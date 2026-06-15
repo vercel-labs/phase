@@ -57,10 +57,11 @@ src/
 
 ### Entry Points
 
-| Export    | Source         | Contents                                                                  |
-| --------- | -------------- | ------------------------------------------------------------------------- |
-| `.`       | `src/index.ts` | createTicker, createSight, createLoop, easing, errors                     |
-| `./react` | `src/react.ts` | useLoop, useTween, useCanvas, useSight, usePresence, Presence, Swap, etc. |
+| Export    | Source              | Contents                                                                  |
+| --------- | ------------------- | ------------------------------------------------------------------------- |
+| `.`       | `src/index.ts`      | createTicker, createSight, createLoop, easing, errors                     |
+| `./ease`  | `src/ease/index.ts` | Easing functions + math utilities (clamp, lerp, remap, easeOutCubic, etc) |
+| `./react` | `src/react.ts`      | useLoop, useTween, useCanvas, useSight, usePresence, Presence, Swap, etc. |
 
 ### Core Concepts
 

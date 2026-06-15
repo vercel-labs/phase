@@ -17,6 +17,7 @@ pnpm add phase
 | Import        | Contents                                                |
 | ------------- | ------------------------------------------------------- |
 | `phase`       | Core primitives — easing, tickers, sight, loops, errors |
+| `phase/ease`  | Easing functions and math utilities only                 |
 | `phase/react` | React hooks and components                              |
 
 ## Core (`phase`)
