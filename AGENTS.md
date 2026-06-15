@@ -2,16 +2,15 @@
 
 ## Repository Overview
 
-This is the `phase` package — lifecycle-aware animation infrastructure for the web.
+Animation infrastructure for the web. Lifecycle-aware primitives that compose visibility, timing, reduced motion, and quality signals into coherent state machines with debuggable transitions.
 
 Tech stack: TypeScript 6+, tsdown (bundler), vitest (tests), oxlint (linting), oxfmt (formatting), lefthook (pre-commit hooks).
 
-## Essential Commands
+## Commands
 
 ```bash
 pnpm build             # Build (tsdown)
 pnpm test              # Run tests (vitest)
-pnpm test:perf         # Run perf tests (vitest)
 pnpm typecheck         # Type check (tsc --noEmit)
 pnpm lint              # Lint (oxlint)
 pnpm lint:fix          # Lint and auto-fix (oxlint --fix)
@@ -22,76 +21,129 @@ pnpm validate          # Run typecheck, lint, format, and test in parallel
 
 ## Architecture
 
-Two-layer design: core primitives and React bindings.
+Two-layer design: core primitives (framework-agnostic) and React bindings.
 
-```
-src/
-├── index.ts          # Core barrel (ease, tick, sight, loop, errors)
-├── react.ts          # React barrel (hooks, components)
-├── core/
-│   ├── ease/         # Easing functions + math utilities
-│   ├── tick/         # Shared rAF clock, zero-alloc FrameState
-│   ├── sight/        # Visibility tracking via IO + document visibility
-│   ├── loop/         # Ticker + sight + reduced-motion = lifecycle loop
-│   ├── error/        # PhaseError re-exports
-│   └── _internal/
-│       └── pool/     # Singleton observer pools (IO, MQL, RO)
-├── react/
-│   ├── presence/     # <Presence> component
-│   ├── swap/         # <Swap> compound component
-│   ├── use-canvas/   # DPR-aware canvas hook
-│   ├── use-container-query/
-│   ├── use-loop/     # Ref-based animation loop hook
-│   ├── use-media/    # Media query subscription
-│   ├── use-presence/ # Mount/unmount lifecycle hook
-│   ├── use-sight/    # Visibility phase hook
-│   ├── use-size/     # Element dimensions via RO
-│   ├── use-stable-callback/
-│   ├── use-synced-ref/
-│   ├── use-tween/    # State-based value tweening
-│   └── _internal/    # Internal hooks (useUpdateEffect)
-└── tests/
-    ├── mocks.ts      # Shared IO/RO/MQL test mocks
-    └── perf.spec.ts  # Zero-allocation + frame budget assertions
-```
+### Top-level folders
 
-### Entry Points
+| Folder    | Purpose                                                                         |
+| --------- | ------------------------------------------------------------------------------- |
+| `ease/`   | Pure math — easing functions, clamping, interpolation. No browser APIs, no React. Safe anywhere. |
+| `core/`   | Framework-agnostic primitives — ticker, sight, loop. Browser APIs live here. `_internal/` holds shared infrastructure (error factory, observer pools) that is never exported publicly. |
+| `react/`  | React hooks and components. Each hook or component gets its own folder. Depends on `core/` for the underlying primitives. `_internal/` holds shared hooks not exported publicly. |
+| `tests/`  | Shared test infrastructure — mock factories for IO/RO/MQL, performance regression tests. |
 
-| Export    | Source              | Contents                                                                  |
-| --------- | ------------------- | ------------------------------------------------------------------------- |
-| `.`       | `src/index.ts`      | createTicker, createSight, createLoop, easing, errors                     |
-| `./ease`  | `src/ease/index.ts` | Easing functions + math utilities (clamp, lerp, remap, easeOutCubic, etc) |
-| `./react` | `src/react.ts`      | useLoop, useTween, useCanvas, useSight, usePresence, Presence, Swap, etc. |
+### File organization conventions
 
-### Core Concepts
+- **One folder per module** — each function, hook, or component lives in a named kebab-case folder with `index.ts` (implementation) and `index.spec.ts` (tests) co-located.
+- **Barrel files** — only three exist: `src/index.ts`, `src/ease/index.ts`, `src/react/index.ts`. These are entry points, not organizational barrels. Don't add more.
+- **`_internal/` directories** — shared helpers consumed within the same layer. Never exported publicly. Never imported cross-layer.
+- **New modules follow the existing pattern** — look at any sibling folder. Match the structure.
 
-- **createTicker** — Shared rAF clock with phase transitions (idle → running → stopped). Zero allocations per frame.
-- **createSight** — Visibility observer combining IntersectionObserver + document.visibilitychange + bfcache.
-- **createLoop** — Combines ticker + sight + prefers-reduced-motion into one lifecycle-aware animation primitive.
-- **Observer Pools** — Singleton IO/RO/MQL instances shared across all consumers to minimize browser API overhead.
-- **React hooks** use refs for hot-path values; `setState` only on phase transitions.
+### Entry points
+
+| Export    | Source               | Contents                                                            |
+| --------- | -------------------- | ------------------------------------------------------------------- |
+| `.`       | `src/index.ts`       | createTicker, createSight, createLoop, easing, errors               |
+| `./ease`  | `src/ease/index.ts`  | Easing + math utilities (clamp, lerp, remap, easeOutCubic)          |
+| `./react` | `src/react/index.ts` | useLoop, useTween, useCanvas, useSight, usePresence, Presence, Swap |
+
+
+## Performance Contracts
+
+These are ironclad. Every module must satisfy them. No exceptions.
+
+### Hot-path rules (per-frame code)
+
+- **Zero allocations per frame** — no object/array/string creation, no closures, no `.map()`, `.filter()`, spread operators, or template literals in the onTick path
+- **FrameState mutated in place** — sealed shape, V8 stays on monomorphic IC path
+- **No try/catch wrapping onTick** — defeats TurboFan optimization
+- **Stable function references** — frame callback created once, never recreated
+- **No debug logging in hot path** — zero string ops unless devtools active
+
+### Lifecycle rules
+
+- **Strong pause** — `cancelAnimationFrame()` stops scheduling entirely. Zero callbacks fire. Not the "weak pause" pattern of rAF + early return.
+- **Frame-locked shared clock** — one `performance.now()` read per rAF frame. All tickers read from this shared value. No visual desync.
+- **Delta clamped at 40ms** — prevents teleport on resume after long pause
+- **Pause-aware elapsed** — `frame.elapsed` freezes during pause, resumes from where it left off
+
+### Browser API rules
+
+- **Zero forced reflows** — never call `getBoundingClientRect()`, `offsetWidth`, `scrollWidth`, `getComputedStyle()`, or any property that triggers synchronous layout
+- **All dimensions from ResizeObserver** (async, compositor-aligned)
+- **All visibility from IntersectionObserver** (async, post-paint)
+
+### React rules
+
+- **Zero re-renders from frame loop** — all per-frame state lives in refs. `onTick`/`onDraw` write to refs or DOM directly.
+- **Only phase changes trigger setState** — infrequent lifecycle transitions, not per-frame
+- **useStableCallback for all consumer callbacks** — prevents loop restart on re-render
 
 ## Performance Testing
 
-`src/tests/perf.spec.ts` contains structural and budget assertions that gate regressions. These are **not** benchmarks — they prove invariants:
+`src/tests/perf.spec.ts` contains structural and budget assertions that gate regressions:
 
-1. **Zero-allocation** — `FrameState` is the exact same object reference across 10,000 frames. No per-frame allocations.
-2. **Frame budget** — per-frame overhead of the hot-path math (clamp, ease, lerp) stays under 0.1ms, leaving 16.57ms for the consumer.
+1. **Zero-allocation** — `FrameState` is the exact same object reference across 10,000 frames
+2. **Frame budget** — per-frame math overhead stays under 0.1ms
 
-Run perf tests in isolation:
+## Code Style
 
-```bash
-pnpm test -- src/tests/perf.spec.ts
-```
+| Convention            | Rule                                                             |
+| --------------------- | ---------------------------------------------------------------- |
+| File and folder names | `kebab-case`                                                     |
+| Type names            | `PascalCase`                                                     |
+| Function names        | `camelCase`                                                      |
+| `any`                 | Banned. Use `unknown` and narrow.                                |
+| Import extensions     | No `.js` extensions                                              |
+| Index imports         | No `/index` — directory index is inferred                        |
+| Type imports          | Use `import type` / `export type` for type-only                  |
+| Barrel files          | Separate API exports from type exports (API first, types second) |
+| JSDoc                 | On public APIs: explain _what_ and _why_, not _how_              |
+| Inline comments       | Only where code cannot speak for itself                          |
 
-Tests use `vi.resetModules()` + dynamic `await import(...)` to get a fresh module singleton per test (the ticker maintains a shared rAF clock at module scope). This pattern is required for any test that exercises singleton state.
+## Testing Conventions
+
+- **Framework**: Vitest with `globals: true`, `environment: 'jsdom'`
+- **Location**: co-located `index.spec.ts` (or `.spec.tsx`) next to `index.ts`
+- **Shared mocks**: `src/tests/mocks.ts` (IO, RO, MQL mocks)
+
+## Dependency Rules
+
+- **Zero runtime dependencies** shipped to consumers
+- `@vercel/error` is bundled at build time via tsdown `deps.onlyBundle`
+- Never add runtime dependencies without explicit approval
+- All dependencies pinned to exact versions
 
 ## Key Design Rules
 
-1. **No barrel files** except the two designated entry points (`index.ts`, `react.ts`).
+1. **No barrel files** except the three designated entry points (`src/index.ts`, `src/ease/index.ts`, `src/react/index.ts`).
 2. **`_internal/` is never exported** publicly.
 3. **Zero per-frame allocations** — FrameState is reused, no closures in the hot path.
-4. **One runtime dependency** — `@vercel/error` for structured errors.
-5. **React is optional** — peer dep marked optional; core works without React.
-6. **Avoid circular dependencies**: never introduce circular deps between modules.
-7. **Co-located tests** — every module has a sibling `.spec.ts(x)` file.
+4. **React is optional** — peer dep marked optional; core works without React.
+5. **No circular imports** — `ease/` has no deps, `core/` depends on `ease/` and `_internal/`, `react/` depends on `core/`. Never import upward.
+6. **Co-located tests** — every module has a sibling `.spec.ts(x)` file.
+7. **Observer pooling** — IO keyed by serialized options, RO is a singleton, MQL keyed by query string. Never create raw observers outside the pool.
+8. **Phases + reasons** — every state machine exposes both. Phase is _what_ state. Reason is _why_ that state.
+
+## How to Add New Features
+
+### New core primitive
+
+1. Create `src/core/<name>/index.ts` with implementation
+2. Create `src/core/<name>/index.spec.ts` with tests
+3. Add exports to `src/index.ts` (API section, then types section)
+4. Run `pnpm validate`
+
+### New React hook
+
+1. Create `src/react/<use-name>/index.ts` (or `.tsx`) with implementation
+2. Create `src/react/<use-name>/index.spec.ts` (or `.spec.tsx`) with tests
+3. Add exports to `src/react/index.ts` (API section, then types section)
+4. Run `pnpm validate`
+
+### New easing function
+
+1. Add the function to `src/ease/index.ts` — must be pure (`number → number`), no side effects
+2. Add test cases to `src/ease/index.spec.ts`
+3. Add export to `src/index.ts` (it re-exports from ease)
+4. Run `pnpm validate`
