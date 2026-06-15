@@ -4,7 +4,7 @@
 
 # ▲ phase
 
-Animation infrastructure for the web.
+Lifecycle-aware animation infrastructure for the web.
 
 ## Table of contents
 
