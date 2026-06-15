@@ -1,4 +1,4 @@
-import { createMockMatchMedia } from '../../../tests/mocks';
+import { createMockMatchMedia } from '../../../__mocks__/match-media';
 
 let mockMM: ReturnType<typeof createMockMatchMedia>;
 

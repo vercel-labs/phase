@@ -6,6 +6,7 @@
 !.cursor/skills
 .env
 .env*.local
+.planning
 .turbo
 .vercel
 node_modules/

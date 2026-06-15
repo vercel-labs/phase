@@ -1,10 +1,8 @@
 import { renderHook } from '@testing-library/react';
 
-import {
-  createMockIntersectionObserver,
-  createMockMatchMedia,
-  createMockResizeObserver,
-} from '../../tests/mocks';
+import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
+import { createMockMatchMedia } from '../../__mocks__/match-media';
+import { createMockResizeObserver } from '../../__mocks__/resize-observer';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 let mockMM: ReturnType<typeof createMockMatchMedia>;

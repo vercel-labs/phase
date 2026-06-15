@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 
-import { createMockIntersectionObserver } from '../../tests/mocks';
+import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 

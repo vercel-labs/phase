@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 
-import { createMockResizeObserver } from '../../tests/mocks';
+import { createMockResizeObserver } from '../../__mocks__/resize-observer';
 
 let mockRO: ReturnType<typeof createMockResizeObserver>;
 

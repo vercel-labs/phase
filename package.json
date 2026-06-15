@@ -1,7 +1,7 @@
 {
   "name": "phase",
   "version": "0.0.1",
-  "description": "Lifecycle-aware animation infrastructure for the web. Zero-allocation frame loops that pause off-screen, resume in view, and respect reduced motion by default.",
+  "description": "Lifecycle-aware animation infrastructure for the web.",
   "author": "Vercel",
   "license": "MIT",
   "repository": {

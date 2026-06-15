@@ -1,4 +1,4 @@
-import { createMockIntersectionObserver } from '../../tests/mocks';
+import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 

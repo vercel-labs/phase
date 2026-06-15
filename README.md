@@ -102,11 +102,11 @@ When your animation needs its own physics engine or gesture recognizer, reach fo
 
 ## Entry points
 
-| Import        | Contents                                                                |
-| ------------- | ----------------------------------------------------------------------- |
-| `phase`       | Core primitives: createLoop, createTicker, createSight, easing, errors  |
-| `phase/ease`  | Easing functions and math utilities only                                |
-| `phase/react` | React hooks and components                                              |
+| Import        | Contents                                                               |
+| ------------- | ---------------------------------------------------------------------- |
+| `phase`       | Core primitives: createLoop, createTicker, createSight, easing, errors |
+| `phase/ease`  | Easing functions and math utilities only                               |
+| `phase/react` | React hooks and components                                             |
 
 Each entry point is independently tree-shakeable. Importing `phase/ease` in a server component pulls zero browser APIs.
 

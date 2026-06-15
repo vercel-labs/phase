@@ -25,12 +25,12 @@ Two-layer design: core primitives (framework-agnostic) and React bindings.
 
 ### Top-level folders
 
-| Folder    | Purpose                                                                         |
-| --------- | ------------------------------------------------------------------------------- |
-| `ease/`   | Pure math — easing functions, clamping, interpolation. No browser APIs, no React. Safe anywhere. |
-| `core/`   | Framework-agnostic primitives — ticker, sight, loop. Browser APIs live here. `_internal/` holds shared infrastructure (error factory, observer pools) that is never exported publicly. |
-| `react/`  | React hooks and components. Each hook or component gets its own folder. Depends on `core/` for the underlying primitives. `_internal/` holds shared hooks not exported publicly. |
-| `tests/`  | Shared test infrastructure — mock factories for IO/RO/MQL, performance regression tests. |
+| Folder   | Purpose                                                                                                                                                                                |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ease/`  | Pure math — easing functions, clamping, interpolation. No browser APIs, no React. Safe anywhere.                                                                                       |
+| `core/`  | Framework-agnostic primitives — ticker, sight, loop. Browser APIs live here. `_internal/` holds shared infrastructure (error factory, observer pools) that is never exported publicly. |
+| `react/` | React hooks and components. Each hook or component gets its own folder. Depends on `core/` for the underlying primitives. `_internal/` holds shared hooks not exported publicly.       |
+| `tests/` | Shared test infrastructure — mock factories for IO/RO/MQL, performance regression tests.                                                                                               |
 
 ### File organization conventions
 
@@ -46,7 +46,6 @@ Two-layer design: core primitives (framework-agnostic) and React bindings.
 | `.`       | `src/index.ts`       | createTicker, createSight, createLoop, easing, errors               |
 | `./ease`  | `src/ease/index.ts`  | Easing + math utilities (clamp, lerp, remap, easeOutCubic)          |
 | `./react` | `src/react/index.ts` | useLoop, useTween, useCanvas, useSight, usePresence, Presence, Swap |
-
 
 ## Performance Contracts
 
