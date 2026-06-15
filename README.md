@@ -4,7 +4,7 @@
 
 # phase
 
-Lifecycle-aware animation infrastructure for the w
+Lifecycle-aware animation infrastructure for the web.
 
 ## Install
 

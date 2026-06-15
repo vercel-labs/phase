@@ -1,5 +1,6 @@
 // Core barrel — re-exports ease, tick, sight, loop
 
+// API
 export {
   easeOutCubic,
   easeOutQuart,
@@ -11,36 +12,34 @@ export {
   lerp,
   inverseLerp,
   remap,
-  type RemapOptions,
 } from './ease';
+export { createTicker } from './core/tick';
+export { createSight } from './core/sight';
+export { createLoop, prefersReducedMotion } from './core/loop';
+export { PhaseError, isPhaseError } from './core/error';
 
-export {
-  createTicker,
-  type FrameState,
-  type TickerPhase,
-  type TickerReason,
-  type TickerOptions,
-  type Ticker,
+// Types
+export type { RemapOptions } from './ease';
+export type {
+  FrameState,
+  Ticker,
+  TickerOptions,
+  TickerPhase,
+  TickerReason,
 } from './core/tick';
-
-export {
-  createSight,
-  type SightPhase,
-  type SightReason,
-  type SightOptions,
-  type Sight,
+export type {
+  Sight,
+  SightOptions,
+  SightPhase,
+  SightReason,
 } from './core/sight';
-
-export {
-  createLoop,
-  prefersReducedMotion,
-  type ReducedMotionBehavior,
-  type LoopPhase,
-  type LoopReason,
-  type Quality,
-  type DegradedReason,
-  type LoopOptions,
-  type Loop,
+export type {
+  DegradedReason,
+  Loop,
+  LoopOptions,
+  LoopPhase,
+  LoopReason,
+  Quality,
+  ReducedMotionBehavior,
 } from './core/loop';
-
-export { PhaseError, isPhaseError, type PhaseErrorCode } from './core/error';
+export type { PhaseErrorCode } from './core/error';

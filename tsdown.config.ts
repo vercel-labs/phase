@@ -11,7 +11,7 @@ export default defineConfig({
   entry: {
     ease: 'src/ease/index.ts',
     index: 'src/index.ts',
-    react: 'src/react.ts',
+    react: 'src/react/index.ts',
   },
   fixedExtension: false,
   format: ['esm'],
