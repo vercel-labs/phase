@@ -2,7 +2,7 @@
   <img src=".github/assets/phase-header.png" alt="phase" />
 </p>
 
-# phase
+# ▲ phase
 
 Animation infrastructure for the web.
 
