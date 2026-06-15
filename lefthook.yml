@@ -1,0 +1,9 @@
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      glob: '**/*.{ts,tsx,json,jsonc,md}'
+      run: pnpm oxfmt --check {staged_files}
+    lint:
+      glob: '**/*.{ts,tsx}'
+      run: pnpm oxlint {staged_files}

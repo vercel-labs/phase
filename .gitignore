@@ -1,0 +1,13 @@
+*.tsbuildinfo
+.cache
+.claude
+.cursor
+!.cursor/commands
+!.cursor/skills
+.env
+.env*.local
+.turbo
+.vercel
+node_modules/
+dist/
+public/
