@@ -1,6 +1,6 @@
 import { render, screen, act } from '@testing-library/react';
 
-import { Swap } from './index.js';
+import { Swap } from '.';
 
 function flushDoubleRaf(): void {
   vi.advanceTimersByTime(32);

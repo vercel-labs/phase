@@ -12,7 +12,7 @@ export {
   inverseLerp,
   remap,
   type RemapOptions,
-} from './core/ease/index.js';
+} from './ease';
 
 export {
   createTicker,
@@ -21,7 +21,7 @@ export {
   type TickerReason,
   type TickerOptions,
   type Ticker,
-} from './core/tick/index.js';
+} from './core/tick';
 
 export {
   createSight,
@@ -29,7 +29,7 @@ export {
   type SightReason,
   type SightOptions,
   type Sight,
-} from './core/sight/index.js';
+} from './core/sight';
 
 export {
   createLoop,
@@ -41,10 +41,6 @@ export {
   type DegradedReason,
   type LoopOptions,
   type Loop,
-} from './core/loop/index.js';
+} from './core/loop';
 
-export {
-  PhaseError,
-  isPhaseError,
-  type PhaseErrorCode,
-} from './core/error/index.js';
+export { PhaseError, isPhaseError, type PhaseErrorCode } from './core/error';

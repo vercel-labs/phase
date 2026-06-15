@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 
-import { useUpdateEffect } from './use-update-effect.js';
+import { useUpdateEffect } from './use-update-effect';
 
 describe('useUpdateEffect', () => {
   it('skips effect on first mount', () => {

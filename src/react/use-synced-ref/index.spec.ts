@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 
-import { useSyncedRef } from './index.js';
+import { useSyncedRef } from '.';
 
 describe('useSyncedRef', () => {
   it('ref.current is the initial value on first render', () => {

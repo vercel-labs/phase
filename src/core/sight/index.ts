@@ -1,5 +1,5 @@
-import { serverContextError } from '../_internal/errors.js';
-import { observeIntersection } from '../_internal/pool/io-pool.js';
+import { serverContextError } from '../_internal/errors';
+import { observeIntersection } from '../_internal/pool/io-pool';
 
 // ---------------------------------------------------------------------------
 // Types

@@ -1,29 +1,29 @@
 // React hooks barrel
 
-export { useSyncedRef } from './react/use-synced-ref/index.js';
-export { useStableCallback } from './react/use-stable-callback/index.js';
+export { useSyncedRef } from './react/use-synced-ref';
+export { useStableCallback } from './react/use-stable-callback';
 export {
   useLoop,
   type UseLoopOptions,
   type UseLoopResult,
-} from './react/use-loop/index.js';
-export { useMediaQuery } from './react/use-media/index.js';
+} from './react/use-loop';
+export { useMediaQuery } from './react/use-media';
 export {
   useSight,
   type UseSightOptions,
   type UseSightResult,
-} from './react/use-sight/index.js';
-export { useSize, type Size } from './react/use-size/index.js';
+} from './react/use-sight';
+export { useSize, type Size } from './react/use-size';
 export {
   useContainerQuery,
   type ContainerBreakpoint,
-} from './react/use-container-query/index.js';
+} from './react/use-container-query';
 export {
   useCanvas,
   type UseCanvasOptions,
   type UseCanvasResult,
-} from './react/use-canvas/index.js';
-export { useTween, type UseTweenOptions } from './react/use-tween/index.js';
+} from './react/use-canvas';
+export { useTween, type UseTweenOptions } from './react/use-tween';
 export {
   usePresence,
   type UsePresenceOptions,
@@ -31,10 +31,6 @@ export {
   type PresencePhase,
   type PresenceReason,
   type PresenceMode,
-} from './react/use-presence/index.js';
-export { Presence, type PresenceProps } from './react/presence/index.js';
-export {
-  Swap,
-  type SwapProps,
-  type SwapStateProps,
-} from './react/swap/index.js';
+} from './react/use-presence';
+export { Presence, type PresenceProps } from './react/presence';
+export { Swap, type SwapProps, type SwapStateProps } from './react/swap';

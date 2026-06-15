@@ -1,4 +1,4 @@
-import { createMockIntersectionObserver } from '../../../tests/mocks.js';
+import { createMockIntersectionObserver } from '../../../tests/mocks';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 
@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 async function getModule() {
-  return import('./io-pool.js');
+  return import('./io-pool');
 }
 
 // ---------------------------------------------------------------------------

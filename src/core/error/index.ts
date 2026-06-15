@@ -2,4 +2,4 @@ export {
   PhaseError,
   isPhaseError,
   type PhaseErrorCode,
-} from '../_internal/errors.js';
+} from '../_internal/errors';

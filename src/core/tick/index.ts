@@ -1,4 +1,4 @@
-import { serverContextError, tickerStoppedError } from '../_internal/errors.js';
+import { serverContextError, tickerStoppedError } from '../_internal/errors';
 
 // ---------------------------------------------------------------------------
 // Types

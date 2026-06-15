@@ -24,7 +24,7 @@ afterEach(() => {
 
 describe('zero-allocation', () => {
   it('FrameState is the same object reference across 10,000 frames', async () => {
-    const { createTicker } = await import('../core/tick/index.js');
+    const { createTicker } = await import('../core/tick');
     const refs: unknown[] = [];
     const ticker = createTicker({
       onTick: (frame) => refs.push(frame),
@@ -59,8 +59,7 @@ describe('frame-budget', () => {
     // This simulates what the hot path does each frame:
     // read shared time, FPS check, delta clamp, frame state mutation, onTick call.
 
-    const { clamp01, easeOutCubic, lerp } =
-      await import('../core/ease/index.js');
+    const { clamp01, easeOutCubic, lerp } = await import('../ease');
 
     const iterations = 100_000;
     let sink = 0;

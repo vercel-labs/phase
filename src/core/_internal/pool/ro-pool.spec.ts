@@ -1,4 +1,4 @@
-import { createMockResizeObserver } from '../../../tests/mocks.js';
+import { createMockResizeObserver } from '../../../tests/mocks';
 
 let mockRO: ReturnType<typeof createMockResizeObserver>;
 
@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 async function getModule() {
-  return import('./ro-pool.js');
+  return import('./ro-pool');
 }
 
 // ---------------------------------------------------------------------------

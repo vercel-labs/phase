@@ -1,6 +1,6 @@
 import { VercelError } from '@vercel/error';
 
-import { isPhaseError, tickerStoppedError } from './errors.js';
+import { isPhaseError, tickerStoppedError } from './errors';
 
 describe('isPhaseError', () => {
   it('returns true for PhaseError instances', () => {

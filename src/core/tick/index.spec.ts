@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 async function getModule() {
-  return import('./index.js');
+  return import('.');
 }
 
 function advanceFrame(ms = 16): void {
@@ -410,7 +410,7 @@ describe('SSR', () => {
     const origRaf = globalThis.requestAnimationFrame;
     vi.stubGlobal('requestAnimationFrame', undefined);
     vi.resetModules();
-    const { createTicker } = await import('./index.js');
+    const { createTicker } = await import('.');
     expect(() => createTicker({ onTick: vi.fn() })).toThrow();
     vi.stubGlobal('requestAnimationFrame', origRaf);
   });

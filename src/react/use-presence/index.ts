@@ -6,7 +6,7 @@ import {
   type RefObject,
 } from 'react';
 
-import { useUpdateEffect } from '../_internal/use-update-effect.js';
+import { useUpdateEffect } from '../_internal/use-update-effect';
 
 // ---------------------------------------------------------------------------
 // Types

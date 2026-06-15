@@ -1,4 +1,4 @@
-import { createMockMatchMedia } from '../../../tests/mocks.js';
+import { createMockMatchMedia } from '../../../tests/mocks';
 
 let mockMM: ReturnType<typeof createMockMatchMedia>;
 
@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 async function getModule() {
-  return import('./mql-pool.js');
+  return import('./mql-pool');
 }
 
 // ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ describe('pooling', () => {
 
     // Re-import to pick up the new spy
     vi.resetModules();
-    const mod = await import('./mql-pool.js');
+    const mod = await import('./mql-pool');
 
     mod.subscribeMediaQuery('(max-width: 600px)', vi.fn());
     mod.subscribeMediaQuery('(max-width: 600px)', vi.fn());
@@ -41,7 +41,7 @@ describe('pooling', () => {
     const matchMediaSpy = vi.fn(mockMM.mockMatchMedia);
     vi.stubGlobal('matchMedia', matchMediaSpy);
     vi.resetModules();
-    const mod = await import('./mql-pool.js');
+    const mod = await import('./mql-pool');
 
     mod.subscribeMediaQuery('(max-width: 600px)', vi.fn());
     mod.subscribeMediaQuery('(max-width: 900px)', vi.fn());

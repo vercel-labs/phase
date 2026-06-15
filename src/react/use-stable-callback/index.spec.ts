@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 
-import { useStableCallback } from './index.js';
+import { useStableCallback } from '.';
 
 describe('useStableCallback', () => {
   it('returned function has stable identity across re-renders', () => {

@@ -9,7 +9,7 @@ import {
   lerp,
   inverseLerp,
   remap,
-} from './index.js';
+} from '.';
 
 // ---------------------------------------------------------------------------
 // Easing functions

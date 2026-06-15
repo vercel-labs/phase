@@ -1,4 +1,4 @@
-import { createMockIntersectionObserver } from '../../tests/mocks.js';
+import { createMockIntersectionObserver } from '../../tests/mocks';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 
@@ -31,7 +31,7 @@ function firePageShow(persisted: boolean): void {
 }
 
 async function getModule() {
-  return import('./index.js');
+  return import('.');
 }
 
 // ---------------------------------------------------------------------------

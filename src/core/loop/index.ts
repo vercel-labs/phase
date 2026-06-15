@@ -1,12 +1,12 @@
-import { serverContextError } from '../_internal/errors.js';
+import { serverContextError } from '../_internal/errors';
 import {
   readMediaQuery,
   subscribeMediaQuery,
-} from '../_internal/pool/mql-pool.js';
-import { createSight } from '../sight/index.js';
-import type { SightPhase } from '../sight/index.js';
-import { createTicker } from '../tick/index.js';
-import type { FrameState, Ticker } from '../tick/index.js';
+} from '../_internal/pool/mql-pool';
+import { createSight } from '../sight';
+import type { SightPhase } from '../sight';
+import { createTicker } from '../tick';
+import type { FrameState, Ticker } from '../tick';
 
 // ---------------------------------------------------------------------------
 // Types

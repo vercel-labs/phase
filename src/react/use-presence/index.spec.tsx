@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 
-import { usePresence, type UsePresenceOptions } from './index.js';
+import { usePresence, type UsePresenceOptions } from '.';
 
 // jsdom doesn't fire CSS transitions — we dispatch the event manually.
 function fireTransitionEnd(element: Element): void {

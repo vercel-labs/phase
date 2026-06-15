@@ -7,10 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      '@vercel/error':
-        specifier: 0.0.1
-        version: 0.0.1
     devDependencies:
       '@testing-library/dom':
         specifier: 10.4.1
@@ -27,6 +23,9 @@ importers:
       '@types/react-dom':
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.10)
+      '@vercel/error':
+        specifier: 0.0.1
+        version: 0.0.1
       jsdom:
         specifier: 23.2.0
         version: 23.2.0

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type RefObject } from 'react';
 
-import { observeResize } from '../../core/_internal/pool/ro-pool.js';
+import { observeResize } from '../../core/_internal/pool/ro-pool';
 
 export interface Size {
   width: number;

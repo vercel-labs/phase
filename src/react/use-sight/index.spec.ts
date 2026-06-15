@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 
-import { createMockIntersectionObserver } from '../../tests/mocks.js';
+import { createMockIntersectionObserver } from '../../tests/mocks';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 
@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 async function getHook() {
-  const mod = await import('./index.js');
+  const mod = await import('.');
   return mod.useSight;
 }
 

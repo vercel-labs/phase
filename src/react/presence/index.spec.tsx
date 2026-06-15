@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { createRef } from 'react';
 
-import { Presence } from './index.js';
+import { Presence } from '.';
 
 beforeEach(() => {
   vi.useFakeTimers();

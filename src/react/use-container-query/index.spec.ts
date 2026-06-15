@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 
-import { createMockResizeObserver } from '../../tests/mocks.js';
+import { createMockResizeObserver } from '../../tests/mocks';
 
 let mockRO: ReturnType<typeof createMockResizeObserver>;
 
@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 async function getHook() {
-  const mod = await import('./index.js');
+  const mod = await import('.');
   return mod.useContainerQuery;
 }
 

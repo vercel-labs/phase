@@ -1,11 +1,15 @@
+<p align="center">
+  <img src=".github/assets/phase-header.png" alt="phase" />
+</p>
+
 # phase
 
-Lifecycle-aware animation infrastructure for the web. Zero-allocation frame loops that pause off-screen, resume in view, and respect reduced motion by default.
+Lifecycle-aware animation infrastructure for the w
 
 ## Install
 
 ```bash
-npm install phase
+pnpm add phase
 ```
 
 ## Entry Points

@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 
-import { createMockMatchMedia } from '../../tests/mocks.js';
+import { createMockMatchMedia } from '../../tests/mocks';
 
 let mockMM: ReturnType<typeof createMockMatchMedia>;
 
@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 async function getHook() {
-  const mod = await import('./index.js');
+  const mod = await import('.');
   return mod.useTween;
 }
 

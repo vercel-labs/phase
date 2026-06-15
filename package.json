@@ -25,9 +25,6 @@
     "postinstall": "lefthook install || true",
     "validate": "pnpm run --parallel '/^(typecheck|lint|format|test)$/'"
   },
-  "dependencies": {
-    "@vercel/error": "0.0.1"
-  },
   "peerDependencies": {
     "react": ">=18"
   },
@@ -42,6 +39,7 @@
     "@types/node": "25.6.0",
     "@types/react": "19.2.10",
     "@types/react-dom": "19.2.3",
+    "@vercel/error": "0.0.1",
     "jsdom": "23.2.0",
     "lefthook": "2.1.5",
     "oxfmt": "0.44.0",
@@ -61,6 +59,10 @@
     ".": {
       "default": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./ease": {
+      "default": "./dist/ease.js",
+      "types": "./dist/ease.d.ts"
     },
     "./react": {
       "default": "./dist/react.js",

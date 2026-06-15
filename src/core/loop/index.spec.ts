@@ -1,7 +1,7 @@
 import {
   createMockIntersectionObserver,
   createMockMatchMedia,
-} from '../../tests/mocks.js';
+} from '../../tests/mocks';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 let mockMM: ReturnType<typeof createMockMatchMedia>;
@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 async function getModule() {
-  return import('./index.js');
+  return import('.');
 }
 
 function makeSightVisible(el: Element): void {
@@ -425,7 +425,7 @@ describe('prefersReducedMotion()', () => {
   it('returns false when matchMedia is undefined (SSR)', async () => {
     vi.stubGlobal('matchMedia', undefined);
     vi.resetModules();
-    const { prefersReducedMotion } = await import('./index.js');
+    const { prefersReducedMotion } = await import('.');
     expect(prefersReducedMotion()).toBe(false);
   });
 
@@ -450,7 +450,7 @@ describe('SSR', () => {
     const origRaf = globalThis.requestAnimationFrame;
     vi.stubGlobal('requestAnimationFrame', undefined);
     vi.resetModules();
-    const { createLoop } = await import('./index.js');
+    const { createLoop } = await import('.');
     const el = document.createElement('div');
     expect(() => createLoop({ element: el, onTick: vi.fn() })).toThrow();
     vi.stubGlobal('requestAnimationFrame', origRaf);

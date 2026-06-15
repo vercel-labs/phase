@@ -6,7 +6,7 @@ import {
   type RefObject,
 } from 'react';
 
-import { observeResize } from '../../core/_internal/pool/ro-pool.js';
+import { observeResize } from '../../core/_internal/pool/ro-pool';
 import {
   createLoop,
   type LoopPhase,
@@ -14,9 +14,9 @@ import {
   type Quality,
   type DegradedReason,
   type ReducedMotionBehavior,
-} from '../../core/loop/index.js';
-import type { FrameState } from '../../core/tick/index.js';
-import { useSyncedRef } from '../use-synced-ref/index.js';
+} from '../../core/loop';
+import type { FrameState } from '../../core/tick';
+import { useSyncedRef } from '../use-synced-ref';
 
 export interface Size {
   width: number;

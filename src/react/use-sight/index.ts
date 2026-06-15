@@ -4,7 +4,7 @@ import {
   createSight,
   type SightPhase,
   type SightReason,
-} from '../../core/sight/index.js';
+} from '../../core/sight';
 
 export interface UseSightOptions extends IntersectionObserverInit {
   /** `'continuous'` keeps observing. `'once'` freezes at `'visible'` after first intersection. */

@@ -3,12 +3,13 @@ import { defineConfig } from 'tsdown';
 export default defineConfig({
   clean: true,
   deps: {
-    neverBundle: ['react', 'react-dom', '@vercel/error'],
+    onlyBundle: ['@vercel/error'],
   },
   dts: {
     sourcemap: true,
   },
   entry: {
+    ease: 'src/ease/index.ts',
     index: 'src/index.ts',
     react: 'src/react.ts',
   },

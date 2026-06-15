@@ -12,9 +12,9 @@ import {
   type Ref,
 } from 'react';
 
-import { missingContextError } from '../../core/_internal/errors.js';
-import { usePresence } from '../use-presence/index.js';
-import { useSyncedRef } from '../use-synced-ref/index.js';
+import { missingContextError } from '../../core/_internal/errors';
+import { usePresence } from '../use-presence';
+import { useSyncedRef } from '../use-synced-ref';
 
 // ---------------------------------------------------------------------------
 // Context

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import {
   subscribeMediaQuery,
   readMediaQuery,
-} from '../../core/_internal/pool/mql-pool.js';
+} from '../../core/_internal/pool/mql-pool';
 
 /**
  * Subscribe to a media query via the shared MQL pool.

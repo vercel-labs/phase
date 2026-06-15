@@ -3,7 +3,7 @@ import { renderHook } from '@testing-library/react';
 import {
   createMockIntersectionObserver,
   createMockMatchMedia,
-} from '../../tests/mocks.js';
+} from '../../tests/mocks';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 let mockMM: ReturnType<typeof createMockMatchMedia>;
@@ -28,7 +28,7 @@ afterEach(() => {
 });
 
 async function getHook() {
-  const mod = await import('./index.js');
+  const mod = await import('.');
   return mod.useLoop;
 }
 

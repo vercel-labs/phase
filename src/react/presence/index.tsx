@@ -5,7 +5,7 @@ import {
   type Ref,
 } from 'react';
 
-import { usePresence, type PresenceMode } from '../use-presence/index.js';
+import { usePresence, type PresenceMode } from '../use-presence';
 
 export interface PresenceProps extends ComponentProps<'div'> {
   show: boolean;

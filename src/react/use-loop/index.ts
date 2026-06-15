@@ -7,9 +7,9 @@ import {
   type Quality,
   type DegradedReason,
   type ReducedMotionBehavior,
-} from '../../core/loop/index.js';
-import type { FrameState } from '../../core/tick/index.js';
-import { useSyncedRef } from '../use-synced-ref/index.js';
+} from '../../core/loop';
+import type { FrameState } from '../../core/tick';
+import { useSyncedRef } from '../use-synced-ref';
 
 export interface UseLoopOptions {
   ref: RefObject<Element | null>;

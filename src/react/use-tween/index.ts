@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 
-import { clamp01, easeOutCubic } from '../../core/ease/index.js';
 import {
   prefersReducedMotion,
   type ReducedMotionBehavior,
-} from '../../core/loop/index.js';
+} from '../../core/loop';
+import { clamp01, easeOutCubic } from '../../ease';
 
 export interface UseTweenOptions {
   target: number;
