@@ -17,7 +17,7 @@ pnpm add phase
 | Import        | Contents                                                |
 | ------------- | ------------------------------------------------------- |
 | `phase`       | Core primitives — easing, tickers, sight, loops, errors |
-| `phase/ease`  | Easing functions and math utilities only                 |
+| `phase/ease`  | Easing functions and math utilities only                |
 | `phase/react` | React hooks and components                              |
 
 ## Core (`phase`)
@@ -25,7 +25,7 @@ pnpm add phase
 ### Easing & Math
 
 ```ts
-import { lerp, clamp01, easeOutCubic, remap } from 'phase';
+import { lerp, clamp01, easeOutCubic, remap } from 'phase/ease';
 ```
 
 - `easeOutCubic`, `easeOutQuart`, `easeOutBack`, `easeInOutCubic`, `linear`
