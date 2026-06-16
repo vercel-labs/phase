@@ -1,6 +1,4 @@
-import { VercelError } from '@vercel/error';
-
-import { isPhaseError, tickerStoppedError } from '.';
+import { PhaseError, isPhaseError, tickerStoppedError } from '.';
 
 describe('isPhaseError', () => {
   it('returns true for PhaseError instances', () => {
@@ -26,9 +24,19 @@ describe('isPhaseError', () => {
   it('returns false for non-error objects', () => {
     expect(isPhaseError({ message: 'fake' })).toBe(false);
   });
+});
 
-  it('returns false for VercelError with different scope', () => {
-    const other = new VercelError('test', { scope: 'other-package' });
-    expect(isPhaseError(other)).toBe(false);
+describe('PhaseError properties', () => {
+  it('exposes code, reason, fix, and link', () => {
+    try {
+      tickerStoppedError();
+    } catch (err) {
+      expect(err).toBeInstanceOf(PhaseError);
+      const pe = err as PhaseError;
+      expect(pe.code).toBe('ticker_stopped');
+      expect(pe.reason).toBeDefined();
+      expect(pe.fix).toBeDefined();
+      expect(pe.name).toBe('PhaseError');
+    }
   });
 });

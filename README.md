@@ -552,7 +552,7 @@ When a loop resumes after a pause, `frame.delta` is clamped to 40ms. Animations 
 
 ## Errors
 
-Phase uses structured errors via `@vercel/error`. Every error includes a machine-readable code and an actionable message.
+Phase uses structured errors. Every error includes a machine-readable code and an actionable message.
 
 ```ts
 import { PhaseError, isPhaseError } from 'phase';

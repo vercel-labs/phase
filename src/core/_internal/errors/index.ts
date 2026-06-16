@@ -1,6 +1,3 @@
-import { VercelError, createErrors, isVercelError } from '@vercel/error';
-import type { ErrorFactory } from '@vercel/error';
-
 export type PhaseErrorCode =
   | 'server_context'
   | 'no_element'
@@ -10,48 +7,55 @@ export type PhaseErrorCode =
   | 'presence_no_children'
   | 'missing_context';
 
-const SCOPE = '@vercel/phase';
+interface PhaseErrorOptions {
+  code: PhaseErrorCode;
+  reason?: string;
+  fix?: string;
+  link?: string;
+}
 
-/** Named error class so stack traces show `PhaseError`, not `VercelError`. */
-export class PhaseError extends VercelError<PhaseErrorCode> {}
+/** Lightweight structured error for phase. */
+export class PhaseError extends Error {
+  readonly code: PhaseErrorCode;
+  readonly reason: string | undefined;
+  readonly fix: string | undefined;
+  readonly link: string | undefined;
+
+  constructor(message: string, options: PhaseErrorOptions) {
+    super(message);
+    this.name = 'PhaseError';
+    this.code = options.code;
+    this.reason = options.reason;
+    this.fix = options.fix;
+    this.link = options.link;
+  }
+}
 
 /** Check if a value is a PhaseError instance. */
 export function isPhaseError(error: unknown): error is PhaseError {
-  if (error instanceof PhaseError) return true;
-  return isVercelError(error) && error.scope === SCOPE;
+  return error instanceof PhaseError;
 }
 
-/** Scoped error factory - all errors are `PhaseError` instances with `scope: '@vercel/phase'`. */
-const phaseError: ErrorFactory<PhaseErrorCode, PhaseError> = createErrors<
-  PhaseErrorCode,
-  PhaseError
->({
-  scope: SCOPE,
-  ErrorClass: PhaseError,
-});
-
 export function serverContextError(fn: string): never {
-  phaseError.raise(`${fn}() cannot be called on the server.`, {
+  throw new PhaseError(`${fn}() cannot be called on the server.`, {
     code: 'server_context',
     reason:
       'Browser APIs like requestAnimationFrame are not available during SSR.',
     fix: `Move ${fn}() into a useEffect or a client-only module.`,
-    link: 'https://vercel.com/docs/errors/phase/server_context',
   });
 }
 
 export function noElementError(fn: string): never {
-  phaseError.raise(`${fn}() requires a mounted DOM element.`, {
+  throw new PhaseError(`${fn}() requires a mounted DOM element.`, {
     code: 'no_element',
     reason:
       'The element ref is null. This usually means the element has not mounted yet or has been unmounted.',
     fix: `Call ${fn}() inside a useEffect after the ref is populated, or use the hook equivalent which handles this automatically.`,
-    link: 'https://vercel.com/docs/errors/phase/no_element',
   });
 }
 
 export function sightDisposedError(): never {
-  phaseError.raise('Cannot interact with a disposed Sight instance.', {
+  throw new PhaseError('Cannot interact with a disposed Sight instance.', {
     code: 'sight_disposed',
     reason: 'dispose() was already called on this Sight instance.',
     fix: 'Create a new Sight instance instead of reusing a disposed one.',
@@ -59,7 +63,7 @@ export function sightDisposedError(): never {
 }
 
 export function invalidDurationError(fn: string, value: number): never {
-  phaseError.raise(`${fn}() received an invalid duration: ${value}`, {
+  throw new PhaseError(`${fn}() received an invalid duration: ${value}`, {
     code: 'invalid_duration',
     reason: 'Duration must be a finite positive number.',
     fix: `Pass a positive number for duration (e.g., 300 for 300ms).`,
@@ -67,7 +71,7 @@ export function invalidDurationError(fn: string, value: number): never {
 }
 
 export function tickerStoppedError(): never {
-  phaseError.raise('Cannot resume a stopped ticker.', {
+  throw new PhaseError('Cannot resume a stopped ticker.', {
     code: 'ticker_stopped',
     reason:
       'stop() is terminal — a stopped ticker cannot be restarted. This prevents accidental zombie loops.',
@@ -76,7 +80,7 @@ export function tickerStoppedError(): never {
 }
 
 export function missingContextError(child: string, parent: string): never {
-  phaseError.raise(`<${child}> must be used inside <${parent}>.`, {
+  throw new PhaseError(`<${child}> must be used inside <${parent}>.`, {
     code: 'missing_context',
     reason: `<${child}> reads from a React context that <${parent}> provides. Without the parent, the context is null.`,
     fix: `Wrap <${child}> with <${parent}>: <${parent}><${child} /></${parent}>`,

@@ -2,9 +2,6 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   clean: true,
-  deps: {
-    onlyBundle: ['@vercel/error'],
-  },
   dts: {
     sourcemap: true,
   },

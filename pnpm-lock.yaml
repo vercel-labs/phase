@@ -23,9 +23,6 @@ importers:
       '@types/react-dom':
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.10)
-      '@vercel/error':
-        specifier: 0.0.1
-        version: 0.0.1
       jsdom:
         specifier: 23.2.0
         version: 23.2.0
@@ -751,10 +748,6 @@ packages:
 
   '@types/react@19.2.10':
     resolution: {integrity: sha512-WPigyYuGhgZ/cTPRXB2EwUw+XvsRA3GqHlsP4qteqrnnjDrApbS7MxcGr/hke5iUoeB7E/gQtrs9I37zAJ0Vjw==}
-
-  '@vercel/error@0.0.1':
-    resolution: {integrity: sha512-vIqvvtMou6uhGH/RE6C2bT9fsPQ9MdVdb2rAO+9zhrT1+Z/4F/EfkHebWCaA7iWC2ayFFOClCXUduFmEWUvDwQ==}
-    engines: {node: 24.x}
 
   '@vitest/expect@4.1.4':
     resolution: {integrity: sha512-iPBpra+VDuXmBFI3FMKHSFXp3Gx5HfmSCE8X67Dn+bwephCnQCaB7qWK2ldHa+8ncN8hJU8VTMcxjPpyMkUjww==}
@@ -1984,8 +1977,6 @@ snapshots:
   '@types/react@19.2.10':
     dependencies:
       csstype: 3.2.3
-
-  '@vercel/error@0.0.1': {}
 
   '@vitest/expect@4.1.4':
     dependencies:

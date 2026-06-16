@@ -112,7 +112,6 @@ These are ironclad. Every module must satisfy them. No exceptions.
 ## Dependency Rules
 
 - **Zero runtime dependencies** shipped to consumers
-- `@vercel/error` is bundled at build time via tsdown `deps.onlyBundle`
 - Never add runtime dependencies without explicit approval
 - All dependencies pinned to exact versions
 
