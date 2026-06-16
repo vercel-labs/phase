@@ -1,5 +1,7 @@
 # phase — Agent Instructions
 
+> **Status: Alpha** — APIs are evolving rapidly. Breaking changes happen without notice.
+
 ## Repository Overview
 
 Animation infrastructure for the web. Lifecycle-aware primitives that compose visibility, timing, reduced motion, and quality signals into coherent state machines with debuggable transitions.
@@ -99,12 +101,13 @@ These are ironclad. Every module must satisfy them. No exceptions.
 | Barrel files          | Separate API exports from type exports (API first, types second) |
 | JSDoc                 | On public APIs: explain _what_ and _why_, not _how_              |
 | Inline comments       | Only where code cannot speak for itself                          |
+| Boolean props         | Banned. Use string unions (e.g. `enter: 'animate' \| 'instant'`) |
 
 ## Testing Conventions
 
 - **Framework**: Vitest with `globals: true`, `environment: 'jsdom'`
 - **Location**: co-located `index.spec.ts` (or `.spec.tsx`) next to `index.ts`
-- **Shared mocks**: `src/tests/mocks.ts` (IO, RO, MQL mocks)
+- **Shared mocks**: `src/__mocks__/` (IO, RO, MQL mocks)
 
 ## Dependency Rules
 

@@ -12,6 +12,7 @@ export { useCanvas } from './use-canvas';
 export { useTween } from './use-tween';
 export { usePresence } from './use-presence';
 export { Presence } from './presence';
+export { WhenVisible } from './when-visible';
 export { Swap } from './swap';
 
 // Types
@@ -29,4 +30,5 @@ export type {
   UsePresenceResult,
 } from './use-presence';
 export type { PresenceProps } from './presence';
+export type { WhenVisibleProps } from './when-visible';
 export type { SwapProps, SwapStateProps } from './swap';

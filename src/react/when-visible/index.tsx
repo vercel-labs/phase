@@ -1,0 +1,82 @@
+import {
+  useRef,
+  type ComponentProps,
+  type JSX,
+  type ReactNode,
+  type Ref,
+} from 'react';
+
+import { prefersReducedMotion } from '../../core/loop';
+import { useSight } from '../use-sight';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface WhenVisibleProps extends ComponentProps<'div'> {
+  /** IntersectionObserver rootMargin. Default `'200px'` — generous headroom for preloading. */
+  rootMargin?: string;
+  /** IntersectionObserver threshold. */
+  threshold?: number | number[];
+  /** IntersectionObserver root element. */
+  root?: Element | null;
+  /** Content shown while awaiting intersection. Sentinel div is always rendered for IO. */
+  fallback?: ReactNode;
+  ref?: Ref<HTMLDivElement>;
+}
+
+// ---------------------------------------------------------------------------
+// WhenVisible
+// ---------------------------------------------------------------------------
+
+/**
+ * Mounts children when the element enters the viewport. One-shot: once
+ * triggered, stays mounted forever.
+ *
+ * Enter animation is handled by CSS `@starting-style`, gated by
+ * `data-enter="animate"`. Reduced motion is handled automatically — the
+ * attribute is not stamped when the user prefers reduced motion.
+ *
+ * @example
+ * <WhenVisible rootMargin="200px" className="transition-opacity data-[enter=animate]:starting:opacity-0">
+ *   <HeavyChart />
+ * </WhenVisible>
+ */
+export function WhenVisible({
+  rootMargin = '200px',
+  threshold,
+  root,
+  fallback,
+  children,
+  ref: forwardedRef,
+  ...divProps
+}: WhenVisibleProps): JSX.Element {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const { phase } = useSight(sentinelRef, {
+    observe: 'once',
+    rootMargin,
+    threshold,
+    root,
+  });
+
+  if (phase !== 'visible') {
+    return (
+      <div ref={sentinelRef} {...divProps}>
+        {fallback}
+      </div>
+    );
+  }
+
+  const motionAllowed = !prefersReducedMotion();
+
+  return (
+    <div
+      {...divProps}
+      ref={forwardedRef as React.RefObject<HTMLDivElement | null>}
+      data-phase="entered"
+      data-enter={motionAllowed ? 'animate' : undefined}
+    >
+      {children}
+    </div>
+  );
+}

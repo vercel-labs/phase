@@ -6,18 +6,14 @@ import {
   type RefObject,
 } from 'react';
 
+import { prefersReducedMotion } from '../../core/loop';
 import { useUpdateEffect } from '../_internal/use-update-effect';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type PresencePhase =
-  | 'idle'
-  | 'entering'
-  | 'entered'
-  | 'exiting'
-  | 'exited';
+export type PresencePhase = 'idle' | 'entered' | 'exiting' | 'exited';
 
 export type PresenceReason =
   | 'initial'
@@ -31,10 +27,12 @@ export type PresenceMode = 'mount' | 'reveal';
 export interface UsePresenceOptions {
   show: boolean;
   mode?: PresenceMode;
-  /** `'skip'` (default): no enter animation on first render. `'animate'`: animate on first render. */
-  initial?: 'animate' | 'skip';
-  /** Safety-net timeout in ms if transitionend/animationend doesn't fire. Default 5000. */
+  /** Controls first-mount behavior. `'animate'` (default): enter animation plays. `'instant'`: appears immediately. */
+  enter?: 'animate' | 'instant';
+  /** Safety-net timeout in ms if transitionend/animationend doesn't fire during exit. Default 5000. */
   exitDuration?: number;
+  /** Whether to respect the user's reduced motion preference. Default `'respect'`. */
+  reducedMotion?: 'respect' | 'ignore';
 }
 
 export interface UsePresenceResult {
@@ -43,6 +41,8 @@ export interface UsePresenceResult {
   /** Convenience: `phase !== 'idle' && phase !== 'exited'` for conditional rendering in mount mode. */
   mounted: boolean;
   ref: RefObject<Element | null>;
+  /** Whether the component should stamp `data-enter="animate"`. Accounts for enter option + reduced motion. */
+  enter: 'animate' | 'instant';
 }
 
 // ---------------------------------------------------------------------------
@@ -52,46 +52,41 @@ export interface UsePresenceResult {
 /**
  * Composable presence primitive for mount/unmount lifecycle with CSS transitions.
  *
- * Stamps `data-phase` on the referenced element. CSS drives the animation,
- * JS manages the lifecycle timing (when to mount, when to unmount).
+ * Enter animations are handled by CSS `@starting-style` — Phase gates them via
+ * `data-enter="animate"`. Exit animations are JS-coordinated: Phase waits for
+ * `transitionend`/`animationend` before unmounting.
  *
  * @example
- * const { phase, ref, mounted } = usePresence({ show: isOpen });
+ * const { phase, ref, mounted, enter } = usePresence({ show: isOpen });
  * if (!mounted) return null;
- * return <div ref={ref} data-phase={phase} className="transition-opacity data-[phase=entering]:opacity-0" />;
+ * return (
+ *   <div ref={ref} data-phase={phase} data-enter={enter === 'animate' ? 'animate' : undefined}
+ *     className="transition-opacity data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0" />
+ * );
  */
 export function usePresence(options: UsePresenceOptions): UsePresenceResult {
   const {
     show,
     mode = 'mount',
-    initial = 'skip',
+    enter: enterOption = 'animate',
     exitDuration = 5000,
+    reducedMotion = 'respect',
   } = options;
 
   const ref = useRef<Element | null>(null);
 
-  const initialPhase: PresencePhase = computeInitialPhase(show, initial);
+  const initialPhase: PresencePhase = show ? 'entered' : 'idle';
 
   const [phase, setPhase] = useState<PresencePhase>(initialPhase);
   const [reason, setReason] = useState<PresenceReason>('initial');
 
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const enterRafRef = useRef<number>(0);
-  const enterCleanupRef = useRef<(() => void) | null>(null);
   const exitCleanupRef = useRef<(() => void) | null>(null);
 
-  const clearAllTimers = useCallback(() => {
+  const clearTimers = useCallback(() => {
     if (exitTimerRef.current !== null) {
       clearTimeout(exitTimerRef.current);
       exitTimerRef.current = null;
-    }
-    if (enterRafRef.current) {
-      cancelAnimationFrame(enterRafRef.current);
-      enterRafRef.current = 0;
-    }
-    if (enterCleanupRef.current) {
-      enterCleanupRef.current();
-      enterCleanupRef.current = null;
     }
     if (exitCleanupRef.current) {
       exitCleanupRef.current();
@@ -99,102 +94,53 @@ export function usePresence(options: UsePresenceOptions): UsePresenceResult {
     }
   }, []);
 
+  useEffect(() => () => clearTimers(), [clearTimers]);
+
   useUpdateEffect(() => {
-    clearAllTimers();
+    clearTimers();
 
     if (show) {
-      handleEnter(ref, setPhase, setReason, enterRafRef, enterCleanupRef);
+      setPhase((prev) => {
+        setReason(prev === 'exiting' ? 'interrupted' : 'show');
+        return 'entered';
+      });
     } else {
-      handleExit(
-        ref,
-        mode,
-        exitDuration,
-        setPhase,
-        setReason,
-        clearAllTimers,
-        exitTimerRef,
-        exitCleanupRef,
-      );
+      const shouldSkipAnimation =
+        reducedMotion === 'respect' && prefersReducedMotion();
+
+      if (shouldSkipAnimation) {
+        const exitTarget: PresencePhase = mode === 'reveal' ? 'idle' : 'exited';
+        setPhase(exitTarget);
+        setReason('animation-end');
+      } else {
+        handleExit(
+          ref,
+          mode,
+          exitDuration,
+          setPhase,
+          setReason,
+          clearTimers,
+          exitTimerRef,
+          exitCleanupRef,
+        );
+      }
     }
   }, [show]);
 
-  // `initial: 'animate'` starts the phase at 'entering' on mount. Since
-  // useUpdateEffect skips the first render, the enter completion must be
-  // scheduled here or the element stays stuck at 'entering' forever.
-  useEffect(() => {
-    if (initialPhase === 'entering') {
-      handleEnter(ref, setPhase, setReason, enterRafRef, enterCleanupRef);
-    }
-    return () => clearAllTimers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const mounted: boolean = phase !== 'idle' && phase !== 'exited';
 
-  return { phase, phaseReason: reason, mounted, ref };
+  const isFirstMount = reason === 'initial';
+  const wantsAnimation = !(isFirstMount && enterOption === 'instant');
+  const motionAllowed = reducedMotion === 'ignore' || !prefersReducedMotion();
+  const enter: 'animate' | 'instant' =
+    wantsAnimation && motionAllowed ? 'animate' : 'instant';
+
+  return { phase, phaseReason: reason, mounted, ref, enter };
 }
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-function computeInitialPhase(
-  show: boolean,
-  initial: 'animate' | 'skip',
-): PresencePhase {
-  if (!show) return 'idle';
-  if (initial === 'skip') return 'entered';
-  return 'entering';
-}
-
-function handleEnter(
-  ref: RefObject<Element | null>,
-  setPhase: (
-    phase: PresencePhase | ((prev: PresencePhase) => PresencePhase),
-  ) => void,
-  setReason: (reason: PresenceReason) => void,
-  enterRafRef: React.RefObject<number>,
-  enterCleanupRef: React.RefObject<(() => void) | null>,
-): void {
-  setPhase((prev) => {
-    setReason(prev === 'exiting' ? 'interrupted' : 'show');
-    return 'entering';
-  });
-
-  const element: Element | null = ref.current;
-
-  function completeEnter(): void {
-    setPhase((current) => (current === 'entering' ? 'entered' : current));
-    setReason('animation-end');
-    cleanup();
-  }
-
-  function cleanup(): void {
-    if (element) {
-      element.removeEventListener('transitionend', completeEnter);
-      element.removeEventListener('animationend', completeEnter);
-    }
-    if (enterRafRef.current) {
-      cancelAnimationFrame(enterRafRef.current);
-      enterRafRef.current = 0;
-    }
-    enterCleanupRef.current = null;
-  }
-
-  enterCleanupRef.current = cleanup;
-
-  if (element) {
-    element.addEventListener('transitionend', completeEnter, { once: true });
-    element.addEventListener('animationend', completeEnter, { once: true });
-  }
-
-  enterRafRef.current = requestAnimationFrame(() => {
-    enterRafRef.current = requestAnimationFrame(() => {
-      enterRafRef.current = 0;
-      completeEnter();
-    });
-  });
-}
 
 function handleExit(
   ref: RefObject<Element | null>,
@@ -204,7 +150,7 @@ function handleExit(
     phase: PresencePhase | ((prev: PresencePhase) => PresencePhase),
   ) => void,
   setReason: (reason: PresenceReason) => void,
-  clearAllTimers: () => void,
+  clearTimers: () => void,
   exitTimerRef: React.RefObject<ReturnType<typeof setTimeout> | null>,
   exitCleanupRef: React.RefObject<(() => void) | null>,
 ): void {
@@ -215,7 +161,7 @@ function handleExit(
   const element: Element | null = ref.current;
 
   function completeExit(): void {
-    clearAllTimers();
+    clearTimers();
     setPhase((current) => {
       if (current !== 'exiting') return current;
       setReason('animation-end');

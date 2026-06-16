@@ -4,6 +4,8 @@
 
 # ▲ phase
 
+> **Status: Alpha** — APIs are evolving rapidly. Expect breaking changes.
+
 Lifecycle-aware animation infrastructure for the web.
 
 ## Table of contents
@@ -23,9 +25,13 @@ Lifecycle-aware animation infrastructure for the web.
   - [useLoop](#useloop)
   - [useCanvas](#usecanvas)
   - [useTween](#usetween)
-  - [usePresence and Presence](#usepresence-and-presence)
-  - [Swap](#swap)
+  - [usePresence](#usepresence)
   - [Utility hooks](#utility-hooks)
+- [React components](#react-components)
+  - [How animations work](#how-animations-work)
+  - [Presence](#presence)
+  - [WhenVisible](#whenvisible)
+  - [Swap](#swap)
 - [Guarantees](#guarantees)
 - [Errors](#errors)
 
@@ -348,44 +354,148 @@ Use `useTween` for single values where the render is cheap (counters, progress b
 
 Reduced motion default: `'complete'` — jumps instantly to target. A toggle should reach its destination; it just shouldn't animate getting there.
 
-### usePresence and Presence
+### usePresence
 
-The missing piece between CSS animations and React unmounting. CSS `@starting-style` handles enter, but exit animations require JS to defer unmounting until the animation completes.
+The hook behind the `<Presence>` component. Use directly when you need full control over the lifecycle DOM.
 
 ```tsx
 import { usePresence } from 'phase/react';
 
-const { ref, phase, mounted } = usePresence({
-  show: isOpen,
-  exitDuration: 300,
-});
+const { phase, ref, mounted, enter } = usePresence({ show: isOpen });
+if (!mounted) return null;
+return (
+  <div
+    ref={ref}
+    data-phase={phase}
+    data-enter={enter === 'animate' ? 'animate' : undefined}
+    className="transition-opacity data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0"
+  />
+);
 ```
 
 #### Presence phases
 
-`idle` → `entering` → `entered` → `exiting` → `exited`
+`idle` → `entered` → `exiting` → `exited`
 
-The `<Presence>` component wraps this into a `div` that stamps `data-phase` automatically. Style with CSS:
+| Phase     | Meaning                                  | `mounted` |
+| --------- | ---------------------------------------- | --------- |
+| `idle`    | Not shown (initial or after reveal exit) | `false`   |
+| `entered` | Visible and active                       | `true`    |
+| `exiting` | Exit animation in progress               | `true`    |
+| `exited`  | Exit complete, ready for unmount         | `false`   |
+
+#### Options
+
+| Option          | Type                     | Default     | Description                        |
+| --------------- | ------------------------ | ----------- | ---------------------------------- |
+| `show`          | `boolean`                | required    | Visibility toggle                  |
+| `mode`          | `'mount' \| 'reveal'`    | `'mount'`   | Unmount after exit or stay in DOM  |
+| `enter`         | `'animate' \| 'instant'` | `'animate'` | First-mount behavior               |
+| `exitDuration`  | `number`                 | `5000`      | Safety timeout for exit (ms)       |
+| `reducedMotion` | `'respect' \| 'ignore'`  | `'respect'` | Reduced motion preference handling |
+
+### Utility hooks
+
+| Hook                | Purpose                                              |
+| ------------------- | ---------------------------------------------------- |
+| `useSight`          | Element visibility as a phase (`visible` / `hidden`) |
+| `useSize`           | Element dimensions via shared ResizeObserver         |
+| `useContainerQuery` | Breakpoint matching against element width            |
+| `useMediaQuery`     | CSS media query subscription (shared MQL pool)       |
+| `useSyncedRef`      | Ref always in sync with latest value                 |
+| `useStableCallback` | Stable-identity function that calls latest closure   |
+
+## React components
+
+### How animations work
+
+Phase uses an asymmetric model for enter and exit animations, using the best tool for each:
+
+**Enter (element appears in DOM):** CSS `@starting-style` handles the animation natively. Phase gates it via the `data-enter="animate"` attribute. When present, the browser animates from the `@starting-style` values on first paint. Zero JS execution during the animation, zero frame delay.
+
+**Exit (element removed from DOM):** JS must coordinate because you can't animate an unmounted element. Phase stamps `data-phase="exiting"`, waits for `transitionend`/`animationend` (or a safety timeout), then unmounts.
+
+This asymmetry reflects a platform constraint: CSS has a native primitive for enter (`@starting-style`), but no primitive for "animate then remove from DOM." The result is optimal performance for both directions.
+
+**Reduced motion:** Handled automatically. When `prefers-reduced-motion: reduce` is active, Phase suppresses `data-enter="animate"` (no enter animation) and skips the exit animation entirely (instant unmount). Zero consumer effort required.
+
+**The CSS pattern:**
+
+```tsx
+className =
+  'transition-opacity data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0';
+```
+
+One pattern works everywhere — Presence, WhenVisible, Swap. No `motion-reduce:` needed.
+
+### Presence
+
+Renders a `div` that manages its own mounting lifecycle. Stamps `data-phase` for exit and `data-enter="animate"` for enter.
 
 ```tsx
 import { Presence } from 'phase/react';
 
 <Presence
   show={isOpen}
-  className="transition-all duration-300
-    data-[phase=entering]:opacity-0 data-[phase=entering]:translate-y-4
-    data-[phase=exiting]:opacity-0 data-[phase=exiting]:scale-95"
+  className="transition-opacity data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0"
 >
-  Content slides up on enter, shrinks on exit
+  Modal content
 </Presence>;
 ```
 
-#### Two modes
+| Prop            | Type                     | Default     | Description                       |
+| --------------- | ------------------------ | ----------- | --------------------------------- |
+| `show`          | `boolean`                | required    | Visibility toggle                 |
+| `mode`          | `'mount' \| 'reveal'`    | `'mount'`   | Unmount after exit or stay in DOM |
+| `enter`         | `'animate' \| 'instant'` | `'animate'` | First-mount animation behavior    |
+| `exitDuration`  | `number`                 | `5000`      | Safety timeout for exit (ms)      |
+| `reducedMotion` | `'respect' \| 'ignore'`  | `'respect'` | Reduced motion handling           |
+
+Two modes:
 
 | Mode       | Behavior                                           | Use case                                 |
 | ---------- | -------------------------------------------------- | ---------------------------------------- |
 | `'mount'`  | Added to DOM on show, removed after exit completes | Modals, toasts, menus                    |
 | `'reveal'` | Always in DOM, visibility toggled via phase        | Scroll reveals, SEO content, IO re-entry |
+
+### WhenVisible
+
+Mounts children when the element enters the viewport. One-shot: once triggered, stays mounted forever. Uses pooled IntersectionObserver via `useSight`.
+
+```tsx
+import { WhenVisible } from 'phase/react';
+
+<WhenVisible
+  rootMargin="200px"
+  className="transition-opacity data-[enter=animate]:starting:opacity-0"
+>
+  <HeavyInteractiveChart />
+</WhenVisible>;
+```
+
+The common pattern for viewport-gated lazy loading:
+
+```tsx
+const HeavyChart = lazy(() => import('./heavy-chart'));
+
+<WhenVisible
+  rootMargin="200px"
+  className="transition-opacity data-[enter=animate]:starting:opacity-0"
+>
+  <Suspense fallback={<Skeleton />}>
+    <HeavyChart />
+  </Suspense>
+</WhenVisible>;
+```
+
+| Prop         | Type                 | Default   | Description                       |
+| ------------ | -------------------- | --------- | --------------------------------- |
+| `rootMargin` | `string`             | `'200px'` | IO rootMargin (preload headroom)  |
+| `threshold`  | `number \| number[]` | —         | IO threshold                      |
+| `root`       | `Element \| null`    | —         | IO root element                   |
+| `fallback`   | `ReactNode`          | —         | Shown while awaiting intersection |
+
+Reduced motion is automatic — `data-enter="animate"` is not stamped when the user prefers reduced motion.
 
 ### Swap
 
@@ -403,25 +513,14 @@ import { Swap } from 'phase/react';
   </Swap.State>
   <Swap.State
     id="success"
-    className="transition-all data-[phase=entering]:opacity-0"
+    className="transition-all data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0"
   >
     <SuccessMessage />
   </Swap.State>
 </Swap>;
 ```
 
-Rapid changes (A → B → C during A's exit) skip intermediate states and advance directly to the latest `active`.
-
-### Utility hooks
-
-| Hook                | Purpose                                              |
-| ------------------- | ---------------------------------------------------- |
-| `useSight`          | Element visibility as a phase (`visible` / `hidden`) |
-| `useSize`           | Element dimensions via shared ResizeObserver         |
-| `useContainerQuery` | Breakpoint matching against element width            |
-| `useMediaQuery`     | CSS media query subscription (shared MQL pool)       |
-| `useSyncedRef`      | Ref always in sync with latest value                 |
-| `useStableCallback` | Stable-identity function that calls latest closure   |
+Rapid changes (A → B → C during A's exit) skip intermediate states and advance directly to the latest `active`. First state appears instantly (CLS prevention); subsequent states animate via `@starting-style`.
 
 ## Guarantees
 

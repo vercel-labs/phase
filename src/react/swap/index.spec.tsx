@@ -2,10 +2,6 @@ import { render, screen, act } from '@testing-library/react';
 
 import { Swap } from '.';
 
-function flushDoubleRaf(): void {
-  vi.advanceTimersByTime(32);
-}
-
 function flushExitTimeout(ms = 5000): void {
   vi.advanceTimersByTime(ms);
 }
@@ -92,9 +88,6 @@ describe('exit-then-enter sequencing', () => {
     expect(screen.getByTestId('state-b')).toBeTruthy();
 
     const wrapperB = getWrapper('state-b');
-    expect(['entering', 'entered']).toContain(wrapperB.dataset.phase);
-
-    act(() => flushDoubleRaf());
     expect(wrapperB.dataset.phase).toBe('entered');
   });
 });
@@ -139,9 +132,6 @@ describe('interrupt', () => {
     rerender(<SwapHarness active="a" />);
 
     expect(screen.getByTestId('state-a')).toBeTruthy();
-    expect(wrapperA.dataset.phase).toBe('entering');
-
-    act(() => flushDoubleRaf());
     expect(wrapperA.dataset.phase).toBe('entered');
 
     expect(screen.queryByTestId('state-b')).toBeNull();
@@ -179,19 +169,20 @@ describe('initial-skip-then-animate', () => {
     expect(wrapper.dataset.phase).toBe('entered');
   });
 
-  it('after first swap completes, new state enters with animation', () => {
+  it('after first swap completes, new state enters immediately with data-enter="animate"', () => {
     const { rerender } = render(<SwapHarness active="a" />);
+
+    // First state has no data-enter (instant, CLS prevention)
+    const wrapperA = getWrapper('state-a');
+    expect(wrapperA.dataset.enter).toBeUndefined();
 
     // Swap to B — A exits
     rerender(<SwapHarness active="b" />);
     act(() => flushExitTimeout());
 
-    // B should enter with animation (entering -> entered)
+    // B enters immediately at 'entered' with data-enter="animate"
     const wrapperB = getWrapper('state-b');
-    expect(['entering', 'entered']).toContain(wrapperB.dataset.phase);
-
-    // Flush the enter animation
-    act(() => flushDoubleRaf());
     expect(wrapperB.dataset.phase).toBe('entered');
+    expect(wrapperB.dataset.enter).toBe('animate');
   });
 });

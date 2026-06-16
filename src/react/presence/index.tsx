@@ -10,21 +10,25 @@ import { usePresence, type PresenceMode } from '../use-presence';
 export interface PresenceProps extends ComponentProps<'div'> {
   show: boolean;
   mode?: PresenceMode;
-  /** `'skip'` (default): no enter animation on first render. `'animate'`: animate on first render. */
-  initial?: 'animate' | 'skip';
-  /** Safety-net timeout in ms if transitionend/animationend doesn't fire. Default 5000. */
+  /** Controls first-mount behavior. `'animate'` (default): enter animation plays. `'instant'`: appears immediately. */
+  enter?: 'animate' | 'instant';
+  /** Safety-net timeout in ms if transitionend/animationend doesn't fire during exit. Default 5000. */
   exitDuration?: number;
+  /** Whether to respect the user's reduced motion preference. Default `'respect'`. */
+  reducedMotion?: 'respect' | 'ignore';
   ref?: Ref<HTMLDivElement>;
 }
 
 /**
  * Renders a `div` that manages its own mounting lifecycle.
- * Auto-stamps `data-phase` with the current PresencePhase value.
+ *
+ * Stamps `data-phase` for exit animations and `data-enter="animate"` to gate
+ * CSS `@starting-style` enter animations. Reduced motion is handled automatically.
  *
  * @example
  * <Presence
  *   show={isOpen}
- *   className="transition-opacity data-[phase=entering]:opacity-0 data-[phase=exiting]:opacity-0"
+ *   className="transition-opacity data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0"
  * >
  *   Modal content
  * </Presence>
@@ -32,17 +36,19 @@ export interface PresenceProps extends ComponentProps<'div'> {
 export function Presence({
   show,
   mode,
-  initial,
+  enter: enterOption,
   exitDuration,
+  reducedMotion,
   ref: forwardedRef,
   children,
   ...divProps
 }: PresenceProps): JSX.Element | null {
-  const { phase, ref, mounted } = usePresence({
+  const { phase, ref, mounted, enter } = usePresence({
     show,
     mode,
-    initial,
+    enter: enterOption,
     exitDuration,
+    reducedMotion,
   });
 
   useImperativeHandle(forwardedRef, () => ref.current as HTMLDivElement);
@@ -54,6 +60,7 @@ export function Presence({
       {...divProps}
       ref={ref as React.RefObject<HTMLDivElement | null>}
       data-phase={phase}
+      data-enter={enter === 'animate' ? 'animate' : undefined}
     >
       {children}
     </div>
