@@ -56,16 +56,16 @@
   ],
   "exports": {
     ".": {
-      "default": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./ease": {
-      "default": "./dist/ease.js",
-      "types": "./dist/ease.d.ts"
+      "types": "./dist/ease.d.ts",
+      "default": "./dist/ease.js"
     },
     "./react": {
-      "default": "./dist/react.js",
-      "types": "./dist/react.d.ts"
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
     }
   },
   "engines": {
