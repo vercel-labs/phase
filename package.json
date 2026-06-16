@@ -23,6 +23,8 @@
     "format:fix": "oxfmt .",
     "prepublishOnly": "pnpm build",
     "postinstall": "lefthook install || true",
+    "size": "size-limit",
+    "size:why": "size-limit --why",
     "validate": "pnpm run --parallel '/^(typecheck|lint|format|test)$/'"
   },
   "peerDependencies": {
@@ -37,6 +39,8 @@
     "nostics": "^1.0.0"
   },
   "devDependencies": {
+    "@size-limit/esbuild-why": "^12.1.0",
+    "@size-limit/preset-small-lib": "^12.1.0",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "16.3.0",
     "@types/node": "25.6.0",
@@ -48,6 +52,7 @@
     "oxlint": "1.59.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "size-limit": "^12.1.0",
     "tsdown": "0.21.7",
     "typescript": "6.0.2",
     "vitest": "4.1.4"
@@ -74,5 +79,59 @@
   "engines": {
     "node": "24.x"
   },
+  "size-limit": [
+    {
+      "name": "core (full)",
+      "path": "dist/index.js",
+      "import": "*"
+    },
+    {
+      "name": "ease utils",
+      "path": "dist/ease.js",
+      "import": "{ easeOutCubic, lerp, clamp, remap }"
+    },
+    {
+      "name": "createLoop",
+      "path": "dist/index.js",
+      "import": "{ createLoop }"
+    },
+    {
+      "name": "createSight",
+      "path": "dist/index.js",
+      "import": "{ createSight }"
+    },
+    {
+      "name": "createTicker",
+      "path": "dist/index.js",
+      "import": "{ createTicker }"
+    },
+    {
+      "name": "react (full)",
+      "path": "dist/react.js",
+      "import": "*",
+      "ignore": [
+        "react",
+        "react-dom"
+      ]
+    },
+    {
+      "name": "react useLoop",
+      "path": "dist/react.js",
+      "import": "{ useLoop }",
+      "ignore": [
+        "react",
+        "react-dom"
+      ]
+    },
+    {
+      "name": "react Presence + usePresence",
+      "path": "dist/react.js",
+      "import": "{ Presence, usePresence }",
+      "ignore": [
+        "react",
+        "react-dom"
+      ]
+    }
+  ],
   "packageManager": "pnpm@10.32.1"
 }
