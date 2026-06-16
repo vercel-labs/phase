@@ -1,4 +1,4 @@
-import { serverContextError } from '../_internal/errors';
+import { diagnostics } from '../_internal/errors';
 import {
   readMediaQuery,
   subscribeMediaQuery,
@@ -104,7 +104,7 @@ export function prefersReducedMotion(): boolean {
  */
 export function createLoop(options: LoopOptions): Loop {
   if (typeof requestAnimationFrame === 'undefined') {
-    serverContextError('createLoop');
+    throw diagnostics.server_context({ fn: 'createLoop' });
   }
 
   const {

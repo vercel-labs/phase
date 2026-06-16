@@ -1,9 +1,9 @@
-import { isPhaseError, missingContextError, tickerStoppedError } from '.';
+import { diagnostics, isPhaseError } from '.';
 
 describe('isPhaseError', () => {
   it('returns true for PhaseError instances', () => {
     try {
-      tickerStoppedError();
+      throw diagnostics.ticker_stopped();
     } catch (err) {
       expect(isPhaseError(err)).toBe(true);
     }
@@ -29,7 +29,10 @@ describe('isPhaseError', () => {
 describe('diagnostics', () => {
   it('exposes the code, message, fix, and docs link', () => {
     try {
-      missingContextError('Swap.State', 'Swap');
+      throw diagnostics.missing_context({
+        child: 'Swap.State',
+        parent: 'Swap',
+      });
     } catch (err) {
       if (!isPhaseError(err)) throw err;
       expect(err.name).toBe('missing_context');

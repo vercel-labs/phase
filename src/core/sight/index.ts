@@ -1,4 +1,4 @@
-import { serverContextError } from '../_internal/errors';
+import { diagnostics } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 
 // ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ export interface Sight {
  */
 export function createSight(options: SightOptions): Sight {
   if (typeof document === 'undefined') {
-    serverContextError('createSight');
+    throw diagnostics.server_context({ fn: 'createSight' });
   }
 
   const { element, intersectionOptions, onPhaseChange } = options;

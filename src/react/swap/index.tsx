@@ -12,7 +12,7 @@ import {
   type Ref,
 } from 'react';
 
-import { missingContextError } from '../../core/_internal/errors';
+import { diagnostics } from '../../core/_internal/errors';
 import { usePresence } from '../use-presence';
 import { useSyncedRef } from '../use-synced-ref';
 
@@ -107,7 +107,9 @@ function SwapState({
   ...divProps
 }: SwapStateProps): JSX.Element | null {
   const ctx = use(SwapCtx);
-  if (!ctx) missingContextError('Swap.State', 'Swap');
+  if (!ctx) {
+    throw diagnostics.missing_context({ child: 'Swap.State', parent: 'Swap' });
+  }
 
   const isCurrent: boolean = ctx.current === id;
   const show: boolean = isCurrent && ctx.active === id;

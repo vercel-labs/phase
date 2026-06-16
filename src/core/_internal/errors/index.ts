@@ -1,4 +1,5 @@
-import { Diagnostic, defineDiagnostics } from 'nostics';
+import { Diagnostic, createConsoleReporter, defineDiagnostics } from 'nostics';
+import { createDevReporter } from 'nostics/reporters/dev';
 
 /**
  * A Phase diagnostic. Every Phase error helper throws an instance of this.
@@ -7,8 +8,12 @@ import { Diagnostic, defineDiagnostics } from 'nostics';
 export { Diagnostic as PhaseError };
 
 /** Scoped diagnostic catalog - every code documents to `vercel.com/docs/errors/phase/<code>`. */
-const diagnostics = /*#__PURE__*/ defineDiagnostics({
+export const diagnostics = /*#__PURE__*/ defineDiagnostics({
   docsBase: 'https://vercel.com/docs/errors/phase',
+  reporters: [
+    /*#__PURE__*/ createConsoleReporter(),
+    /*#__PURE__*/ createDevReporter(),
+  ],
   codes: {
     server_context: {
       why: (p: { fn: string }) =>
@@ -53,30 +58,3 @@ export type PhaseErrorCode = keyof typeof diagnostics;
 /** Check if a value is a Phase diagnostic. */
 export const isPhaseError = (error: unknown): error is Diagnostic =>
   error instanceof Diagnostic;
-
-// TODO: clean up these wrapper functions — now that nostics gives each code a
-// typed handle, call sites can `throw diagnostics.<code>(params)` directly and
-// these `*Error()` helpers can be removed.
-export function serverContextError(fn: string): never {
-  throw diagnostics.server_context({ fn });
-}
-
-export function noElementError(fn: string): never {
-  throw diagnostics.no_element({ fn });
-}
-
-export function sightDisposedError(): never {
-  throw diagnostics.sight_disposed();
-}
-
-export function invalidDurationError(fn: string, value: number): never {
-  throw diagnostics.invalid_duration({ fn, value });
-}
-
-export function tickerStoppedError(): never {
-  throw diagnostics.ticker_stopped();
-}
-
-export function missingContextError(child: string, parent: string): never {
-  throw diagnostics.missing_context({ child, parent });
-}
