@@ -60,7 +60,7 @@ That's it. Behind those four lines:
 - **Resumes without skipping a beat** — no teleporting, no lost animation time
 - **Clean teardown** — unmount and walk away, nothing leaks
 
-Visibility, reduced motion, frame timing, quality signals, teardown. Handled. The rest of this README explains how.
+Visibility, reduced motion, frame timing, quality signals, teardown & more. Handled.
 
 ## Philosophy
 
@@ -143,15 +143,54 @@ loop.start();
 | `paused`  | Temporarily stopped, will resume | `sight`, `reduced-motion`, `enabled`, `context-lost` |
 | `stopped` | Permanently disposed             | `manual`, `disposed`                                 |
 
+#### Quality signals
+
+Phase and quality are orthogonal axes. A loop can be `running` + `degraded` — still animating, but at reduced fidelity to preserve resources.
+
+| Quality    | Meaning               | What changes                      |
+| ---------- | --------------------- | --------------------------------- |
+| `full`     | Normal operation      | Configured FPS, full DPR          |
+| `degraded` | Resources constrained | FPS capped to 30, DPR drops to 1x |
+
+Two signals trigger degradation:
+
+| Trigger      | `qualityReason`  | When                                           | Recovery                 |
+| ------------ | ---------------- | ---------------------------------------------- | ------------------------ |
+| Window blur  | `'unfocused'`    | User switches to another window                | Recovers on window focus |
+| Frame budget | `'frame-budget'` | 3+ consecutive frames exceed the 16.6ms budget | Does not auto-recover    |
+
+Read `loop.quality` and `loop.qualityReason` to adapt your own rendering — fewer particles, simpler shaders, skip non-essential visual passes.
+
+#### The `degraded` option
+
+Controls how the loop responds when quality degrades. Mirrors the `reducedMotion` pattern — same three choices, same philosophy.
+
+| Value        | Behavior                                             | Use case                                             |
+| ------------ | ---------------------------------------------------- | ---------------------------------------------------- |
+| `'throttle'` | Cap FPS (default 30, configurable via `degradedFps`) | Most animations — still runs, just slower            |
+| `'pause'`    | Pause the loop entirely                              | Heavy canvas/WebGL — if it can't run well, don't run |
+| `'ignore'`   | Keep running at full quality                         | Critical UI that must never degrade                  |
+
+```ts
+createLoop({
+  element: el,
+  onTick: draw,
+  degraded: 'throttle', // default
+  degradedFps: 20, // only accepted when degraded is 'throttle'
+});
+```
+
 #### Loop options
 
-| Option          | Type                                | Default   | Description                               |
-| --------------- | ----------------------------------- | --------- | ----------------------------------------- |
-| `element`       | `Element`                           | required  | Element to observe for visibility         |
-| `onTick`        | `(frame: FrameState) => void`       | required  | Called each frame while running           |
-| `fps`           | `number`                            | —         | Cap frames per second                     |
-| `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'pause'` | Behavior when user prefers reduced motion |
-| `onPhaseChange` | `(phase, reason) => void`           | —         | Called on every phase transition          |
+| Option          | Type                                | Default      | Description                               |
+| --------------- | ----------------------------------- | ------------ | ----------------------------------------- |
+| `element`       | `Element`                           | required     | Element to observe for visibility         |
+| `onTick`        | `(frame: FrameState) => void`       | required     | Called each frame while running           |
+| `fps`           | `number`                            | —            | Cap frames per second                     |
+| `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion |
+| `degraded`      | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades            |
+| `degradedFps`   | `number`                            | `30`         | FPS cap in degraded throttle mode         |
+| `onPhaseChange` | `(phase, reason) => void`           | —            | Called on every phase transition          |
 
 ### createTicker
 

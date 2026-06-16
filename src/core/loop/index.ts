@@ -13,6 +13,7 @@ import type { FrameState, Ticker } from '../tick';
 // ---------------------------------------------------------------------------
 
 export type ReducedMotionBehavior = 'pause' | 'complete' | 'ignore';
+export type DegradedBehavior = 'throttle' | 'pause' | 'ignore';
 
 export type LoopPhase = 'idle' | 'running' | 'paused' | 'stopped';
 export type LoopReason =
@@ -21,6 +22,7 @@ export type LoopReason =
   | 'resumed'
   | 'sight'
   | 'reduced-motion'
+  | 'degraded'
   | 'enabled'
   | 'context-lost'
   | 'manual'
@@ -29,7 +31,7 @@ export type LoopReason =
 export type Quality = 'full' | 'degraded';
 export type DegradedReason = 'unfocused' | 'frame-budget';
 
-export interface LoopOptions {
+interface LoopOptionsBase {
   element: Element;
   /**
    * Called every frame. Write to refs or DOM directly — never call React
@@ -42,6 +44,13 @@ export interface LoopOptions {
   start?: 'auto' | 'manual';
   onPhaseChange?: (phase: LoopPhase, reason: LoopReason) => void;
 }
+
+type DegradedOptions =
+  | { degraded?: 'throttle'; degradedFps?: number }
+  | { degraded: 'pause' }
+  | { degraded: 'ignore' };
+
+export type LoopOptions = LoopOptionsBase & DegradedOptions;
 
 export interface Loop {
   start(): void;
@@ -61,7 +70,7 @@ const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 /** How many consecutive over-budget frames before degrading quality. */
 const OVER_BUDGET_THRESHOLD = 3;
 
-/** FPS cap applied when quality is degraded. */
+/** FPS cap applied when quality is degraded (throttle mode). */
 const DEGRADED_FPS_CAP = 30;
 
 // ---------------------------------------------------------------------------
@@ -103,10 +112,18 @@ export function createLoop(options: LoopOptions): Loop {
     onTick,
     fps: baseFps,
     reducedMotion = 'pause',
+    degraded = 'throttle' as DegradedBehavior,
+    degradedFps: configuredDegradedFps,
     intersectionOptions,
     start: startMode = 'auto',
     onPhaseChange,
-  } = options;
+  } = options as LoopOptionsBase & {
+    degraded?: DegradedBehavior;
+    degradedFps?: number;
+  };
+
+  const degradedFps: number | undefined =
+    degraded === 'throttle' ? configuredDegradedFps : undefined;
 
   // --- State ---
 
@@ -120,6 +137,9 @@ export function createLoop(options: LoopOptions): Loop {
   let intentStarted = false;
   let overBudgetCount = 0;
   let ticker: Ticker | null = null;
+
+  // Quality signal flags
+  let focusDegraded = false;
 
   // Set by setQuality when the ticker needs rebuilding with a new FPS cap.
   // Checked after onTick returns to avoid re-entrant ticker destruction.
@@ -135,21 +155,41 @@ export function createLoop(options: LoopOptions): Loop {
   }
 
   function setQuality(quality: Quality, reason?: DegradedReason): void {
-    if (_quality === quality) return;
+    const changed = _quality !== quality;
     _quality = quality;
     _qualityReason = reason;
 
-    // Schedule a ticker rebuild so the new FPS cap takes effect.
-    // Can't rebuild synchronously here because this may be called from inside onTick.
-    if (ticker && _phase === 'running') {
-      pendingTickerRebuild = true;
+    if (!changed) return;
+
+    if (degraded === 'throttle') {
+      // Schedule a ticker rebuild so the new FPS cap takes effect.
+      if (ticker && _phase === 'running') {
+        pendingTickerRebuild = true;
+      }
+    } else if (degraded === 'pause') {
+      reconcile();
     }
+    // 'ignore': state updates only, no auto-action
+  }
+
+  /** Evaluate all quality signals and pick the highest-priority active one. */
+  function reconcileQuality(): void {
+    if (focusDegraded) {
+      setQuality('degraded', 'unfocused');
+      return;
+    }
+    if (overBudgetCount >= OVER_BUDGET_THRESHOLD) {
+      setQuality('degraded', 'frame-budget');
+      return;
+    }
+    setQuality('full');
   }
 
   function getEffectiveFps(): number | undefined {
     if (_quality !== 'degraded') return baseFps;
-    if (baseFps === undefined) return DEGRADED_FPS_CAP;
-    return Math.min(baseFps, DEGRADED_FPS_CAP);
+    const cap: number = degradedFps ?? DEGRADED_FPS_CAP;
+    if (baseFps === undefined) return cap;
+    return Math.min(baseFps, cap);
   }
 
   // --- Ticker lifecycle ---
@@ -187,8 +227,8 @@ export function createLoop(options: LoopOptions): Loop {
     }
 
     overBudgetCount++;
-    if (overBudgetCount >= OVER_BUDGET_THRESHOLD && _quality !== 'degraded') {
-      setQuality('degraded', 'frame-budget');
+    if (overBudgetCount >= OVER_BUDGET_THRESHOLD) {
+      reconcileQuality();
     }
   }
 
@@ -199,6 +239,7 @@ export function createLoop(options: LoopOptions): Loop {
     if (reducedMotionActive && reducedMotion === 'pause')
       return 'reduced-motion';
     if (!sightVisible) return 'sight';
+    if (degraded === 'pause' && _quality === 'degraded') return 'degraded';
     return null;
   }
 
@@ -241,15 +282,8 @@ export function createLoop(options: LoopOptions): Loop {
   }
 
   function onFocusChange(): void {
-    const focused: boolean = document.hasFocus();
-    if (!focused && _quality !== 'degraded') {
-      setQuality('degraded', 'unfocused');
-      return;
-    }
-    // Only recover if we degraded because of unfocus (not frame-budget).
-    if (focused && _qualityReason === 'unfocused') {
-      setQuality('full');
-    }
+    focusDegraded = !document.hasFocus();
+    reconcileQuality();
   }
 
   // --- Init subsystems ---

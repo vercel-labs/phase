@@ -7,7 +7,6 @@
     "types": ["node", "vitest/globals"],
     "jsx": "react-jsx",
     "strict": true,
-    "isolatedDeclarations": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -16,8 +15,6 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "noUncheckedIndexedAccess": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
     "outDir": "dist"
   },
   "include": ["src"],

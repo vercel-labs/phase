@@ -34,6 +34,7 @@ export type {
   SightReason,
 } from './core/sight';
 export type {
+  DegradedBehavior,
   DegradedReason,
   Loop,
   LoopOptions,

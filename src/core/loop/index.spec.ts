@@ -331,6 +331,68 @@ describe('quality signal', () => {
   });
 });
 
+describe('quality signal - degraded option', () => {
+  it('degraded: pause + unfocused -> loop pauses with reason=degraded', async () => {
+    const { createLoop } = await getModule();
+    const el = document.createElement('div');
+    const loop = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      degraded: 'pause',
+    });
+    makeSightVisible(el);
+
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+
+    expect(loop.phase).toBe('paused');
+    expect(loop.phaseReason).toBe('degraded');
+    expect(loop.quality).toBe('degraded');
+    loop.stop();
+  });
+
+  it('degraded: ignore + unfocused -> quality updates but loop keeps running', async () => {
+    const { createLoop } = await getModule();
+    const el = document.createElement('div');
+    const loop = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      degraded: 'ignore',
+    });
+    makeSightVisible(el);
+
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+
+    expect(loop.phase).toBe('running');
+    expect(loop.quality).toBe('degraded');
+    expect(loop.qualityReason).toBe('unfocused');
+    loop.stop();
+  });
+
+  it('degraded: pause recovers when focus returns', async () => {
+    const { createLoop } = await getModule();
+    const el = document.createElement('div');
+    const loop = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      degraded: 'pause',
+    });
+    makeSightVisible(el);
+
+    const hasFocusSpy = vi.spyOn(document, 'hasFocus');
+    hasFocusSpy.mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+    expect(loop.phase).toBe('paused');
+
+    hasFocusSpy.mockReturnValue(true);
+    window.dispatchEvent(new Event('focus'));
+    expect(loop.phase).toBe('running');
+    expect(loop.quality).toBe('full');
+    loop.stop();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // onPhaseChange callback
 // ---------------------------------------------------------------------------
