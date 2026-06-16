@@ -1,4 +1,4 @@
-import { PhaseError, isPhaseError, tickerStoppedError } from '.';
+import { isPhaseError, missingContextError, tickerStoppedError } from '.';
 
 describe('isPhaseError', () => {
   it('returns true for PhaseError instances', () => {
@@ -26,17 +26,18 @@ describe('isPhaseError', () => {
   });
 });
 
-describe('PhaseError properties', () => {
-  it('exposes code, reason, fix, and link', () => {
+describe('diagnostics', () => {
+  it('exposes the code, message, fix, and docs link', () => {
     try {
-      tickerStoppedError();
+      missingContextError('Swap.State', 'Swap');
     } catch (err) {
-      expect(err).toBeInstanceOf(PhaseError);
-      const pe = err as PhaseError;
-      expect(pe.code).toBe('ticker_stopped');
-      expect(pe.reason).toBeDefined();
-      expect(pe.fix).toBeDefined();
-      expect(pe.name).toBe('PhaseError');
+      if (!isPhaseError(err)) throw err;
+      expect(err.name).toBe('missing_context');
+      expect(err.message).toContain('<Swap.State> must be used inside <Swap>');
+      expect(err.fix).toContain('Wrap <Swap.State> with <Swap>');
+      expect(err.docs).toBe(
+        'https://vercel.com/docs/errors/phase/missing_context',
+      );
     }
   });
 });

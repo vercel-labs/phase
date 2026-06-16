@@ -1,88 +1,82 @@
-export type PhaseErrorCode =
-  | 'server_context'
-  | 'no_element'
-  | 'sight_disposed'
-  | 'invalid_duration'
-  | 'ticker_stopped'
-  | 'presence_no_children'
-  | 'missing_context';
+import { Diagnostic, defineDiagnostics } from 'nostics';
 
-interface PhaseErrorOptions {
-  code: PhaseErrorCode;
-  reason?: string;
-  fix?: string;
-  link?: string;
-}
+/**
+ * A Phase diagnostic. Every Phase error helper throws an instance of this.
+ * Aliased from nostics' `Diagnostic` so `error instanceof PhaseError` works.
+ */
+export { Diagnostic as PhaseError };
 
-/** Lightweight structured error for phase. */
-export class PhaseError extends Error {
-  readonly code: PhaseErrorCode;
-  readonly reason: string | undefined;
-  readonly fix: string | undefined;
-  readonly link: string | undefined;
+/** Scoped diagnostic catalog - every code documents to `vercel.com/docs/errors/phase/<code>`. */
+const diagnostics = /*#__PURE__*/ defineDiagnostics({
+  docsBase: 'https://vercel.com/docs/errors/phase',
+  codes: {
+    server_context: {
+      why: (p: { fn: string }) =>
+        `${p.fn}() cannot be called on the server. Browser APIs like requestAnimationFrame are not available during SSR.`,
+      fix: (p: { fn: string }) =>
+        `Move ${p.fn}() into a useEffect or a client-only module.`,
+    },
+    no_element: {
+      why: (p: { fn: string }) =>
+        `${p.fn}() requires a mounted DOM element. The element ref is null, which usually means the element has not mounted yet or has been unmounted.`,
+      fix: (p: { fn: string }) =>
+        `Call ${p.fn}() inside a useEffect after the ref is populated, or use the hook equivalent which handles this automatically.`,
+    },
+    sight_disposed: {
+      why: 'Cannot interact with a disposed Sight instance. dispose() was already called on it.',
+      fix: 'Create a new Sight instance instead of reusing a disposed one.',
+    },
+    invalid_duration: {
+      why: (p: { fn: string; value: number }) =>
+        `${p.fn}() received an invalid duration: ${p.value}. Duration must be a finite positive number.`,
+      fix: 'Pass a positive number for duration (e.g., 300 for 300ms).',
+    },
+    ticker_stopped: {
+      why: 'Cannot resume a stopped ticker. stop() is terminal — a stopped ticker cannot be restarted, which prevents accidental zombie loops.',
+      fix: 'Create a new ticker instance instead of resuming a stopped one.',
+    },
+    presence_no_children: {
+      why: 'Presence was rendered without any children to track.',
+      fix: 'Pass the element you want to animate as a child of the Presence component.',
+    },
+    missing_context: {
+      why: (p: { child: string; parent: string }) =>
+        `<${p.child}> must be used inside <${p.parent}>. <${p.child}> reads from a React context that <${p.parent}> provides; without the parent, the context is null.`,
+      fix: (p: { child: string; parent: string }) =>
+        `Wrap <${p.child}> with <${p.parent}>: <${p.parent}><${p.child} /></${p.parent}>`,
+    },
+  },
+});
 
-  constructor(message: string, options: PhaseErrorOptions) {
-    super(message);
-    this.name = 'PhaseError';
-    this.code = options.code;
-    this.reason = options.reason;
-    this.fix = options.fix;
-    this.link = options.link;
-  }
-}
+export type PhaseErrorCode = keyof typeof diagnostics;
 
-/** Check if a value is a PhaseError instance. */
-export function isPhaseError(error: unknown): error is PhaseError {
-  return error instanceof PhaseError;
-}
+/** Check if a value is a Phase diagnostic. */
+export const isPhaseError = (error: unknown): error is Diagnostic =>
+  error instanceof Diagnostic;
 
+// TODO: clean up these wrapper functions — now that nostics gives each code a
+// typed handle, call sites can `throw diagnostics.<code>(params)` directly and
+// these `*Error()` helpers can be removed.
 export function serverContextError(fn: string): never {
-  throw new PhaseError(`${fn}() cannot be called on the server.`, {
-    code: 'server_context',
-    reason:
-      'Browser APIs like requestAnimationFrame are not available during SSR.',
-    fix: `Move ${fn}() into a useEffect or a client-only module.`,
-  });
+  throw diagnostics.server_context({ fn });
 }
 
 export function noElementError(fn: string): never {
-  throw new PhaseError(`${fn}() requires a mounted DOM element.`, {
-    code: 'no_element',
-    reason:
-      'The element ref is null. This usually means the element has not mounted yet or has been unmounted.',
-    fix: `Call ${fn}() inside a useEffect after the ref is populated, or use the hook equivalent which handles this automatically.`,
-  });
+  throw diagnostics.no_element({ fn });
 }
 
 export function sightDisposedError(): never {
-  throw new PhaseError('Cannot interact with a disposed Sight instance.', {
-    code: 'sight_disposed',
-    reason: 'dispose() was already called on this Sight instance.',
-    fix: 'Create a new Sight instance instead of reusing a disposed one.',
-  });
+  throw diagnostics.sight_disposed();
 }
 
 export function invalidDurationError(fn: string, value: number): never {
-  throw new PhaseError(`${fn}() received an invalid duration: ${value}`, {
-    code: 'invalid_duration',
-    reason: 'Duration must be a finite positive number.',
-    fix: `Pass a positive number for duration (e.g., 300 for 300ms).`,
-  });
+  throw diagnostics.invalid_duration({ fn, value });
 }
 
 export function tickerStoppedError(): never {
-  throw new PhaseError('Cannot resume a stopped ticker.', {
-    code: 'ticker_stopped',
-    reason:
-      'stop() is terminal — a stopped ticker cannot be restarted. This prevents accidental zombie loops.',
-    fix: 'Create a new ticker instance instead of resuming a stopped one.',
-  });
+  throw diagnostics.ticker_stopped();
 }
 
 export function missingContextError(child: string, parent: string): never {
-  throw new PhaseError(`<${child}> must be used inside <${parent}>.`, {
-    code: 'missing_context',
-    reason: `<${child}> reads from a React context that <${parent}> provides. Without the parent, the context is null.`,
-    fix: `Wrap <${child}> with <${parent}>: <${parent}><${child} /></${parent}>`,
-  });
+  throw diagnostics.missing_context({ child, parent });
 }
