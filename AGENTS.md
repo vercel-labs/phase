@@ -125,6 +125,7 @@ These are ironclad. Every module must satisfy them. No exceptions.
 6. **Co-located tests** — every module has a sibling `.spec.ts(x)` file.
 7. **Observer pooling** — IO keyed by serialized options, RO is a singleton, MQL keyed by query string. Never create raw observers outside the pool.
 8. **Phases + reasons** — every state machine exposes both. Phase is _what_ state. Reason is _why_ that state.
+9. **Diagnostic codes** — every nostics code in `src/core/_internal/errors` is named `XNN_code_name`: category letter (`R` runtime, `B` build, `C` config, `D` deprecation) + two-digit sequence + snake_case name (e.g. `R07_missing_context`). Never reuse or renumber a published code.
 
 ## How to Add New Features
 
