@@ -36,7 +36,7 @@
     }
   },
   "dependencies": {
-    "nostics": "^1.0.0"
+    "nostics": "^1.1.4"
   },
   "devDependencies": {
     "@size-limit/esbuild-why": "^12.1.0",

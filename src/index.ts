@@ -43,4 +43,3 @@ export type {
   Quality,
   ReducedMotionBehavior,
 } from './core/loop';
-export type { PhaseErrorCode } from './core/error';
