@@ -3,7 +3,7 @@ import { diagnostics, isPhaseError } from '.';
 describe('isPhaseError', () => {
   it('returns true for PhaseError instances', () => {
     try {
-      throw diagnostics.ticker_stopped();
+      throw diagnostics.R05_ticker_stopped();
     } catch (err) {
       expect(isPhaseError(err)).toBe(true);
     }
@@ -29,17 +29,17 @@ describe('isPhaseError', () => {
 describe('diagnostics', () => {
   it('exposes the code, message, fix, and docs link', () => {
     try {
-      throw diagnostics.missing_context({
+      throw diagnostics.R07_missing_context({
         child: 'Swap.State',
         parent: 'Swap',
       });
     } catch (err) {
       if (!isPhaseError(err)) throw err;
-      expect(err.name).toBe('missing_context');
+      expect(err.name).toBe('R07_missing_context');
       expect(err.message).toContain('<Swap.State> must be used inside <Swap>');
       expect(err.fix).toContain('Wrap <Swap.State> with <Swap>');
       expect(err.docs).toBe(
-        'https://vercel.com/docs/errors/phase/missing_context',
+        'https://vercel.com/docs/errors/phase/r07_missing_context',
       );
     }
   });

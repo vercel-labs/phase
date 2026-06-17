@@ -108,7 +108,10 @@ function SwapState({
 }: SwapStateProps): JSX.Element | null {
   const ctx = use(SwapCtx);
   if (!ctx) {
-    throw diagnostics.missing_context({ child: 'Swap.State', parent: 'Swap' });
+    throw diagnostics.R07_missing_context({
+      child: 'Swap.State',
+      parent: 'Swap',
+    });
   }
 
   const isCurrent: boolean = ctx.current === id;

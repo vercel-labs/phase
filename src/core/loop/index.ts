@@ -104,7 +104,7 @@ export function prefersReducedMotion(): boolean {
  */
 export function createLoop(options: LoopOptions): Loop {
   if (typeof requestAnimationFrame === 'undefined') {
-    throw diagnostics.server_context({ fn: 'createLoop' });
+    throw diagnostics.R01_server_context({ fn: 'createLoop' });
   }
 
   const {

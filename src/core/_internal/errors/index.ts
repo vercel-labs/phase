@@ -15,36 +15,36 @@ export const diagnostics = /*#__PURE__*/ defineDiagnostics({
     /*#__PURE__*/ createDevReporter(),
   ],
   codes: {
-    server_context: {
+    R01_server_context: {
       why: (p: { fn: string }) =>
         `${p.fn}() cannot be called on the server. Browser APIs like requestAnimationFrame are not available during SSR.`,
       fix: (p: { fn: string }) =>
         `Move ${p.fn}() into a useEffect or a client-only module.`,
     },
-    no_element: {
+    R02_no_element: {
       why: (p: { fn: string }) =>
         `${p.fn}() requires a mounted DOM element. The element ref is null, which usually means the element has not mounted yet or has been unmounted.`,
       fix: (p: { fn: string }) =>
         `Call ${p.fn}() inside a useEffect after the ref is populated, or use the hook equivalent which handles this automatically.`,
     },
-    sight_disposed: {
+    R03_sight_disposed: {
       why: 'Cannot interact with a disposed Sight instance. dispose() was already called on it.',
       fix: 'Create a new Sight instance instead of reusing a disposed one.',
     },
-    invalid_duration: {
+    R04_invalid_duration: {
       why: (p: { fn: string; value: number }) =>
         `${p.fn}() received an invalid duration: ${p.value}. Duration must be a finite positive number.`,
       fix: 'Pass a positive number for duration (e.g., 300 for 300ms).',
     },
-    ticker_stopped: {
+    R05_ticker_stopped: {
       why: 'Cannot resume a stopped ticker. stop() is terminal — a stopped ticker cannot be restarted, which prevents accidental zombie loops.',
       fix: 'Create a new ticker instance instead of resuming a stopped one.',
     },
-    presence_no_children: {
+    R06_presence_no_children: {
       why: 'Presence was rendered without any children to track.',
       fix: 'Pass the element you want to animate as a child of the Presence component.',
     },
-    missing_context: {
+    R07_missing_context: {
       why: (p: { child: string; parent: string }) =>
         `<${p.child}> must be used inside <${p.parent}>. <${p.child}> reads from a React context that <${p.parent}> provides; without the parent, the context is null.`,
       fix: (p: { child: string; parent: string }) =>

@@ -65,7 +65,7 @@ const DEFAULT_FIRST_DELTA_MS = 16.67;
  */
 export function createTicker(options: TickerOptions): Ticker {
   if (typeof requestAnimationFrame === 'undefined') {
-    throw diagnostics.server_context({ fn: 'createTicker' });
+    throw diagnostics.R01_server_context({ fn: 'createTicker' });
   }
 
   const { onTick, fps } = options;
@@ -103,7 +103,7 @@ export function createTicker(options: TickerOptions): Ticker {
 
   function start(): void {
     if (_phase === 'running') return;
-    if (_phase === 'stopped') throw diagnostics.ticker_stopped();
+    if (_phase === 'stopped') throw diagnostics.R05_ticker_stopped();
     if (_phase === 'paused') {
       resume();
       return;
@@ -132,7 +132,7 @@ export function createTicker(options: TickerOptions): Ticker {
   }
 
   function resume(): void {
-    if (_phase === 'stopped') throw diagnostics.ticker_stopped();
+    if (_phase === 'stopped') throw diagnostics.R05_ticker_stopped();
     if (_phase !== 'paused') return;
 
     totalPausedTime += performance.now() - pauseStartTime;

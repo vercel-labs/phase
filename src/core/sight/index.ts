@@ -49,7 +49,7 @@ export interface Sight {
  */
 export function createSight(options: SightOptions): Sight {
   if (typeof document === 'undefined') {
-    throw diagnostics.server_context({ fn: 'createSight' });
+    throw diagnostics.R01_server_context({ fn: 'createSight' });
   }
 
   const { element, intersectionOptions, onPhaseChange } = options;
