@@ -39,7 +39,7 @@ phase is the _when_ layer — when to animate, when to render, when to pause —
 | `WhenIdle`    | React mount until idle              | no      | no           | non-critical UI that shouldn't block first paint   |
 | `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading / reveals              |
 
-`Defer` is the cheapest and safest (keeps content, skips paint). `When*` save the most (no DOM until triggered). None of these affect layout or CLS.
+`Defer` is the cheapest and safest (keeps content, skips paint) and never causes a hard layout shift; its children stay in the DOM at true size. `When*` save the most (no DOM until triggered) but **will shift layout / cause CLS unless the `fallback` reserves the exact final content height**, so always size it (see [references/rendering-recipes.md](references/rendering-recipes.md)).
 
 Two idle hooks defer work off the critical path: `useIdle` gates rendering with a boolean once the browser is idle, and `useWhenIdle` runs a side effect (prefetch, `import()`) once idle. `useRenderState(ref)` reads a `Defer` subtree's render-skip state to pause **raw, non-phase** work (a hand-written rAF loop, `setInterval`) — phase's own loops already self-pause off-screen.
 
