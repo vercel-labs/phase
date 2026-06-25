@@ -1,0 +1,195 @@
+[
+  {
+    "name": "createTicker",
+    "path": "src/index.ts",
+    "import": "{ createTicker }",
+    "limit": "850 B"
+  },
+  {
+    "name": "createSight",
+    "path": "src/index.ts",
+    "import": "{ createSight }",
+    "limit": "925 B"
+  },
+  {
+    "name": "createLifecycle",
+    "path": "src/index.ts",
+    "import": "{ createLifecycle }",
+    "limit": "1.45 kB"
+  },
+  {
+    "name": "createLoop",
+    "path": "src/index.ts",
+    "import": "{ createLoop }",
+    "limit": "2.5 kB"
+  },
+  {
+    "name": "createScrollProgress",
+    "path": "src/index.ts",
+    "import": "{ createScrollProgress }",
+    "limit": "850 B"
+  },
+  {
+    "name": "createRenderState",
+    "path": "src/index.ts",
+    "import": "{ createRenderState }",
+    "limit": "500 B"
+  },
+  {
+    "name": "whenIdle",
+    "path": "src/index.ts",
+    "import": "{ whenIdle }",
+    "limit": "400 B"
+  },
+  {
+    "name": "prefersReducedMotion",
+    "path": "src/index.ts",
+    "import": "{ prefersReducedMotion }",
+    "limit": "150 B"
+  },
+  {
+    "name": "ease (all)",
+    "path": "src/ease/index.ts",
+    "limit": "250 B"
+  },
+  {
+    "name": "useLoop",
+    "path": "src/react/index.ts",
+    "import": "{ useLoop }",
+    "ignore": ["react"],
+    "limit": "2.8 kB"
+  },
+  {
+    "name": "useLifecycle",
+    "path": "src/react/index.ts",
+    "import": "{ useLifecycle }",
+    "ignore": ["react"],
+    "limit": "1.6 kB"
+  },
+  {
+    "name": "useSight",
+    "path": "src/react/index.ts",
+    "import": "{ useSight }",
+    "ignore": ["react"],
+    "limit": "1.05 kB"
+  },
+  {
+    "name": "useCanvas",
+    "path": "src/react/index.ts",
+    "import": "{ useCanvas }",
+    "ignore": ["react"],
+    "limit": "3.25 kB"
+  },
+  {
+    "name": "useTween",
+    "path": "src/react/index.ts",
+    "import": "{ useTween }",
+    "ignore": ["react"],
+    "limit": "675 B"
+  },
+  {
+    "name": "usePresence",
+    "path": "src/react/index.ts",
+    "import": "{ usePresence }",
+    "ignore": ["react"],
+    "limit": "725 B"
+  },
+  {
+    "name": "useScrollProgress",
+    "path": "src/react/index.ts",
+    "import": "{ useScrollProgress }",
+    "ignore": ["react"],
+    "limit": "850 B"
+  },
+  {
+    "name": "useSize",
+    "path": "src/react/index.ts",
+    "import": "{ useSize }",
+    "ignore": ["react"],
+    "limit": "300 B"
+  },
+  {
+    "name": "useContainerQuery",
+    "path": "src/react/index.ts",
+    "import": "{ useContainerQuery }",
+    "ignore": ["react"],
+    "limit": "375 B"
+  },
+  {
+    "name": "useMediaQuery",
+    "path": "src/react/index.ts",
+    "import": "{ useMediaQuery }",
+    "ignore": ["react"],
+    "limit": "300 B"
+  },
+  {
+    "name": "useSyncedRef",
+    "path": "src/react/index.ts",
+    "import": "{ useSyncedRef }",
+    "ignore": ["react"],
+    "limit": "75 B"
+  },
+  {
+    "name": "useStableCallback",
+    "path": "src/react/index.ts",
+    "import": "{ useStableCallback }",
+    "ignore": ["react"],
+    "limit": "90 B"
+  },
+  {
+    "name": "Presence",
+    "path": "src/react/index.ts",
+    "import": "{ Presence }",
+    "ignore": ["react"],
+    "limit": "850 B"
+  },
+  {
+    "name": "WhenVisible",
+    "path": "src/react/index.ts",
+    "import": "{ WhenVisible }",
+    "ignore": ["react"],
+    "limit": "1.3 kB"
+  },
+  {
+    "name": "WhenIdle",
+    "path": "src/react/index.ts",
+    "import": "{ WhenIdle }",
+    "ignore": ["react"],
+    "limit": "600 B"
+  },
+  {
+    "name": "Defer",
+    "path": "src/react/index.ts",
+    "import": "{ Defer }",
+    "ignore": ["react"],
+    "limit": "150 B"
+  },
+  {
+    "name": "useIdle",
+    "path": "src/react/index.ts",
+    "import": "{ useIdle }",
+    "ignore": ["react"],
+    "limit": "400 B"
+  },
+  {
+    "name": "useWhenIdle",
+    "path": "src/react/index.ts",
+    "import": "{ useWhenIdle }",
+    "ignore": ["react"],
+    "limit": "425 B"
+  },
+  {
+    "name": "useRenderState",
+    "path": "src/react/index.ts",
+    "import": "{ useRenderState }",
+    "ignore": ["react"],
+    "limit": "550 B"
+  },
+  {
+    "name": "Swap",
+    "path": "src/react/index.ts",
+    "import": "{ Swap }",
+    "ignore": ["react"],
+    "limit": "1.25 kB"
+  }
+]

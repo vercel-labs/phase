@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "arrowParens": "always",
+  "bracketSameLine": false,
+  "bracketSpacing": true,
+  "endOfLine": "lf",
+  "ignorePatterns": [
+    "**/pnpm-lock.yaml",
+    "**/.cache/**",
+    "**/.claude/**",
+    "**/.git/**",
+    "**/.github/**",
+    "**/.turbo/**",
+    "**/.vercel/**",
+    "**/.changeset/**/*.md",
+    "**/dist/**",
+    "**/node_modules/**"
+  ],
+  "printWidth": 80,
+  "quoteProps": "as-needed",
+  "semi": true,
+  "singleQuote": true,
+  "sortImports": true,
+  "sortPackageJson": false,
+  "tabWidth": 2,
+  "trailingComma": "all",
+  "useTabs": false
+}

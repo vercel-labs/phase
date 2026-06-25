@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "pedantic": "off",
+    "perf": "warn",
+    "style": "off",
+    "restriction": "error",
+    "nursery": "off"
+  },
+  "rules": {
+    "no-unused-vars": "warn",
+    "no-console": "off",
+    "no-undefined": "off",
+    "typescript/explicit-function-return-type": "off",
+    "no-rest-spread-properties": "off",
+    "no-use-before-define": "off",
+    "no-optional-chaining": "off",
+    "no-async-await": "off",
+    "no-plusplus": "off"
+  }
+}

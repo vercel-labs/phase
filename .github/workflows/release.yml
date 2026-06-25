@@ -1,0 +1,69 @@
+name: Release
+
+# Validates and publishes to npm on every push to main.
+# Uses npm Trusted Publishing (OIDC) -- no NPM_TOKEN secret needed.
+# Requires the package to be configured as a Trusted Publisher on npmjs.com
+# linked to this repo and workflow.
+# If the version in package.json is already on the registry, npm publish
+# will fail, signalling that a version bump is needed.
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Re-run the full validation gate on the merge commit before doing
+      # anything release-related. Branch protection covers the PR's HEAD,
+      # but flaky tests, dep drift, or admin merges can let a broken commit
+      # land on main. Anything publish-worthy must pass these checks first.
+      - name: Format
+        run: pnpm format
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Skill coverage
+        run: pnpm skill:check
+
+      - name: Skill artifacts are up to date
+        run: |
+          pnpm skill:build
+          pnpm skill:package
+          git diff --exit-code skills/phase/AGENTS.md skills/phase/metadata.json skills/phase/dist/phase-skill.zip \
+            || (echo "Skill artifacts are stale. Run 'pnpm skill:build && pnpm skill:package' and commit the result." && exit 1)
+
+      - name: Publish to npm
+        run: npm publish
