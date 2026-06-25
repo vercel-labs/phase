@@ -84,11 +84,11 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
   const drawRef = useSyncedRef(options.draw);
 
   const [state, setState] = useState(INITIAL_STATE);
+  const [restartNonce, setRestartNonce] = useState(0);
 
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const sizeRef = useRef<Size>({ width: 0, height: 0 });
   const qualityRef = useSyncedRef(state.quality);
-  const teardownRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const container: Element | null = containerRef.current;
@@ -205,17 +205,16 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
       unsubDpr();
       canvas.removeEventListener('contextlost', onContextLost);
       canvas.removeEventListener('contextrestored', onContextRestored);
-      teardownRef.current = null;
     }
 
-    teardownRef.current = teardown;
     return teardown;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, fps, reducedMotion, degraded, degradedFps]);
+  }, [enabled, fps, reducedMotion, degraded, degradedFps, restartNonce]);
 
-  // Restart tears down and lets the next effect cycle rebuild everything.
+  // Restart bumps a nonce so the effect re-runs: it tears down the current
+  // loop + observers and rebuilds them on the next cycle.
   const restart = useCallback(() => {
-    teardownRef.current?.();
+    setRestartNonce((n) => n + 1);
   }, []);
 
   return { restart, ...state };

@@ -4,6 +4,7 @@
 .cursor
 !.cursor/commands
 !.cursor/skills
+.deepsec
 .env
 .env*.local
 .logs

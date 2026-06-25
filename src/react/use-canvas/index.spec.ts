@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 import { createMockMatchMedia } from '../../__mocks__/match-media';
@@ -133,5 +133,63 @@ describe('devicePixelContentBoxSize', () => {
 
     expect(canvas.width).toBe(750);
     expect(canvas.height).toBe(1334);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// restart
+// ---------------------------------------------------------------------------
+
+describe('restart', () => {
+  it('re-establishes resize observation after restart', async () => {
+    const useCanvas = await getHook();
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+
+    vi.stubGlobal('devicePixelRatio', 1);
+
+    const { result } = renderHook(() =>
+      useCanvas({ containerRef, canvasRef, draw: vi.fn() }),
+    );
+
+    mockRO.trigger(container, 100, 50);
+    expect(canvas.width).toBe(100);
+
+    act(() => {
+      result.current.restart();
+    });
+
+    // After restart the container must still be observed and resizes applied.
+    expect(mockRO.instances.some((i) => i.observed.has(container))).toBe(true);
+    mockRO.trigger(container, 200, 80);
+    expect(canvas.width).toBe(200);
+    expect(canvas.height).toBe(80);
+  });
+
+  it('keeps the loop running after restart', async () => {
+    const useCanvas = await getHook();
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+
+    const { result } = renderHook(() =>
+      useCanvas({ containerRef, canvasRef, draw: vi.fn() }),
+    );
+    act(() => {
+      mockIO.trigger(container, true);
+    });
+    expect(result.current.phase).toBe('running');
+
+    act(() => {
+      result.current.restart();
+    });
+    act(() => {
+      mockIO.trigger(container, true);
+    });
+
+    expect(result.current.phase).toBe('running');
   });
 });

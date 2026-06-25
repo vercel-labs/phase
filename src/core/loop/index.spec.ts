@@ -394,6 +394,113 @@ describe('quality signal - degraded option', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Quality signal - frame budget
+// ---------------------------------------------------------------------------
+
+// Pause-mode frame-budget recovery delay (must mirror the constant in index.ts).
+const RECOVERY_RETRY_MS = 2000;
+
+/**
+ * Drives the loop's ticker with a manually controlled clock. The default fake
+ * timer rAF fires fixed ~16ms frames, which can never go over budget — so to
+ * exercise the frame-budget path we stub `performance.now` + rAF and step the
+ * clock by arbitrary deltas. `setTimeout` (used by recovery) stays on fake
+ * timers, advanced separately via `vi.advanceTimersByTime`.
+ */
+function setupManualClock() {
+  let clock = 0;
+  let rafCb: FrameRequestCallback | null = null;
+  const raf = vi.fn((cb: FrameRequestCallback): number => {
+    rafCb = cb;
+    return 1;
+  });
+  vi.stubGlobal('requestAnimationFrame', raf);
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => clock);
+
+  return {
+    /** Step the clock forward and dispatch one frame at the new time. */
+    advance(ms: number): void {
+      clock += ms;
+      rafCb?.(clock);
+    },
+    restore(): void {
+      nowSpy.mockRestore();
+    },
+  };
+}
+
+describe('quality signal - frame budget', () => {
+  // A delta over budget*1.5 (25ms at 60fps) for 3 consecutive frames degrades.
+  const OVER_BUDGET_DELTA = 35;
+
+  function degradeViaBudget(clock: ReturnType<typeof setupManualClock>): void {
+    clock.advance(16); // first frame uses default delta (under budget)
+    clock.advance(OVER_BUDGET_DELTA);
+    clock.advance(OVER_BUDGET_DELTA);
+    clock.advance(OVER_BUDGET_DELTA);
+  }
+
+  it('3 over-budget frames -> degraded, reason=frame-budget', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const loop = createLoop({ element: el, onTick: vi.fn() });
+    makeSightVisible(el);
+
+    degradeViaBudget(clock);
+
+    expect(loop.quality).toBe('degraded');
+    expect(loop.qualityReason).toBe('frame-budget');
+    clock.restore();
+    loop.stop();
+  });
+
+  it('pause: degrades then recovers via timer (not permanent)', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const loop = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      degraded: 'pause',
+    });
+    makeSightVisible(el);
+
+    degradeViaBudget(clock);
+    expect(loop.phase).toBe('paused');
+    expect(loop.phaseReason).toBe('degraded');
+
+    // No frames tick while paused — recovery must come from the timer alone.
+    await vi.advanceTimersByTimeAsync(RECOVERY_RETRY_MS);
+    expect(loop.phase).toBe('running');
+    expect(loop.quality).toBe('full');
+    clock.restore();
+    loop.stop();
+  });
+
+  it('pause: stop() cancels a pending recovery timer', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const loop = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      degraded: 'pause',
+    });
+    makeSightVisible(el);
+
+    degradeViaBudget(clock);
+    loop.stop();
+
+    // Timer firing after stop must not throw or resurrect the loop.
+    await vi.advanceTimersByTimeAsync(RECOVERY_RETRY_MS);
+    expect(loop.phase).toBe('stopped');
+    clock.restore();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // onPhaseChange callback
 // ---------------------------------------------------------------------------
 

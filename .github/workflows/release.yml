@@ -13,22 +13,31 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
+# id-token: write is NOT granted at the workflow level. It is scoped only to the
+# `publish` job below, so the long validation step (which runs many actions and
+# scripts) never holds the OIDC publishing capability.
+permissions:
+  contents: read
+
 jobs:
-  release:
+  # Re-run the full validation gate on the merge commit before doing anything
+  # release-related. Branch protection covers the PR's HEAD, but flaky tests,
+  # dep drift, or admin merges can let a broken commit land on main. Anything
+  # publish-worthy must pass these checks first. This job has no id-token.
+  validate:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
         with:
           fetch-depth: 0
           lfs: true
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@fdbc4fdcf7d143a5d0a39e9a02e103b13e309024 # v6.0.4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: "24"
           cache: "pnpm"
@@ -36,10 +45,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Re-run the full validation gate on the merge commit before doing
-      # anything release-related. Branch protection covers the PR's HEAD,
-      # but flaky tests, dep drift, or admin merges can let a broken commit
-      # land on main. Anything publish-worthy must pass these checks first.
       - name: Format
         run: pnpm format
 
@@ -64,6 +69,32 @@ jobs:
           pnpm skill:package
           git diff --exit-code skills/phase/AGENTS.md skills/phase/metadata.json skills/phase/dist/phase-skill.zip \
             || (echo "Skill artifacts are stale. Run 'pnpm skill:build && pnpm skill:package' and commit the result." && exit 1)
+
+  # Minimal publish job. Only this job holds id-token: write, and it runs only
+  # after validate succeeds. npm publish triggers `prepublishOnly` (pnpm build),
+  # so the package is rebuilt here from a clean checkout before publishing.
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - uses: pnpm/action-setup@fdbc4fdcf7d143a5d0a39e9a02e103b13e309024 # v6.0.4
+
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Publish to npm
         run: npm publish

@@ -64,6 +64,15 @@ const OVER_BUDGET_THRESHOLD = 3;
 /** FPS cap applied when quality is degraded (throttle mode). */
 const DEGRADED_FPS_CAP = 30;
 
+/**
+ * In `degraded: 'pause'` mode a frame-budget degrade pauses the loop, so no
+ * further frames tick to clear it — without a timer the loop would stay paused
+ * forever after a transient spike. After this delay the loop optimistically
+ * un-pauses and re-measures, rescheduling on each subsequent degrade. (Throttle
+ * mode keeps ticking, so it does not use this.)
+ */
+const RECOVERY_RETRY_MS = 2000;
+
 // ---------------------------------------------------------------------------
 // createLoop
 // ---------------------------------------------------------------------------
@@ -128,6 +137,9 @@ export function createLoop(options: LoopOptions): Loop {
   // Quality signal flags
   let focusDegraded = false;
 
+  // Pending pause-mode frame-budget recovery timer (see RECOVERY_RETRY_MS).
+  let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+
   // --- State transitions ---
 
   function setPhase(phase: LoopPhase, reason: LoopReason): void {
@@ -164,6 +176,25 @@ export function createLoop(options: LoopOptions): Loop {
       return;
     }
     setQuality('full');
+  }
+
+  /**
+   * Un-pause and re-measure after a pause-mode frame-budget degrade. If frames
+   * are still over budget, the next degrade reschedules this.
+   */
+  function scheduleBudgetRecovery(): void {
+    if (recoveryTimer !== null) return;
+    recoveryTimer = setTimeout(() => {
+      recoveryTimer = null;
+      overBudgetCount = 0;
+      reconcileQuality();
+    }, RECOVERY_RETRY_MS);
+  }
+
+  function clearBudgetRecovery(): void {
+    if (recoveryTimer === null) return;
+    clearTimeout(recoveryTimer);
+    recoveryTimer = null;
   }
 
   // --- Ticker lifecycle ---
@@ -209,9 +240,12 @@ export function createLoop(options: LoopOptions): Loop {
     }
 
     overBudgetCount++;
-    if (overBudgetCount >= OVER_BUDGET_THRESHOLD) {
-      reconcileQuality();
-    }
+    if (overBudgetCount < OVER_BUDGET_THRESHOLD) return;
+
+    reconcileQuality();
+    // Pause mode stops ticking once degraded, so no future frame can clear the
+    // degraded state — schedule a timed retry. Throttle keeps running.
+    if (degraded === 'pause') scheduleBudgetRecovery();
   }
 
   // --- Reconcile ---
@@ -281,6 +315,7 @@ export function createLoop(options: LoopOptions): Loop {
 
   function stop(): void {
     if (_phase === 'stopped') return;
+    clearBudgetRecovery();
     destroyTicker();
     lifecycle.stop();
     unsubFocus();
