@@ -1,0 +1,155 @@
+import { renderHook, act } from '@testing-library/react';
+
+import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
+import { createMockMatchMedia } from '../../__mocks__/match-media';
+
+let mockIO: ReturnType<typeof createMockIntersectionObserver>;
+let mockMM: ReturnType<typeof createMockMatchMedia>;
+
+beforeEach(() => {
+  mockIO = createMockIntersectionObserver();
+  mockMM = createMockMatchMedia();
+  vi.stubGlobal('IntersectionObserver', mockIO.MockClass);
+  vi.stubGlobal('matchMedia', mockMM.mockMatchMedia);
+  Object.defineProperty(document, 'hidden', {
+    value: false,
+    writable: true,
+    configurable: true,
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.resetModules();
+});
+
+async function getHook() {
+  const mod = await import('.');
+  return mod.useLifecycle;
+}
+
+function createRefWithElement() {
+  const el = document.createElement('div');
+  return { ref: { current: el }, el };
+}
+
+describe('useLifecycle', () => {
+  it('returns a ref when none is provided', async () => {
+    const useLifecycle = await getHook();
+    const { result } = renderHook(() => useLifecycle());
+    expect(result.current.ref).toBeDefined();
+    expect(result.current.ref.current).toBeNull();
+    expect(result.current.isActive).toBe(false);
+  });
+
+  it('activates when the element becomes visible', async () => {
+    const useLifecycle = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useLifecycle({ ref }));
+
+    act(() => mockIO.trigger(el, true));
+    expect(result.current.phase).toBe('active');
+    expect(result.current.isActive).toBe(true);
+  });
+
+  it('pauses when the element leaves the viewport', async () => {
+    const useLifecycle = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useLifecycle({ ref }));
+
+    act(() => mockIO.trigger(el, true));
+    act(() => mockIO.trigger(el, false));
+    expect(result.current.phase).toBe('paused');
+    expect(result.current.phaseReason).toBe('sight');
+    expect(result.current.isActive).toBe(false);
+  });
+
+  it('pauses on reduced motion by default', async () => {
+    const useLifecycle = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useLifecycle({ ref }));
+
+    act(() => mockIO.trigger(el, true));
+    act(() => mockMM.setMatches('(prefers-reduced-motion: reduce)', true));
+    expect(result.current.phase).toBe('paused');
+    expect(result.current.phaseReason).toBe('reduced-motion');
+  });
+
+  it('paused prop manually pauses and resumes', async () => {
+    const useLifecycle = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result, rerender } = renderHook(
+      ({ paused }: { paused: boolean }) => useLifecycle({ ref, paused }),
+      { initialProps: { paused: false } },
+    );
+
+    act(() => mockIO.trigger(el, true));
+    expect(result.current.isActive).toBe(true);
+
+    rerender({ paused: true });
+    expect(result.current.phase).toBe('paused');
+    expect(result.current.phaseReason).toBe('manual');
+
+    rerender({ paused: false });
+    expect(result.current.isActive).toBe(true);
+  });
+
+  it('enabled=false stays idle', async () => {
+    const useLifecycle = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useLifecycle({ ref, enabled: false }));
+
+    act(() => mockIO.trigger(el, true));
+    expect(result.current.phase).toBe('idle');
+    expect(result.current.isActive).toBe(false);
+  });
+
+  it('cleans up on unmount', async () => {
+    const useLifecycle = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { unmount } = renderHook(() => useLifecycle({ ref }));
+
+    unmount();
+    expect(() => mockIO.trigger(el, true)).not.toThrow();
+  });
+
+  it('onPhaseChange fires synchronously on phase transitions', async () => {
+    const useLifecycle = await getHook();
+    const { ref, el } = createRefWithElement();
+    const onPhaseChange = vi.fn();
+    renderHook(() => useLifecycle({ ref, onPhaseChange }));
+
+    act(() => mockIO.trigger(el, true));
+    expect(onPhaseChange).toHaveBeenCalledWith('active', 'started');
+
+    act(() => mockIO.trigger(el, false));
+    expect(onPhaseChange).toHaveBeenCalledWith('paused', 'sight');
+  });
+
+  it('onPhaseChange picks up latest callback without re-creating lifecycle', async () => {
+    const useLifecycle = await getHook();
+    const { ref, el } = createRefWithElement();
+    const cb1 = vi.fn();
+    const cb2 = vi.fn();
+
+    const { rerender } = renderHook(
+      ({ onPhaseChange }: { onPhaseChange: typeof cb1 }) =>
+        useLifecycle({ ref, onPhaseChange }),
+      { initialProps: { onPhaseChange: cb1 } },
+    );
+
+    // createLifecycle auto-starts: element not yet visible, so cb1 receives
+    // ('paused', 'sight') during construction, then ('active', 'started').
+    act(() => mockIO.trigger(el, true));
+    expect(cb1).toHaveBeenCalledWith('active', 'started');
+    const cb1CallCount = cb1.mock.calls.length;
+
+    // Swap callback without tearing down the lifecycle
+    rerender({ onPhaseChange: cb2 });
+
+    act(() => mockIO.trigger(el, false));
+    expect(cb2).toHaveBeenCalledWith('paused', 'sight');
+    // cb1 should NOT have been called after the swap
+    expect(cb1).toHaveBeenCalledTimes(cb1CallCount);
+  });
+});

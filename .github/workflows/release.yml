@@ -1,0 +1,100 @@
+name: Release
+
+# Validates and publishes to npm on every push to main.
+# Uses npm Trusted Publishing (OIDC) -- no NPM_TOKEN secret needed.
+# Requires the package to be configured as a Trusted Publisher on npmjs.com
+# linked to this repo and workflow.
+# If the version in package.json is already on the registry, npm publish
+# will fail, signalling that a version bump is needed.
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+# id-token: write is NOT granted at the workflow level. It is scoped only to the
+# `publish` job below, so the long validation step (which runs many actions and
+# scripts) never holds the OIDC publishing capability.
+permissions:
+  contents: read
+
+jobs:
+  # Re-run the full validation gate on the merge commit before doing anything
+  # release-related. Branch protection covers the PR's HEAD, but flaky tests,
+  # dep drift, or admin merges can let a broken commit land on main. Anything
+  # publish-worthy must pass these checks first. This job has no id-token.
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - uses: pnpm/action-setup@fdbc4fdcf7d143a5d0a39e9a02e103b13e309024 # v6.0.4
+
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format
+        run: pnpm format
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Skill coverage
+        run: pnpm skill:check
+
+      - name: Skill artifacts are up to date
+        run: |
+          pnpm skill:build
+          pnpm skill:package
+          git diff --exit-code skills/phase/AGENTS.md skills/phase/metadata.json skills/phase/dist/phase-skill.zip \
+            || (echo "Skill artifacts are stale. Run 'pnpm skill:build && pnpm skill:package' and commit the result." && exit 1)
+
+  # Minimal publish job. Only this job holds id-token: write, and it runs only
+  # after validate succeeds. npm publish triggers `prepublishOnly` (pnpm build),
+  # so the package is rebuilt here from a clean checkout before publishing.
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - uses: pnpm/action-setup@fdbc4fdcf7d143a5d0a39e9a02e103b13e309024 # v6.0.4
+
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish to npm
+        run: npm publish
