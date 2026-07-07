@@ -30,9 +30,9 @@ const { ref, progress } = useScrollProgress<T>(options?);
 
 - Reveal/opacity effects driven by how much of an element is visible.
 - Progress indicators tied to viewport coverage.
-- Simple parallax effects (clamped to element visibility, not scroll position).
+- Parallax effects (clamped to element visibility, not scroll position).
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                       | Use                                                               |
 | ------------------------------------- | ----------------------------------------------------------------- |
@@ -42,7 +42,7 @@ const { ref, progress } = useScrollProgress<T>(options?);
 
 ## Do
 
-- Cleanup is automatic — the observer is unsubscribed on unmount.
+- Cleanup is automatic. The observer is unsubscribed on unmount.
 - Use for declarative reveal effects:
   ```tsx
   const { ref, progress } = useScrollProgress();
@@ -56,15 +56,15 @@ const { ref, progress } = useScrollProgress<T>(options?);
 
 ## Don't
 
-- **Don't expect continuous values** — updates only at threshold crossings (~20 per viewport traversal at default steps).
-- **Don't use for tall elements expecting full 0→1 scroll** — ratio plateaus once the element fills the viewport. Use `ScrollTimeline`.
+- **Don't expect continuous values.** Updates only at threshold crossings (~20 per viewport traversal at default steps).
+- **Don't use for tall elements expecting full 0→1 scroll.** Ratio plateaus once the element fills the viewport. Use `ScrollTimeline`.
 
 ## Reduced motion
 
-`useScrollProgress` doesn't handle reduced motion — it's a ratio, not an animation. If using the ratio for decorative animation, check `prefersReducedMotion()` or use `useLoop` which handles it.
+`useScrollProgress` reports a ratio, not an animation, and does not handle reduced motion. If using the ratio for decorative animation, check `prefersReducedMotion()` or use `useLoop` which handles it.
 
 ## See also
 
-- [createScrollProgress](./create-scroll-progress.md) — framework-agnostic core
-- [useSight](./use-sight.md) — boolean visibility instead of ratio
-- [useLoop](./use-loop.md) — if you need per-frame writes, combine with createScrollProgress
+- [createScrollProgress](./create-scroll-progress.md). Framework-agnostic core
+- [useSight](./use-sight.md). Boolean visibility instead of ratio
+- [useLoop](./use-loop.md). If you need per-frame writes, combine with createScrollProgress

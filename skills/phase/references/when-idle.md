@@ -31,9 +31,10 @@ cancel(); // optional: prevent the callback before it runs
 
 ### Options (`whenIdle`)
 
-| Option    | Type     | Default | Description                                      |
-| --------- | -------- | ------- | ------------------------------------------------ |
-| `timeout` | `number` | —       | Max ms to wait before running even if never idle |
+| Option    | Type          | Default | Description                                      |
+| --------- | ------------- | ------- | ------------------------------------------------ |
+| `timeout` | `number`      | —       | Max ms to wait before running even if never idle |
+| `signal`  | `AbortSignal` | —       | Cancels the scheduled callback when aborted      |
 
 ### Data attributes stamped (after idle)
 
@@ -47,13 +48,13 @@ cancel(); // optional: prevent the callback before it runs
 - Non-critical UI that should not compete with first paint (secondary panels, below-the-fold widgets, analytics).
 - Work that must run eventually but not on the critical path (`whenIdle` for cache warming, prefetch).
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                     | Use                                                   |
 | ----------------------------------- | ----------------------------------------------------- |
-| Content that must be in SSR HTML    | `Defer` — `WhenIdle` children are not server-rendered |
+| Content that must be in SSR HTML    | `Defer` (`WhenIdle` children are not server-rendered) |
 | Mount when scrolled into view       | `WhenVisible`                                         |
-| Critical content needed immediately | Render it directly — don't defer                      |
+| Critical content needed immediately | Render it directly. Don't defer.                      |
 
 ## Do
 
@@ -67,17 +68,18 @@ cancel(); // optional: prevent the callback before it runs
 
 ## Don't
 
-- **Don't use for above-the-fold or SEO-critical content** — idle never fires during SSR, so children are absent from server HTML.
-- **Don't expect unmount** — like `WhenVisible`, it is one-shot.
+- **Don't use for above-the-fold or SEO-critical content.** Idle never fires during SSR, so children are absent from server HTML.
+- **Don't expect unmount.** Like `WhenVisible`, it is one-shot.
 
 ## Reduced motion
 
-Automatic: `data-enter="animate"` is not stamped when the user prefers reduced motion. Content still mounts — only the enter animation is skipped.
+Automatic: `data-enter="animate"` is not stamped when the user prefers reduced motion. Content still mounts. Only the enter animation is skipped.
 
 ## See also
 
-- [rendering-recipes](./rendering-recipes.md) — composing `WhenIdle` with `lazy()`, `Suspense`, and the other helpers
-- [when-visible](./when-visible.md) — gate mounting on viewport entry
-- [defer](./defer.md) — keep content in the DOM but skip painting
-- [use-idle](./use-idle.md) — the boolean hook behind `WhenIdle`
-- [use-when-idle](./use-when-idle.md) — run a side effect (prefetch, `import()`) once idle
+- [rendering-recipes](./rendering-recipes.md). Composing `WhenIdle` with `lazy()`, `Suspense`, and the other helpers
+- [when-visible](./when-visible.md). Gate mounting on viewport entry
+- [defer](./defer.md). Keep content in the DOM but skip painting
+- [use-idle](./use-idle.md). The boolean hook behind `WhenIdle`
+- [use-when-idle](./use-when-idle.md). Run a side effect (prefetch, `import()`) once idle
+- [abort-signals](./abort-signals.md). Cancel the `whenIdle` callback via the `signal` option

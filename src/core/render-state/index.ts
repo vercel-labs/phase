@@ -1,3 +1,4 @@
+import { linkAbortSignal } from '../_internal/abort';
 import { noElementError, serverContextError } from '../_internal/errors';
 
 // ---------------------------------------------------------------------------
@@ -9,6 +10,8 @@ export type RenderPhase = 'rendered' | 'skipped';
 export interface RenderStateOptions {
   element: Element;
   onPhaseChange?: (phase: RenderPhase) => void;
+  /** Abort signal that stops the observer when aborted. */
+  signal?: AbortSignal;
 }
 
 export interface RenderState {
@@ -24,13 +27,13 @@ export interface RenderState {
 /**
  * Report whether the browser is rendering an element or skipping it under
  * `content-visibility`. Listens to the `contentvisibilityautostatechange`
- * event — the browser's ground-truth paint decision.
+ * event, the browser's ground-truth paint decision.
  *
  * Use it to pause raw, non-phase work (a hand-written rAF loop, `setInterval`,
  * expensive effects) when a `Defer` subtree stops painting. phase's own loops
  * already self-pause off-screen, so they do not need this.
  *
- * Listening and reacting has zero layout effect — it never breaks the
+ * Listening and reacting has zero layout effect. It never breaks the
  * no-layout-shift guarantee of `content-visibility`.
  *
  * @example
@@ -43,13 +46,17 @@ export interface RenderState {
  *
  * @remarks
  * Where `content-visibility` is unsupported, `phase` stays `'rendered'`.
+ *
+ * Per the CSS Containment spec, `ResizeObserver` callbacks pause for elements
+ * inside a skipped `content-visibility: auto` subtree. Use this primitive to
+ * detect that transition when your code depends on size observations resuming.
  */
 export function createRenderState(options: RenderStateOptions): RenderState {
   if (typeof document === 'undefined') {
     serverContextError('createRenderState');
   }
 
-  const { element, onPhaseChange } = options;
+  const { element, onPhaseChange, signal } = options;
 
   if (!element) noElementError('createRenderState');
 
@@ -69,14 +76,19 @@ export function createRenderState(options: RenderStateOptions): RenderState {
 
   element.addEventListener('contentvisibilityautostatechange', onStateChange);
 
+  let unlinkAbort: (() => void) | undefined;
+
   function stop(): void {
     if (stopped) return;
     stopped = true;
+    unlinkAbort?.();
     element.removeEventListener(
       'contentvisibilityautostatechange',
       onStateChange,
     );
   }
+
+  unlinkAbort = linkAbortSignal(signal, stop);
 
   return {
     get phase() {

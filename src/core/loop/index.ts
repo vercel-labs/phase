@@ -1,3 +1,4 @@
+import { linkAbortSignal } from '../_internal/abort';
 import { noElementError, serverContextError } from '../_internal/errors';
 import { createLifecycle } from '../lifecycle';
 import { createTicker } from '../tick';
@@ -27,7 +28,7 @@ export type DegradedReason = 'unfocused' | 'frame-budget';
 interface LoopOptionsBase {
   element: Element;
   /**
-   * Called every frame. Write to refs or DOM directly — never call React
+   * Called every frame. Write to refs or DOM directly. Never call React
    * `setState` here (60 calls/sec = 60 re-renders/sec).
    */
   onTick: (frame: FrameState) => void;
@@ -36,6 +37,8 @@ interface LoopOptionsBase {
   intersectionOptions?: IntersectionObserverInit;
   start?: 'auto' | 'manual';
   onPhaseChange?: (phase: LoopPhase, reason: LoopReason) => void;
+  /** Abort signal that stops the loop when aborted. */
+  signal?: AbortSignal;
 }
 
 type DegradedOptions =
@@ -66,7 +69,7 @@ const DEGRADED_FPS_CAP = 30;
 
 /**
  * In `degraded: 'pause'` mode a frame-budget degrade pauses the loop, so no
- * further frames tick to clear it — without a timer the loop would stay paused
+ * further frames tick to clear it. Without a timer the loop would stay paused
  * forever after a transient spike. After this delay the loop optimistically
  * un-pauses and re-measures, rescheduling on each subsequent degrade. (Throttle
  * mode keeps ticking, so it does not use this.)
@@ -84,7 +87,7 @@ const RECOVERY_RETRY_MS = 2000;
  * or the tab is backgrounded, resumes when it returns, and cleans up with `stop()`.
  *
  * @remarks
- * The loop is signal-driven and exposes only `start()` and `stop()` — there is no
+ * The loop is signal-driven and exposes only `start()` and `stop()`. There is no
  * imperative `pause()`/`resume()`. Pausing is decided by visibility, reduced
  * motion, and quality, so an imperative pause would compete with those signals.
  * For manual control, use `useLoop`'s `enabled` option (React) or `createLifecycle`,
@@ -113,9 +116,11 @@ export function createLoop(options: LoopOptions): Loop {
     intersectionOptions,
     start: startMode = 'auto',
     onPhaseChange,
+    signal,
   } = options as LoopOptionsBase & {
     degraded?: DegradedBehavior;
     degradedFps?: number;
+    signal?: AbortSignal;
   };
 
   if (!element) noElementError('createLoop');
@@ -315,12 +320,18 @@ export function createLoop(options: LoopOptions): Loop {
 
   function stop(): void {
     if (_phase === 'stopped') return;
+    unlinkAbort?.();
     clearBudgetRecovery();
     destroyTicker();
     lifecycle.stop();
     unsubFocus();
     setPhase('stopped', 'disposed');
   }
+
+  // Declared before assignment because an already-aborted signal makes
+  // linkAbortSignal call stop() synchronously, which reads unlinkAbort.
+  let unlinkAbort: (() => void) | undefined;
+  unlinkAbort = linkAbortSignal(signal, stop);
 
   if (startMode === 'auto') {
     start();

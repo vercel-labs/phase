@@ -18,23 +18,23 @@ const matches: boolean = useMediaQuery(query);
 
 ### Return
 
-`boolean` — whether the media query currently matches.
+`boolean`. Whether the media query currently matches.
 
 ## When to use
 
 - Subscribing to viewport-level or device-level media queries reactively.
 - Dark mode detection: `useMediaQuery('(prefers-color-scheme: dark)')`.
-- Reduced motion detection (reactive): `useMediaQuery('(prefers-reduced-motion: reduce)')`.
+- Reduced motion detection (reactive). Prefer `usePrefersReducedMotion()` for this specific case.
 - Responsive logic that depends on viewport, not element size.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                     | Use                                                  |
 | ----------------------------------- | ---------------------------------------------------- |
 | Element-level breakpoint            | `useContainerQuery` or `useSize`                     |
 | One-shot reduced motion check       | `prefersReducedMotion()` (synchronous, non-reactive) |
-| Animation gating for reduced motion | `useLoop` / `useLifecycle` — handle it automatically |
-| CSS can do it                       | `@media` query in CSS — no JS needed                 |
+| Animation gating for reduced motion | `useLoop` / `useLifecycle` (handle it automatically) |
+| CSS can do it                       | `@media` query in CSS (no JS needed)                 |
 
 ## Do
 
@@ -47,15 +47,16 @@ const matches: boolean = useMediaQuery(query);
 
 ## Don't
 
-- **Don't use for element-level responsiveness** — media queries are viewport-scoped. Use `useContainerQuery`.
-- **Don't rely on the initial `false`** — during SSR and hydration the value is `false`. Design fallback UI accordingly.
+- **Don't use for element-level responsiveness.** Media queries are viewport-scoped. Use `useContainerQuery`.
+- **Don't rely on the initial `false`.** During SSR and hydration the value is `false`. Design fallback UI accordingly.
 
 ## Reduced motion
 
-`useMediaQuery('(prefers-reduced-motion: reduce)')` is the reactive way to check reduced motion. But for animation primitives, you don't need this — all hooks handle it automatically.
+`useMediaQuery('(prefers-reduced-motion: reduce)')` is the reactive way to check reduced motion. But for animation primitives, you don't need this. All hooks handle it automatically.
 
 ## See also
 
-- [useContainerQuery](./use-container-query.md) — element-level breakpoints
-- [prefers-reduced-motion](./prefers-reduced-motion.md) — synchronous one-shot check
-- [useSize](./use-size.md) — raw element dimensions
+- [useContainerQuery](./use-container-query.md). Element-level breakpoints
+- [use-prefers-reduced-motion](./use-prefers-reduced-motion.md). Reactive reduced-motion boolean
+- [prefers-reduced-motion](./prefers-reduced-motion.md). Synchronous one-shot check
+- [useSize](./use-size.md). Raw element dimensions

@@ -11,7 +11,7 @@ export type { RenderPhase } from '../../core/render-state';
  *
  * Use it to pause raw, non-phase work (a hand-written rAF loop, `setInterval`)
  * when the subtree stops painting. phase loops self-pause off-screen already.
- * Has no layout effect — safe for CLS.
+ * Has no layout effect. Safe for CLS.
  *
  * @example
  * const ref = useRef<HTMLDivElement>(null);

@@ -5,7 +5,7 @@ const callbacks = new Map<Element, ROCallback>();
 
 /**
  * Observe an element via a singleton ResizeObserver.
- * One RO instance for the entire page — RO takes zero constructor options.
+ * One RO instance for the entire page. RO takes zero constructor options.
  *
  * @returns Cleanup function that unobserves the element.
  */
@@ -35,7 +35,7 @@ export function observeResize(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/** Lazy-created singleton — RO takes zero constructor options, so one instance can observe everything. */
+/** Lazy-created singleton. RO takes zero constructor options, so one instance can observe everything. */
 function getObserver(): ResizeObserver {
   if (!observer) {
     observer = new ResizeObserver((entries) => {

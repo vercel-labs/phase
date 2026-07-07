@@ -7,10 +7,11 @@ import {
   type LifecycleReason,
   type LifecycleReducedMotion,
 } from '../../core/lifecycle';
+import { useSyncedRef } from '../use-synced-ref';
 
 export interface UseLifecycleOptions<T extends Element = HTMLDivElement> {
   /**
-   * Element whose visibility gates the lifecycle. Optional — when omitted, attach
+   * Element whose visibility gates the lifecycle. Optional. When omitted, attach
    * the returned `ref`.
    */
   ref?: RefObject<T | null>;
@@ -21,6 +22,12 @@ export interface UseLifecycleOptions<T extends Element = HTMLDivElement> {
   /** When `false`, the lifecycle is torn down and reports `idle`. Default `true`. */
   enabled?: boolean;
   intersectionOptions?: IntersectionObserverInit;
+  /**
+   * Synchronous callback fired in the observer/MQL callback, before React
+   * schedules a render. Use to post messages to a worker or update a ref
+   * without waiting for the React commit.
+   */
+  onPhaseChange?: (phase: LifecyclePhase, reason: LifecycleReason) => void;
 }
 
 export interface UseLifecycleResult<T extends Element = HTMLDivElement> {
@@ -63,6 +70,7 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
 ): UseLifecycleResult<T> {
   const { reducedMotion, intersectionOptions, enabled = true } = options ?? {};
   const paused = options?.paused ?? false;
+  const onPhaseChangeRef = useSyncedRef(options?.onPhaseChange);
 
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
@@ -81,7 +89,10 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
       element,
       reducedMotion,
       intersectionOptions,
-      onPhaseChange: (phase, phaseReason) => setState({ phase, phaseReason }),
+      onPhaseChange: (phase, phaseReason) => {
+        onPhaseChangeRef.current?.(phase, phaseReason);
+        setState({ phase, phaseReason });
+      },
     });
     lifecycleRef.current = lifecycle;
 

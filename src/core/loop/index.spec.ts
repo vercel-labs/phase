@@ -402,7 +402,7 @@ const RECOVERY_RETRY_MS = 2000;
 
 /**
  * Drives the loop's ticker with a manually controlled clock. The default fake
- * timer rAF fires fixed ~16ms frames, which can never go over budget — so to
+ * timer rAF fires fixed ~16ms frames, which can never go over budget. To
  * exercise the frame-budget path we stub `performance.now` + rAF and step the
  * clock by arbitrary deltas. `setTimeout` (used by recovery) stays on fake
  * timers, advanced separately via `vi.advanceTimersByTime`.
@@ -548,6 +548,22 @@ describe('stop cleanup', () => {
     const loop = createLoop({ element: el, onTick: vi.fn() });
     loop.stop();
     expect(() => loop.stop()).not.toThrow();
+  });
+
+  it('aborting the signal stops the loop', async () => {
+    const { createLoop } = await getModule();
+    const el = document.createElement('div');
+    const controller = new AbortController();
+    const loop = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      signal: controller.signal,
+    });
+    makeSightVisible(el);
+    expect(loop.phase).toBe('running');
+
+    controller.abort();
+    expect(loop.phase).toBe('stopped');
   });
 });
 

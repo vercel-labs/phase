@@ -1,6 +1,6 @@
 # `useTween`
 
-Animates a number from its current position to `target` over a duration. Calls `setState` per frame — appropriate when the animated value is used in render output and the render is cheap.
+Animates a number from its current position to `target` over a duration. Calls `setState` per frame, appropriate when the animated value is used in render output and the render is cheap.
 
 ## Signature
 
@@ -31,7 +31,7 @@ Returns the current animated `number`.
 - The animated value must be in React state (rendered in JSX, not written to DOM directly).
 - You want easing and interruption handling.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                         | Use                              |
 | --------------------------------------- | -------------------------------- |
@@ -52,16 +52,16 @@ Returns the current animated `number`.
 
 ## Don't
 
-- **Don't animate many values with separate `useTween` calls** — each triggers a re-render per frame. Use `useLoop` for batch DOM animation.
-- **Don't pass `duration: 0` or negative** — throws `PhaseError` with code `invalid_duration`.
-- **Don't use for canvas or WebGL** — `useTween` drives React state. Use `useCanvas`.
+- **Don't animate many values with separate `useTween` calls.** Each triggers a re-render per frame. Use `useLoop` for batch DOM animation.
+- **Don't pass `duration: 0` or negative.** Throws `PhaseError` with code `invalid_duration`.
+- **Don't use for canvas or WebGL.** `useTween` drives React state. Use `useCanvas`.
 
 ## Reduced motion
 
-Default `'complete'`: jumps to target instantly. The value still arrives at its destination; the animation is skipped. This is the right default for tweens that must reach their final state.
+Default `'complete'`: jumps to target instantly. The value still arrives at its destination. The animation is skipped. This is the right default for tweens that must reach their final state.
 
 ## See also
 
-- [useLoop](./use-loop.md) — per-frame DOM animation via refs (no re-renders)
-- [ease](./ease.md) — easing functions used by useTween
-- [useCanvas](./use-canvas.md) — canvas/WebGL animation
+- [useLoop](./use-loop.md). Per-frame DOM animation via refs (no re-renders)
+- [ease](./ease.md). Easing functions used by useTween
+- [useCanvas](./use-canvas.md). Canvas/WebGL animation

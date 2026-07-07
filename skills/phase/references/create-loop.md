@@ -23,13 +23,14 @@ const loop = createLoop(options: LoopOptions): Loop;
 | `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to the underlying IO            |
 | `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately              |
 | `onPhaseChange`       | `(phase, reason) => void`           | —            | Called on every phase transition          |
+| `signal`              | `AbortSignal`                       | —            | Stops the loop when the signal is aborted |
 
 ### Return (Loop)
 
 | Property        | Type                          | Description                                    |
 | --------------- | ----------------------------- | ---------------------------------------------- |
 | `start()`       | `() => void`                  | Begin the loop (no-op if already running)      |
-| `stop()`        | `() => void`                  | Terminal — disposes everything                 |
+| `stop()`        | `() => void`                  | Terminal (disposes everything)                 |
 | `phase`         | `LoopPhase`                   | `'idle' \| 'running' \| 'paused' \| 'stopped'` |
 | `phaseReason`   | `LoopReason`                  | Why the current phase was entered              |
 | `quality`       | `Quality`                     | `'full' \| 'degraded'`                         |
@@ -42,15 +43,15 @@ const loop = createLoop(options: LoopOptions): Loop;
 - You need quality degradation signals (FPS throttle on window blur or frame budget overflow).
 - You're animating DOM elements (transforms, opacity, positions) in a frame loop.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                                   | Use                                                                         |
 | ------------------------------------------------- | --------------------------------------------------------------------------- |
-| You own the renderer (three.js, Pixi, Web Worker) | `createLifecycle` — gives you active/paused signal without driving the loop |
-| Single value into React render                    | `useTween` — simpler, calls setState                                        |
+| You own the renderer (three.js, Pixi, Web Worker) | `createLifecycle` (gives you active/paused signal without driving the loop) |
+| Single value into React render                    | `useTween` (smaller API surface, calls setState)                            |
 | Pure CSS can do it                                | CSS `transition` / `animation` / `@starting-style`                          |
 | Need springs or gesture-driven animation          | External library (motion, GSAP)                                             |
-| React component                                   | `useLoop` — same engine with React lifecycle management                     |
+| React component                                   | `useLoop` (same engine with React lifecycle management)                     |
 
 ## Do
 
@@ -66,22 +67,23 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 ## Don't
 
-- **Never call React `setState` inside `onTick`** — it fires 60 times/sec. Write to refs or DOM directly.
-- **Never allocate inside `onTick`** — no objects, arrays, closures, template literals, or spreads. `FrameState` is mutated in place; reuse external variables.
-- **Never store a reference to `frame`** — it's the same object every tick, mutated in place. Read values immediately.
-- **Don't call `start()` after `stop()`** — `stop()` is terminal. Create a new loop instance.
-- **Don't use `createLoop` without an element** — throws `PhaseError` with code `no_element`.
+- **Never call React `setState` inside `onTick`.** It fires 60 times/sec. Write to refs or DOM directly.
+- **Never allocate inside `onTick`.** No objects, arrays, closures, template literals, or spreads. `FrameState` is mutated in place; reuse external variables.
+- **Never store a reference to `frame`.** It's the same object every tick, mutated in place. Read values immediately.
+- **Don't call `start()` after `stop()`.** `stop()` is terminal. Create a new loop instance.
+- **Don't use `createLoop` without an element.** Throws `PhaseError` with code `no_element`.
 
 ## Reduced motion
 
-Default: `'pause'` — the loop pauses entirely when the user enables reduced motion. The `phaseReason` will be `'reduced-motion'`.
+Default: `'pause'`. The loop pauses entirely when reduced motion is enabled. The `phaseReason` will be `'reduced-motion'`.
 
 - `'complete'`: Jump to the end state instantly (useful for tweens that have a target). The loop runs one final tick then stops.
 - `'ignore'`: Keep running regardless. Use only for non-decorative motion (e.g. a data visualization that conveys information via movement).
 
 ## See also
 
-- [createTicker](./create-ticker.md) — the low-level rAF clock underneath createLoop; use when you don't need visibility management
-- [createLifecycle](./create-lifecycle.md) — the activation signal without the ticker; use when you own the render loop
-- [useLoop](./use-loop.md) — React hook wrapping createLoop with ref management
-- [useCanvas](./use-canvas.md) — React hook for canvas/WebGL with DPR handling on top of createLoop
+- [createTicker](./create-ticker.md). The low-level rAF clock underneath createLoop; use when you don't need visibility management
+- [createLifecycle](./create-lifecycle.md). The activation signal without the ticker; use when you own the render loop
+- [useLoop](./use-loop.md). React hook wrapping createLoop with ref management
+- [useCanvas](./use-canvas.md). React hook for canvas/WebGL with DPR handling on top of createLoop
+- [abort-signals](./abort-signals.md). Stop this loop via the `signal` option

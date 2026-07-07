@@ -1,3 +1,4 @@
+import { linkAbortSignal } from '../_internal/abort';
 import { noElementError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 
@@ -17,6 +18,8 @@ export interface SightOptions {
   element: Element;
   intersectionOptions?: IntersectionObserverInit;
   onPhaseChange?: (phase: SightPhase, reason: SightReason) => void;
+  /** Abort signal that stops the observer when aborted. */
+  signal?: AbortSignal;
 }
 
 export interface Sight {
@@ -34,7 +37,7 @@ export interface Sight {
  *
  * `phase` is `'visible'` only when both the document is visible (not backgrounded)
  * and the element is within the viewport. Uses a shared IntersectionObserver
- * pool — multiple `createSight` calls with the same options share one observer.
+ * pool. Multiple `createSight` calls with the same options share one observer.
  *
  * @example
  * const sight = createSight({
@@ -52,7 +55,7 @@ export function createSight(options: SightOptions): Sight {
     serverContextError('createSight');
   }
 
-  const { element, intersectionOptions, onPhaseChange } = options;
+  const { element, intersectionOptions, onPhaseChange, signal } = options;
 
   if (!element) noElementError('createSight');
 
@@ -108,15 +111,20 @@ export function createSight(options: SightOptions): Sight {
     ...intersectionOptions,
   });
 
+  let unlinkAbort: (() => void) | undefined;
+
   function stop(): void {
     if (stopped) return;
     stopped = true;
+    unlinkAbort?.();
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('pageshow', onPageShow);
     unobserveIO();
     _phase = 'hidden';
     _reason = 'initial';
   }
+
+  unlinkAbort = linkAbortSignal(signal, stop);
 
   return {
     get phase() {

@@ -15,6 +15,49 @@ import { join, relative, resolve } from 'node:path';
 
 const targetDir = resolve(process.argv[2] || '.');
 
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Flags the manual synced-ref idiom that useSyncedRef shortens:
+//   const xRef = useRef(v);
+//   xRef.current = v;   // next non-blank line, same initializer
+// Matching the same initializer keeps false positives near zero: useRef(null),
+// a different value, or a conditional write (`if (c) xRef.current = v`) all miss.
+// Dedup only, not a defect: the raw pattern is correct React.
+function matchesSyncedRef(lines, i) {
+  const decl =
+    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*useRef\s*(?:<[^>]*>)?\s*\(([^)]*)\)/.exec(
+      lines[i],
+    );
+  if (!decl) return false;
+
+  const name = decl[1];
+  const initial = decl[2].trim();
+  if (initial === '') return false;
+
+  let j = i + 1;
+  while (j < lines.length) {
+    const t = lines[j].trim();
+    if (
+      t === '' ||
+      t.startsWith('//') ||
+      t.startsWith('*') ||
+      t.startsWith('/*')
+    )
+      j++;
+    else break;
+  }
+  if (j >= lines.length) return false;
+
+  const assign = new RegExp(
+    '^' + escapeRegExp(name) + '\\.current\\s*=\\s*(.+?);?$',
+  ).exec(lines[j].trim());
+  if (!assign) return false;
+
+  return assign[1].trim() === initial;
+}
+
 const SIGNALS = [
   {
     id: 'manual-raf',
@@ -66,6 +109,13 @@ const SIGNALS = [
     label: 'setInterval/setTimeout for animation (no visibility check)',
     pattern: /setInterval|setTimeout/,
     contextPattern: /transform|opacity|animate|position|translate/,
+    exclude: /node_modules|phase|\.spec\.|\.test\./,
+  },
+  {
+    id: 'manual-synced-ref',
+    label: 'Manual synced ref (dedup: useSyncedRef offers a shorthand)',
+    severity: 'dedup',
+    matcher: matchesSyncedRef,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
   },
 ];
@@ -120,6 +170,16 @@ for (const filePath of files) {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+
+      // Custom matchers get the full line array and index (multi-line shapes)
+      if (signal.matcher) {
+        if (!signal.matcher(lines, i)) continue;
+        findings
+          .get(signal.id)
+          .push({ file: rel, line: i + 1, text: line.trim() });
+        continue;
+      }
+
       if (!signal.pattern.test(line)) continue;
 
       // Context pattern: only match if nearby lines contain the context
@@ -138,8 +198,11 @@ for (const filePath of files) {
 // --- Output ---
 
 let totalFindings = 0;
+let dedupFindings = 0;
 
+// Actionable anti-patterns first.
 for (const signal of SIGNALS) {
+  if (signal.severity === 'dedup') continue;
   const items = findings.get(signal.id);
   if (items.length === 0) continue;
 
@@ -150,11 +213,29 @@ for (const signal of SIGNALS) {
   }
 }
 
-if (totalFindings === 0) {
+// Dedup signals last: correct code with a phase shorthand.
+for (const signal of SIGNALS) {
+  if (signal.severity !== 'dedup') continue;
+  const items = findings.get(signal.id);
+  if (items.length === 0) continue;
+
+  console.log(`\n## ${signal.label} (${items.length})  [dedup, not a defect]`);
+  for (const item of items) {
+    console.log(`  ${item.file}:${item.line}  ${item.text.slice(0, 100)}`);
+    dedupFindings++;
+  }
+}
+
+if (totalFindings === 0 && dedupFindings === 0) {
   console.log('\n✓ No animation anti-pattern candidates found.');
 } else {
   console.log(`\n─────────────────────────────────────────`);
   console.log(`Total candidates: ${totalFindings}`);
+  if (dedupFindings > 0) {
+    console.log(
+      `Dedup opportunities: ${dedupFindings} (correct code, optional cleanup)`,
+    );
+  }
   console.log(
     `Classify each against the decision ladder (CSS → useTween → phase → library → no change).`,
   );

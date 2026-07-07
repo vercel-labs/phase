@@ -22,7 +22,7 @@ const idle = useIdle({ timeout: 2000 });
 - Kick off deferrable side effects (prefetch, analytics init) once idle.
 - You need the boolean directly rather than the `WhenIdle` mounting wrapper.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                 | Use                         |
 | ------------------------------- | --------------------------- |
@@ -40,16 +40,16 @@ const idle = useIdle({ timeout: 2000 });
 
 ## Don't
 
-- **Don't use for SSR-critical content** — returns `false` on the server and the first client render, so idle-gated content is absent from server HTML.
-- **Don't drive per-frame work off it** — it flips once and stays `true`; it is not a loop.
+- **Don't use for SSR-critical content.** Returns `false` on the server and the first client render, so idle-gated content is absent from server HTML.
+- **Don't drive per-frame work off it.** It flips once and stays `true`; it is not a loop.
 
 ## Reduced motion
 
-Not applicable — `useIdle` is a scheduling signal, not an animation. Gate any motion you trigger from it with the usual reduced-motion handling.
+Not applicable. `useIdle` is a scheduling signal, not an animation. Gate any motion you trigger from it with the usual reduced-motion handling.
 
 ## See also
 
-- [rendering-recipes](./rendering-recipes.md) — sequencing work with `useIdle` and composing the rendering helpers
-- [use-when-idle](./use-when-idle.md) — the effect form, for side effects (prefetch, `import()`) once idle
-- [when-idle](./when-idle.md) — the mounting wrapper around `useIdle`
-- [use-sight](./use-sight.md) — visibility-based gating instead of idle
+- [rendering-recipes](./rendering-recipes.md). Sequencing work with `useIdle` and composing the rendering helpers
+- [use-when-idle](./use-when-idle.md). The effect form, for side effects (prefetch, `import()`) once idle
+- [when-idle](./when-idle.md). The mounting wrapper around `useIdle`
+- [use-sight](./use-sight.md). Visibility-based gating instead of idle

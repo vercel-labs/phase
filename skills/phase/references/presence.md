@@ -34,16 +34,16 @@ import { Presence } from 'phase/react';
 
 ## When to use
 
-- Simple show/hide transitions where a wrapper `div` is acceptable.
-- Modals, toasts, menus, dropdowns — anything that mounts/unmounts.
+- Show/hide transitions where a wrapper `div` is acceptable.
+- Modals, toasts, menus, dropdowns, and anything that mounts/unmounts.
 - You want zero boilerplate (compared to `usePresence`).
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this               | Use                                           |
 | ----------------------------- | --------------------------------------------- |
-| Need custom element (not div) | `usePresence` hook — full control over markup |
-| Exit→enter between N states   | `<Swap>` — coordinated transitions            |
+| Need custom element (not div) | `usePresence` hook (full control over markup) |
+| Exit→enter between N states   | `<Swap>` (coordinated transitions)            |
 | Viewport-gated lazy mount     | `<WhenVisible>`                               |
 | Per-frame animation           | `useLoop`                                     |
 
@@ -63,16 +63,16 @@ import { Presence } from 'phase/react';
 
 ## Don't
 
-- **Don't use for per-frame animation** — `Presence` is for mount/unmount transitions only.
-- **Don't set `exitDuration` shorter than your CSS transition** — causes mid-animation unmount.
-- **Don't nest `<Presence>` inside another `<Presence>` for exit→enter** — use `<Swap>` instead.
+- **Don't use for per-frame animation.** `Presence` is for mount/unmount transitions only.
+- **Don't set `exitDuration` shorter than your CSS transition.** Causes mid-animation unmount.
+- **Don't nest `<Presence>` inside another `<Presence>` for exit→enter.** Use `<Swap>` instead.
 
 ## Reduced motion
 
-Default `'respect'`: enter animation skipped (`data-enter="animate"` not stamped), exit is instant (no `exiting` phase). Element still appears/disappears — decoration is removed, not behavior.
+Default `'respect'`: enter animation skipped (`data-enter="animate"` not stamped), exit is instant (no `exiting` phase). Element still appears/disappears. Decoration is removed, not behavior.
 
 ## See also
 
-- [usePresence](./use-presence.md) — hook for full control over markup
-- [swap](./swap.md) — coordinated exit→enter
-- [when-visible](./when-visible.md) — viewport-gated lazy mount
+- [usePresence](./use-presence.md). Hook for full control over markup
+- [swap](./swap.md). Coordinated exit→enter
+- [when-visible](./when-visible.md). Viewport-gated lazy mount

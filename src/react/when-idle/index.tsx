@@ -23,7 +23,7 @@ export interface WhenIdleProps extends ComponentProps<'div'> {
  * Mounts children once the browser is idle after first paint. One-shot (once
  * mounted, stays mounted). Use it to defer non-critical UI off the critical path.
  *
- * Children are not server-rendered — idle never fires during SSR — so reserve
+ * Children are not server-rendered (idle never fires during SSR), so reserve
  * this for non-critical content. For viewport-gated mounting use `WhenVisible`;
  * to keep content in the DOM but skip painting use `Defer`.
  *

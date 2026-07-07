@@ -308,6 +308,24 @@ describe('stop', () => {
     sight.stop();
     expect(() => sight.stop()).not.toThrow();
   });
+
+  it('aborting the signal stops the observer', async () => {
+    const { createSight } = await getModule();
+    const el = document.createElement('div');
+    const cb = vi.fn();
+    const controller = new AbortController();
+    const sight = createSight({
+      element: el,
+      onPhaseChange: cb,
+      signal: controller.signal,
+    });
+
+    controller.abort();
+    expect(sight.phase).toBe('hidden');
+
+    mockIO.trigger(el, true);
+    expect(cb).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

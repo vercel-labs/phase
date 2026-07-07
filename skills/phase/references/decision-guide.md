@@ -4,7 +4,7 @@ How to choose between CSS-only, minimal JS, phase, or an external animation libr
 
 ## The ladder
 
-Always prefer the cheapest tier. Moving up the ladder adds JS, runtime cost, and bundle weight — only justified when the lower tier genuinely cannot do the job.
+Always prefer the cheapest tier. Moving up the ladder adds JS, runtime cost, and bundle weight, which is only justified when the lower tier genuinely cannot do the job.
 
 ```
 CSS-only  →  Minimal JS (useTween)  →  phase primitives  →  External library
@@ -31,7 +31,7 @@ Use when:
 - The render is cheap (one element, minimal diffing)
 - You do NOT need per-frame DOM writes, canvas, or visibility-aware pausing
 
-`useTween` calls `setState` per frame — acceptable only when the render tree below it is small. If the animated value drives a large subtree, move to Tier 3 (`useLoop` with ref-based DOM writes).
+`useTween` calls `setState` per frame, acceptable only when the render tree below it is small. If the animated value drives a large subtree, move to Tier 3 (`useLoop` with ref-based DOM writes).
 
 Reduced motion: jumps to target instantly (value still arrives, animation skipped).
 
@@ -66,10 +66,10 @@ All phase primitives share:
 
 - Zero per-frame allocations
 - Automatic reduced-motion handling
-- Pooled observers (IO/RO/MQL — no raw `new IntersectionObserver`)
+- Pooled observers (IO/RO/MQL, no raw `new IntersectionObserver`)
 - Clean teardown on unmount
 
-### Rendering: when to render, not just when to animate
+### Rendering: when to render, not only when to animate
 
 phase's rendering helpers apply the same lifecycle signals to _rendering_ work. Choose by how aggressively you can skip work and whether the content must exist for SSR:
 
@@ -79,10 +79,10 @@ phase's rendering helpers apply the same lifecycle signals to _rendering_ work. 
 | `WhenIdle`    | React mount until idle              | no      | no           | non-critical UI that shouldn't block first paint   |
 | `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading / reveals              |
 
-- **`Defer` is the safest default** — children stay server-rendered and keep their reserved box (`contain-intrinsic-size: auto <est>`), so no layout shift. It defers rendering only, never hydration or mounting.
-- **`WhenIdle` / `WhenVisible` save more** but their children are absent from SSR HTML — reserve them for non-critical content.
+- **`Defer` is the safest default.** Children stay server-rendered and keep their reserved box (`contain-intrinsic-size: auto <est>`), so no layout shift. It defers rendering only, never hydration or mounting.
+- **`WhenIdle` / `WhenVisible` save more** but their children are absent from SSR HTML. Reserve them for non-critical content.
 
-For multi-signal rendering patterns — two-tier `Defer` + `WhenVisible`, idle-gated `lazy()`, gating raw loops with `useRenderState`, and what _not_ to compose — see [rendering-recipes.md](./rendering-recipes.md).
+For multi-signal rendering patterns (two-tier `Defer` + `WhenVisible`, idle-gated `lazy()`, gating raw loops with `useRenderState`, and what _not_ to compose), see [rendering-recipes.md](./rendering-recipes.md).
 
 ### Tier 4: External library
 
@@ -192,7 +192,7 @@ function AnimationGate({ logoCount, children }) {
 }
 ```
 
-The logos pass through as `children` — server-rendered HTML that React never hydrates or re-renders. The client component is a thin wrapper that toggles a CSS class. Benefits:
+The logos pass through as `children`, server-rendered HTML that React never hydrates or re-renders. The client component is a thin wrapper that toggles a CSS class. Benefits:
 
 - Less JS shipped (no image component hydration)
 - Faster TTI (content in initial HTML)
@@ -212,16 +212,16 @@ The logos pass through as `children` — server-rendered HTML that React never h
 
 ## When NOT to replace with phase
 
-- CSS transitions that already work well — leave them alone
-- Spring animations with interruption — keep your spring library
-- Gesture-driven animations — keep your gesture library
-- Server-side code that imports easing math — use `phase/ease` (no browser APIs)
+- CSS transitions that already work well. Leave them alone.
+- Spring animations with interruption. Keep your spring library.
+- Gesture-driven animations. Keep your gesture library.
+- Server-side code that imports easing math. Use `phase/ease` (no browser APIs).
 
 ## Common mistakes
 
-- **Recommending phase for a CSS-only animation** — if `@starting-style` + `transition` or a simple `animation` handles the enter/exit, don't add JS. Phase is for when CSS genuinely can't do it.
-- **Using `useLoop` when `useTween` is sufficient** — if you're animating one value into render output and the component is cheap, `useTween` is simpler and smaller. `useLoop` is for when you need ref-based DOM writes or many values.
-- **Using `useLifecycle` expecting it to drive frames** — it only gives you an active/paused signal. It does not schedule `requestAnimationFrame`. Use `useLoop` or `useCanvas` when you want phase to drive the clock.
-- **Forgetting that `createLoop` has no `pause()`/`resume()`** — it's signal-driven (visibility, reduced motion, quality). For manual control, use `createLifecycle` which exposes `pause()`/`resume()`, or use the React hook's `enabled` prop.
-- **Reaching for an external library for enter/exit transitions** — `Presence`, `Swap`, and `WhenVisible` handle mount/unmount with CSS `@starting-style` + `transitionend`. You don't need a library for this.
-- **Using `useScrollProgress` expecting continuous scroll-scrubbing** — it reports intersection ratio, which plateaus for tall elements. For scroll-position-driven animation, use `ScrollTimeline` or `motion`'s `useScroll`.
+- **Recommending phase for a CSS-only animation.** If `@starting-style` + `transition` or a CSS `animation` handles the enter/exit, don't add JS. Phase is for when CSS genuinely can't do it.
+- **Using `useLoop` when `useTween` is sufficient.** If you're animating one value into render output and the component is cheap, `useTween` has a smaller API surface and bundle. `useLoop` is for when you need ref-based DOM writes or many values.
+- **Using `useLifecycle` expecting it to drive frames.** It only gives you an active/paused signal. It does not schedule `requestAnimationFrame`. Use `useLoop` or `useCanvas` when you want phase to drive the clock.
+- **Forgetting that `createLoop` has no `pause()`/`resume()`.** It's signal-driven (visibility, reduced motion, quality). For manual control, use `createLifecycle` which exposes `pause()`/`resume()`, or use the React hook's `enabled` prop.
+- **Reaching for an external library for enter/exit transitions.** `Presence`, `Swap`, and `WhenVisible` handle mount/unmount with CSS `@starting-style` + `transitionend`. You don't need a library for this.
+- **Using `useScrollProgress` expecting continuous scroll-scrubbing.** It reports intersection ratio, which plateaus for tall elements. For scroll-position-driven animation, use `ScrollTimeline` or `motion`'s `useScroll`.

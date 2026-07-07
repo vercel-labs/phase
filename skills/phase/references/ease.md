@@ -8,11 +8,11 @@ Pure functions. No browser APIs, no side effects, no React. Safe in server compo
 import { lerp, clamp01, easeOutCubic, remap } from 'phase/ease';
 ```
 
-Tree-shakeable — unused functions are dead-code-eliminated.
+Tree-shakeable. Unused functions are dead-code-eliminated.
 
 ## Easing functions
 
-All take a progress value (0–1) and return a curved progress value (0–1). They don't know about time, pixels, or anything else — they reshape a number.
+All take a progress value (0–1) and return a curved progress value (0–1). They don't know about time, pixels, or anything else. They reshape a number.
 
 | Function                            | Character                                               |
 | ----------------------------------- | ------------------------------------------------------- |
@@ -20,7 +20,7 @@ All take a progress value (0–1) and return a curved progress value (0–1). Th
 | `easeOutQuart(progress)`            | Sharper deceleration                                    |
 | `easeOutBack(progress, overshoot?)` | Overshoots target, snaps back. Default overshoot ≈ 10%. |
 | `easeInOutCubic(progress)`          | Symmetric S-curve                                       |
-| `linear(progress)`                  | Identity — no easing                                    |
+| `linear(progress)`                  | Identity (no easing)                                    |
 
 ## Math utilities
 
@@ -61,12 +61,12 @@ Easing, interpolation, and your value range are three separate concerns. phase k
 - When `useTween` is too heavy or you need the raw math.
 - Custom easing for `useTween`'s `easing` option.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                                           | Use                                               |
 | --------------------------------------------------------- | ------------------------------------------------- |
-| Animating a value into React render                       | `useTween` — manages the loop for you             |
-| CSS easing                                                | CSS `cubic-bezier()` or `linear()` — no JS needed |
+| Animating a value into React render                       | `useTween` (manages the loop for you)             |
+| CSS easing                                                | CSS `cubic-bezier()` or `linear()` (no JS needed) |
 | Complex easing (bounce, elastic with configurable params) | External library or hand-written math             |
 
 ## Do
@@ -89,16 +89,16 @@ Easing, interpolation, and your value range are three separate concerns. phase k
 
 ## Don't
 
-- **Don't call `easeOutBack` with extremely large overshoot** — values > 5 can produce extreme over/undershoot. Default 1.70158 is intentional.
-- **Don't allocate the `RemapOptions` object inside `onTick`** — pre-allocate and mutate the `value` field.
-- **Don't use easing as a substitute for spring physics** — easing is time-based (fixed duration). Springs are velocity-aware (no fixed duration).
+- **Don't call `easeOutBack` with extremely large overshoot.** Values > 5 can produce extreme over/undershoot. Default 1.70158 is intentional.
+- **Don't allocate the `RemapOptions` object inside `onTick`.** Pre-allocate and mutate the `value` field.
+- **Don't use easing as a substitute for spring physics.** Easing is time-based (fixed duration). Springs are velocity-aware (no fixed duration).
 
 ## Reduced motion
 
-Easing functions are pure math — they don't know about reduced motion. The consumer of the eased value is responsible for checking motion preferences (or using a phase primitive that checks automatically).
+Easing functions are pure math and don't know about reduced motion. The consumer of the eased value is responsible for checking motion preferences (or using a phase primitive that checks automatically).
 
 ## See also
 
-- [useTween](./use-tween.md) — single-value animation using these easing functions
-- [useLoop](./use-loop.md) — per-frame loop where you'd use lerp/clamp01/easing manually
-- [decision-guide](./decision-guide.md) — when CSS easing is sufficient vs. JS
+- [useTween](./use-tween.md). Single-value animation using these easing functions
+- [useLoop](./use-loop.md). Per-frame loop where you'd use lerp/clamp01/easing manually
+- [decision-guide](./decision-guide.md). When CSS easing is sufficient vs. JS

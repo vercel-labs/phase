@@ -24,25 +24,25 @@ No options. Returns `false` on the server (no `matchMedia`).
 - Conditionally importing heavy animation modules.
 - Making decisions at app initialization time before any hooks run.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                            | Use                                                             |
 | ------------------------------------------ | --------------------------------------------------------------- |
-| Reactive subscription to motion preference | `useMediaQuery('(prefers-reduced-motion: reduce)')`             |
+| Reactive subscription to motion preference | `usePrefersReducedMotion()` (re-renders on change)              |
 | Gating an animation loop                   | `createLoop` / `useLoop` — handles reduced motion automatically |
-| Checking inside a React component          | The hooks handle it for you — no manual check needed            |
+| Checking inside a React component          | The hooks handle it for you (no manual check needed)            |
 
 ## Do
 
 - Use for conditional `import()` of heavy animation code.
 - Use at module/app init level, outside React's render cycle.
-- Trust that all phase hooks/primitives consult this signal automatically — you rarely need this directly.
+- Trust that all phase hooks/primitives consult this signal automatically. You rarely need this directly.
 
 ## Don't
 
-- **Don't poll it in a loop** — it reads from the shared MQL pool (cheap), but still don't call it per-frame.
-- **Don't use it to skip reduced motion handling** — that's what `reducedMotion: 'ignore'` is for on the primitive options.
-- **Don't assume it's reactive** — this is a point-in-time read. For reactivity, use `useMediaQuery`.
+- **Don't poll it in a loop.** It reads from the shared MQL pool (cheap), but still don't call it per-frame.
+- **Don't use it to skip reduced motion handling.** That's what `reducedMotion: 'ignore'` is for on the primitive options.
+- **Don't assume it's reactive.** This is a point-in-time read. For reactivity, use `useMediaQuery`.
 
 ## Reduced motion
 
@@ -50,6 +50,7 @@ This IS the reduced motion primitive. All other phase exports delegate to it int
 
 ## See also
 
-- [use-media-query](./use-media-query.md) — reactive subscription (re-renders on change)
-- [create-loop](./create-loop.md) — automatic reduced-motion handling via `reducedMotion` option
-- [create-lifecycle](./create-lifecycle.md) — automatic reduced-motion handling
+- [use-prefers-reduced-motion](./use-prefers-reduced-motion.md). Reactive boolean hook
+- [use-media-query](./use-media-query.md). Reactive subscription for arbitrary queries
+- [create-loop](./create-loop.md). Automatic reduced-motion handling via `reducedMotion` option
+- [create-lifecycle](./create-lifecycle.md). Automatic reduced-motion handling

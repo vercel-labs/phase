@@ -17,7 +17,7 @@
 
 <!-- 2-4 bullets: the specific scenarios where this export is the right choice. -->
 
-## When NOT to use — reach for X instead
+## When not to use
 
 <!-- 2-4 bullets: common mis-reach scenarios and what to use instead. -->
 
@@ -31,7 +31,7 @@
 <!-- ```tsx -->
 <!-- code -->
 <!-- ``` -->
-<!-- Each pattern gets its own labeled block. Keep code minimal — just the relevant part. -->
+<!-- Each pattern gets its own labeled block. Keep code minimal, only the relevant part. -->
 
 ## Don't
 
@@ -50,4 +50,4 @@
 ## See also
 
 <!-- Mandatory cross-links to related exports. Format: -->
-<!-- - [exportName](./export-name.md) — one-line relationship description -->
+<!-- - [exportName](./export-name.md) (one-line relationship description) -->

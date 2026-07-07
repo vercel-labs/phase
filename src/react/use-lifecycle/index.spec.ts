@@ -112,4 +112,44 @@ describe('useLifecycle', () => {
     unmount();
     expect(() => mockIO.trigger(el, true)).not.toThrow();
   });
+
+  it('onPhaseChange fires synchronously on phase transitions', async () => {
+    const useLifecycle = await getHook();
+    const { ref, el } = createRefWithElement();
+    const onPhaseChange = vi.fn();
+    renderHook(() => useLifecycle({ ref, onPhaseChange }));
+
+    act(() => mockIO.trigger(el, true));
+    expect(onPhaseChange).toHaveBeenCalledWith('active', 'started');
+
+    act(() => mockIO.trigger(el, false));
+    expect(onPhaseChange).toHaveBeenCalledWith('paused', 'sight');
+  });
+
+  it('onPhaseChange picks up latest callback without re-creating lifecycle', async () => {
+    const useLifecycle = await getHook();
+    const { ref, el } = createRefWithElement();
+    const cb1 = vi.fn();
+    const cb2 = vi.fn();
+
+    const { rerender } = renderHook(
+      ({ onPhaseChange }: { onPhaseChange: typeof cb1 }) =>
+        useLifecycle({ ref, onPhaseChange }),
+      { initialProps: { onPhaseChange: cb1 } },
+    );
+
+    // createLifecycle auto-starts: element not yet visible, so cb1 receives
+    // ('paused', 'sight') during construction, then ('active', 'started').
+    act(() => mockIO.trigger(el, true));
+    expect(cb1).toHaveBeenCalledWith('active', 'started');
+    const cb1CallCount = cb1.mock.calls.length;
+
+    // Swap callback without tearing down the lifecycle
+    rerender({ onPhaseChange: cb2 });
+
+    act(() => mockIO.trigger(el, false));
+    expect(cb2).toHaveBeenCalledWith('paused', 'sight');
+    // cb1 should NOT have been called after the swap
+    expect(cb1).toHaveBeenCalledTimes(cb1CallCount);
+  });
 });

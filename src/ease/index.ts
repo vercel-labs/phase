@@ -26,7 +26,7 @@ export function easeInOutCubic(progress: number): number {
     : 1 - (-2 * progress + 2) ** 3 / 2;
 }
 
-/** Linear (identity) — no easing. */
+/** Linear (identity). No easing applied. */
 export function linear(progress: number): number {
   return progress;
 }
@@ -50,7 +50,7 @@ export function lerp(start: number, end: number, progress: number): number {
   return start + (end - start) * progress;
 }
 
-/** Inverse of lerp — returns the progress (0–1) for a given value between start and end. */
+/** Inverse of lerp. Returns the progress (0–1) for a given value between start and end. */
 export function inverseLerp(start: number, end: number, value: number): number {
   return start === end ? 0 : (value - start) / (end - start);
 }

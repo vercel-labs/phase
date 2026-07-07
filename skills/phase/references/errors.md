@@ -39,12 +39,12 @@ if (isPhaseError(err)) {
 - Distinguishing phase errors from other errors in error boundaries.
 - Logging structured error information (code + reason + fix).
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                         | Use                                                           |
 | --------------------------------------- | ------------------------------------------------------------- |
 | Preventing the error in the first place | Check the error code table above and avoid the trigger        |
-| React error boundary                    | Standard React error boundary — `isPhaseError` helps classify |
+| React error boundary                    | Standard React error boundary (`isPhaseError` helps classify) |
 
 ## Do
 
@@ -54,16 +54,16 @@ if (isPhaseError(err)) {
 
 ## Don't
 
-- **Don't catch and silently swallow PhaseErrors** — they indicate misconfiguration, not transient failures.
-- **Don't wrap `onTick` in try/catch** — defeats TurboFan optimization on the hot path.
+- **Don't catch and silently swallow PhaseErrors.** They indicate misconfiguration, not transient failures.
+- **Don't wrap `onTick` in try/catch.** Defeats TurboFan optimization on the hot path.
 
 ## Reduced motion
 
-Not applicable — errors are not affected by motion preferences.
+Not applicable. Errors are not affected by motion preferences.
 
 ## See also
 
-- [create-loop](./create-loop.md) — throws `server_context`, `no_element`
-- [create-ticker](./create-ticker.md) — throws `server_context`, `ticker_stopped`
-- [use-tween](./use-tween.md) — throws `invalid_duration`
-- [swap](./swap.md) — throws `missing_context`
+- [create-loop](./create-loop.md). Throws `server_context`, `no_element`
+- [create-ticker](./create-ticker.md). Throws `server_context`, `ticker_stopped`
+- [use-tween](./use-tween.md). Throws `invalid_duration`
+- [swap](./swap.md). Throws `missing_context`

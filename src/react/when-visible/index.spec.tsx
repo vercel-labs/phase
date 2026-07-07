@@ -235,6 +235,18 @@ describe('options', () => {
 // ---------------------------------------------------------------------------
 
 describe('ref forwarding', () => {
+  it('ref points at the sentinel div at mount (before intersection)', async () => {
+    const WhenVisible = await getWhenVisible();
+    const ref = createRef<HTMLDivElement>();
+    render(
+      <WhenVisible data-testid="when-visible" ref={ref}>
+        content
+      </WhenVisible>,
+    );
+
+    expect(ref.current).toBe(getSentinel());
+  });
+
   it('ref is attached to content div after intersection', async () => {
     const WhenVisible = await getWhenVisible();
     const ref = createRef<HTMLDivElement>();
@@ -247,5 +259,26 @@ describe('ref forwarding', () => {
     act(() => mockIO.trigger(getSentinel(), true));
 
     expect(ref.current).toBe(screen.getByTestId('when-visible'));
+  });
+
+  it('supports callback refs in both states', async () => {
+    const WhenVisible = await getWhenVisible();
+    const nodes: (HTMLDivElement | null)[] = [];
+    render(
+      <WhenVisible
+        data-testid="when-visible"
+        ref={(node) => {
+          nodes.push(node);
+        }}
+      >
+        content
+      </WhenVisible>,
+    );
+
+    expect(nodes.at(-1)).toBe(getSentinel());
+
+    act(() => mockIO.trigger(getSentinel(), true));
+
+    expect(nodes.at(-1)).toBe(screen.getByTestId('when-visible'));
   });
 });

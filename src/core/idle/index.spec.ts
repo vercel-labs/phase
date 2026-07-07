@@ -91,6 +91,36 @@ describe('setTimeout fallback', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Abort signal
+// ---------------------------------------------------------------------------
+
+describe('abort signal', () => {
+  it('aborting the signal cancels the scheduled callback', async () => {
+    const { whenIdle } = await getModule();
+    const cb = vi.fn();
+    const controller = new AbortController();
+
+    whenIdle(cb, { signal: controller.signal });
+    controller.abort();
+    mockIdle.flush();
+
+    expect(cb).not.toHaveBeenCalled();
+    expect(mockIdle.pending).toBe(0);
+  });
+
+  it('never schedules when the signal is already aborted', async () => {
+    const { whenIdle } = await getModule();
+    const cb = vi.fn();
+
+    whenIdle(cb, { signal: AbortSignal.abort() });
+
+    expect(mockIdle.pending).toBe(0);
+    mockIdle.flush();
+    expect(cb).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // SSR guard
 // ---------------------------------------------------------------------------
 

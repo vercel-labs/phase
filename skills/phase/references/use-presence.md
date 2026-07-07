@@ -1,6 +1,6 @@
 # `usePresence`
 
-The hook behind `<Presence>`. Composable mount/unmount lifecycle with CSS transitions — enter via `@starting-style`, exit coordinated by JS waiting for `transitionend`/`animationend`.
+The hook behind `<Presence>`. Composable mount/unmount lifecycle with CSS transitions. Enter via `@starting-style`, exit coordinated by JS waiting for `transitionend`/`animationend`.
 
 ## Signature
 
@@ -36,17 +36,17 @@ const { phase, phaseReason, mounted, ref, enter } = usePresence(options);
 - Building your own presence component with custom elements or logic.
 - When `<Presence>` component's `div` wrapper doesn't fit your DOM structure.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                       | Use                                       |
 | ------------------------------------- | ----------------------------------------- |
-| Simple show/hide with default div     | `<Presence>` component — less boilerplate |
+| Show/hide with default div            | `<Presence>` component (less boilerplate) |
 | Coordinated exit→enter between states | `<Swap>` component                        |
 | Viewport-gated lazy mount             | `<WhenVisible>` component                 |
 
 ## Do
 
-- Cleanup is automatic — exit timers and event listeners are cleared on unmount.
+- Cleanup is automatic. Exit timers and event listeners are cleared on unmount.
 - Use the canonical CSS pattern:
   ```tsx
   const { phase, ref, mounted, enter } = usePresence({ show: isOpen });
@@ -60,21 +60,21 @@ const { phase, phaseReason, mounted, ref, enter } = usePresence(options);
     />
   );
   ```
-- Always attach the `ref` — needed for `transitionend`/`animationend` listening.
+- Always attach the `ref`. Needed for `transitionend`/`animationend` listening.
 - Use `mode: 'reveal'` for SEO content or IO re-entry (stays in DOM, toggles visibility).
 
 ## Don't
 
-- **Don't forget to attach `ref`** — without it, exit animation has no element to listen on and relies on the safety timeout.
-- **Don't set `exitDuration` too low** — if it's shorter than your CSS transition, the element unmounts mid-animation.
-- **Don't use `usePresence` for per-frame animation** — it coordinates mount/unmount transitions only. Use `useLoop` for continuous animation.
+- **Don't forget to attach `ref`.** Without it, exit animation has no element to listen on and relies on the safety timeout.
+- **Don't set `exitDuration` too low.** If it's shorter than your CSS transition, the element unmounts mid-animation.
+- **Don't use `usePresence` for per-frame animation.** It coordinates mount/unmount transitions only. Use `useLoop` for continuous animation.
 
 ## Reduced motion
 
-Default `'respect'`: `enter` is `'instant'` (no `data-enter="animate"` stamped), exit is instant (no `exiting` phase, immediate unmount). Decorative animations are skipped; the element still appears and disappears.
+Default `'respect'`: `enter` is `'instant'` (no `data-enter="animate"` stamped), exit is instant (no `exiting` phase, immediate unmount). Decorative animations are skipped. The element still appears and disappears.
 
 ## See also
 
-- [presence](./presence.md) — declarative `<Presence>` component wrapping usePresence
-- [swap](./swap.md) — coordinated exit→enter for multiple states
-- [when-visible](./when-visible.md) — viewport-gated lazy mount
+- [presence](./presence.md). Declarative `<Presence>` component wrapping usePresence
+- [swap](./swap.md). Coordinated exit→enter for multiple states
+- [when-visible](./when-visible.md). Viewport-gated lazy mount

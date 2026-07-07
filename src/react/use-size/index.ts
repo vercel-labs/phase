@@ -9,7 +9,7 @@ export interface Size {
 
 export interface UseSizeOptions<T extends Element = HTMLDivElement> {
   /**
-   * Element to measure. Optional — when omitted, attach the returned `ref`.
+   * Element to measure. Optional. When omitted, attach the returned `ref`.
    */
   ref?: RefObject<T | null>;
 }

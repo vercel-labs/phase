@@ -86,6 +86,22 @@ describe('cleanup', () => {
       render.stop();
     }).not.toThrow();
   });
+
+  it('aborting the signal stops the observer', () => {
+    const el = document.createElement('div');
+    const cb = vi.fn();
+    const controller = new AbortController();
+    createRenderState({
+      element: el,
+      onPhaseChange: cb,
+      signal: controller.signal,
+    });
+
+    controller.abort();
+    dispatchStateChange(el, true);
+
+    expect(cb).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

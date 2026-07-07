@@ -3,7 +3,7 @@
  *
  * Run via: pnpm perf
  *
- * These are NOT benchmarks — they're structural and budget assertions that
+ * These are NOT benchmarks. They are structural and budget assertions that
  * gate regressions. They prove:
  * 1. Zero per-frame allocations (FrameState reused across frames)
  * 2. The real ticker dispatch path stays well under the frame budget

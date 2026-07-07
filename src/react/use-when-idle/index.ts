@@ -7,7 +7,7 @@ export type { IdleOptions } from '../../core/idle';
 
 /**
  * Run a callback once, when the browser is idle after mount. The effect-shaped
- * counterpart to `useIdle` — use it for side effects (prefetching a chunk,
+ * counterpart to `useIdle`. Use it for side effects (prefetching a chunk,
  * warming a cache, `import()`) rather than rendering.
  *
  * Cancels automatically on unmount, and always calls the latest `callback`

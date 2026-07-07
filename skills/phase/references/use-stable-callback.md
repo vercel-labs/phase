@@ -26,11 +26,11 @@ const stable = useStableCallback(callback);
 - Using callbacks in effect deps without causing re-runs.
 - Event handlers that need latest closure values but stable identity.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                   | Use                                                                       |
 | --------------------------------- | ------------------------------------------------------------------------- |
-| Per-frame callback (onTick, draw) | `useSyncedRef` — phase hooks use it internally, no consumer action needed |
+| Per-frame callback (onTick, draw) | `useSyncedRef` (phase hooks use it internally, no consumer action needed) |
 | Simple memoized value             | `useMemo` / `useCallback` with proper deps                                |
 
 ## Do
@@ -45,14 +45,14 @@ const stable = useStableCallback(callback);
 
 ## Don't
 
-- **Don't use for `onTick`/`draw`** — phase hooks already sync these via `useSyncedRef` internally. Adding `useStableCallback` on top is redundant.
-- **Don't use where React's `useCallback` with proper deps suffices** — only reach for this when deps would be unstable or numerous.
+- **Don't use for `onTick`/`draw`.** Phase hooks already sync these via `useSyncedRef` internally. Adding `useStableCallback` on top is redundant.
+- **Don't use where React's `useCallback` with proper deps suffices.** Only reach for this when deps would be unstable or numerous.
 
 ## Reduced motion
 
-Not applicable — utility hook, no animation behavior.
+Not applicable. Utility hook, no animation behavior.
 
 ## See also
 
-- [useSyncedRef](./use-synced-ref.md) — ref-based value sync (used internally by phase hooks)
-- [useLoop](./use-loop.md) — uses useSyncedRef for onTick automatically
+- [useSyncedRef](./use-synced-ref.md). Ref-based value sync (used internally by phase hooks)
+- [useLoop](./use-loop.md). Uses useSyncedRef for onTick automatically

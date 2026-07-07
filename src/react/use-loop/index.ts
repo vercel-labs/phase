@@ -13,17 +13,24 @@ import type { FrameState } from '../../core/tick';
 import { degradedConfig } from '../_internal/degraded-config';
 import { useSyncedRef } from '../use-synced-ref';
 
+/**
+ * Per-frame loop callback. Receives the current frame state. Write to refs or
+ * DOM directly. Never call React `setState` here (60 calls/sec = 60
+ * re-renders/sec).
+ */
+export type LoopTickFn = (frame: FrameState) => void;
+
 export interface UseLoopOptions<T extends Element = HTMLDivElement> {
   /**
-   * Element to observe. Optional — when omitted, attach the returned `ref`.
+   * Element to observe. Optional. When omitted, attach the returned `ref`.
    * Pass your own ref to share it or attach it elsewhere.
    */
   ref?: RefObject<T | null>;
   /**
-   * Called every frame. Write to refs or DOM directly — never call React
+   * Called every frame. Write to refs or DOM directly. Never call React
    * `setState` here (60 calls/sec = 60 re-renders/sec).
    */
-  onTick: (frame: FrameState) => void;
+  onTick: LoopTickFn;
   fps?: number;
   enabled?: boolean;
   reducedMotion?: ReducedMotionBehavior;

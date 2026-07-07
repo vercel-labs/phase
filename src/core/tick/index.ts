@@ -1,3 +1,4 @@
+import { linkAbortSignal } from '../_internal/abort';
 import { serverContextError, tickerStoppedError } from '../_internal/errors';
 
 // ---------------------------------------------------------------------------
@@ -28,9 +29,11 @@ export interface TickerOptions {
   fps?: number;
   /**
    * Called every frame with the current frame state. Write to refs or DOM
-   * directly — never call React `setState` here (60 state updates/sec = 60 re-renders/sec).
+   * directly. Never call React `setState` here (60 state updates/sec = 60 re-renders/sec).
    */
   onTick: (frame: FrameState) => void;
+  /** Abort signal that stops the ticker when aborted. */
+  signal?: AbortSignal;
 }
 
 export interface Ticker {
@@ -46,7 +49,7 @@ export interface Ticker {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Prevents teleportation on resume — matches motion's maxElapsed. */
+/** Prevents teleportation on resume. Matches motion's maxElapsed. */
 const MAX_DELTA_MS = 40;
 
 /** Default first-frame delta when no previous tick exists. */
@@ -110,7 +113,7 @@ function resetFrameState(state: FrameState): void {
  * Core rAF loop primitive with FPS cap, delta clamping, and strong pause.
  *
  * @remarks
- * `FrameState` is reused across frames — do not store a reference to it.
+ * `FrameState` is reused across frames. Do not store a reference to it.
  * Read values immediately in your `onTick` callback.
  */
 export function createTicker(options: TickerOptions): Ticker {
@@ -118,7 +121,7 @@ export function createTicker(options: TickerOptions): Ticker {
     serverContextError('createTicker');
   }
 
-  const { onTick, fps } = options;
+  const { onTick, fps, signal } = options;
   const minFrameTime: number = fps ? 1000 / fps : 0;
 
   let _phase: TickerPhase = 'idle';
@@ -199,9 +202,15 @@ export function createTicker(options: TickerOptions): Ticker {
 
     _phase = 'stopped';
     _reason = _reason === 'initial' ? 'disposed' : 'manual';
+    unlinkAbort?.();
     leaveSharedClock?.();
     leaveSharedClock = null;
   }
+
+  // Declared before assignment because an already-aborted signal makes
+  // linkAbortSignal call stop() synchronously, which reads unlinkAbort.
+  let unlinkAbort: (() => void) | undefined;
+  unlinkAbort = linkAbortSignal(signal, stop);
 
   return {
     start,

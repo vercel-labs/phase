@@ -1,19 +1,19 @@
 # Performance rules
 
-Impact-ranked do's and don'ts for writing performant animation code with phase. These are not aspirations — they are tested invariants backed by `src/__tests__/perf.spec.ts`.
+Impact-ranked do's and don'ts for writing performant animation code with phase. These are not aspirations. They are tested invariants backed by `src/__tests__/perf.spec.ts`.
 
 ## Contents
 
-- **Critical** — Zero per-frame allocations | Never setState in onTick | No forced reflows
-- **High** — Strong pause | Reduced motion by default | Stable function references
-- **Medium** — Frame-locked shared clock | Delta clamping | Observer pooling | will-change lifecycle | No getBoundingClientRect for visibility
-- **Low** — Don't store FrameState refs | No try/catch in onTick | No debug logging in hot path
+- **Critical.** Zero per-frame allocations | Never setState in onTick | No forced reflows
+- **High.** Strong pause | Reduced motion by default | Stable function references
+- **Medium.** Frame-locked shared clock | Delta clamping | Observer pooling | will-change lifecycle | No getBoundingClientRect for visibility
+- **Low.** Don't store FrameState refs | No try/catch in onTick | No debug logging in hot path
 
 ## Critical (per-frame violations cause visible jank)
 
 ### Zero per-frame allocations
 
-V8's garbage collector runs in stop-the-world bursts on the main thread. Every allocation inside `onTick` becomes GC pressure that directly causes dropped frames — even small objects accumulate across 60 calls/sec and trigger collections mid-animation. `FrameState` is created once and mutated in place every frame. Your `onTick`/`draw` must match.
+V8's garbage collector runs in stop-the-world bursts on the main thread. Every allocation inside `onTick` becomes GC pressure that directly causes dropped frames. Even small objects accumulate across 60 calls/sec and trigger collections mid-animation. `FrameState` is created once and mutated in place every frame. Your `onTick`/`draw` must match.
 
 **Do:**
 
@@ -43,11 +43,11 @@ onTick: (frame) => {
 };
 ```
 
-**Pragmatic exception:** writing a template literal to `el.style.transform` (as in the Do example above) is acceptable — you must produce a string to set a CSS property, and the browser immediately consumes it. The rule targets unnecessary intermediate allocations (objects, arrays, closures), not the unavoidable final string write to the DOM.
+**Pragmatic exception:** writing a template literal to `el.style.transform` (as in the Do example above) is acceptable. You must produce a string to set a CSS property, and the browser immediately consumes it. The rule targets unnecessary intermediate allocations (objects, arrays, closures), not the unavoidable final string write to the DOM.
 
 ### Never `setState` inside `onTick` / `draw`
 
-React's reconciler is designed for infrequent, batched updates — not 60Hz. Each `setState` schedules a full fiber tree walk, diffing, and DOM commit. At 60fps that's 60 reconciliations per second competing with your animation for the 16.6ms frame budget. The animation itself stalls while React diffs. Write to refs or DOM directly.
+React's reconciler is designed for infrequent, batched updates, not 60Hz. Each `setState` schedules a full fiber tree walk, diffing, and DOM commit. At 60fps that's 60 reconciliations per second competing with your animation for the 16.6ms frame budget. The animation itself stalls while React diffs. Write to refs or DOM directly.
 
 **Do:**
 
@@ -69,7 +69,7 @@ The only exception is `useTween`, which deliberately uses `setState` for single 
 
 ### No forced reflows in animation paths
 
-Layout-triggering APIs force the browser to synchronously compute layout before returning a value. Inside a 60fps loop, this means the browser performs a full style-recalc + layout pass _every single frame_ before your animation can proceed — the exact opposite of compositor-aligned animation. Never call these inside or near `onTick`:
+Layout-triggering APIs force the browser to synchronously compute layout before returning a value. Inside a 60fps loop, this means the browser performs a full style-recalc + layout pass _every single frame_ before your animation can proceed. This is the exact opposite of compositor-aligned animation. Never call these inside or near `onTick`:
 
 - `getBoundingClientRect()`
 - `offsetWidth`, `offsetHeight`, `offsetTop`, `offsetLeft`
@@ -92,7 +92,7 @@ onTick: () => {
 
 ### Strong pause
 
-The weak-pause pattern (schedule rAF + early return) still costs ~0.1ms per frame in scheduling overhead, and on mobile that accumulates across multiple paused loops sharing the thread — draining battery for zero visual output. phase uses `cancelAnimationFrame()` to stop scheduling entirely when paused. Zero callbacks fire, zero CPU consumed.
+The weak-pause pattern (schedule rAF + early return) still costs ~0.1ms per frame in scheduling overhead, and on mobile that accumulates across multiple paused loops sharing the thread, draining battery for zero visual output. phase uses `cancelAnimationFrame()` to stop scheduling entirely when paused. Zero callbacks fire, zero CPU consumed.
 
 **Don't replicate phase's pattern incorrectly:**
 
@@ -127,7 +127,7 @@ Per-frame callbacks should be created once, not recreated every render.
 **Don't:**
 
 ```tsx
-// Creates a new function every render — unnecessary (phase syncs via ref)
+// Creates a new function every render (unnecessary; phase syncs via ref)
 return <Anim onTick={(frame) => draw(frame, props)} />;
 ```
 
@@ -185,7 +185,7 @@ io.observe(element);
 
 ### `will-change` only while animating
 
-`will-change` promotes an element to its own GPU compositing layer — consuming VRAM and preventing the browser from coalescing paint operations. Leaving it on permanently wastes GPU memory when the animation is paused or idle.
+`will-change` promotes an element to its own GPU compositing layer, consuming VRAM and preventing the browser from coalescing paint operations. Leaving it on permanently wastes GPU memory when the animation is paused or idle.
 
 **Don't:**
 
@@ -200,11 +200,11 @@ io.observe(element);
 <div className={shouldAnimate ? 'will-change-transform' : ''} />
 ```
 
-For JS-driven animations via `useLoop`, the browser auto-promotes after the first few `style.transform` writes — you typically don't need `will-change` at all. It's primarily useful for CSS `animation` / `transition` where you want to signal the compositor before the animation starts.
+For JS-driven animations via `useLoop`, the browser auto-promotes after the first few `style.transform` writes. You typically don't need `will-change` at all. It's primarily useful for CSS `animation` / `transition` where you want to signal the compositor before the animation starts.
 
 ### Don't use `getBoundingClientRect()` for initial visibility
 
-A common temptation: "the hero is above the fold, I want animation to start immediately without waiting for IntersectionObserver." The IO callback fires at paint time — one frame (~16ms). For animations with multi-second intervals, that delay is imperceptible. The reflow cost of `getBoundingClientRect()` is real, especially on pages with complex layout.
+A common temptation: "the hero is above the fold, I want animation to start immediately without waiting for IntersectionObserver." The IO callback fires at paint time, one frame (~16ms). For animations with multi-second intervals, that delay is imperceptible. The reflow cost of `getBoundingClientRect()` is real, especially on pages with complex layout.
 
 **Don't:**
 

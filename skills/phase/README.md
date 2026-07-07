@@ -1,10 +1,10 @@
 # phase skill
 
-Agent skill for the [phase](https://github.com/vercel-labs/phase) animation library. Teaches agents to implement phase primitives correctly, follow performant-animation best practices, and audit existing animation code.
+Agent skill for the [phase](https://github.com/vercel-labs/phase) animation library. Teaches you to implement phase primitives correctly, follow performant-animation best practices, and audit existing animation code.
 
 ## Install
 
-Three paths — pick whichever fits your workflow.
+Three paths. Pick whichever fits your workflow.
 
 ### 1. skills.sh (recommended)
 
@@ -23,6 +23,14 @@ Copy the `skills/phase/` directory into your project's `.agents/skills/phase/` (
 ### 3. Zip download
 
 Download `skills/phase/dist/phase-skill.zip` from this repository, unzip into your skills directory.
+
+## Running an audit
+
+The scanner ships with the skill. You don't need to install anything else. Once the skill is installed, ask your agent to audit your animation code; it reads `SKILL.md` → `references/audit.md`, runs `scripts/scan.mjs`, and classifies the findings against the decision ladder. To run it standalone:
+
+```bash
+node <skill-dir>/scripts/scan.mjs <target-dir>
+```
 
 ## What's inside
 

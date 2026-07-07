@@ -26,12 +26,12 @@ const ref: RefObject<T> = useSyncedRef(value);
 - Accessing the latest props/state from inside event handlers or effects with empty deps arrays.
 - Internal use: `useLoop` and `useCanvas` use this internally to keep `onTick`/`draw` fresh.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                         | Use                                                            |
 | --------------------------------------- | -------------------------------------------------------------- |
-| Stable-identity callback for props/deps | `useStableCallback` — returns a callable function, not a ref   |
-| DOM element ref                         | Standard `useRef` — `useSyncedRef` is for values, not elements |
+| Stable-identity callback for props/deps | `useStableCallback` (returns a callable function, not a ref)   |
+| DOM element ref                         | Standard `useRef` (`useSyncedRef` is for values, not elements) |
 
 ## Do
 
@@ -46,14 +46,14 @@ const ref: RefObject<T> = useSyncedRef(value);
 
 ## Don't
 
-- **Don't use in deps arrays** — the ref object identity is stable, so it won't trigger re-runs. Read `.current` inside the effect body instead.
-- **Don't use for state that should trigger re-renders** — refs don't re-render. Use `useState` for reactive state.
+- **Don't use in deps arrays.** The ref object identity is stable, so it won't trigger re-runs. Read `.current` inside the effect body instead.
+- **Don't use for state that should trigger re-renders.** Refs don't re-render. Use `useState` for reactive state.
 
 ## Reduced motion
 
-Not applicable — utility hook, no animation behavior.
+Not applicable. Utility hook, no animation behavior.
 
 ## See also
 
-- [useStableCallback](./use-stable-callback.md) — stable-identity function (callable, not a ref)
-- [useLoop](./use-loop.md) — uses useSyncedRef internally for onTick
+- [useStableCallback](./use-stable-callback.md). Stable-identity function (callable, not a ref)
+- [useLoop](./use-loop.md). Uses useSyncedRef internally for onTick

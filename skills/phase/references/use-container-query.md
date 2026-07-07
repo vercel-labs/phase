@@ -38,13 +38,13 @@ const { ref, matches } = useContainerQuery<T>(breakpoint, options?);
 - Showing/hiding content based on container width.
 - Adapting layout at specific size boundaries.
 
-## When NOT to use — reach for X instead
+## When not to use
 
-| Instead of this                           | Use                             |
-| ----------------------------------------- | ------------------------------- |
-| Need actual dimensions (not just boolean) | `useSize`                       |
-| Viewport-based media query                | `useMediaQuery`                 |
-| CSS container queries are sufficient      | CSS `@container` — no JS needed |
+| Instead of this                        | Use                             |
+| -------------------------------------- | ------------------------------- |
+| Need actual dimensions (not a boolean) | `useSize`                       |
+| Viewport-based media query             | `useMediaQuery`                 |
+| CSS container queries are sufficient   | CSS `@container` (no JS needed) |
 
 ## Do
 
@@ -57,14 +57,15 @@ const { ref, matches } = useContainerQuery<T>(breakpoint, options?);
 
 ## Don't
 
-- **Don't use when CSS `@container` queries can do the job** — pure CSS is cheaper.
-- **Don't set contradictory min/max values** — `matches` will always be `false`.
+- **Don't use when CSS `@container` queries can do the job.** Pure CSS is cheaper.
+- **Don't set contradictory min/max values.** `matches` will always be `false`.
+- **Don't expect updates inside a skipped `Defer` subtree.** Like `useSize`, this hook uses `ResizeObserver` internally. The CSS Containment spec silences RO callbacks while `content-visibility: auto` content is skipped. Observations resume when the element scrolls back into view.
 
 ## Reduced motion
 
-Not applicable — reports a boolean, not animation.
+Not applicable. Reports a boolean, not animation.
 
 ## See also
 
-- [useSize](./use-size.md) — raw dimensions (re-renders on every change)
-- [useMediaQuery](./use-media-query.md) — viewport/device media queries
+- [useSize](./use-size.md). Raw dimensions (re-renders on every change)
+- [useMediaQuery](./use-media-query.md). Viewport/device media queries

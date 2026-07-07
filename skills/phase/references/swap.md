@@ -35,7 +35,7 @@ import { Swap } from 'phase/react';
 
 ### Behavior
 
-- First state appears instantly (CLS prevention — no enter animation on initial mount).
+- First state appears instantly (CLS prevention, no enter animation on initial mount).
 - Subsequent states animate via `@starting-style` after the previous state exits.
 - Rapid changes (A→B→C during A's exit) skip intermediates and advance to the latest `active`.
 - `<Swap.State>` outside `<Swap>` throws `PhaseError` with code `missing_context`.
@@ -46,11 +46,11 @@ import { Swap } from 'phase/react';
 - Anywhere you need coordinated exit→enter without overlap.
 - When both old and new content should animate (exit old, then enter new).
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                 | Use                                |
 | ------------------------------- | ---------------------------------- |
-| Simple show/hide (one thing)    | `<Presence>`                       |
+| Show/hide (one thing)           | `<Presence>`                       |
 | Overlap transitions (crossfade) | Manual dual `<Presence>` + z-index |
 | Route-level page transitions    | View Transitions API               |
 
@@ -77,16 +77,16 @@ import { Swap } from 'phase/react';
 
 ## Don't
 
-- **Don't use `<Swap.State>` outside `<Swap>`** — throws `PhaseError` with code `missing_context`.
-- **Don't expect overlap** — `Swap` is sequential (exit completes, then enter starts). For crossfade, use two `<Presence>` components.
-- **Don't change `id` values dynamically** — IDs are stable identifiers for states.
+- **Don't use `<Swap.State>` outside `<Swap>`.** Throws `PhaseError` with code `missing_context`.
+- **Don't expect overlap.** `Swap` is sequential (exit completes, then enter starts). For crossfade, use two `<Presence>` components.
+- **Don't change `id` values dynamically.** IDs are stable identifiers for states.
 
 ## Reduced motion
 
-Automatic: enter animation skipped for the incoming state, exit is instant for the outgoing state. Both still swap — decoration is removed, not behavior.
+Automatic: enter animation skipped for the incoming state, exit is instant for the outgoing state. Both still swap. Decoration is removed, not behavior.
 
 ## See also
 
-- [presence](./presence.md) — simple show/hide without coordination
-- [usePresence](./use-presence.md) — hook for custom presence logic
-- [when-visible](./when-visible.md) — viewport-gated (different concern)
+- [presence](./presence.md). Show/hide without coordination
+- [usePresence](./use-presence.md). Hook for custom presence logic
+- [when-visible](./when-visible.md). Viewport-gated (different concern)

@@ -22,8 +22,9 @@ const phase = useRenderState(ref); // 'rendered' | 'skipped'
 
 - Pause raw, non-phase work (hand-written rAF, `setInterval`, expensive effects) when a `Defer` subtree stops painting.
 - Read a `Defer`'s render-skip state by passing the `ref` you gave `Defer`.
+- Detect when `ResizeObserver` (`useSize`, `useContainerQuery`) stops and resumes delivering observations inside a `Defer` subtree. The CSS Containment spec silences RO callbacks while content is skipped; `useRenderState` reports that transition so you can respond to it.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                 | Use                              |
 | ------------------------------- | -------------------------------- |
@@ -50,20 +51,20 @@ const phase = useRenderState(ref); // 'rendered' | 'skipped'
 
 ## Don't
 
-- **Don't use it to gate phase loops** — `useLoop`/`useCanvas`/`useLifecycle` already self-pause off-screen.
-- **Don't change layout or unmount on `'skipped'`** — that reintroduces layout shift.
+- **Don't use it to gate phase loops.** `useLoop`/`useCanvas`/`useLifecycle` already self-pause off-screen.
+- **Don't change layout or unmount on `'skipped'`.** That reintroduces layout shift.
 
 ## Does this affect layout or CLS?
 
-No. The hook only observes and reports. Pausing CPU work in response has no layout effect — `content-visibility`'s no-layout-shift guarantee stays intact.
+No. The hook only observes and reports. Pausing CPU work in response has no layout effect. The `content-visibility` no-layout-shift guarantee stays intact.
 
 ## Reduced motion
 
-Not applicable — render-state is a paint signal, not an animation.
+Not applicable. Render-state is a paint signal, not an animation.
 
 ## See also
 
-- [rendering-recipes](./rendering-recipes.md) — gating raw loops inside a `Defer` and other compositions
-- [create-render-state](./create-render-state.md) — the core primitive behind this hook
-- [defer](./defer.md) — the component whose render-skip state this reads
-- [use-sight](./use-sight.md) — viewport visibility as a phase
+- [rendering-recipes](./rendering-recipes.md). Gating raw loops inside a `Defer` and other compositions
+- [create-render-state](./create-render-state.md). The core primitive behind this hook
+- [defer](./defer.md). The component whose render-skip state this reads
+- [use-sight](./use-sight.md). Viewport visibility as a phase

@@ -11,7 +11,7 @@ export interface UseTweenOptions {
   delay?: number;
   easing?: (progress: number) => number;
   enabled?: boolean;
-  /** Default: `'complete'` — tweens jump to target under reduced motion. */
+  /** Default: `'complete'`. Tweens jump to target under reduced motion. */
   reducedMotion?: ReducedMotionBehavior;
 }
 

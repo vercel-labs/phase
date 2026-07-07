@@ -1,3 +1,4 @@
+import { linkAbortSignal } from '../_internal/abort';
 import { noElementError, serverContextError } from '../_internal/errors';
 import {
   readMediaQuery,
@@ -29,12 +30,14 @@ export interface LifecycleOptions {
   intersectionOptions?: IntersectionObserverInit;
   start?: 'auto' | 'manual';
   onPhaseChange?: (phase: LifecyclePhase, reason: LifecycleReason) => void;
+  /** Abort signal that stops the lifecycle when aborted. */
+  signal?: AbortSignal;
 }
 
 export interface Lifecycle {
   /** Begin honoring signals. Called automatically unless `start: 'manual'`. */
   start(): void;
-  /** Terminal — disposes observers and listeners. Cannot be restarted. */
+  /** Terminal. Disposes observers and listeners. Cannot be restarted. */
   stop(): void;
   /** Manually pause (e.g. a panel opened over the animation). Lowest priority. */
   pause(): void;
@@ -84,6 +87,7 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
     intersectionOptions,
     start: startMode = 'auto',
     onPhaseChange,
+    signal,
   } = options;
 
   if (!element) noElementError('createLifecycle');
@@ -165,6 +169,7 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
 
   function stop(): void {
     if (_phase === 'stopped') return;
+    unlinkAbort?.();
     sight.stop();
     unsubReducedMotion?.();
     unsubReducedMotion = null;
@@ -182,6 +187,9 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
     manualPaused = false;
     reconcile();
   }
+
+  let unlinkAbort: (() => void) | undefined;
+  unlinkAbort = linkAbortSignal(signal, stop);
 
   if (startMode === 'auto') {
     start();

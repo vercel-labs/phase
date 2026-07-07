@@ -236,6 +236,30 @@ describe('createLifecycle', () => {
     });
   });
 
+  describe('abort signal', () => {
+    it('aborting the signal stops the lifecycle', async () => {
+      const { createLifecycle } = await getModule();
+      const el = document.createElement('div');
+      const cb = vi.fn();
+      const controller = new AbortController();
+      const lifecycle = createLifecycle({
+        element: el,
+        onPhaseChange: cb,
+        signal: controller.signal,
+      });
+      makeVisible(el);
+      expect(lifecycle.phase).toBe('active');
+
+      controller.abort();
+      expect(lifecycle.phase).toBe('stopped');
+      expect(cb).toHaveBeenCalledWith('stopped', 'disposed');
+
+      cb.mockClear();
+      makeHidden(el);
+      expect(cb).not.toHaveBeenCalled();
+    });
+  });
+
   describe('SSR', () => {
     it('throws when document is undefined', async () => {
       const origDocument = globalThis.document;

@@ -405,6 +405,34 @@ describe('rapid lifecycle', () => {
 // SSR
 // ---------------------------------------------------------------------------
 
+describe('abort signal', () => {
+  it('aborting the signal stops the ticker', async () => {
+    const { createTicker } = await getModule();
+    const cb = vi.fn();
+    const controller = new AbortController();
+    const ticker = createTicker({ onTick: cb, signal: controller.signal });
+    ticker.start();
+    advanceFrame(16);
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    controller.abort();
+    expect(ticker.phase).toBe('stopped');
+
+    cb.mockClear();
+    advanceFrame(16);
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('stops immediately when the signal is already aborted', async () => {
+    const { createTicker } = await getModule();
+    const ticker = createTicker({
+      onTick: vi.fn(),
+      signal: AbortSignal.abort(),
+    });
+    expect(ticker.phase).toBe('stopped');
+  });
+});
+
 describe('SSR', () => {
   it('throws when requestAnimationFrame is undefined', async () => {
     const origRaf = globalThis.requestAnimationFrame;

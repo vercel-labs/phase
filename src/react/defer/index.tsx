@@ -19,13 +19,13 @@ export interface DeferProps extends Omit<ComponentProps<'div'>, 'style'> {
 
 /**
  * Skip the browser's rendering work (style, layout, paint) for off-screen
- * content via `content-visibility: auto`. Pure CSS — no JS, no observer.
+ * content via `content-visibility: auto`. Pure CSS, no JS, no observer.
  *
  * Children stay in the DOM and are server-rendered (SEO- and CLS-safe).
  * `contain-intrinsic-size: auto <estimatedHeight>` reserves space so the
- * scrollbar does not jump. Defers rendering only — not hydration or mounting.
+ * scrollbar does not jump. Defers rendering only, not hydration or mounting.
  *
- * The render-skip styles are encapsulated and cannot be overridden — there is
+ * The render-skip styles are encapsulated and cannot be overridden. There is
  * no `style` prop. Style the wrapper with `className`; this keeps the
  * no-layout-shift guarantee intact.
  *

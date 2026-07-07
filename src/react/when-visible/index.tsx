@@ -14,7 +14,7 @@ import { useSight } from '../use-sight';
 // ---------------------------------------------------------------------------
 
 export interface WhenVisibleProps extends ComponentProps<'div'> {
-  /** IntersectionObserver rootMargin. Default `'200px'` — generous headroom for preloading. */
+  /** IntersectionObserver rootMargin. Default `'200px'` (generous headroom for preloading). */
   rootMargin?: string;
   /** IntersectionObserver threshold. */
   threshold?: number | number[];
@@ -22,6 +22,7 @@ export interface WhenVisibleProps extends ComponentProps<'div'> {
   root?: Element | null;
   /** Content shown while awaiting intersection. Sentinel div is always rendered for IO. */
   fallback?: ReactNode;
+  /** Forwarded to the rendered div in both states (the sentinel before visible, the entered div after). Populated at mount. */
   ref?: Ref<HTMLDivElement>;
 }
 
@@ -60,9 +61,14 @@ export function WhenVisible({
     root,
   });
 
+  const setRef = (node: HTMLDivElement | null): void => {
+    sentinelRef.current = node;
+    assignRef(forwardedRef, node);
+  };
+
   if (phase !== 'visible') {
     return (
-      <div ref={sentinelRef} {...divProps}>
+      <div ref={setRef} {...divProps}>
         {fallback}
       </div>
     );
@@ -73,11 +79,22 @@ export function WhenVisible({
   return (
     <div
       {...divProps}
-      ref={forwardedRef as React.RefObject<HTMLDivElement | null>}
+      ref={setRef}
       data-phase="entered"
       data-enter={motionAllowed ? 'animate' : undefined}
     >
       {children}
     </div>
   );
+}
+
+function assignRef(
+  ref: Ref<HTMLDivElement> | undefined,
+  node: HTMLDivElement | null,
+): void {
+  if (typeof ref === 'function') {
+    ref(node);
+  } else if (ref) {
+    ref.current = node;
+  }
 }

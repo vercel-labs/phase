@@ -29,13 +29,13 @@ const { ref, size } = useSize<T>(options?);
 - Responsive logic based on actual element size (not viewport).
 - Feeding dimensions to canvas sizing, layout calculations, or animations.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                         | Use                                                     |
 | --------------------------------------- | ------------------------------------------------------- |
-| Breakpoint matching (only need boolean) | `useContainerQuery` — re-renders only on boundary cross |
+| Breakpoint matching (only need boolean) | `useContainerQuery` (re-renders only on boundary cross) |
 | Viewport size                           | CSS viewport units or `window.innerWidth`               |
-| Canvas sizing                           | `useCanvas` — handles resize internally                 |
+| Canvas sizing                           | `useCanvas` (handles resize internally)                 |
 
 ## Do
 
@@ -52,15 +52,17 @@ const { ref, size } = useSize<T>(options?);
 
 ## Don't
 
-- **Don't use `getBoundingClientRect()` as a fallback** — it forces a synchronous reflow. Trust the async RO callback.
-- **Don't use when you only need a breakpoint boolean** — `useContainerQuery` re-renders less often.
+- **Don't use `getBoundingClientRect()` as a fallback.** It forces a synchronous reflow. Trust the async RO callback.
+- **Don't use when you only need a breakpoint boolean.** `useContainerQuery` re-renders less often.
+- **Don't expect updates inside a skipped `Defer` subtree.** Per the CSS Containment spec, `ResizeObserver` callbacks pause for elements inside `content-visibility: auto` subtrees that the browser has skipped. Size observations resume when the element scrolls back into view. This is spec behavior across all browsers, not a bug. If you need to detect the skip/unskip transition, use `useRenderState`.
 
 ## Reduced motion
 
-Not applicable — `useSize` reports dimensions, not animation.
+Not applicable. `useSize` reports dimensions, not animation.
 
 ## See also
 
-- [useContainerQuery](./use-container-query.md) — breakpoint matching (fewer re-renders)
-- [useCanvas](./use-canvas.md) — canvas sizing handled automatically
-- [useScrollProgress](./use-scroll-progress.md) — visibility ratio, not dimensions
+- [useContainerQuery](./use-container-query.md). Breakpoint matching (fewer re-renders)
+- [useCanvas](./use-canvas.md). Canvas sizing handled automatically
+- [useDevicePixelRatio](./use-device-pixel-ratio.md). Multiply CSS dimensions by DPR for buffer sizing
+- [useScrollProgress](./use-scroll-progress.md). Visibility ratio, not dimensions

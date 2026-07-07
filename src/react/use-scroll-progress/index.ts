@@ -8,7 +8,7 @@ import { createScrollProgress } from '../../core/scroll-progress';
 
 export interface UseScrollProgressOptions<T extends Element = HTMLDivElement> {
   /**
-   * Element to observe. Optional — when omitted, attach the returned `ref`.
+   * Element to observe. Optional. When omitted, attach the returned `ref`.
    */
   ref?: RefObject<T | null>;
   /** Number of evenly-spaced thresholds. Default 20 (~5% granularity). */

@@ -1,3 +1,5 @@
+'use client';
+
 // React hooks barrel
 
 // API
@@ -5,7 +7,9 @@ export { useSyncedRef } from './use-synced-ref';
 export { useStableCallback } from './use-stable-callback';
 export { useLoop } from './use-loop';
 export { useLifecycle } from './use-lifecycle';
+export { useDevicePixelRatio } from './use-device-pixel-ratio';
 export { useMediaQuery } from './use-media';
+export { usePrefersReducedMotion } from './use-reduced-motion';
 export { useSight } from './use-sight';
 export { useSize } from './use-size';
 export { useContainerQuery } from './use-container-query';
@@ -23,8 +27,13 @@ export { Defer } from './defer';
 export { Swap } from './swap';
 
 // Types
-export type { UseLoopOptions, UseLoopResult } from './use-loop';
+export type { LoopTickFn, UseLoopOptions, UseLoopResult } from './use-loop';
 export type { UseLifecycleOptions, UseLifecycleResult } from './use-lifecycle';
+export type {
+  LifecyclePhase,
+  LifecycleReason,
+  LifecycleReducedMotion,
+} from '../core/lifecycle';
 export type { UseSightOptions, UseSightResult } from './use-sight';
 export type { Size, UseSizeOptions, UseSizeResult } from './use-size';
 export type {
@@ -38,7 +47,11 @@ export type {
 } from './use-scroll-progress';
 export type { RenderPhase } from './use-render-state';
 export type { IdleOptions } from './use-idle';
-export type { UseCanvasOptions, UseCanvasResult } from './use-canvas';
+export type {
+  CanvasDrawFn,
+  UseCanvasOptions,
+  UseCanvasResult,
+} from './use-canvas';
 export type { UseTweenOptions } from './use-tween';
 export type {
   PresenceMode,

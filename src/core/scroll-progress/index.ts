@@ -1,3 +1,4 @@
+import { linkAbortSignal } from '../_internal/abort';
 import { noElementError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 
@@ -13,6 +14,8 @@ export interface ScrollProgressOptions {
   steps?: number;
   root?: Element | Document | null;
   rootMargin?: string;
+  /** Abort signal that stops the observer when aborted. */
+  signal?: AbortSignal;
 }
 
 export interface ScrollProgress {
@@ -81,6 +84,7 @@ export function createScrollProgress(
     steps = DEFAULT_STEPS,
     root,
     rootMargin,
+    signal,
   } = options;
 
   if (!element) noElementError('createScrollProgress');
@@ -103,14 +107,21 @@ export function createScrollProgress(
     threshold,
   });
 
+  let unlinkAbort: (() => void) | undefined;
+
+  function stop(): void {
+    if (stopped) return;
+    stopped = true;
+    unlinkAbort?.();
+    unobserve();
+  }
+
+  unlinkAbort = linkAbortSignal(signal, stop);
+
   return {
     get ratio(): number {
       return _ratio;
     },
-    stop(): void {
-      if (stopped) return;
-      stopped = true;
-      unobserve();
-    },
+    stop,
   };
 }

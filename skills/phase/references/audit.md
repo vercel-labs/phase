@@ -11,7 +11,7 @@ A repeatable procedure for auditing existing animation code. Surfaces anti-patte
 
 ## Step 1: Scan for candidates
 
-Run the deterministic scanner bundled with this skill on the target directory. The script lives at `scripts/scan.mjs` relative to this skill's directory — resolve it from wherever the skill is installed (e.g. `skills/phase/scripts/scan.mjs` in the phase repo, or `.agents/skills/phase/scripts/scan.mjs` in a consuming project):
+Run the deterministic scanner bundled with this skill on the target directory. The script lives at `scripts/scan.mjs` relative to this skill's directory. Resolve it from wherever the skill is installed (e.g. `skills/phase/scripts/scan.mjs` in the phase repo, or `.agents/skills/phase/scripts/scan.mjs` in a consuming project):
 
 ```bash
 node <skill-dir>/scripts/scan.mjs <target-dir>
@@ -33,7 +33,13 @@ The scanner greps for these anti-pattern signals:
 | Permanent `will-change`     | `will-change-transform` always on, not toggled with animation state                                                      | Wastes GPU memory when idle                        |
 | Manual visibility gate      | Hand-wired IO + visibilitychange + reduced motion to produce a boolean                                                   | Reimplements `useLifecycle`; fragile, verbose      |
 
-Output is a list of candidate sites: `file:line` with the matched pattern.
+The scanner also emits one **dedup** signal, reported separately from the anti-patterns above because it flags correct code, not a defect:
+
+| Signal (dedup)    | Pattern                                                                                                     | Note                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Manual synced ref | `const xRef = useRef(v)` immediately followed by an unconditional `xRef.current = v` mirroring the same `v` | This is the correct React latest-ref idiom; `useSyncedRef` is just a one-line shorthand. Optional cleanup, never a defect. |
+
+Output is a list of candidate sites: `file:line` with the matched pattern. Dedup findings are listed after the anti-patterns and excluded from the actionable count.
 
 If `scan.mjs` is not available (e.g. the skill is loaded without scripts), perform the scan manually by searching for the patterns above in the target codebase.
 
@@ -93,36 +99,37 @@ After:
 - **"No change" is a valid recommendation.** If the code is already optimal, say so and move on.
 - **Always address reduced motion.** If the candidate has no reduced-motion handling, the recommendation must include it.
 - **Always address cleanup.** If the candidate leaks listeners/observers/rAF handles, the recommendation must include proper teardown.
-- **Show before/after code.** Keep snippets minimal — just the relevant change, not the entire file.
+- **Show before/after code.** Keep snippets minimal, only the relevant change, not the entire file.
 
 ## Common replacements
 
-| Current pattern                                                      | Replace with                                                      |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Manual `requestAnimationFrame` loop + `cancelAnimationFrame` cleanup | `useLoop` (if DOM) or `useCanvas` (if canvas)                     |
-| `requestAnimationFrame` without `cancelAnimationFrame`               | Same — plus the cleanup is now automatic                          |
-| `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                      |
-| `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                               |
-| `new ResizeObserver` for dimensions                                  | `useSize`                                                         |
-| `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)       |
-| `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                        |
-| `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                   |
-| `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                      |
-| `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                     |
-| Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                       |
-| CSS-only animation that's working fine                               | No change — don't add JS where it's not needed                    |
-| Hand-wired IO + visibilitychange + reduced motion → boolean          | `useLifecycle` — single hook, same signals, pooled IO             |
-| `getBoundingClientRect()` for initial in-view check                  | Trust IO (one-frame delay is invisible) or `rootMargin`           |
-| Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops      |
-| `setInterval` rotation with visibility gating                        | CSS `@keyframes` + `useLifecycle` toggling `animation-play-state` |
+| Current pattern                                                      | Replace with                                                        |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Manual `requestAnimationFrame` loop + `cancelAnimationFrame` cleanup | `useLoop` (if DOM) or `useCanvas` (if canvas)                       |
+| `requestAnimationFrame` without `cancelAnimationFrame`               | Same, plus the cleanup is now automatic                             |
+| `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                        |
+| `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                                 |
+| `new ResizeObserver` for dimensions                                  | `useSize`                                                           |
+| `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)         |
+| `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                          |
+| `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                     |
+| `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                        |
+| `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                       |
+| Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                         |
+| CSS-only animation that's working fine                               | No change. Don't add JS where it's not needed.                      |
+| Hand-wired IO + visibilitychange + reduced motion → boolean          | `useLifecycle` (single hook, same signals, pooled IO)               |
+| `getBoundingClientRect()` for initial in-view check                  | Trust IO (one-frame delay is invisible) or `rootMargin`             |
+| Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops        |
+| `setInterval` rotation with visibility gating                        | CSS `@keyframes` + `useLifecycle` toggling `animation-play-state`   |
+| `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose) |
 
 ## Output format
 
 Present findings as a numbered list, grouped by impact:
 
-1. **Critical** — causes jank or accessibility failures
-2. **High** — wastes significant CPU or leaks resources
-3. **Medium** — suboptimal but functional
-4. **No change** — already well-implemented (list briefly for completeness)
+1. **Critical.** Causes jank or accessibility failures
+2. **High.** Wastes significant CPU or leaks resources
+3. **Medium.** Suboptimal but functional
+4. **No change.** Already well-implemented (list briefly for completeness)
 
 End with a summary: "Found N candidates, M actionable, K already optimal."

@@ -6,6 +6,7 @@ import {
   type RefObject,
 } from 'react';
 
+import { subscribeDpr, readDpr } from '../../core/_internal/pool/dpr';
 import { observeResize } from '../../core/_internal/pool/ro-pool';
 import {
   createLoop,
@@ -25,14 +26,25 @@ export interface Size {
   height: number;
 }
 
+/**
+ * Per-frame canvas draw callback. Receives the 2D context, frame state, and
+ * current element size. Draw directly to the canvas. Never call React
+ * `setState` here.
+ */
+export type CanvasDrawFn = (
+  ctx: CanvasRenderingContext2D,
+  frame: FrameState,
+  size: Size,
+) => void;
+
 export interface UseCanvasOptions {
   containerRef: RefObject<Element | null>;
   canvasRef: RefObject<HTMLCanvasElement | null>;
   /**
    * Called every frame with the 2D context, frame state, and current element size.
-   * Draw directly to the canvas — never call React `setState` here.
+   * Draw directly to the canvas. Never call React `setState` here.
    */
-  draw: (ctx: CanvasRenderingContext2D, frame: FrameState, size: Size) => void;
+  draw: CanvasDrawFn;
   fps?: number;
   enabled?: boolean;
   reducedMotion?: ReducedMotionBehavior;
@@ -100,7 +112,7 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
     if (!initialCtx) return;
     ctxRef.current = initialCtx;
 
-    let dpr: number = window.devicePixelRatio || 1;
+    let dpr: number = readDpr();
     let contextLost = false;
 
     // --- Canvas buffer sizing ---
@@ -138,7 +150,7 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
 
     // --- DPR monitoring (e.g. user drags window between monitors) ---
 
-    const unsubDpr: () => void = subscribeDprChanges(dpr, (newDpr) => {
+    const unsubDpr: () => void = subscribeDpr((newDpr) => {
       dpr = newDpr;
       applySize(sizeRef.current.width, sizeRef.current.height);
     });
@@ -218,21 +230,4 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
   }, []);
 
   return { restart, ...state };
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-/** Listen for devicePixelRatio changes via matchMedia (e.g. monitor switch). */
-function subscribeDprChanges(
-  initialDpr: number,
-  onChange: (dpr: number) => void,
-): () => void {
-  const query: MediaQueryList = matchMedia(`(resolution: ${initialDpr}dppx)`);
-  function handler(): void {
-    onChange(window.devicePixelRatio || 1);
-  }
-  query.addEventListener('change', handler);
-  return () => query.removeEventListener('change', handler);
 }

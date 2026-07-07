@@ -10,7 +10,7 @@ export interface UseSightOptions<
   T extends Element = HTMLDivElement,
 > extends IntersectionObserverInit {
   /**
-   * Element to observe. Optional — when omitted, attach the returned `ref`.
+   * Element to observe. Optional. When omitted, attach the returned `ref`.
    */
   ref?: RefObject<T | null>;
   /** `'continuous'` keeps observing. `'once'` freezes at `'visible'` after first intersection. */

@@ -1,6 +1,6 @@
 # `useLoop`
 
-The primary React hook. Wraps `createLoop` with React lifecycle management — visibility-aware animation loop that never triggers re-renders from the frame loop.
+The primary React hook. Wraps `createLoop` with React lifecycle management. Visibility-aware animation loop that never triggers re-renders from the frame loop.
 
 ## Signature
 
@@ -15,7 +15,7 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 | Option                | Type                                | Default      | Description                                        |
 | --------------------- | ----------------------------------- | ------------ | -------------------------------------------------- |
 | `ref`                 | `RefObject<T \| null>`              | returned     | Bring your own ref, or attach the returned one     |
-| `onTick`              | `(frame: FrameState) => void`       | required     | Called every frame — write to refs/DOM only        |
+| `onTick`              | `LoopTickFn`                        | required     | Called every frame (write to refs/DOM only)        |
 | `fps`                 | `number`                            | —            | Cap frames per second                              |
 | `enabled`             | `boolean`                           | `true`       | When `false`, tears down the loop (reports `idle`) |
 | `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior under reduced motion                      |
@@ -39,18 +39,18 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 - You need visibility-aware pausing (zero CPU off-screen).
 - You want phase/quality signals exposed as React state for conditional rendering.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                       | Use                                                            |
 | ------------------------------------- | -------------------------------------------------------------- |
-| Canvas/WebGL animation                | `useCanvas` — adds DPR handling, resize, context loss recovery |
-| You own the renderer (three.js, Pixi) | `useLifecycle` — gives active/paused signal                    |
+| Canvas/WebGL animation                | `useCanvas` (adds DPR handling, resize, context loss recovery) |
+| You own the renderer (three.js, Pixi) | `useLifecycle` (gives active/paused signal)                    |
 | Single numeric value into render      | `useTween`                                                     |
 | No React                              | `createLoop` (core)                                            |
 
 ## Do
 
-- Cleanup is automatic — the effect teardown calls `stop()` on unmount. No manual cleanup needed.
+- Cleanup is automatic. The effect teardown calls `stop()` on unmount. No manual cleanup needed.
 - Attach the returned `ref` to the element you're animating:
   ```tsx
   const { ref } = useLoop({
@@ -65,12 +65,13 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
   useLoop({ onTick: draw, enabled: isAnimating });
   ```
 - Your `onTick` always sees the latest props/state/refs without restarting the loop (stored via `useSyncedRef` internally).
+- Extract `onTick` to a named function using the exported `LoopTickFn` type: `const tick: LoopTickFn = (frame) => { ... }`.
 
 ## Don't
 
-- **Never call `setState` inside `onTick`** — triggers 60 re-renders/sec. Write to refs or DOM.
-- **Never allocate inside `onTick`** — no objects, arrays, closures, or spreads. Template literals for the final `style.*` write are acceptable (see [performance.md](./performance.md)).
-- **Never store a reference to `frame`** — same object mutated in place each tick.
+- **Never call `setState` inside `onTick`.** Triggers 60 re-renders/sec. Write to refs or DOM.
+- **Never allocate inside `onTick`.** No objects, arrays, closures, or spreads. Template literals for the final `style.*` write are acceptable (see [performance.md](./performance.md)).
+- **Never store a reference to `frame`.** Same object mutated in place each tick.
 
 ## Reduced motion
 
@@ -78,7 +79,7 @@ Default `'pause'`: loop pauses, `phaseReason` is `'reduced-motion'`. Use `'compl
 
 ## See also
 
-- [useCanvas](./use-canvas.md) — canvas/WebGL variant with DPR and resize handling
-- [useLifecycle](./use-lifecycle.md) — activation signal for loops you own
-- [createLoop](./create-loop.md) — framework-agnostic core
-- [useTween](./use-tween.md) — single-value animation into React state
+- [useCanvas](./use-canvas.md). Canvas/WebGL variant with DPR and resize handling
+- [useLifecycle](./use-lifecycle.md). Activation signal for loops you own
+- [createLoop](./create-loop.md). Framework-agnostic core
+- [useTween](./use-tween.md). Single-value animation into React state

@@ -118,6 +118,23 @@ describe('stop', () => {
 
     expect(cb).not.toHaveBeenCalled();
   });
+
+  it('aborting the signal stops the observer', async () => {
+    const { createScrollProgress } = await getModule();
+    const el = document.createElement('div');
+    const cb = vi.fn();
+    const controller = new AbortController();
+    createScrollProgress({
+      element: el,
+      onProgress: cb,
+      signal: controller.signal,
+    });
+
+    controller.abort();
+    mockIO.triggerWithRatio(el, 0.5);
+
+    expect(cb).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

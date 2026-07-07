@@ -14,14 +14,14 @@ import { WhenVisible } from 'phase/react';
 
 ### Props
 
-| Prop         | Type                    | Default   | Description                       |
-| ------------ | ----------------------- | --------- | --------------------------------- |
-| `rootMargin` | `string`                | `'200px'` | IO rootMargin (preload headroom)  |
-| `threshold`  | `number \| number[]`    | —         | IO threshold                      |
-| `root`       | `Element \| null`       | —         | IO root element                   |
-| `fallback`   | `ReactNode`             | —         | Shown while awaiting intersection |
-| `ref`        | `Ref<HTMLDivElement>`   | —         | Forward a ref                     |
-| ...rest      | `ComponentProps<'div'>` | —         | All standard div props            |
+| Prop         | Type                    | Default   | Description                                                                                                    |
+| ------------ | ----------------------- | --------- | -------------------------------------------------------------------------------------------------------------- |
+| `rootMargin` | `string`                | `'200px'` | IO rootMargin (preload headroom)                                                                               |
+| `threshold`  | `number \| number[]`    | —         | IO threshold                                                                                                   |
+| `root`       | `Element \| null`       | —         | IO root element                                                                                                |
+| `fallback`   | `ReactNode`             | —         | Shown while awaiting intersection                                                                              |
+| `ref`        | `Ref<HTMLDivElement>`   | —         | Forwarded to the rendered div in both states (sentinel before visible, entered div after). Populated at mount. |
+| ...rest      | `ComponentProps<'div'>` | —         | All standard div props                                                                                         |
 
 ### Data attributes stamped (after visible)
 
@@ -36,13 +36,13 @@ import { WhenVisible } from 'phase/react';
 - Code-split components that should only load when scrolled into view.
 - Scroll-triggered reveal animations (fade in on enter).
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this             | Use                                             |
 | --------------------------- | ----------------------------------------------- |
 | Show/hide that can reverse  | `<Presence>` with `mode: 'reveal'`              |
-| Need exit animation         | `<Presence>` — WhenVisible is one-shot, no exit |
-| Boolean visibility tracking | `useSight` — for observation without mounting   |
+| Need exit animation         | `<Presence>` (WhenVisible is one-shot, no exit) |
+| Boolean visibility tracking | `useSight` (for observation without mounting)   |
 
 ## Do
 
@@ -64,18 +64,22 @@ import { WhenVisible } from 'phase/react';
 
 ## Don't
 
-- **Don't expect it to unmount when scrolled away** — it's one-shot. Once visible, stays mounted.
-- **Don't use for exit animations** — `WhenVisible` has no exit phase. Use `<Presence>`.
+- **Don't expect it to unmount when scrolled away.** It's one-shot. Once visible, stays mounted.
+- **Don't use for exit animations.** `WhenVisible` has no exit phase. Use `<Presence>`.
 - **Don't set `rootMargin: '0px'`** unless you want no preloading headroom.
-- **Don't ship a zero-height `fallback`** — a mismatched placeholder height causes layout shift on mount.
+- **Don't ship a zero-height `fallback`.** A mismatched placeholder height causes layout shift on mount.
+
+## Ref forwarding
+
+A forwarded `ref` is attached to whichever div is currently rendered: the sentinel before intersection, the entered div after. `ref.current` is populated at mount — safe to read for measurement or to attach a listener to an ancestor via `.closest()` without waiting for visibility. Both nodes live inside the same subtree, so ancestor lookups resolve identically in either state.
 
 ## Reduced motion
 
-Automatic: `data-enter="animate"` is not stamped when the user prefers reduced motion. Content still mounts — the enter animation is simply skipped.
+Automatic: `data-enter="animate"` is not stamped when the user prefers reduced motion. Content still mounts. The enter animation is skipped.
 
 ## See also
 
-- [rendering-recipes](./rendering-recipes.md) — two-tier `Defer` + `WhenVisible` and other compositions
-- [presence](./presence.md) — show/hide with exit animation
-- [useSight](./use-sight.md) — boolean visibility without mounting
-- [swap](./swap.md) — coordinated state transitions
+- [rendering-recipes](./rendering-recipes.md). Two-tier `Defer` + `WhenVisible` and other compositions
+- [presence](./presence.md). Show/hide with exit animation
+- [useSight](./use-sight.md). Boolean visibility without mounting
+- [swap](./swap.md). Coordinated state transitions

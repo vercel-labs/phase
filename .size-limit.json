@@ -3,43 +3,49 @@
     "name": "createTicker",
     "path": "src/index.ts",
     "import": "{ createTicker }",
-    "limit": "850 B"
+    "limit": "925 B"
   },
   {
     "name": "createSight",
     "path": "src/index.ts",
     "import": "{ createSight }",
-    "limit": "925 B"
+    "limit": "1.05 kB"
   },
   {
     "name": "createLifecycle",
     "path": "src/index.ts",
     "import": "{ createLifecycle }",
-    "limit": "1.45 kB"
+    "limit": "1.6 kB"
   },
   {
     "name": "createLoop",
     "path": "src/index.ts",
     "import": "{ createLoop }",
-    "limit": "2.5 kB"
+    "limit": "2.85 kB"
   },
   {
     "name": "createScrollProgress",
     "path": "src/index.ts",
     "import": "{ createScrollProgress }",
-    "limit": "850 B"
+    "limit": "950 B"
   },
   {
     "name": "createRenderState",
     "path": "src/index.ts",
     "import": "{ createRenderState }",
-    "limit": "500 B"
+    "limit": "550 B"
+  },
+  {
+    "name": "createDevicePixelRatio",
+    "path": "src/index.ts",
+    "import": "{ createDevicePixelRatio }",
+    "limit": "600 B"
   },
   {
     "name": "whenIdle",
     "path": "src/index.ts",
     "import": "{ whenIdle }",
-    "limit": "400 B"
+    "limit": "490 B"
   },
   {
     "name": "prefersReducedMotion",
@@ -57,28 +63,28 @@
     "path": "src/react/index.ts",
     "import": "{ useLoop }",
     "ignore": ["react"],
-    "limit": "2.8 kB"
+    "limit": "3.05 kB"
   },
   {
     "name": "useLifecycle",
     "path": "src/react/index.ts",
     "import": "{ useLifecycle }",
     "ignore": ["react"],
-    "limit": "1.6 kB"
+    "limit": "1.7 kB"
   },
   {
     "name": "useSight",
     "path": "src/react/index.ts",
     "import": "{ useSight }",
     "ignore": ["react"],
-    "limit": "1.05 kB"
+    "limit": "1.2 kB"
   },
   {
     "name": "useCanvas",
     "path": "src/react/index.ts",
     "import": "{ useCanvas }",
     "ignore": ["react"],
-    "limit": "3.25 kB"
+    "limit": "3.75 kB"
   },
   {
     "name": "useTween",
@@ -99,7 +105,7 @@
     "path": "src/react/index.ts",
     "import": "{ useScrollProgress }",
     "ignore": ["react"],
-    "limit": "850 B"
+    "limit": "1.02 kB"
   },
   {
     "name": "useSize",
@@ -121,6 +127,20 @@
     "import": "{ useMediaQuery }",
     "ignore": ["react"],
     "limit": "300 B"
+  },
+  {
+    "name": "usePrefersReducedMotion",
+    "path": "src/react/index.ts",
+    "import": "{ usePrefersReducedMotion }",
+    "ignore": ["react"],
+    "limit": "300 B"
+  },
+  {
+    "name": "useDevicePixelRatio",
+    "path": "src/react/index.ts",
+    "import": "{ useDevicePixelRatio }",
+    "ignore": ["react"],
+    "limit": "400 B"
   },
   {
     "name": "useSyncedRef",
@@ -148,7 +168,7 @@
     "path": "src/react/index.ts",
     "import": "{ WhenVisible }",
     "ignore": ["react"],
-    "limit": "1.3 kB"
+    "limit": "1.45 kB"
   },
   {
     "name": "WhenIdle",
@@ -169,14 +189,14 @@
     "path": "src/react/index.ts",
     "import": "{ useIdle }",
     "ignore": ["react"],
-    "limit": "400 B"
+    "limit": "520 B"
   },
   {
     "name": "useWhenIdle",
     "path": "src/react/index.ts",
     "import": "{ useWhenIdle }",
     "ignore": ["react"],
-    "limit": "425 B"
+    "limit": "530 B"
   },
   {
     "name": "useRenderState",

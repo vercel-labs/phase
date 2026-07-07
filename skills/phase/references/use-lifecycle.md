@@ -1,6 +1,6 @@
 # `useLifecycle`
 
-The activation signal for loops you own. Wraps `createLifecycle` — returns `active` / `paused` so a consumer-owned render loop can pause when off-screen or under reduced motion.
+The activation signal for loops you own. Wraps `createLifecycle` and returns `active` / `paused` so a consumer-owned render loop can pause when off-screen or under reduced motion.
 
 ## Signature
 
@@ -12,13 +12,14 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 
 ### Options
 
-| Option                | Type                       | Default   | Description                                 |
-| --------------------- | -------------------------- | --------- | ------------------------------------------- |
-| `ref`                 | `RefObject<T \| null>`     | returned  | Bring your own ref                          |
-| `reducedMotion`       | `'pause' \| 'ignore'`      | `'pause'` | Whether reduced motion pauses the lifecycle |
-| `paused`              | `boolean`                  | `false`   | Manual pause (e.g. panel covers animation)  |
-| `enabled`             | `boolean`                  | `true`    | When `false`, tears down and reports `idle` |
-| `intersectionOptions` | `IntersectionObserverInit` | —         | Forwarded to IO                             |
+| Option                | Type                       | Default   | Description                                                                                                           |
+| --------------------- | -------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `ref`                 | `RefObject<T \| null>`     | returned  | Bring your own ref                                                                                                    |
+| `reducedMotion`       | `'pause' \| 'ignore'`      | `'pause'` | Whether reduced motion pauses the lifecycle                                                                           |
+| `paused`              | `boolean`                  | `false`   | Manual pause (e.g. panel covers animation)                                                                            |
+| `enabled`             | `boolean`                  | `true`    | When `false`, tears down and reports `idle`                                                                           |
+| `intersectionOptions` | `IntersectionObserverInit` | —         | Forwarded to IO                                                                                                       |
+| `onPhaseChange`       | `(phase, reason) => void`  | —         | Synchronous callback, fires before React render. Use for latency-sensitive work (posting to a worker, updating a ref) |
 
 ### Return
 
@@ -35,7 +36,7 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 - You need `paused` prop support for UI-driven suspension.
 - You want a single `isActive` boolean to gate your `useEffect`-based loop.
 
-## When NOT to use — reach for X instead
+## When not to use
 
 | Instead of this                            | Use                      |
 | ------------------------------------------ | ------------------------ |
@@ -45,7 +46,7 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 
 ## Do
 
-- Cleanup is automatic — the effect teardown calls `stop()` on unmount. No manual cleanup needed.
+- Cleanup is automatic. The effect teardown calls `stop()` on unmount. No manual cleanup needed.
 - Gate your renderer with `isActive`:
   ```tsx
   const { ref, isActive } = useLifecycle();
@@ -60,8 +61,17 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
   return <canvas ref={ref} />;
   ```
 - Use `paused` for contextual suspension (modal, settings panel).
+- Use `onPhaseChange` when you need synchronous notification (same frame as the observer callback), bypassing the React render cycle:
 
-- Use as a thin RSC boundary for CSS animations with server-rendered content. Wrap `useLifecycle` in a named client component — the naming IS the documentation:
+  ```tsx
+  const { ref, isActive } = useLifecycle({
+    onPhaseChange: (phase) => {
+      worker.postMessage({ type: phase === 'active' ? 'resume' : 'pause' });
+    },
+  });
+  ```
+
+- Use as a thin RSC boundary for CSS animations with server-rendered content. Wrap `useLifecycle` in a named client component. The naming IS the documentation:
 
   ```tsx
   'use client';
@@ -90,9 +100,9 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 
 ## Don't
 
-- **Don't use `useLifecycle` when `useLoop` would work** — if phase can drive the loop, let it (you get quality signals, frame budget tracking, and shared clock for free).
-- **Don't set `paused` to implement visibility pausing** — that's automatic. Manual pause is for UI scenarios only.
-- **Don't ship a generic `<Lifecycle>` component** — unlike `Presence` (which has real transitionend/timeout logic), the lifecycle wrapper is 4 lines. Name it contextually and own those lines.
+- **Don't use `useLifecycle` when `useLoop` would work.** If phase can drive the loop, let it (you get quality signals, frame budget tracking, and shared clock for free).
+- **Don't set `paused` to implement visibility pausing.** That's automatic. Manual pause is for UI scenarios only.
+- **Don't ship a generic `<Lifecycle>` component.** Unlike `Presence` (which has real transitionend/timeout logic), the lifecycle wrapper is 4 lines. Name it contextually and own those lines.
 
 ## Reduced motion
 
@@ -100,7 +110,8 @@ Default `'pause'`: `isActive` becomes `false`, `phaseReason` is `'reduced-motion
 
 ## See also
 
-- [useLoop](./use-loop.md) — use when phase should drive the loop
-- [useCanvas](./use-canvas.md) — use for canvas where phase drives the loop
-- [useSight](./use-sight.md) — pure visibility, no animation gating
-- [createLifecycle](./create-lifecycle.md) — framework-agnostic core
+- [useLoop](./use-loop.md). Use when phase should drive the loop
+- [useCanvas](./use-canvas.md). Use for canvas where phase drives the loop
+- [useDevicePixelRatio](./use-device-pixel-ratio.md). Reactive DPR for buffer sizing (common pairing)
+- [useSight](./use-sight.md). Pure visibility, no animation gating
+- [createLifecycle](./create-lifecycle.md). Framework-agnostic core

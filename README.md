@@ -4,27 +4,27 @@
 
 # ▲ phase
 
-> **Status: Alpha** — APIs are evolving rapidly. Expect breaking changes.
+> **Status: Alpha.** APIs are evolving rapidly. Expect breaking changes.
 
-The lifecycle-aware performance layer for the web. Know when to animate, when to render, and when to pause.
+Phase is a lightweight, lifecycle-aware UI performance layer for the web. It includes tools & guidance to optimize render performance, build performant animations, and manage layout and off-screen resources.
 
 ## Why phase
 
 You can't accidentally tank the main thread, leak an observer, jank on scroll, or ignore reduced motion. The hard parts are handled for you, so the slow path isn't even reachable:
 
-- **Pauses when unseen** — off-screen or in a background tab, work stops and CPU drops to zero.
-- **Respects reduced motion by default** — accessibility is built in, not an opt-in.
-- **Never forces a reflow** — no `getBoundingClientRect`, no layout thrash, anywhere in the package.
-- **Zero re-renders from the frame loop** — per-frame work writes to refs and the DOM, never React state.
-- **Frame-locked shared clock** — every animation on the page reads one clock, so nothing drifts out of sync.
-- **Renders only what matters** — skip painting off-screen content, mount non-critical UI when idle.
+- **Pauses when unseen.** Off-screen or in a background tab, work stops and CPU drops to zero.
+- **Respects reduced motion by default.** Accessibility is built in, not an opt-in.
+- **Never forces a reflow.** No `getBoundingClientRect`, no layout thrash, anywhere in the package.
+- **Zero re-renders from the frame loop.** Per-frame work writes to refs and the DOM, never React state.
+- **Frame-locked shared clock.** Every animation on the page reads one clock, so nothing drifts out of sync.
+- **Renders only what matters.** Skip painting off-screen content, mount non-critical UI when idle.
 
-Each guarantee is a [tested invariant](#guarantees), not an aspiration — and every export stays [sub-kilobyte to a few kilobytes](#bundle-size).
+Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every export stays [sub-kilobyte to a few kilobytes](#bundle-size).
 
 ## Table of contents
 
 - [Install](#install)
-- [Quick start](#quick-start)
+- [Getting started](#getting-started)
 - [Philosophy](#philosophy)
 - [Scope](#scope)
 - [Entry points](#entry-points)
@@ -58,7 +58,7 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration — and e
 - [Guarantees](#guarantees)
 - [Errors](#errors)
 - [Relationship to View Transitions](#relationship-to-view-transitions)
-- [Bundle Size](#bundle-size)
+- [Bundle size](#bundle-size)
 - [Agent skill](#agent-skill)
 
 ## Install
@@ -67,7 +67,7 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration — and e
 pnpm add phase
 ```
 
-## Quick start
+## Getting started
 
 ```tsx
 import { useLoop } from 'phase/react';
@@ -106,7 +106,7 @@ const { phase, phaseReason } = useLoop({ onTick: draw });
 
 One string replaces `if (running && visible && !paused && !prefersReducedMotion && mounted)`.
 
-Each of those signals is also a CPU and battery decision. Animating while off-screen, ignoring reduced motion, or running after unmount is what burns cycles and causes jank — so `phase` composes them once, correctly, instead of leaving each call site to get the conjunction right.
+Each of those signals is also a CPU and battery decision. Animating while off-screen, ignoring reduced motion, or running after unmount is what burns cycles and causes jank. `phase` composes them once, correctly, instead of leaving each call site to get the conjunction right.
 
 Safe behavior is automatic. Visibility awareness, reduced motion, observer cleanup, and delta clamping are defaults, not opt-ins. Bypassing reduced motion requires an explicit `reducedMotion: 'ignore'` in the diff.
 
@@ -118,7 +118,7 @@ Safe behavior is automatic. Visibility awareness, reduced motion, observer clean
 
 **Does not handle:** spring physics, gesture systems, declarative keyframe orchestration. Reach for a dedicated library (e.g. `motion`) when you need those.
 
-This narrow scope is deliberate. Shipping only the performance-critical plumbing — and nothing else — is what keeps every export [sub-kilobyte to a few kilobytes](#bundle-size).
+This narrow scope is deliberate. Shipping only the performance-critical plumbing (and nothing else) is what keeps every export [sub-kilobyte to a few kilobytes](#bundle-size).
 
 ## Entry points
 
@@ -179,7 +179,7 @@ Two signals trigger degradation:
 | Window blur  | `'unfocused'`    | User switches to another window                | Recovers on window focus |
 | Frame budget | `'frame-budget'` | 3+ consecutive frames exceed the 16.6ms budget | Does not auto-recover    |
 
-Read `loop.quality` and `loop.qualityReason` to adapt rendering (fewer particles, simpler shaders, skip non-essential visual passes).
+Read `loop.quality` and `loop.qualityReason` to adapt rendering (fewer particles, lower-fidelity shaders, skip non-essential visual passes).
 
 #### The `degraded` option
 
@@ -187,7 +187,7 @@ Controls the loop's response when quality degrades. Same three-value pattern as 
 
 | Value        | Behavior                                             | Use case                                            |
 | ------------ | ---------------------------------------------------- | --------------------------------------------------- |
-| `'throttle'` | Cap FPS (default 30, configurable via `degradedFps`) | Most animations. Still runs, just slower            |
+| `'throttle'` | Cap FPS (default 30, configurable via `degradedFps`) | Most animations. Still runs, only slower            |
 | `'pause'`    | Pause the loop entirely                              | Heavy canvas/WebGL. If it can't run well, don't run |
 | `'ignore'`   | Keep running at full quality                         | Critical UI that must never degrade                 |
 
@@ -241,7 +241,7 @@ All tickers share a single `requestAnimationFrame` loop. Every subscriber reads 
 
 ### createSight
 
-Answers one question: can the user see this element right now? Combines `document.visibilitychange`, `pageshow` (bfcache restore), and `IntersectionObserver` into a single phase.
+Answers one question: is this element visible right now? Combines `document.visibilitychange`, `pageshow` (bfcache restore), and `IntersectionObserver` into a single phase.
 
 ```ts
 import { createSight } from 'phase';
@@ -319,7 +319,7 @@ const progress = createScrollProgress({
 progress.stop();
 ```
 
-The `steps` option controls threshold granularity. Default `20` generates 21 evenly-spaced thresholds (0%, 5%, 10%, …, 100%). Multiple instances with the same `steps` share a single IO — zero extra observers.
+The `steps` option controls threshold granularity. Default `20` generates 21 evenly-spaced thresholds (0%, 5%, 10%, …, 100%). Multiple instances with the same `steps` share a single IO, adding zero extra observers.
 
 #### ScrollProgress options
 
@@ -333,7 +333,7 @@ The `steps` option controls threshold granularity. Default `20` generates 21 eve
 
 ### prefersReducedMotion
 
-Returns `true` when the user has enabled reduced motion at the OS level. Use it to gate expensive setup or dynamic imports.
+Returns `true` when reduced motion is enabled at the OS level. Use it to gate expensive setup or dynamic imports.
 
 ```ts
 import { prefersReducedMotion } from 'phase';
@@ -348,7 +348,7 @@ All hooks and primitives consult this signal automatically. You only need it dir
 
 ## Easing and math
 
-Pure functions. No browser APIs, no side effects, no React. Safe in server components, build scripts, and tests.
+Pure functions with no browser APIs, side effects, or React. Safe in server components, build scripts, and tests.
 
 ```ts
 import { lerp, clamp01, easeOutCubic, remap } from 'phase/ease';
@@ -364,7 +364,7 @@ import { lerp, clamp01, easeOutCubic, remap } from 'phase/ease';
 | `easeInOutCubic` | Symmetric S-curve               |
 | `linear`         | No easing (identity)            |
 
-All easing functions take a progress value (0–1) and return a curved progress value (0–1). They don't know about time, pixels, or anything else — they reshape a number.
+All easing functions take a progress value (0–1) and return a curved progress value (0–1). They don't know about time, pixels, or anything else. They reshape a number.
 
 ### Math utilities
 
@@ -388,18 +388,18 @@ Easing, interpolation, and your value range are three separate concerns. `phase`
 
 ## Choosing a primitive
 
-| Need                                              | Use                                                                     |
-| ------------------------------------------------- | ----------------------------------------------------------------------- |
-| Know if it's on screen?                           | `useSight` (visibility only)                                            |
-| Want `phase` to run your frame loop?              | `useLoop` (DOM) / `useCanvas` (canvas)                                  |
-| You own the loop (WebGL, three.js, a Web Worker)? | `useLifecycle` (active/paused signal)                                   |
-| Animating one value into render?                  | `useTween`                                                              |
-| Mount/unmount transitions?                        | `Presence` / `Swap` / `WhenVisible`                                     |
-| Skip painting off-screen content (keep in DOM)?   | `Defer`                                                                 |
-| Mount non-critical UI when the browser is idle?   | `WhenIdle` / `useIdle`                                                  |
-| Prefetch or run a side effect when idle?          | `useWhenIdle`                                                           |
-| Pause raw work inside a `Defer` subtree?          | `useRenderState`                                                        |
-| Reactive scroll/size/media values?                | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery` |
+| Need                                                     | Use                                                                     |
+| -------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Check on-screen visibility                               | `useSight` (visibility only)                                            |
+| Run a frame loop via `phase`                             | `useLoop` (DOM) / `useCanvas` (canvas)                                  |
+| Pause/resume your own loop (WebGL, three.js, Web Worker) | `useLifecycle` (active/paused signal)                                   |
+| Animate a single value in render output                  | `useTween`                                                              |
+| Animate mount/unmount transitions                        | `Presence` / `Swap` / `WhenVisible`                                     |
+| Skip painting off-screen content (keep in DOM)           | `Defer`                                                                 |
+| Defer non-critical UI until the browser is idle          | `WhenIdle` / `useIdle`                                                  |
+| Run a side effect or prefetch when idle                  | `useWhenIdle`                                                           |
+| Pause non-`phase` work inside a `Defer` subtree          | `useRenderState`                                                        |
+| Subscribe to scroll, size, or media values reactively    | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery` |
 
 **`useSight` vs `useLifecycle`:** `useSight` reports pure visibility (for lazy-mounting, analytics, `WhenVisible`). `useLifecycle` folds in reduced motion and a manual pause, so you can't accidentally animate for users who asked not to. If you're gating an animation, use `useLifecycle`. If you're gating content, use `useSight`.
 
@@ -553,7 +553,7 @@ return (
 
 ### useScrollProgress
 
-Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with React lifecycle management — see its [note on scope](#createscrollprogress) (visibility ratio, not scroll-scrubbing).
+Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with React lifecycle management (see its [note on scope](#createscrollprogress) for the distinction between visibility ratio and scroll-scrubbing).
 
 ```tsx
 import { useScrollProgress } from 'phase/react';
@@ -568,7 +568,7 @@ function FadeIn({ children }) {
 }
 ```
 
-Re-renders only at threshold crossings — ~20 per full viewport traversal at default steps. `progress` is `0` before first observation.
+Re-renders only at threshold crossings (~20 per full viewport traversal at default steps). `progress` is `0` before first observation.
 
 ### Utility hooks
 
@@ -593,7 +593,7 @@ className =
   'transition-opacity data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0';
 ```
 
-No `motion-reduce:` class needed. Reduced motion is handled automatically.
+No `motion-reduce:` class needed because reduced motion is handled automatically.
 
 **Enter:** CSS `@starting-style` animates the element natively when `data-enter="animate"` is present. Zero JS during the animation.
 
@@ -668,7 +668,7 @@ const HeavyChart = lazy(() => import('./heavy-chart'));
 | `root`       | `Element \| null`    | —         | IO root element                   |
 | `fallback`   | `ReactNode`          | —         | Shown while awaiting intersection |
 
-Reduced motion is automatic: `data-enter="animate"` is not stamped when the user prefers reduced motion.
+Reduced motion is automatic: `data-enter="animate"` is not stamped when reduced motion is preferred.
 
 ### Swap
 
@@ -697,7 +697,7 @@ Rapid changes (A → B → C during A's exit) skip intermediate states and advan
 
 ## Rendering
 
-`phase` is the _when_ layer — when to animate, when to render, when to pause — from one set of signals. Alongside `WhenVisible`, two helpers skip rendering work for off-screen content. They differ in how aggressively they skip and whether the content survives server rendering:
+`phase` is the _when_ layer (when to animate, when to render, when to pause), built from one set of signals. Alongside `WhenVisible`, two helpers skip rendering work for off-screen content. They differ in how aggressively they skip and whether the content survives server rendering:
 
 | Helper        | Defers                              | In DOM? | In SSR HTML? | Reach for it when                                  |
 | ------------- | ----------------------------------- | ------- | ------------ | -------------------------------------------------- |
@@ -707,7 +707,7 @@ Rapid changes (A → B → C during A's exit) skip intermediate states and advan
 
 ### Defer
 
-Skips the browser's rendering work (style, layout, paint) for off-screen content via `content-visibility: auto`. Pure CSS — no JS, no observer. Children stay in the DOM and are server-rendered.
+Skips the browser's rendering work (style, layout, paint) for off-screen content via `content-visibility: auto`, using pure CSS with no JS or observers. Children stay in the DOM and are server-rendered.
 
 ```tsx
 import { Defer } from 'phase/react';
@@ -720,11 +720,11 @@ import { Defer } from 'phase/react';
 | Prop              | Type                                   | Default    | Description                                         |
 | ----------------- | -------------------------------------- | ---------- | --------------------------------------------------- |
 | `estimatedHeight` | `string`                               | `'1000px'` | Reserved size before first paint (any CSS length)   |
-| ...rest           | `Omit<ComponentProps<'div'>, 'style'>` | —          | Standard div props except `style` — use `className` |
+| ...rest           | `Omit<ComponentProps<'div'>, 'style'>` | —          | Standard div props except `style` (use `className`) |
 
-`contain-intrinsic-size: auto <estimatedHeight>` reserves space, so there is no layout shift — the browser remembers the real size after first paint. `Defer` defers rendering only, not hydration or mounting. There is no `style` prop: the render-skip styles are encapsulated so they can't be overridden — style the wrapper with `className`.
+`contain-intrinsic-size: auto <estimatedHeight>` reserves space, so there is no layout shift. The browser remembers the real size after first paint. `Defer` defers rendering only, not hydration or mounting. There is no `style` prop: the render-skip styles are encapsulated so they can't be overridden. Style the wrapper with `className`.
 
-**Animations inside a `Defer` keep running** — `content-visibility` skips paint, not JavaScript. `phase`'s own loops (`useLoop`, `useCanvas`, `useLifecycle`) already self-pause off-screen via their own visibility observer. For raw work (a hand-written `requestAnimationFrame` loop, `setInterval`), gate it with `useRenderState`.
+**Animations inside a `Defer` keep running.** `content-visibility` skips paint, not JavaScript. `phase`'s own loops (`useLoop`, `useCanvas`, `useLifecycle`) already self-pause off-screen via their own visibility observer. For raw work (a hand-written `requestAnimationFrame` loop, `setInterval`), gate it with `useRenderState`.
 
 ### WhenIdle
 
@@ -746,11 +746,11 @@ import { WhenIdle } from 'phase/react';
 | `timeout`  | `number`    | —       | Max ms to wait before mounting anyway |
 | `fallback` | `ReactNode` | —       | Shown until the browser is idle       |
 
-Idle never fires during SSR, so `WhenIdle` children are absent from server HTML — reserve it for non-critical content. For content that must be crawlable, use `Defer`. Reduced motion is automatic: `data-enter="animate"` is not stamped when the user prefers reduced motion.
+Idle never fires during SSR, so `WhenIdle` children are absent from server HTML. Reserve it for non-critical content. For content that must be crawlable, use `Defer`. Reduced motion is automatic: `data-enter="animate"` is not stamped when reduced motion is preferred.
 
 ### useWhenIdle
 
-Runs a callback once, when the browser is idle after mount — the effect-shaped counterpart to `useIdle`. Use it for side effects (prefetching a chunk, warming a cache) rather than rendering. Cancels on unmount and always calls the latest callback.
+Runs a callback once when the browser is idle after mount (the effect-shaped counterpart to `useIdle`). Use it for side effects (prefetching a chunk, warming a cache) rather than rendering. Cancels on unmount and always calls the latest callback.
 
 ```tsx
 import { lazy, Suspense, useState } from 'react';
@@ -773,7 +773,7 @@ function Chat() {
 }
 ```
 
-It replaces the common (and easily leaky) hand-rolled `useEffect(() => { const id = requestIdleCallback(...); return () => cancelIdleCallback(id); }, [])` — `useWhenIdle` handles cancellation and the SSR guard. Reach for `useIdle` instead when you need to render from the idle signal.
+It replaces the common (and leak-prone) hand-rolled `useEffect(() => { const id = requestIdleCallback(...); return () => cancelIdleCallback(id); }, [])`. `useWhenIdle` handles cancellation and the SSR guard. Reach for `useIdle` instead when you need to render from the idle signal.
 
 ### useRenderState
 
@@ -800,11 +800,11 @@ function Chart() {
 }
 ```
 
-`useRenderState` only listens and reports — it has no layout effect, so it never breaks `Defer`'s no-layout-shift guarantee. You rarely need it for `phase` loops, which already self-pause off-screen.
+`useRenderState` only listens and reports. It has no layout effect, so it never breaks `Defer`'s no-layout-shift guarantee. You rarely need it for `phase` loops, which already self-pause off-screen.
 
 ## Guarantees
 
-These are the performance invariants behind [Why phase](#why-phase) — tested in CI, not aspirations.
+These are the performance invariants behind [Why phase](#why-phase). They are tested in CI, not aspirations.
 
 ### Zero per-frame allocations
 
@@ -850,7 +850,7 @@ import { PhaseError, isPhaseError } from 'phase';
 
 `phase` doesn't wrap React's View Transition API, and it doesn't need to. The two compose cleanly. Reach for `<ViewTransition>` when you animate between committed UI states like route changes and shared-element morphs, and reach for `Presence`, `Swap`, and the frame loops for component-local lifecycle on stable React. A `phase` loop keeps ticking inside a view-transitioned subtree without conflict.
 
-## Bundle Size
+## Bundle size
 
 Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export is individually measured with [Size Limit](https://github.com/ai/size-limit) and budgeted in CI. Sizes reflect minified + brotli-compressed bytes.
 
@@ -858,40 +858,43 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 
 <!-- SIZE-TABLE:START -->
 
-| Export                 | Size (min+brotli) |
-| ---------------------- | ----------------: |
-| **Core**               |                   |
-| `createTicker`         |             764 B |
-| `createSight`          |             889 B |
-| `createLifecycle`      |           1.39 kB |
-| `createLoop`           |           2.48 kB |
-| `createScrollProgress` |             782 B |
-| `createRenderState`    |             425 B |
-| `whenIdle`             |             334 B |
-| `prefersReducedMotion` |             101 B |
-| **Ease**               |                   |
-| `ease (all)`           |             210 B |
-| **React**              |                   |
-| `useLoop`              |           2.73 kB |
-| `useLifecycle`         |           1.54 kB |
-| `useSight`             |           1.02 kB |
-| `useCanvas`            |           3.19 kB |
-| `useTween`             |             615 B |
-| `usePresence`          |             594 B |
-| `useScrollProgress`    |             841 B |
-| `useSize`              |             265 B |
-| `useContainerQuery`    |             344 B |
-| `useMediaQuery`        |             245 B |
-| `useSyncedRef`         |              22 B |
-| `useStableCallback`    |              39 B |
-| `Presence`             |             746 B |
-| `WhenVisible`          |           1.24 kB |
-| `WhenIdle`             |             499 B |
-| `Defer`                |             103 B |
-| `useIdle`              |             319 B |
-| `useWhenIdle`          |             348 B |
-| `useRenderState`       |             458 B |
-| `Swap`                 |           1.13 kB |
+| Export                    | Size (min+brotli) |
+| ------------------------- | ----------------: |
+| **Core**                  |                   |
+| `createTicker`            |             834 B |
+| `createSight`             |             963 B |
+| `createLifecycle`         |           1.47 kB |
+| `createLoop`              |            2.6 kB |
+| `createScrollProgress`    |             868 B |
+| `createRenderState`       |             495 B |
+| `createDevicePixelRatio`  |             544 B |
+| `whenIdle`                |             409 B |
+| `prefersReducedMotion`    |             101 B |
+| **Ease**                  |                   |
+| `ease (all)`              |             210 B |
+| **React**                 |                   |
+| `useLoop`                 |           2.81 kB |
+| `useLifecycle`            |           1.68 kB |
+| `useSight`                |            1.1 kB |
+| `useCanvas`               |           3.43 kB |
+| `useTween`                |             612 B |
+| `usePresence`             |             591 B |
+| `useScrollProgress`       |             927 B |
+| `useSize`                 |             266 B |
+| `useContainerQuery`       |             339 B |
+| `useMediaQuery`           |             245 B |
+| `usePrefersReducedMotion` |             272 B |
+| `useDevicePixelRatio`     |             231 B |
+| `useSyncedRef`            |              22 B |
+| `useStableCallback`       |              39 B |
+| `Presence`                |             746 B |
+| `WhenVisible`             |           1.34 kB |
+| `WhenIdle`                |             591 B |
+| `Defer`                   |             103 B |
+| `useIdle`                 |             435 B |
+| `useWhenIdle`             |             445 B |
+| `useRenderState`          |             527 B |
+| `Swap`                    |           1.12 kB |
 
 <!-- SIZE-TABLE:END -->
 
@@ -907,3 +910,5 @@ npx skills add vercel-labs/phase --skill phase
 ```
 
 Or copy `skills/phase/` into your project's `.agents/skills/phase/` and reference its `SKILL.md` from your `AGENTS.md`, or download [`skills/phase/dist/phase-skill.zip`](skills/phase/dist/phase-skill.zip) and unzip it into your skills directory.
+
+The audit scanner ships with the skill (no separate install needed). Ask your agent to audit your animation code and it runs `scripts/scan.mjs` for you, or run it standalone with `node <skill-dir>/scripts/scan.mjs <target-dir>`. See the [skill README](skills/phase/README.md#running-an-audit) for details.
