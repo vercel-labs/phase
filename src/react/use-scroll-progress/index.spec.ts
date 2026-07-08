@@ -105,4 +105,78 @@ describe('useScrollProgress', () => {
     expect(result1.current.progress).toBe(0.3);
     expect(result2.current.progress).toBe(0.7);
   });
+
+  it('always returns progressRef', async () => {
+    const useScrollProgress = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useScrollProgress({ ref }));
+
+    expect(result.current.progressRef.current).toBe(0);
+
+    act(() => mockIO.triggerWithRatio(el, 0.6));
+    expect(result.current.progressRef.current).toBe(0.6);
+  });
+});
+
+describe('useScrollProgress with onProgress (transient mode)', () => {
+  it('calls onProgress instead of triggering re-render', async () => {
+    const useScrollProgress = await getHook();
+    const { ref, el } = createRefWithElement();
+    const onProgress = vi.fn();
+
+    let renderCount = 0;
+    const { result } = renderHook(() => {
+      renderCount++;
+      return useScrollProgress({ ref, onProgress });
+    });
+
+    const countAfterMount = renderCount;
+
+    act(() => mockIO.triggerWithRatio(el, 0.5));
+
+    expect(onProgress).toHaveBeenCalledWith(0.5);
+    expect(renderCount).toBe(countAfterMount);
+    expect(result.current.progress).toBe(0);
+  });
+
+  it('keeps progress at 0 in transient mode', async () => {
+    const useScrollProgress = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() =>
+      useScrollProgress({ ref, onProgress: vi.fn() }),
+    );
+
+    act(() => mockIO.triggerWithRatio(el, 0.8));
+    expect(result.current.progress).toBe(0);
+  });
+
+  it('updates progressRef in transient mode', async () => {
+    const useScrollProgress = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() =>
+      useScrollProgress({ ref, onProgress: vi.fn() }),
+    );
+
+    act(() => mockIO.triggerWithRatio(el, 0.75));
+    expect(result.current.progressRef.current).toBe(0.75);
+  });
+
+  it('calls the latest onProgress when callback changes', async () => {
+    const useScrollProgress = await getHook();
+    const { ref, el } = createRefWithElement();
+    const first = vi.fn();
+    const second = vi.fn();
+
+    const { rerender } = renderHook(
+      ({ cb }) => useScrollProgress({ ref, onProgress: cb }),
+      { initialProps: { cb: first } },
+    );
+
+    rerender({ cb: second });
+
+    act(() => mockIO.triggerWithRatio(el, 0.4));
+
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith(0.4);
+  });
 });

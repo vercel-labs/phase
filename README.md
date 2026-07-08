@@ -875,26 +875,26 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **React**                 |                   |
 | `useLoop`                 |           2.81 kB |
 | `useLifecycle`            |           1.68 kB |
-| `useSight`                |            1.1 kB |
+| `useSight`                |           1.19 kB |
 | `useCanvas`               |           3.43 kB |
-| `useTween`                |             612 B |
-| `usePresence`             |             591 B |
-| `useScrollProgress`       |             927 B |
-| `useSize`                 |             266 B |
+| `useTween`                |             606 B |
+| `usePresence`             |             593 B |
+| `useScrollProgress`       |             996 B |
+| `useSize`                 |             337 B |
 | `useContainerQuery`       |             339 B |
-| `useMediaQuery`           |             245 B |
+| `useMediaQuery`           |             244 B |
 | `usePrefersReducedMotion` |             272 B |
 | `useDevicePixelRatio`     |             231 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
 | `Presence`                |             746 B |
-| `WhenVisible`             |           1.34 kB |
-| `WhenIdle`                |             591 B |
+| `WhenVisible`             |           1.43 kB |
+| `WhenIdle`                |             592 B |
 | `Defer`                   |             103 B |
 | `useIdle`                 |             435 B |
-| `useWhenIdle`             |             445 B |
+| `useWhenIdle`             |             449 B |
 | `useRenderState`          |             527 B |
-| `Swap`                    |           1.12 kB |
+| `Swap`                    |           1.13 kB |
 
 <!-- SIZE-TABLE:END -->
 

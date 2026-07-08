@@ -34,7 +34,11 @@ export type {
   LifecycleReason,
   LifecycleReducedMotion,
 } from '../core/lifecycle';
-export type { UseSightOptions, UseSightResult } from './use-sight';
+export type {
+  SightCallback,
+  UseSightOptions,
+  UseSightResult,
+} from './use-sight';
 export type {
   Size,
   SizeCallback,
@@ -47,6 +51,7 @@ export type {
   UseContainerQueryResult,
 } from './use-container-query';
 export type {
+  ScrollProgressCallback,
   UseScrollProgressOptions,
   UseScrollProgressResult,
 } from './use-scroll-progress';

@@ -7,30 +7,33 @@ Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with Rea
 ```ts
 import { useScrollProgress } from 'phase/react';
 
-const { ref, progress } = useScrollProgress<T>(options?);
+const { ref, progress, progressRef } = useScrollProgress<T>(options?);
 ```
 
 ### Options
 
-| Option       | Type                   | Default  | Description                        |
-| ------------ | ---------------------- | -------- | ---------------------------------- |
-| `ref`        | `RefObject<T \| null>` | returned | Bring your own ref                 |
-| `steps`      | `number`               | `20`     | Number of evenly-spaced thresholds |
-| `root`       | `Element \| null`      | —        | IO root element                    |
-| `rootMargin` | `string`               | —        | IO root margin                     |
+| Option       | Type                         | Default  | Description                                                                            |
+| ------------ | ---------------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `ref`        | `RefObject<T \| null>`       | returned | Bring your own ref                                                                     |
+| `steps`      | `number`                     | `20`     | Number of evenly-spaced thresholds                                                     |
+| `root`       | `Element \| null`            | —        | IO root element                                                                        |
+| `rootMargin` | `string`                     | —        | IO root margin                                                                         |
+| `onProgress` | `(progress: number) => void` | —        | Called on every threshold crossing. When provided, `progress` stays `0`, no re-renders |
 
 ### Return
 
-| Property   | Type                   | Description                                           |
-| ---------- | ---------------------- | ----------------------------------------------------- |
-| `ref`      | `RefObject<T \| null>` | Attach to the observed element                        |
-| `progress` | `number`               | Fraction visible (0–1). `0` before first observation. |
+| Property      | Type                   | Description                                                                           |
+| ------------- | ---------------------- | ------------------------------------------------------------------------------------- |
+| `ref`         | `RefObject<T \| null>` | Attach to the observed element                                                        |
+| `progress`    | `number`               | Fraction visible (0–1). `0` before first observation. Always `0` with `onProgress`    |
+| `progressRef` | `RefObject<number>`    | Fraction visible via ref. Always current regardless of mode, never triggers re-render |
 
 ## When to use
 
 - Reveal/opacity effects driven by how much of an element is visible.
 - Progress indicators tied to viewport coverage.
 - Parallax effects (clamped to element visibility, not scroll position).
+- **With `onProgress`**: scroll-driven animation consumers that read progress imperatively without re-renders.
 
 ## When not to use
 
@@ -52,6 +55,15 @@ const { ref, progress } = useScrollProgress<T>(options?);
     </div>
   );
   ```
+- Use `onProgress` for zero-re-render scroll-driven animation:
+  ```tsx
+  const { ref, progressRef } = useScrollProgress({
+    onProgress: (p) => {
+      el.style.opacity = String(p);
+    },
+  });
+  ```
+- Read `progressRef.current` inside `onTick` callbacks for the latest ratio without closure staleness.
 - Adjust `steps` for smoother or coarser updates (higher = more re-renders).
 
 ## Don't

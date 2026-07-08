@@ -5,6 +5,12 @@ import {
   type SightPhase,
   type SightReason,
 } from '../../core/sight';
+import { useSyncedRef } from '../use-synced-ref';
+
+export type SightCallback = (
+  phase: SightPhase,
+  phaseReason: SightReason,
+) => void;
 
 export interface UseSightOptions<
   T extends Element = HTMLDivElement,
@@ -15,16 +21,27 @@ export interface UseSightOptions<
   ref?: RefObject<T | null>;
   /** `'continuous'` keeps observing. `'once'` freezes at `'visible'` after first intersection. */
   observe?: 'continuous' | 'once';
+  /**
+   * Called on every visibility transition. When provided, `phase` and
+   * `phaseReason` stay at initial values and no re-renders occur.
+   */
+  onVisibilityChange?: SightCallback;
 }
 
 export interface UseSightResult<T extends Element = HTMLDivElement> {
   /** Attach to the element whose visibility you want to track. */
   ref: RefObject<T | null>;
+  /** Visibility phase. Stays `'unknown'` when `onVisibilityChange` is provided. */
   phase: SightPhase;
+  /** Reason for the current phase. Stays `'initial'` when `onVisibilityChange` is provided. */
   phaseReason: SightReason;
+  /** Visibility phase via ref. Always current regardless of mode. */
+  phaseRef: RefObject<SightPhase>;
+  /** Phase reason via ref. Always current regardless of mode. */
+  phaseReasonRef: RefObject<SightReason>;
 }
 
-type SightState = Omit<UseSightResult, 'ref'>;
+type SightState = { phase: SightPhase; phaseReason: SightReason };
 
 const INITIAL_STATE: SightState = {
   phase: 'unknown',
@@ -34,19 +51,27 @@ const INITIAL_STATE: SightState = {
 /**
  * Intersection + document visibility as a phase.
  *
- * Returns `'unknown'` during SSR and before first observation.
- * `observe: 'once'` freezes at `'visible'` after first intersection and unobserves.
+ * Pass `onVisibilityChange` for zero-re-render mode (animation gating,
+ * many-element observation). Without it, `phase` and `phaseReason` update
+ * via state on every transition. `phaseRef`/`phaseReasonRef` are always current.
  *
  * @example
+ * // Reactive
  * const { ref, phase } = useSight();
- * if (phase === 'visible') startAnimation();
- * return <div ref={ref} />;
+ *
+ * // Transient (no re-renders)
+ * const { ref, phaseRef } = useSight({
+ *   onVisibilityChange: (phase) => { worker.postMessage({ visible: phase === 'visible' }); },
+ * });
  */
 export function useSight<T extends Element = HTMLDivElement>(
   options?: UseSightOptions<T>,
 ): UseSightResult<T> {
   const [state, setState] = useState<SightState>(INITIAL_STATE);
   const observe = options?.observe ?? 'continuous';
+  const phaseRef = useRef<SightPhase>('unknown');
+  const phaseReasonRef = useRef<SightReason>('initial');
+  const onVisibilityChangeRef = useSyncedRef(options?.onVisibilityChange);
 
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
@@ -66,7 +91,15 @@ export function useSight<T extends Element = HTMLDivElement>(
       },
       onPhaseChange: (phase, reason) => {
         if (frozen) return;
-        setState({ phase, phaseReason: reason });
+
+        phaseRef.current = phase;
+        phaseReasonRef.current = reason;
+
+        if (onVisibilityChangeRef.current) {
+          onVisibilityChangeRef.current(phase, reason);
+        } else {
+          setState({ phase, phaseReason: reason });
+        }
 
         if (observe === 'once' && phase === 'visible') {
           frozen = true;
@@ -79,5 +112,5 @@ export function useSight<T extends Element = HTMLDivElement>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [observe]);
 
-  return { ref, ...state };
+  return { ref, ...state, phaseRef, phaseReasonRef };
 }
