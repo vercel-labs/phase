@@ -4,32 +4,50 @@ Element visibility as a phase (`visible` / `hidden`). Wraps `createSight` with R
 
 ## Signature
 
+Two overloads. When `onVisibilityChange` is provided, `phase` and `phaseReason` are omitted from the return type (compile-time error to access them).
+
 ```ts
 import { useSight } from 'phase/react';
 
+// Reactive (re-renders on visibility transitions)
 const { ref, phase, phaseReason, phaseRef, phaseReasonRef } = useSight<T>(options?);
+
+// Transient (zero re-renders)
+const { ref, phaseRef, phaseReasonRef } = useSight<T>({
+  onVisibilityChange: (phase, reason) => { /* imperative work */ },
+});
 ```
 
 ### Options
 
-| Option               | Type                                               | Default        | Description                                                                              |
-| -------------------- | -------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------- |
-| `ref`                | `RefObject<T \| null>`                             | returned       | Bring your own ref                                                                       |
-| `observe`            | `'continuous' \| 'once'`                           | `'continuous'` | `'once'` freezes at `'visible'` after first intersection                                 |
-| `root`               | `Element \| null`                                  | —              | IO root element                                                                          |
-| `rootMargin`         | `string`                                           | —              | IO root margin                                                                           |
-| `threshold`          | `number \| number[]`                               | —              | IO threshold                                                                             |
-| `onVisibilityChange` | `(phase: SightPhase, reason: SightReason) => void` | —              | Called on every visibility transition. When provided, state stays initial, no re-renders |
+| Option               | Type                                               | Default        | Description                                                                                            |
+| -------------------- | -------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ |
+| `ref`                | `RefObject<T \| null>`                             | returned       | Bring your own ref                                                                                     |
+| `observe`            | `'continuous' \| 'once'`                           | `'continuous'` | `'once'` freezes at `'visible'` after first intersection                                               |
+| `root`               | `Element \| null`                                  | —              | IO root element                                                                                        |
+| `rootMargin`         | `string`                                           | —              | IO root margin                                                                                         |
+| `threshold`          | `number \| number[]`                               | —              | IO threshold                                                                                           |
+| `onVisibilityChange` | `(phase: SightPhase, reason: SightReason) => void` | —              | Called on every visibility transition. When provided, `phase`/`phaseReason` are omitted, no re-renders |
 
-### Return
+### Return (reactive, no `onVisibilityChange`)
 
-| Property         | Type                     | Description                                                                       |
-| ---------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| `ref`            | `RefObject<T \| null>`   | Attach to the observed element                                                    |
-| `phase`          | `SightPhase`             | `'unknown' \| 'visible' \| 'hidden'`. Stays `'unknown'` with `onVisibilityChange` |
-| `phaseReason`    | `SightReason`            | `'initial' \| 'viewport' \| 'document' \| 'bfcache' \| 'all-hidden'`              |
-| `phaseRef`       | `RefObject<SightPhase>`  | Visibility phase via ref. Always current regardless of mode                       |
-| `phaseReasonRef` | `RefObject<SightReason>` | Phase reason via ref. Always current regardless of mode                           |
+| Property         | Type                     | Description                                                          |
+| ---------------- | ------------------------ | -------------------------------------------------------------------- |
+| `ref`            | `RefObject<T \| null>`   | Attach to the observed element                                       |
+| `phase`          | `SightPhase`             | `'unknown' \| 'visible' \| 'hidden'`                                 |
+| `phaseReason`    | `SightReason`            | `'initial' \| 'viewport' \| 'document' \| 'bfcache' \| 'all-hidden'` |
+| `phaseRef`       | `RefObject<SightPhase>`  | Visibility phase via ref. Always current, never triggers re-render   |
+| `phaseReasonRef` | `RefObject<SightReason>` | Phase reason via ref. Always current, never triggers re-render       |
+
+### Return (transient, with `onVisibilityChange`)
+
+| Property         | Type                     | Description                                                        |
+| ---------------- | ------------------------ | ------------------------------------------------------------------ |
+| `ref`            | `RefObject<T \| null>`   | Attach to the observed element                                     |
+| `phaseRef`       | `RefObject<SightPhase>`  | Visibility phase via ref. Always current, never triggers re-render |
+| `phaseReasonRef` | `RefObject<SightReason>` | Phase reason via ref. Always current, never triggers re-render     |
+
+`phase` and `phaseReason` are not available in transient mode. Accessing them is a TypeScript error.
 
 ## When to use
 
@@ -64,7 +82,7 @@ const { ref, phase, phaseReason, phaseRef, phaseReasonRef } = useSight<T>(option
   });
   ```
 - Read `phaseRef.current` inside callbacks for the latest visibility without closure staleness.
-- Check `phaseReason` to distinguish viewport leave from tab switch.
+- Check `phaseReason` (or `phaseReasonRef`) to distinguish viewport leave from tab switch.
 
 ## Don't
 

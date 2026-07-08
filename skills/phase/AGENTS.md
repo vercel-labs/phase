@@ -47,20 +47,21 @@ Two idle hooks defer work off the critical path: `useIdle` gates rendering with 
 
 The ladder picks a _tier_; this table picks the _primitive_ once phase is the right tier.
 
-| Need                                                | Use                                                                     |
-| --------------------------------------------------- | ----------------------------------------------------------------------- |
-| Know if it's on screen?                             | `useSight`                                                              |
-| Want phase to run your frame loop?                  | `useLoop` (DOM) / `useCanvas` (canvas)                                  |
-| You own the loop (WebGL, three.js, Web Worker)?     | `useLifecycle` (active/paused signal)                                   |
-| Animating one value into render?                    | `useTween`                                                              |
-| Mount/unmount transitions?                          | `Presence` / `Swap` / `WhenVisible`                                     |
-| Skip painting off-screen content (keep in DOM)?     | `Defer`                                                                 |
-| Mount non-critical UI when idle?                    | `WhenIdle` / `useIdle`                                                  |
-| Run a side effect (prefetch, `import()`) when idle? | `useWhenIdle`                                                           |
-| Pause raw work inside a `Defer` subtree?            | `useRenderState`                                                        |
-| Reactive scroll/size/media values?                  | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery` |
-| Reactive reduced-motion check for non-phase code?   | `usePrefersReducedMotion`                                               |
-| Need reactive `devicePixelRatio` for buffer sizing? | `useDevicePixelRatio`                                                   |
+| Need                                                | Use                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Know if it's on screen?                             | `useSight`                                                                                  |
+| Want phase to run your frame loop?                  | `useLoop` (DOM) / `useCanvas` (canvas)                                                      |
+| You own the loop (WebGL, three.js, Web Worker)?     | `useLifecycle` (active/paused signal)                                                       |
+| Animating one value into render?                    | `useTween`                                                                                  |
+| Mount/unmount transitions?                          | `Presence` / `Swap` / `WhenVisible`                                                         |
+| Skip painting off-screen content (keep in DOM)?     | `Defer`                                                                                     |
+| Mount non-critical UI when idle?                    | `WhenIdle` / `useIdle`                                                                      |
+| Run a side effect (prefetch, `import()`) when idle? | `useWhenIdle`                                                                               |
+| Pause raw work inside a `Defer` subtree?            | `useRenderState`                                                                            |
+| Reactive scroll/size/media values?                  | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
+| Scroll/size/visibility without re-renders?          | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
+| Reactive reduced-motion check for non-phase code?   | `usePrefersReducedMotion`                                                                   |
+| Need reactive `devicePixelRatio` for buffer sizing? | `useDevicePixelRatio`                                                                       |
 
 ## Non-negotiable invariants
 
@@ -2930,29 +2931,46 @@ Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with Rea
 
 ## Signature
 
+Two overloads. When `onProgress` is provided, `progress` is omitted from the return type (compile-time error to access it).
+
 ```ts
 import { useScrollProgress } from 'phase/react';
 
+// Reactive (re-renders at threshold crossings)
 const { ref, progress, progressRef } = useScrollProgress<T>(options?);
+
+// Transient (zero re-renders)
+const { ref, progressRef } = useScrollProgress<T>({
+  onProgress: (p) => { el.style.opacity = String(p); },
+});
 ```
 
 ### Options
 
-| Option       | Type                         | Default  | Description                                                                            |
-| ------------ | ---------------------------- | -------- | -------------------------------------------------------------------------------------- |
-| `ref`        | `RefObject<T \| null>`       | returned | Bring your own ref                                                                     |
-| `steps`      | `number`                     | `20`     | Number of evenly-spaced thresholds                                                     |
-| `root`       | `Element \| null`            | —        | IO root element                                                                        |
-| `rootMargin` | `string`                     | —        | IO root margin                                                                         |
-| `onProgress` | `(progress: number) => void` | —        | Called on every threshold crossing. When provided, `progress` stays `0`, no re-renders |
+| Option       | Type                         | Default  | Description                                                                                                  |
+| ------------ | ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `ref`        | `RefObject<T \| null>`       | returned | Bring your own ref                                                                                           |
+| `steps`      | `number`                     | `20`     | Number of evenly-spaced thresholds                                                                           |
+| `root`       | `Element \| null`            | —        | IO root element                                                                                              |
+| `rootMargin` | `string`                     | —        | IO root margin                                                                                               |
+| `onProgress` | `(progress: number) => void` | —        | Called on every threshold crossing. When provided, `progress` is omitted from the return type, no re-renders |
 
-### Return
+### Return (reactive, no `onProgress`)
 
-| Property      | Type                   | Description                                                                           |
-| ------------- | ---------------------- | ------------------------------------------------------------------------------------- |
-| `ref`         | `RefObject<T \| null>` | Attach to the observed element                                                        |
-| `progress`    | `number`               | Fraction visible (0–1). `0` before first observation. Always `0` with `onProgress`    |
-| `progressRef` | `RefObject<number>`    | Fraction visible via ref. Always current regardless of mode, never triggers re-render |
+| Property      | Type                   | Description                                                        |
+| ------------- | ---------------------- | ------------------------------------------------------------------ |
+| `ref`         | `RefObject<T \| null>` | Attach to the observed element                                     |
+| `progress`    | `number`               | Fraction visible (0–1). `0` before first observation               |
+| `progressRef` | `RefObject<number>`    | Fraction visible via ref. Always current, never triggers re-render |
+
+### Return (transient, with `onProgress`)
+
+| Property      | Type                   | Description                                                        |
+| ------------- | ---------------------- | ------------------------------------------------------------------ |
+| `ref`         | `RefObject<T \| null>` | Attach to the observed element                                     |
+| `progressRef` | `RefObject<number>`    | Fraction visible via ref. Always current, never triggers re-render |
+
+`progress` is not available in transient mode. Accessing it is a TypeScript error.
 
 ## When to use
 
@@ -2990,7 +3008,7 @@ const { ref, progress, progressRef } = useScrollProgress<T>(options?);
   });
   ```
 - Read `progressRef.current` inside `onTick` callbacks for the latest ratio without closure staleness.
-- Adjust `steps` for smoother or coarser updates (higher = more re-renders).
+- Adjust `steps` for smoother or coarser updates (higher = more re-renders in reactive mode).
 
 ## Don't
 
@@ -3015,32 +3033,50 @@ Element visibility as a phase (`visible` / `hidden`). Wraps `createSight` with R
 
 ## Signature
 
+Two overloads. When `onVisibilityChange` is provided, `phase` and `phaseReason` are omitted from the return type (compile-time error to access them).
+
 ```ts
 import { useSight } from 'phase/react';
 
+// Reactive (re-renders on visibility transitions)
 const { ref, phase, phaseReason, phaseRef, phaseReasonRef } = useSight<T>(options?);
+
+// Transient (zero re-renders)
+const { ref, phaseRef, phaseReasonRef } = useSight<T>({
+  onVisibilityChange: (phase, reason) => { /* imperative work */ },
+});
 ```
 
 ### Options
 
-| Option               | Type                                               | Default        | Description                                                                              |
-| -------------------- | -------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------- |
-| `ref`                | `RefObject<T \| null>`                             | returned       | Bring your own ref                                                                       |
-| `observe`            | `'continuous' \| 'once'`                           | `'continuous'` | `'once'` freezes at `'visible'` after first intersection                                 |
-| `root`               | `Element \| null`                                  | —              | IO root element                                                                          |
-| `rootMargin`         | `string`                                           | —              | IO root margin                                                                           |
-| `threshold`          | `number \| number[]`                               | —              | IO threshold                                                                             |
-| `onVisibilityChange` | `(phase: SightPhase, reason: SightReason) => void` | —              | Called on every visibility transition. When provided, state stays initial, no re-renders |
+| Option               | Type                                               | Default        | Description                                                                                            |
+| -------------------- | -------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ |
+| `ref`                | `RefObject<T \| null>`                             | returned       | Bring your own ref                                                                                     |
+| `observe`            | `'continuous' \| 'once'`                           | `'continuous'` | `'once'` freezes at `'visible'` after first intersection                                               |
+| `root`               | `Element \| null`                                  | —              | IO root element                                                                                        |
+| `rootMargin`         | `string`                                           | —              | IO root margin                                                                                         |
+| `threshold`          | `number \| number[]`                               | —              | IO threshold                                                                                           |
+| `onVisibilityChange` | `(phase: SightPhase, reason: SightReason) => void` | —              | Called on every visibility transition. When provided, `phase`/`phaseReason` are omitted, no re-renders |
 
-### Return
+### Return (reactive, no `onVisibilityChange`)
 
-| Property         | Type                     | Description                                                                       |
-| ---------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| `ref`            | `RefObject<T \| null>`   | Attach to the observed element                                                    |
-| `phase`          | `SightPhase`             | `'unknown' \| 'visible' \| 'hidden'`. Stays `'unknown'` with `onVisibilityChange` |
-| `phaseReason`    | `SightReason`            | `'initial' \| 'viewport' \| 'document' \| 'bfcache' \| 'all-hidden'`              |
-| `phaseRef`       | `RefObject<SightPhase>`  | Visibility phase via ref. Always current regardless of mode                       |
-| `phaseReasonRef` | `RefObject<SightReason>` | Phase reason via ref. Always current regardless of mode                           |
+| Property         | Type                     | Description                                                          |
+| ---------------- | ------------------------ | -------------------------------------------------------------------- |
+| `ref`            | `RefObject<T \| null>`   | Attach to the observed element                                       |
+| `phase`          | `SightPhase`             | `'unknown' \| 'visible' \| 'hidden'`                                 |
+| `phaseReason`    | `SightReason`            | `'initial' \| 'viewport' \| 'document' \| 'bfcache' \| 'all-hidden'` |
+| `phaseRef`       | `RefObject<SightPhase>`  | Visibility phase via ref. Always current, never triggers re-render   |
+| `phaseReasonRef` | `RefObject<SightReason>` | Phase reason via ref. Always current, never triggers re-render       |
+
+### Return (transient, with `onVisibilityChange`)
+
+| Property         | Type                     | Description                                                        |
+| ---------------- | ------------------------ | ------------------------------------------------------------------ |
+| `ref`            | `RefObject<T \| null>`   | Attach to the observed element                                     |
+| `phaseRef`       | `RefObject<SightPhase>`  | Visibility phase via ref. Always current, never triggers re-render |
+| `phaseReasonRef` | `RefObject<SightReason>` | Phase reason via ref. Always current, never triggers re-render     |
+
+`phase` and `phaseReason` are not available in transient mode. Accessing them is a TypeScript error.
 
 ## When to use
 
@@ -3075,7 +3111,7 @@ const { ref, phase, phaseReason, phaseRef, phaseReasonRef } = useSight<T>(option
   });
   ```
 - Read `phaseRef.current` inside callbacks for the latest visibility without closure staleness.
-- Check `phaseReason` to distinguish viewport leave from tab switch.
+- Check `phaseReason` (or `phaseReasonRef`) to distinguish viewport leave from tab switch.
 
 ## Don't
 
@@ -3101,26 +3137,41 @@ Element dimensions via the shared ResizeObserver singleton. Never calls `getBoun
 
 ## Signature
 
+Two overloads. When `onResize` is provided, `size` is omitted from the return type (compile-time error to access it).
+
 ```ts
 import { useSize } from 'phase/react';
 
+// Reactive (re-renders on resize)
 const { ref, size, sizeRef } = useSize<T>(options?);
+
+// Transient (zero re-renders)
+const { ref, sizeRef } = useSize<T>({ onResize: (s) => applySize(s) });
 ```
 
 ### Options
 
-| Option     | Type                   | Default  | Description                                                                        |
-| ---------- | ---------------------- | -------- | ---------------------------------------------------------------------------------- |
-| `ref`      | `RefObject<T \| null>` | returned | Bring your own ref                                                                 |
-| `onResize` | `(size: Size) => void` | —        | Called on every resize. When provided, `size` stays `null` and no re-renders occur |
+| Option     | Type                   | Default  | Description                                                                                  |
+| ---------- | ---------------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `ref`      | `RefObject<T \| null>` | returned | Bring your own ref                                                                           |
+| `onResize` | `(size: Size) => void` | —        | Called on every resize. When provided, `size` is omitted from the return type, no re-renders |
 
-### Return
+### Return (reactive, no `onResize`)
 
-| Property  | Type                      | Description                                                                          |
-| --------- | ------------------------- | ------------------------------------------------------------------------------------ |
-| `ref`     | `RefObject<T \| null>`    | Attach to the measured element                                                       |
-| `size`    | `Size \| null`            | `{ width, height }` or `null` until first observation. Always `null` with `onResize` |
-| `sizeRef` | `RefObject<Size \| null>` | Always-current dimensions via ref. Updated in both modes, never triggers re-render   |
+| Property  | Type                      | Description                                                 |
+| --------- | ------------------------- | ----------------------------------------------------------- |
+| `ref`     | `RefObject<T \| null>`    | Attach to the measured element                              |
+| `size`    | `Size \| null`            | `{ width, height }` or `null` until first observation       |
+| `sizeRef` | `RefObject<Size \| null>` | Always-current dimensions via ref. Never triggers re-render |
+
+### Return (transient, with `onResize`)
+
+| Property  | Type                      | Description                                                 |
+| --------- | ------------------------- | ----------------------------------------------------------- |
+| `ref`     | `RefObject<T \| null>`    | Attach to the measured element                              |
+| `sizeRef` | `RefObject<Size \| null>` | Always-current dimensions via ref. Never triggers re-render |
+
+`size` is not available in transient mode. Accessing it is a TypeScript error.
 
 ## When to use
 
@@ -3164,6 +3215,7 @@ const { ref, size, sizeRef } = useSize<T>(options?);
 
 - **Don't use `getBoundingClientRect()` as a fallback.** It forces a synchronous reflow. Trust the async RO callback.
 - **Don't use when you only need a breakpoint boolean.** `useContainerQuery` re-renders less often.
+- **Don't read `size` when `onResize` is provided.** The type omits it to prevent this, but the intent: in transient mode, read from `sizeRef` or use the callback value.
 - **Don't expect updates inside a skipped `Defer` subtree.** Per the CSS Containment spec, `ResizeObserver` callbacks pause for elements inside `content-visibility: auto` subtrees that the browser has skipped. Size observations resume when the element scrolls back into view. This is spec behavior across all browsers, not a bug. If you need to detect the skip/unskip transition, use `useRenderState`.
 
 ## Reduced motion
