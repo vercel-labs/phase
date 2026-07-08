@@ -4,7 +4,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.2'
+  version: '0.0.3'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend CSS-only, minimal JS, phase, or an external library.'
 ---
 
