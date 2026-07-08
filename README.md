@@ -388,18 +388,19 @@ Easing, interpolation, and your value range are three separate concerns. `phase`
 
 ## Choosing a primitive
 
-| Need                                                     | Use                                                                     |
-| -------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Check on-screen visibility                               | `useSight` (visibility only)                                            |
-| Run a frame loop via `phase`                             | `useLoop` (DOM) / `useCanvas` (canvas)                                  |
-| Pause/resume your own loop (WebGL, three.js, Web Worker) | `useLifecycle` (active/paused signal)                                   |
-| Animate a single value in render output                  | `useTween`                                                              |
-| Animate mount/unmount transitions                        | `Presence` / `Swap` / `WhenVisible`                                     |
-| Skip painting off-screen content (keep in DOM)           | `Defer`                                                                 |
-| Defer non-critical UI until the browser is idle          | `WhenIdle` / `useIdle`                                                  |
-| Run a side effect or prefetch when idle                  | `useWhenIdle`                                                           |
-| Pause non-`phase` work inside a `Defer` subtree          | `useRenderState`                                                        |
-| Subscribe to scroll, size, or media values reactively    | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery` |
+| Need                                                     | Use                                                                                         |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Check on-screen visibility                               | `useSight` (visibility only)                                                                |
+| Run a frame loop via `phase`                             | `useLoop` (DOM) / `useCanvas` (canvas)                                                      |
+| Pause/resume your own loop (WebGL, three.js, Web Worker) | `useLifecycle` (active/paused signal)                                                       |
+| Animate a single value in render output                  | `useTween`                                                                                  |
+| Animate mount/unmount transitions                        | `Presence` / `Swap` / `WhenVisible`                                                         |
+| Skip painting off-screen content (keep in DOM)           | `Defer`                                                                                     |
+| Defer non-critical UI until the browser is idle          | `WhenIdle` / `useIdle`                                                                      |
+| Run a side effect or prefetch when idle                  | `useWhenIdle`                                                                               |
+| Pause non-`phase` work inside a `Defer` subtree          | `useRenderState`                                                                            |
+| Subscribe to scroll, size, or media values reactively    | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
+| Scroll/size/visibility without re-renders?               | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
 
 **`useSight` vs `useLifecycle`:** `useSight` reports pure visibility (for lazy-mounting, analytics, `WhenVisible`). `useLifecycle` folds in reduced motion and a manual pause, so you can't accidentally animate for users who asked not to. If you're gating an animation, use `useLifecycle`. If you're gating content, use `useSight`.
 
@@ -572,15 +573,17 @@ Re-renders only at threshold crossings (~20 per full viewport traversal at defau
 
 ### Utility hooks
 
-| Hook                | Purpose                                              |
-| ------------------- | ---------------------------------------------------- |
-| `useSight`          | Element visibility as a phase (`visible` / `hidden`) |
-| `useSize`           | Element dimensions via shared ResizeObserver         |
-| `useContainerQuery` | Breakpoint matching against element width            |
-| `useScrollProgress` | Element visibility ratio as a 0–1 value              |
-| `useMediaQuery`     | CSS media query subscription (shared MQL pool)       |
-| `useSyncedRef`      | Ref always in sync with latest value                 |
-| `useStableCallback` | Stable-identity function that calls latest closure   |
+| Hook                | Purpose                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| `useSight`          | Element visibility as a phase. Pass `onVisibilityChange` for zero-re-render mode      |
+| `useSize`           | Element dimensions via shared ResizeObserver. Pass `onResize` for zero-re-render mode |
+| `useContainerQuery` | Breakpoint matching against element width                                             |
+| `useScrollProgress` | Element visibility ratio (0–1). Pass `onProgress` for zero-re-render mode             |
+| `useMediaQuery`     | CSS media query subscription (shared MQL pool)                                        |
+| `useSyncedRef`      | Ref always in sync with latest value                                                  |
+| `useStableCallback` | Stable-identity function that calls latest closure                                    |
+
+`useSight`, `useSize`, and `useScrollProgress` each support a transient mode: pass a callback (`onVisibilityChange`, `onResize`, `onProgress`) and the hook delivers updates via callback with zero re-renders. The reactive state field is omitted from the return type so accessing it is a compile-time error. An always-current ref (`phaseRef`, `sizeRef`, `progressRef`) is available in both modes.
 
 ## React components
 
@@ -875,24 +878,24 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **React**                 |                   |
 | `useLoop`                 |           2.81 kB |
 | `useLifecycle`            |           1.68 kB |
-| `useSight`                |            1.1 kB |
+| `useSight`                |           1.19 kB |
 | `useCanvas`               |           3.43 kB |
-| `useTween`                |             612 B |
-| `usePresence`             |             591 B |
-| `useScrollProgress`       |             927 B |
-| `useSize`                 |             266 B |
-| `useContainerQuery`       |             339 B |
+| `useTween`                |             614 B |
+| `usePresence`             |             592 B |
+| `useScrollProgress`       |             996 B |
+| `useSize`                 |             337 B |
+| `useContainerQuery`       |             334 B |
 | `useMediaQuery`           |             245 B |
 | `usePrefersReducedMotion` |             272 B |
 | `useDevicePixelRatio`     |             231 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             746 B |
-| `WhenVisible`             |           1.34 kB |
-| `WhenIdle`                |             591 B |
-| `Defer`                   |             103 B |
+| `Presence`                |             745 B |
+| `WhenVisible`             |           1.44 kB |
+| `WhenIdle`                |             592 B |
+| `Defer`                   |             104 B |
 | `useIdle`                 |             435 B |
-| `useWhenIdle`             |             445 B |
+| `useWhenIdle`             |             448 B |
 | `useRenderState`          |             527 B |
 | `Swap`                    |           1.12 kB |
 

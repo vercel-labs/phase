@@ -34,16 +34,32 @@ export type {
   LifecycleReason,
   LifecycleReducedMotion,
 } from '../core/lifecycle';
-export type { UseSightOptions, UseSightResult } from './use-sight';
-export type { Size, UseSizeOptions, UseSizeResult } from './use-size';
+export type {
+  SightCallback,
+  UseSightOptions,
+  UseSightReactiveResult,
+  UseSightResult,
+  UseSightTransientResult,
+} from './use-sight';
+export type {
+  Size,
+  SizeCallback,
+  UseSizeOptions,
+  UseSizeReactiveResult,
+  UseSizeResult,
+  UseSizeTransientResult,
+} from './use-size';
 export type {
   ContainerBreakpoint,
   UseContainerQueryOptions,
   UseContainerQueryResult,
 } from './use-container-query';
 export type {
+  ScrollProgressCallback,
   UseScrollProgressOptions,
+  UseScrollProgressReactiveResult,
   UseScrollProgressResult,
+  UseScrollProgressTransientResult,
 } from './use-scroll-progress';
 export type { RenderPhase } from './use-render-state';
 export type { IdleOptions } from './use-idle';

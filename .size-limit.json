@@ -77,7 +77,7 @@
     "path": "src/react/index.ts",
     "import": "{ useSight }",
     "ignore": ["react"],
-    "limit": "1.2 kB"
+    "limit": "1.35 kB"
   },
   {
     "name": "useCanvas",
@@ -105,14 +105,14 @@
     "path": "src/react/index.ts",
     "import": "{ useScrollProgress }",
     "ignore": ["react"],
-    "limit": "1.02 kB"
+    "limit": "1.1 kB"
   },
   {
     "name": "useSize",
     "path": "src/react/index.ts",
     "import": "{ useSize }",
     "ignore": ["react"],
-    "limit": "300 B"
+    "limit": "410 B"
   },
   {
     "name": "useContainerQuery",

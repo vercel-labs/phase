@@ -4,30 +4,48 @@ Element dimensions via the shared ResizeObserver singleton. Never calls `getBoun
 
 ## Signature
 
+Two overloads. When `onResize` is provided, `size` is omitted from the return type (compile-time error to access it).
+
 ```ts
 import { useSize } from 'phase/react';
 
-const { ref, size } = useSize<T>(options?);
+// Reactive (re-renders on resize)
+const { ref, size, sizeRef } = useSize<T>(options?);
+
+// Transient (zero re-renders)
+const { ref, sizeRef } = useSize<T>({ onResize: (s) => applySize(s) });
 ```
 
 ### Options
 
-| Option | Type                   | Default  | Description        |
-| ------ | ---------------------- | -------- | ------------------ |
-| `ref`  | `RefObject<T \| null>` | returned | Bring your own ref |
+| Option     | Type                   | Default  | Description                                                                                  |
+| ---------- | ---------------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `ref`      | `RefObject<T \| null>` | returned | Bring your own ref                                                                           |
+| `onResize` | `(size: Size) => void` | —        | Called on every resize. When provided, `size` is omitted from the return type, no re-renders |
 
-### Return
+### Return (reactive, no `onResize`)
 
-| Property | Type                   | Description                                           |
-| -------- | ---------------------- | ----------------------------------------------------- |
-| `ref`    | `RefObject<T \| null>` | Attach to the measured element                        |
-| `size`   | `Size \| null`         | `{ width, height }` or `null` until first observation |
+| Property  | Type                      | Description                                                 |
+| --------- | ------------------------- | ----------------------------------------------------------- |
+| `ref`     | `RefObject<T \| null>`    | Attach to the measured element                              |
+| `size`    | `Size \| null`            | `{ width, height }` or `null` until first observation       |
+| `sizeRef` | `RefObject<Size \| null>` | Always-current dimensions via ref. Never triggers re-render |
+
+### Return (transient, with `onResize`)
+
+| Property  | Type                      | Description                                                 |
+| --------- | ------------------------- | ----------------------------------------------------------- |
+| `ref`     | `RefObject<T \| null>`    | Attach to the measured element                              |
+| `sizeRef` | `RefObject<Size \| null>` | Always-current dimensions via ref. Never triggers re-render |
+
+`size` is not available in transient mode. Accessing it is a TypeScript error.
 
 ## When to use
 
 - Reading element dimensions without forced reflows.
 - Responsive logic based on actual element size (not viewport).
 - Feeding dimensions to canvas sizing, layout calculations, or animations.
+- **With `onResize`**: imperative consumers (canvas, WebGL, animation loops) that need size without re-renders.
 
 ## When not to use
 
@@ -48,12 +66,23 @@ const { ref, size } = useSize<T>(options?);
     </div>
   );
   ```
+- Use `onResize` for zero-re-render canvas/animation sizing:
+  ```tsx
+  const { ref, sizeRef } = useSize({
+    onResize: (size) => {
+      canvas.width = size.width * dpr;
+      canvas.height = size.height * dpr;
+    },
+  });
+  ```
+- Read `sizeRef.current` inside `onTick`/`draw` callbacks for the latest dimensions without closure staleness.
 - Re-renders only when dimensions actually change (deduped internally).
 
 ## Don't
 
 - **Don't use `getBoundingClientRect()` as a fallback.** It forces a synchronous reflow. Trust the async RO callback.
 - **Don't use when you only need a breakpoint boolean.** `useContainerQuery` re-renders less often.
+- **Don't read `size` when `onResize` is provided.** The type omits it to prevent this, but the intent: in transient mode, read from `sizeRef` or use the callback value.
 - **Don't expect updates inside a skipped `Defer` subtree.** Per the CSS Containment spec, `ResizeObserver` callbacks pause for elements inside `content-visibility: auto` subtrees that the browser has skipped. Size observations resume when the element scrolls back into view. This is spec behavior across all browsers, not a bug. If you need to detect the skip/unskip transition, use `useRenderState`.
 
 ## Reduced motion

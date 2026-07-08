@@ -4,7 +4,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.2'
+  version: '0.0.3'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend CSS-only, minimal JS, phase, or an external library.'
 ---
 
@@ -43,20 +43,21 @@ Two idle hooks defer work off the critical path: `useIdle` gates rendering with 
 
 The ladder picks a _tier_; this table picks the _primitive_ once phase is the right tier.
 
-| Need                                                | Use                                                                     |
-| --------------------------------------------------- | ----------------------------------------------------------------------- |
-| Know if it's on screen?                             | `useSight`                                                              |
-| Want phase to run your frame loop?                  | `useLoop` (DOM) / `useCanvas` (canvas)                                  |
-| You own the loop (WebGL, three.js, Web Worker)?     | `useLifecycle` (active/paused signal)                                   |
-| Animating one value into render?                    | `useTween`                                                              |
-| Mount/unmount transitions?                          | `Presence` / `Swap` / `WhenVisible`                                     |
-| Skip painting off-screen content (keep in DOM)?     | `Defer`                                                                 |
-| Mount non-critical UI when idle?                    | `WhenIdle` / `useIdle`                                                  |
-| Run a side effect (prefetch, `import()`) when idle? | `useWhenIdle`                                                           |
-| Pause raw work inside a `Defer` subtree?            | `useRenderState`                                                        |
-| Reactive scroll/size/media values?                  | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery` |
-| Reactive reduced-motion check for non-phase code?   | `usePrefersReducedMotion`                                               |
-| Need reactive `devicePixelRatio` for buffer sizing? | `useDevicePixelRatio`                                                   |
+| Need                                                | Use                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Know if it's on screen?                             | `useSight`                                                                                  |
+| Want phase to run your frame loop?                  | `useLoop` (DOM) / `useCanvas` (canvas)                                                      |
+| You own the loop (WebGL, three.js, Web Worker)?     | `useLifecycle` (active/paused signal)                                                       |
+| Animating one value into render?                    | `useTween`                                                                                  |
+| Mount/unmount transitions?                          | `Presence` / `Swap` / `WhenVisible`                                                         |
+| Skip painting off-screen content (keep in DOM)?     | `Defer`                                                                                     |
+| Mount non-critical UI when idle?                    | `WhenIdle` / `useIdle`                                                                      |
+| Run a side effect (prefetch, `import()`) when idle? | `useWhenIdle`                                                                               |
+| Pause raw work inside a `Defer` subtree?            | `useRenderState`                                                                            |
+| Reactive scroll/size/media values?                  | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
+| Scroll/size/visibility without re-renders?          | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
+| Reactive reduced-motion check for non-phase code?   | `usePrefersReducedMotion`                                                                   |
+| Need reactive `devicePixelRatio` for buffer sizing? | `useDevicePixelRatio`                                                                       |
 
 ## Non-negotiable invariants
 

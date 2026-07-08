@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef, type RefObject } from 'react';
 
 import { createScrollProgress } from '../../core/scroll-progress';
+import { useSyncedRef } from '../use-synced-ref';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+export type ScrollProgressCallback = (progress: number) => void;
 
 export interface UseScrollProgressOptions<T extends Element = HTMLDivElement> {
   /**
@@ -15,14 +18,35 @@ export interface UseScrollProgressOptions<T extends Element = HTMLDivElement> {
   steps?: number;
   root?: Element | null;
   rootMargin?: string;
+  /**
+   * Called on every threshold crossing. When provided, `progress` stays `0`
+   * and no re-renders occur, the right path for scroll-driven animation
+   * consumers that read progress imperatively.
+   */
+  onProgress?: ScrollProgressCallback;
 }
 
-export interface UseScrollProgressResult<T extends Element = HTMLDivElement> {
-  /** Attach to the element whose visibility ratio you want to track. */
+export interface UseScrollProgressReactiveResult<
+  T extends Element = HTMLDivElement,
+> {
   ref: RefObject<T | null>;
-  /** Fraction of the element currently visible (0–1). See `createScrollProgress` for semantics. */
+  /** Fraction of the element currently visible (0–1). */
   progress: number;
+  /** Fraction visible via ref. Always current, never triggers re-render. */
+  progressRef: RefObject<number>;
 }
+
+export interface UseScrollProgressTransientResult<
+  T extends Element = HTMLDivElement,
+> {
+  ref: RefObject<T | null>;
+  /** Fraction visible via ref. Always current, never triggers re-render. */
+  progressRef: RefObject<number>;
+}
+
+/** @deprecated Use `UseScrollProgressReactiveResult` or `UseScrollProgressTransientResult`. */
+export type UseScrollProgressResult<T extends Element = HTMLDivElement> =
+  UseScrollProgressReactiveResult<T>;
 
 // ---------------------------------------------------------------------------
 // useScrollProgress
@@ -31,22 +55,35 @@ export interface UseScrollProgressResult<T extends Element = HTMLDivElement> {
 /**
  * Element visibility ratio (0–1) via the shared IntersectionObserver pool.
  *
- * Reports the fraction of the element currently visible. Ideal for reveal/opacity
- * effects. Not a scroll-scrubbing engine: event-driven and quantized to `steps`.
- *
- * Re-renders only at threshold crossings (~20 per full viewport traversal).
- * `progress` is `0` before first observation and during SSR.
+ * Pass `onProgress` for zero-re-render mode (scroll-driven animation).
+ * Without it, `progress` updates via state at each threshold crossing.
+ * `progressRef` is always current in both modes.
  *
  * @example
+ * // Reactive (re-renders at threshold crossings)
  * const { ref, progress } = useScrollProgress();
- * return <div ref={ref} style={{ opacity: progress }} />;
+ *
+ * // Transient (no re-renders — read progressRef in onTick)
+ * const { ref, progressRef } = useScrollProgress({
+ *   onProgress: (p) => { el.style.opacity = String(p); },
+ * });
  */
 export function useScrollProgress<T extends Element = HTMLDivElement>(
+  options: UseScrollProgressOptions<T> & {
+    onProgress: ScrollProgressCallback;
+  },
+): UseScrollProgressTransientResult<T>;
+export function useScrollProgress<T extends Element = HTMLDivElement>(
   options?: UseScrollProgressOptions<T>,
-): UseScrollProgressResult<T> {
+): UseScrollProgressReactiveResult<T>;
+export function useScrollProgress<T extends Element = HTMLDivElement>(
+  options?: UseScrollProgressOptions<T>,
+): UseScrollProgressReactiveResult<T> | UseScrollProgressTransientResult<T> {
   const [progress, setProgress] = useState(0);
+  const progressRef = useRef(0);
   const steps: number | undefined = options?.steps;
   const rootMargin: string | undefined = options?.rootMargin;
+  const onProgressRef = useSyncedRef(options?.onProgress);
 
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
@@ -57,7 +94,15 @@ export function useScrollProgress<T extends Element = HTMLDivElement>(
 
     const scrollProgress = createScrollProgress({
       element,
-      onProgress: setProgress,
+      onProgress: (ratio: number) => {
+        progressRef.current = ratio;
+
+        if (onProgressRef.current) {
+          onProgressRef.current(ratio);
+        } else {
+          setProgress(ratio);
+        }
+      },
       steps,
       root: options?.root,
       rootMargin,
@@ -67,5 +112,5 @@ export function useScrollProgress<T extends Element = HTMLDivElement>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [steps, rootMargin]);
 
-  return { ref, progress };
+  return { ref, progress, progressRef };
 }
