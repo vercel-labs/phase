@@ -880,24 +880,24 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useLifecycle`            |           1.68 kB |
 | `useSight`                |           1.19 kB |
 | `useCanvas`               |           3.43 kB |
-| `useTween`                |             606 B |
-| `usePresence`             |             593 B |
+| `useTween`                |             614 B |
+| `usePresence`             |             592 B |
 | `useScrollProgress`       |             996 B |
 | `useSize`                 |             337 B |
-| `useContainerQuery`       |             339 B |
-| `useMediaQuery`           |             244 B |
+| `useContainerQuery`       |             334 B |
+| `useMediaQuery`           |             245 B |
 | `usePrefersReducedMotion` |             272 B |
 | `useDevicePixelRatio`     |             231 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             746 B |
-| `WhenVisible`             |           1.43 kB |
+| `Presence`                |             745 B |
+| `WhenVisible`             |           1.44 kB |
 | `WhenIdle`                |             592 B |
-| `Defer`                   |             103 B |
+| `Defer`                   |             104 B |
 | `useIdle`                 |             435 B |
-| `useWhenIdle`             |             449 B |
+| `useWhenIdle`             |             448 B |
 | `useRenderState`          |             527 B |
-| `Swap`                    |           1.13 kB |
+| `Swap`                    |           1.12 kB |
 
 <!-- SIZE-TABLE:END -->
 
