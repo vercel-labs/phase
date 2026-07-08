@@ -35,7 +35,12 @@ export type {
   LifecycleReducedMotion,
 } from '../core/lifecycle';
 export type { UseSightOptions, UseSightResult } from './use-sight';
-export type { Size, UseSizeOptions, UseSizeResult } from './use-size';
+export type {
+  Size,
+  SizeCallback,
+  UseSizeOptions,
+  UseSizeResult,
+} from './use-size';
 export type {
   ContainerBreakpoint,
   UseContainerQueryOptions,

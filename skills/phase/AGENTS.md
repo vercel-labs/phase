@@ -3079,27 +3079,30 @@ Element dimensions via the shared ResizeObserver singleton. Never calls `getBoun
 ```ts
 import { useSize } from 'phase/react';
 
-const { ref, size } = useSize<T>(options?);
+const { ref, size, sizeRef } = useSize<T>(options?);
 ```
 
 ### Options
 
-| Option | Type                   | Default  | Description        |
-| ------ | ---------------------- | -------- | ------------------ |
-| `ref`  | `RefObject<T \| null>` | returned | Bring your own ref |
+| Option     | Type                   | Default  | Description                                                                        |
+| ---------- | ---------------------- | -------- | ---------------------------------------------------------------------------------- |
+| `ref`      | `RefObject<T \| null>` | returned | Bring your own ref                                                                 |
+| `onResize` | `(size: Size) => void` | —        | Called on every resize. When provided, `size` stays `null` and no re-renders occur |
 
 ### Return
 
-| Property | Type                   | Description                                           |
-| -------- | ---------------------- | ----------------------------------------------------- |
-| `ref`    | `RefObject<T \| null>` | Attach to the measured element                        |
-| `size`   | `Size \| null`         | `{ width, height }` or `null` until first observation |
+| Property  | Type                      | Description                                                                          |
+| --------- | ------------------------- | ------------------------------------------------------------------------------------ |
+| `ref`     | `RefObject<T \| null>`    | Attach to the measured element                                                       |
+| `size`    | `Size \| null`            | `{ width, height }` or `null` until first observation. Always `null` with `onResize` |
+| `sizeRef` | `RefObject<Size \| null>` | Always-current dimensions via ref. Updated in both modes, never triggers re-render   |
 
 ## When to use
 
 - Reading element dimensions without forced reflows.
 - Responsive logic based on actual element size (not viewport).
 - Feeding dimensions to canvas sizing, layout calculations, or animations.
+- **With `onResize`**: imperative consumers (canvas, WebGL, animation loops) that need size without re-renders.
 
 ## When not to use
 
@@ -3120,6 +3123,16 @@ const { ref, size } = useSize<T>(options?);
     </div>
   );
   ```
+- Use `onResize` for zero-re-render canvas/animation sizing:
+  ```tsx
+  const { ref, sizeRef } = useSize({
+    onResize: (size) => {
+      canvas.width = size.width * dpr;
+      canvas.height = size.height * dpr;
+    },
+  });
+  ```
+- Read `sizeRef.current` inside `onTick`/`draw` callbacks for the latest dimensions without closure staleness.
 - Re-renders only when dimensions actually change (deduped internally).
 
 ## Don't

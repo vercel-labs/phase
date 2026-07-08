@@ -105,4 +105,114 @@ describe('useSize', () => {
 
     expect(result.current.size).toEqual({ width: 300, height: 150 });
   });
+
+  it('always returns sizeRef', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useSize({ ref }));
+
+    expect(result.current.sizeRef.current).toBeNull();
+
+    act(() => mockRO.trigger(el, 200, 100));
+    expect(result.current.sizeRef.current).toEqual({ width: 200, height: 100 });
+  });
+
+  it('sizeRef updates even without onResize', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useSize({ ref }));
+
+    act(() => mockRO.trigger(el, 400, 300));
+    expect(result.current.sizeRef.current).toEqual({ width: 400, height: 300 });
+    expect(result.current.size).toEqual({ width: 400, height: 300 });
+  });
+});
+
+const noop = vi.fn();
+
+describe('useSize with onResize (transient mode)', () => {
+  it('calls onResize instead of triggering re-render', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const onResize = vi.fn();
+
+    let renderCount = 0;
+    const { result } = renderHook(() => {
+      renderCount++;
+      return useSize({ ref, onResize });
+    });
+
+    const countAfterMount = renderCount;
+
+    act(() => mockRO.trigger(el, 200, 100));
+
+    expect(onResize).toHaveBeenCalledWith({ width: 200, height: 100 });
+    expect(renderCount).toBe(countAfterMount);
+    expect(result.current.size).toBeNull();
+  });
+
+  it('keeps size null in transient mode', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useSize({ ref, onResize: noop }));
+
+    act(() => mockRO.trigger(el, 200, 100));
+    expect(result.current.size).toBeNull();
+  });
+
+  it('updates sizeRef in transient mode', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useSize({ ref, onResize: noop }));
+
+    act(() => mockRO.trigger(el, 200, 100));
+    expect(result.current.sizeRef.current).toEqual({ width: 200, height: 100 });
+  });
+
+  it('dedupes unchanged dimensions in transient mode', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const onResize = vi.fn();
+    renderHook(() => useSize({ ref, onResize }));
+
+    act(() => mockRO.trigger(el, 200, 100));
+    act(() => mockRO.trigger(el, 200, 100));
+
+    expect(onResize).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls the latest onResize when callback changes', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const first = vi.fn();
+    const second = vi.fn();
+
+    const { rerender } = renderHook(
+      ({ cb }) => useSize({ ref, onResize: cb }),
+      { initialProps: { cb: first } },
+    );
+
+    rerender({ cb: second });
+
+    act(() => mockRO.trigger(el, 300, 150));
+
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith({ width: 300, height: 150 });
+  });
+
+  it('rapid resize in transient mode calls onResize for each change', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const onResize = vi.fn();
+    renderHook(() => useSize({ ref, onResize }));
+
+    act(() => {
+      mockRO.trigger(el, 100, 50);
+      mockRO.trigger(el, 200, 100);
+      mockRO.trigger(el, 300, 150);
+    });
+
+    expect(onResize).toHaveBeenCalledTimes(3);
+    expect(onResize).toHaveBeenLastCalledWith({ width: 300, height: 150 });
+  });
 });
