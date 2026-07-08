@@ -6,7 +6,7 @@ Impact-ranked do's and don'ts for writing performant animation code with phase. 
 
 - **Critical.** Zero per-frame allocations | Never setState in onTick | No forced reflows
 - **High.** Strong pause | Reduced motion by default | Stable function references
-- **Medium.** Frame-locked shared clock | Delta clamping | Observer pooling | will-change lifecycle | No getBoundingClientRect for visibility
+- **Medium.** Frame-locked shared clock | Delta clamping | Observer pooling | Never drive layout from a MutationObserver | will-change lifecycle | No getBoundingClientRect for visibility
 - **Low.** Don't store FrameState refs | No try/catch in onTick | No debug logging in hot path
 
 ## Critical (per-frame violations cause visible jank)
@@ -182,6 +182,34 @@ io.observe(element);
 ```
 
 **Do:** Use `createSight`, `createScrollProgress`, `useSize`, `useMediaQuery` — all use the shared pools automatically. 20 elements with the same IO options share one observer instance.
+
+### Never drive layout from a `MutationObserver`
+
+A `MutationObserver` callback fires after the DOM has mutated but before the browser has laid it out again. Reading any layout property inside it forces a synchronous reflow to resolve the dirty layout, and it repeats on every callback:
+
+- `getBoundingClientRect()`
+- `offsetWidth`, `offsetHeight`
+- `scrollWidth`, `scrollHeight`, `scrollTop`, `scrollLeft`
+- `clientWidth`, `clientHeight`
+- `getComputedStyle()`
+
+Observing `attributes` (especially `attributeFilter: ['style']`) with `subtree: true` to react to size or position is the worst offender. JS-driven animation libraries (motion, react-spring) rewrite inline styles every frame, so the observer runs — and reflows — once per mutation per frame across the whole subtree.
+
+**Don't:**
+
+```ts
+const mo = new MutationObserver(() => {
+  const { scrollHeight, clientHeight } = el; // forced reflow, on every style mutation
+  thumb.style.height = `${(clientHeight / scrollHeight) * trackH}px`;
+});
+mo.observe(el, { subtree: true, attributes: true, attributeFilter: ['style'] });
+```
+
+**Do:** React to size with `ResizeObserver` (`useSize`) and to visibility with `IntersectionObserver` (`useSight`) — both are async, compositor-aligned, and never force reflow. Reach for `MutationObserver` only for genuinely structural changes (`childList`). If you must read layout in response, coalesce callbacks into one `requestAnimationFrame` and separate all reads from all writes.
+
+```ts
+const { ref, size } = useSize(); // async, compositor-aligned, no layout read
+```
 
 ### `will-change` only while animating
 

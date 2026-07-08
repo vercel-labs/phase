@@ -92,6 +92,17 @@ const SIGNALS = [
     exclude: /node_modules|phase|\.spec\.|\.test\./,
   },
   {
+    id: 'mutationobserver-layout',
+    label:
+      'MutationObserver driving layout (reflow / style+subtree observation)',
+    pattern: /new\s+MutationObserver/,
+    // Only flag when the observer watches attributes/style or reads layout
+    // nearby. Structural (childList) observation is legitimate and skipped.
+    contextPattern:
+      /attributeFilter|attributes\s*:\s*true|getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight|getComputedStyle/,
+    exclude: /node_modules|phase|\.spec\.|\.test\./,
+  },
+  {
     id: 'js-opacity-transform',
     label: 'JS-driven opacity/transform (may be CSS-only candidate)',
     pattern: /\.style\.(opacity|transform)\s*=/,
