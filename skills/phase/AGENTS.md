@@ -7,7 +7,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
 author: vercel
-version: '0.0.1'
+version: '0.0.2'
 abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend CSS-only, minimal JS, phase, or an external library.'
 
 ---
@@ -247,6 +247,7 @@ The scanner greps for these anti-pattern signals:
 | Forced reflow               | `getBoundingClientRect`, `offsetWidth`, `offsetHeight`, `getComputedStyle`, `scrollWidth`, `clientWidth` in `.ts`/`.tsx` | Synchronous layout thrashing                       |
 | Raw IntersectionObserver    | `new IntersectionObserver`                                                                                               | Missing pooling, manual cleanup                    |
 | Raw ResizeObserver          | `new ResizeObserver`                                                                                                     | Missing pooling, manual cleanup                    |
+| MutationObserver → layout   | `new MutationObserver` observing `attributes`/`style` or reading layout in its callback                                  | Forces synchronous reflow on every mutation        |
 | JS-driven opacity/transform | `style.opacity =` or `style.transform =` with no visibility gating                                                       | Could be CSS, or needs phase for lifecycle         |
 | Missing reduced motion      | Animation code without `prefers-reduced-motion` or phase primitives                                                      | Accessibility gap                                  |
 | Background animation        | `setInterval`/`setTimeout` for animation without visibility check                                                        | Wastes CPU off-screen                              |
@@ -324,25 +325,26 @@ After:
 
 ## Common replacements
 
-| Current pattern                                                      | Replace with                                                        |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Manual `requestAnimationFrame` loop + `cancelAnimationFrame` cleanup | `useLoop` (if DOM) or `useCanvas` (if canvas)                       |
-| `requestAnimationFrame` without `cancelAnimationFrame`               | Same, plus the cleanup is now automatic                             |
-| `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                        |
-| `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                                 |
-| `new ResizeObserver` for dimensions                                  | `useSize`                                                           |
-| `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)         |
-| `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                          |
-| `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                     |
-| `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                        |
-| `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                       |
-| Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                         |
-| CSS-only animation that's working fine                               | No change. Don't add JS where it's not needed.                      |
-| Hand-wired IO + visibilitychange + reduced motion → boolean          | `useLifecycle` (single hook, same signals, pooled IO)               |
-| `getBoundingClientRect()` for initial in-view check                  | Trust IO (one-frame delay is invisible) or `rootMargin`             |
-| Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops        |
-| `setInterval` rotation with visibility gating                        | CSS `@keyframes` + `useLifecycle` toggling `animation-play-state`   |
-| `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose) |
+| Current pattern                                                      | Replace with                                                             |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Manual `requestAnimationFrame` loop + `cancelAnimationFrame` cleanup | `useLoop` (if DOM) or `useCanvas` (if canvas)                            |
+| `requestAnimationFrame` without `cancelAnimationFrame`               | Same, plus the cleanup is now automatic                                  |
+| `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                             |
+| `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                                      |
+| `new ResizeObserver` for dimensions                                  | `useSize`                                                                |
+| `MutationObserver` on `style`/`attributes` to track size or position | `useSize` (ResizeObserver) / `useSight` (IO); reserve MO for `childList` |
+| `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)              |
+| `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                               |
+| `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                          |
+| `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                             |
+| `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                            |
+| Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                              |
+| CSS-only animation that's working fine                               | No change. Don't add JS where it's not needed.                           |
+| Hand-wired IO + visibilitychange + reduced motion → boolean          | `useLifecycle` (single hook, same signals, pooled IO)                    |
+| `getBoundingClientRect()` for initial in-view check                  | Trust IO (one-frame delay is invisible) or `rootMargin`                  |
+| Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops             |
+| `setInterval` rotation with visibility gating                        | CSS `@keyframes` + `useLifecycle` toggling `animation-play-state`        |
+| `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)      |
 
 ## Output format
 
@@ -1422,7 +1424,7 @@ Impact-ranked do's and don'ts for writing performant animation code with phase. 
 
 - **Critical.** Zero per-frame allocations | Never setState in onTick | No forced reflows
 - **High.** Strong pause | Reduced motion by default | Stable function references
-- **Medium.** Frame-locked shared clock | Delta clamping | Observer pooling | will-change lifecycle | No getBoundingClientRect for visibility
+- **Medium.** Frame-locked shared clock | Delta clamping | Observer pooling | Never drive layout from a MutationObserver | will-change lifecycle | No getBoundingClientRect for visibility
 - **Low.** Don't store FrameState refs | No try/catch in onTick | No debug logging in hot path
 
 ## Critical (per-frame violations cause visible jank)
@@ -1598,6 +1600,34 @@ io.observe(element);
 ```
 
 **Do:** Use `createSight`, `createScrollProgress`, `useSize`, `useMediaQuery` — all use the shared pools automatically. 20 elements with the same IO options share one observer instance.
+
+### Never drive layout from a `MutationObserver`
+
+Never read layout inside a `MutationObserver` callback. The callback fires after the DOM has mutated but before the browser lays it out again, so any layout read forces a synchronous reflow to resolve the dirty layout, and it repeats on every callback:
+
+- `getBoundingClientRect()`
+- `offsetWidth`, `offsetHeight`
+- `scrollWidth`, `scrollHeight`, `scrollTop`, `scrollLeft`
+- `clientWidth`, `clientHeight`
+- `getComputedStyle()`
+
+Observing `attributes` (especially `attributeFilter: ['style']`) with `subtree: true` to react to size or position is the most expensive case. JS-driven animation libraries (motion, react-spring) rewrite inline styles every frame, so the observer reflows once per mutation per frame across the whole subtree.
+
+**Don't:**
+
+```ts
+const mo = new MutationObserver(() => {
+  const { scrollHeight, clientHeight } = el; // forced reflow, on every style mutation
+  thumb.style.height = `${(clientHeight / scrollHeight) * trackH}px`;
+});
+mo.observe(el, { subtree: true, attributes: true, attributeFilter: ['style'] });
+```
+
+**Do:** React to size with `ResizeObserver` (`useSize`) and to visibility with `IntersectionObserver` (`useSight`). Both are async, compositor-aligned, and never force reflow. Reach for `MutationObserver` only for structural changes (`childList`). If you must read layout in response, coalesce callbacks into one `requestAnimationFrame` and separate all reads from all writes.
+
+```ts
+const { ref, size } = useSize(); // async, compositor-aligned, no layout read
+```
 
 ### `will-change` only while animating
 
