@@ -137,7 +137,7 @@ describe('useSize with onResize (transient mode)', () => {
     const onResize = vi.fn();
 
     let renderCount = 0;
-    const { result } = renderHook(() => {
+    renderHook(() => {
       renderCount++;
       return useSize({ ref, onResize });
     });
@@ -148,16 +148,6 @@ describe('useSize with onResize (transient mode)', () => {
 
     expect(onResize).toHaveBeenCalledWith({ width: 200, height: 100 });
     expect(renderCount).toBe(countAfterMount);
-    expect(result.current.size).toBeNull();
-  });
-
-  it('keeps size null in transient mode', async () => {
-    const useSize = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() => useSize({ ref, onResize: noop }));
-
-    act(() => mockRO.trigger(el, 200, 100));
-    expect(result.current.size).toBeNull();
   });
 
   it('updates sizeRef in transient mode', async () => {
@@ -198,6 +188,18 @@ describe('useSize with onResize (transient mode)', () => {
 
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledWith({ width: 300, height: 150 });
+  });
+
+  it('omits size from return type when onResize is provided', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const result = renderHook(() => useSize({ ref, onResize: vi.fn() })).result;
+
+    act(() => mockRO.trigger(el, 200, 100));
+
+    expect(result.current.sizeRef.current).toEqual({ width: 200, height: 100 });
+    // @ts-expect-error — size is not in the transient return type
+    expect(result.current.size).toBeNull();
   });
 
   it('rapid resize in transient mode calls onResize for each change', async () => {

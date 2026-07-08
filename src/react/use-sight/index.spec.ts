@@ -135,7 +135,7 @@ describe('useSight with onVisibilityChange (transient mode)', () => {
     const onVisibilityChange = vi.fn();
 
     let renderCount = 0;
-    const { result } = renderHook(() => {
+    renderHook(() => {
       renderCount++;
       return useSight({ ref, onVisibilityChange });
     });
@@ -146,19 +146,6 @@ describe('useSight with onVisibilityChange (transient mode)', () => {
 
     expect(onVisibilityChange).toHaveBeenCalledWith('visible', 'viewport');
     expect(renderCount).toBe(countAfterMount);
-    expect(result.current.phase).toBe('unknown');
-  });
-
-  it('keeps phase at unknown in transient mode', async () => {
-    const useSight = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() =>
-      useSight({ ref, onVisibilityChange: vi.fn() }),
-    );
-
-    act(() => mockIO.trigger(el, true));
-    expect(result.current.phase).toBe('unknown');
-    expect(result.current.phaseReason).toBe('initial');
   });
 
   it('updates phaseRef and phaseReasonRef in transient mode', async () => {
@@ -171,6 +158,22 @@ describe('useSight with onVisibilityChange (transient mode)', () => {
     act(() => mockIO.trigger(el, true));
     expect(result.current.phaseRef.current).toBe('visible');
     expect(result.current.phaseReasonRef.current).toBe('viewport');
+  });
+
+  it('omits phase/phaseReason from return type when onVisibilityChange is provided', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+    const result = renderHook(() =>
+      useSight({ ref, onVisibilityChange: vi.fn() }),
+    ).result;
+
+    act(() => mockIO.trigger(el, true));
+
+    expect(result.current.phaseRef.current).toBe('visible');
+    // @ts-expect-error — phase is not in the transient return type
+    expect(result.current.phase).toBe('unknown');
+    // @ts-expect-error — phaseReason is not in the transient return type
+    expect(result.current.phaseReason).toBe('initial');
   });
 
   it('calls the latest onVisibilityChange when callback changes', async () => {

@@ -28,18 +28,27 @@ export interface UseSightOptions<
   onVisibilityChange?: SightCallback;
 }
 
-export interface UseSightResult<T extends Element = HTMLDivElement> {
-  /** Attach to the element whose visibility you want to track. */
+export interface UseSightReactiveResult<T extends Element = HTMLDivElement> {
   ref: RefObject<T | null>;
-  /** Visibility phase. Stays `'unknown'` when `onVisibilityChange` is provided. */
   phase: SightPhase;
-  /** Reason for the current phase. Stays `'initial'` when `onVisibilityChange` is provided. */
   phaseReason: SightReason;
-  /** Visibility phase via ref. Always current regardless of mode. */
+  /** Visibility phase via ref. Always current, never triggers re-render. */
   phaseRef: RefObject<SightPhase>;
-  /** Phase reason via ref. Always current regardless of mode. */
+  /** Phase reason via ref. Always current, never triggers re-render. */
   phaseReasonRef: RefObject<SightReason>;
 }
+
+export interface UseSightTransientResult<T extends Element = HTMLDivElement> {
+  ref: RefObject<T | null>;
+  /** Visibility phase via ref. Always current, never triggers re-render. */
+  phaseRef: RefObject<SightPhase>;
+  /** Phase reason via ref. Always current, never triggers re-render. */
+  phaseReasonRef: RefObject<SightReason>;
+}
+
+/** @deprecated Use `UseSightReactiveResult` or `UseSightTransientResult`. */
+export type UseSightResult<T extends Element = HTMLDivElement> =
+  UseSightReactiveResult<T>;
 
 type SightState = { phase: SightPhase; phaseReason: SightReason };
 
@@ -65,8 +74,14 @@ const INITIAL_STATE: SightState = {
  * });
  */
 export function useSight<T extends Element = HTMLDivElement>(
+  options: UseSightOptions<T> & { onVisibilityChange: SightCallback },
+): UseSightTransientResult<T>;
+export function useSight<T extends Element = HTMLDivElement>(
   options?: UseSightOptions<T>,
-): UseSightResult<T> {
+): UseSightReactiveResult<T>;
+export function useSight<T extends Element = HTMLDivElement>(
+  options?: UseSightOptions<T>,
+): UseSightReactiveResult<T> | UseSightTransientResult<T> {
   const [state, setState] = useState<SightState>(INITIAL_STATE);
   const observe = options?.observe ?? 'continuous';
   const phaseRef = useRef<SightPhase>('unknown');

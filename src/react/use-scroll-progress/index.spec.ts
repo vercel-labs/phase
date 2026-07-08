@@ -125,7 +125,7 @@ describe('useScrollProgress with onProgress (transient mode)', () => {
     const onProgress = vi.fn();
 
     let renderCount = 0;
-    const { result } = renderHook(() => {
+    renderHook(() => {
       renderCount++;
       return useScrollProgress({ ref, onProgress });
     });
@@ -136,18 +136,6 @@ describe('useScrollProgress with onProgress (transient mode)', () => {
 
     expect(onProgress).toHaveBeenCalledWith(0.5);
     expect(renderCount).toBe(countAfterMount);
-    expect(result.current.progress).toBe(0);
-  });
-
-  it('keeps progress at 0 in transient mode', async () => {
-    const useScrollProgress = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() =>
-      useScrollProgress({ ref, onProgress: vi.fn() }),
-    );
-
-    act(() => mockIO.triggerWithRatio(el, 0.8));
-    expect(result.current.progress).toBe(0);
   });
 
   it('updates progressRef in transient mode', async () => {
@@ -159,6 +147,20 @@ describe('useScrollProgress with onProgress (transient mode)', () => {
 
     act(() => mockIO.triggerWithRatio(el, 0.75));
     expect(result.current.progressRef.current).toBe(0.75);
+  });
+
+  it('omits progress from return type when onProgress is provided', async () => {
+    const useScrollProgress = await getHook();
+    const { ref, el } = createRefWithElement();
+    const result = renderHook(() =>
+      useScrollProgress({ ref, onProgress: vi.fn() }),
+    ).result;
+
+    act(() => mockIO.triggerWithRatio(el, 0.5));
+
+    expect(result.current.progressRef.current).toBe(0.5);
+    // @ts-expect-error — progress is not in the transient return type
+    expect(result.current.progress).toBe(0);
   });
 
   it('calls the latest onProgress when callback changes', async () => {

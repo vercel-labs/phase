@@ -26,14 +26,27 @@ export interface UseScrollProgressOptions<T extends Element = HTMLDivElement> {
   onProgress?: ScrollProgressCallback;
 }
 
-export interface UseScrollProgressResult<T extends Element = HTMLDivElement> {
-  /** Attach to the element whose visibility ratio you want to track. */
+export interface UseScrollProgressReactiveResult<
+  T extends Element = HTMLDivElement,
+> {
   ref: RefObject<T | null>;
-  /** Fraction of the element currently visible (0–1). Always `0` when `onProgress` is provided. */
+  /** Fraction of the element currently visible (0–1). */
   progress: number;
-  /** Fraction visible via ref. Always current regardless of mode. */
+  /** Fraction visible via ref. Always current, never triggers re-render. */
   progressRef: RefObject<number>;
 }
+
+export interface UseScrollProgressTransientResult<
+  T extends Element = HTMLDivElement,
+> {
+  ref: RefObject<T | null>;
+  /** Fraction visible via ref. Always current, never triggers re-render. */
+  progressRef: RefObject<number>;
+}
+
+/** @deprecated Use `UseScrollProgressReactiveResult` or `UseScrollProgressTransientResult`. */
+export type UseScrollProgressResult<T extends Element = HTMLDivElement> =
+  UseScrollProgressReactiveResult<T>;
 
 // ---------------------------------------------------------------------------
 // useScrollProgress
@@ -56,8 +69,16 @@ export interface UseScrollProgressResult<T extends Element = HTMLDivElement> {
  * });
  */
 export function useScrollProgress<T extends Element = HTMLDivElement>(
+  options: UseScrollProgressOptions<T> & {
+    onProgress: ScrollProgressCallback;
+  },
+): UseScrollProgressTransientResult<T>;
+export function useScrollProgress<T extends Element = HTMLDivElement>(
   options?: UseScrollProgressOptions<T>,
-): UseScrollProgressResult<T> {
+): UseScrollProgressReactiveResult<T>;
+export function useScrollProgress<T extends Element = HTMLDivElement>(
+  options?: UseScrollProgressOptions<T>,
+): UseScrollProgressReactiveResult<T> | UseScrollProgressTransientResult<T> {
   const [progress, setProgress] = useState(0);
   const progressRef = useRef(0);
   const steps: number | undefined = options?.steps;

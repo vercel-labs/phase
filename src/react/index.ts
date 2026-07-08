@@ -37,13 +37,17 @@ export type {
 export type {
   SightCallback,
   UseSightOptions,
+  UseSightReactiveResult,
   UseSightResult,
+  UseSightTransientResult,
 } from './use-sight';
 export type {
   Size,
   SizeCallback,
   UseSizeOptions,
+  UseSizeReactiveResult,
   UseSizeResult,
+  UseSizeTransientResult,
 } from './use-size';
 export type {
   ContainerBreakpoint,
@@ -53,7 +57,9 @@ export type {
 export type {
   ScrollProgressCallback,
   UseScrollProgressOptions,
+  UseScrollProgressReactiveResult,
   UseScrollProgressResult,
+  UseScrollProgressTransientResult,
 } from './use-scroll-progress';
 export type { RenderPhase } from './use-render-state';
 export type { IdleOptions } from './use-idle';
