@@ -67,6 +67,15 @@ const { restart, phase, phaseReason, quality, qualityReason } =
 - Draw in CSS pixels. `ctx` is already scaled for `devicePixelRatio`. DPR changes (e.g. dragging between monitors) are tracked reactively, including chained switches (A -> B -> C).
 - Use `degraded: 'pause'` for heavy GPU work that can't gracefully degrade.
 - Read `quality` to adapt rendering (fewer particles, simpler shaders).
+- For 3D overlays on DOM elements, pair with `useSize({ box: 'border-box' })` for the target element's dimensions. Use a separate container for the canvas (the RO pool allows one observer per element, so sharing a ref between `useSize` and `useCanvas` would clobber one subscription). If you also need viewport-relative position (DOM-to-WebGL coordinate mapping), that requires `getBoundingClientRect()` on scroll/resize in a custom hook, since no async observer exists for element position:
+
+  ```tsx
+  const targetRef = useRef(null);
+  const canvasContainerRef = useRef(null);
+  const canvasRef = useRef(null);
+  const { size } = useSize({ ref: targetRef, box: 'border-box' });
+  useCanvas({ containerRef: canvasContainerRef, canvasRef, draw });
+  ```
 
 ## Don't
 

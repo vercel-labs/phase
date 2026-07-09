@@ -176,9 +176,30 @@ Minimal footprint is a core promise of phase. Every public export is individuall
 5. Update `skills/phase/references/ease.md` with the new function
 6. Run `pnpm format:fix && pnpm validate && pnpm skill:check`
 
-## Formatting
+## Before committing
 
-**Always run `pnpm format:fix` after making any changes**, especially to markdown files. The formatter (oxfmt) enforces consistent style across all files including `.md`. This is not optional; the pre-commit hook will reject unformatted files.
+Run this sequence before every commit. Lefthook covers some of it on pre-commit, but `--amend` and non-skill changes can skip hooks. Do it yourself every time.
+
+```bash
+pnpm lint:fix            # oxlint auto-fix
+pnpm format:fix          # oxfmt (including .md files)
+pnpm size:readme         # regenerate README bundle-size table
+pnpm skill:build         # regenerate AGENTS.md + metadata.json from SKILL.md
+pnpm skill:package       # regenerate phase-skill.zip
+```
+
+`size:readme` and `skill:build`/`skill:package` produce generated files that CI diffchecks. A stale artifact fails the build.
+
+Run `pnpm validate` before opening or updating a PR, not on every commit.
+
+## Versioning and changelog
+
+When asked to bump the version (patch, minor, or major):
+
+1. Bump `version` in `package.json`.
+2. Bump `version` in `skills/phase/SKILL.md` frontmatter (skill version is independent, but bump it alongside package changes that alter the public API or skill references).
+3. **Prepend** a new section to `CHANGELOG.md` under the new version number. Keep all previous entries intact (newest first, oldest last). Follow the existing format: `## X.Y.Z`, then `### Patch Changes` / `### Minor Changes` / `### Major Changes`, then bullet points.
+4. Never overwrite or truncate older changelog entries.
 
 ## Skill sync
 

@@ -106,6 +106,61 @@ describe('useSize', () => {
     expect(result.current.size).toEqual({ width: 300, height: 150 });
   });
 
+  it('returns border-box dimensions when box is "border-box"', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useSize({ ref, box: 'border-box' }));
+
+    act(() => mockRO.triggerWithBorderBox(el, 200, 100, 240, 120));
+    expect(result.current.size).toEqual({ width: 240, height: 120 });
+  });
+
+  it('returns content-box dimensions by default when border differs', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useSize({ ref }));
+
+    act(() => mockRO.triggerWithBorderBox(el, 200, 100, 240, 120));
+    expect(result.current.size).toEqual({ width: 200, height: 100 });
+  });
+
+  it('re-observes when box option changes at runtime', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result, rerender } = renderHook(
+      ({ box }: { box?: 'content-box' | 'border-box' }) =>
+        useSize({ ref, box }),
+      {
+        initialProps: {
+          box: undefined as 'content-box' | 'border-box' | undefined,
+        },
+      },
+    );
+
+    act(() => mockRO.triggerWithBorderBox(el, 200, 100, 240, 120));
+    expect(result.current.size).toEqual({ width: 200, height: 100 });
+
+    rerender({ box: 'border-box' });
+    act(() => mockRO.triggerWithBorderBox(el, 200, 100, 240, 120));
+    expect(result.current.size).toEqual({ width: 240, height: 120 });
+  });
+
+  it('deduplicates border-box renders on unchanged dimensions', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+    let renderCount = 0;
+    renderHook(() => {
+      renderCount++;
+      return useSize({ ref, box: 'border-box' });
+    });
+
+    act(() => mockRO.triggerWithBorderBox(el, 200, 100, 240, 120));
+    const countAfterFirst = renderCount;
+
+    act(() => mockRO.triggerWithBorderBox(el, 200, 100, 240, 120));
+    expect(renderCount).toBe(countAfterFirst);
+  });
+
   it('always returns sizeRef', async () => {
     const useSize = await getHook();
     const { ref, el } = createRefWithElement();

@@ -1,5 +1,14 @@
 # phase
 
+## 0.0.3
+
+### Patch Changes
+
+- Add `box` option to `useSize`: `'content-box' | 'border-box'`. Defaults to `'content-box'`. With `'border-box'`, the hook returns the element's full visual bounds (content + padding + border) and the ResizeObserver fires on border-box changes.
+- The RO pool's `observeResize` now accepts an optional `box` parameter forwarded to `ResizeObserver.observe()`, enabling per-element box model observation on the singleton.
+- Skill: added 3D canvas overlay recipe to `use-size.md` and `use-canvas.md`.
+- Skill: documented the distinction between dimension tracking (`useSize`, reflow-free) and viewport-relative position tracking (`getBoundingClientRect()`, custom hook).
+
 ## 0.0.2
 
 ### Patch Changes
