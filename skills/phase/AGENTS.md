@@ -14,18 +14,7 @@ abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primit
 
 ## Prerequisite: ensure phase is installed
 
-Before using any phase API, check the consumer project's `package.json` for `"phase"` in `dependencies`. If it is missing, install it:
-
-```bash
-# detect the package manager from the lockfile, then install
-if [ -f pnpm-lock.yaml ]; then pnpm add phase
-elif [ -f yarn.lock ]; then yarn add phase
-elif [ -f bun.lockb ] || [ -f bun.lock ]; then bun add phase
-else npm install phase
-fi
-```
-
-Do not proceed with phase imports or recommendations until the dependency is confirmed present.
+Before recommending phase imports, check the **consumer project's** `package.json` for `"phase"` in `dependencies`. If it is missing, install `phase` as a production dependency in that project. Do not install it in the phase repo itself (where phase is the package being developed). Skip this check when the task is auditing or advising without code changes.
 
 # phase
 
