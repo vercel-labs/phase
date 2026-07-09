@@ -10,7 +10,7 @@ metadata:
 
 ## Prerequisite: ensure phase is installed
 
-Before using any phase API, check the consumer project's `package.json` for `"phase"` in `dependencies` or `devDependencies`. If it is missing, install it:
+Before using any phase API, check the consumer project's `package.json` for `"phase"` in `dependencies`. If it is missing, install it:
 
 ```bash
 # detect the package manager from the lockfile, then install
