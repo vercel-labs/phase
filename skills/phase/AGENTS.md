@@ -12,6 +12,21 @@ abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primit
 
 ---
 
+## Prerequisite: ensure phase is installed
+
+Before using any phase API, check the consumer project's `package.json` for `"phase"` in `dependencies` or `devDependencies`. If it is missing, install it:
+
+```bash
+# detect the package manager from the lockfile, then install
+if [ -f pnpm-lock.yaml ]; then pnpm add phase
+elif [ -f yarn.lock ]; then yarn add phase
+elif [ -f bun.lockb ] || [ -f bun.lock ]; then bun add phase
+else npm install phase
+fi
+```
+
+Do not proceed with phase imports or recommendations until the dependency is confirmed present.
+
 # phase
 
 This skill teaches you to implement phase primitives correctly, preserve performance guarantees, and audit animation code. Phase is the lifecycle-aware performance layer for the web: it composes visibility, reduced motion, and frame budget signals so animations pause when unseen, respect user preferences, and never force a reflow.
