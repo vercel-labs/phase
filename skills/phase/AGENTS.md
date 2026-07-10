@@ -63,6 +63,7 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 | Run a side effect (prefetch, `import()`) when idle?  | `useWhenIdle`                                                                               |
 | Pause raw work inside a `Defer` subtree?             | `useRenderState`                                                                            |
 | React to DOM mutations without reflow?               | `useMutation`                                                                               |
+| Track pointer position without layout thrash?        | `usePointer`                                                                                |
 | Reactive scroll/size/media values?                   | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
 | Scroll/size/visibility without re-renders?           | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
 | Reactive reduced-motion check for non-phase code?    | `usePrefersReducedMotion`                                                                   |
@@ -92,14 +93,14 @@ For the full performance ruleset, read [references/performance.md](references/pe
 
 Every export belongs to a category. The choosing table above picks the primitive; this table shows the organizational structure.
 
-| Category    | What it covers                               | Exports                                                                                                                                                                                                                                                                                             |
-| ----------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Timing      | Frame clocks and animation loops             | `createTicker`, `createLoop`, `useLoop`, `useCanvas`, `useTween`                                                                                                                                                                                                                                    |
-| Observation | Reactive wrappers around browser observers   | `createSight`, `createScrollProgress`, `createRenderState`, `createDevicePixelRatio`, `createMutation`, `useSight`, `useScrollProgress`, `useSize`, `useContainerQuery`, `useMediaQuery`, `useRenderState`, `useDevicePixelRatio`, `usePrefersReducedMotion`, `useMutation`, `prefersReducedMotion` |
-| Lifecycle   | Activation signals composed from IO+MQL+rIC  | `createLifecycle`, `useLifecycle`, `whenIdle`, `useIdle`, `useWhenIdle`                                                                                                                                                                                                                             |
-| Composition | Mount/unmount orchestration with transitions | `Presence`, `usePresence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer`                                                                                                                                                                                                                               |
-| Math        | Pure easing and interpolation functions      | `clamp`, `clamp01`, `lerp`, `inverseLerp`, `remap`, `easeOutCubic`, `easeOutQuart`, `easeOutBack`, `easeInOutCubic`, `linear`                                                                                                                                                                       |
-| Utility     | React ref/callback patterns for phase users  | `useSyncedRef`, `useStableCallback`                                                                                                                                                                                                                                                                 |
+| Category    | What it covers                               | Exports                                                                                                                                                                                                                                                                                                                            |
+| ----------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Timing      | Frame clocks and animation loops             | `createTicker`, `createLoop`, `useLoop`, `useCanvas`, `useTween`                                                                                                                                                                                                                                                                   |
+| Observation | Reactive wrappers around browser observers   | `createSight`, `createScrollProgress`, `createRenderState`, `createDevicePixelRatio`, `createMutation`, `createPointer`, `useSight`, `useScrollProgress`, `useSize`, `useContainerQuery`, `useMediaQuery`, `useRenderState`, `useDevicePixelRatio`, `usePrefersReducedMotion`, `useMutation`, `usePointer`, `prefersReducedMotion` |
+| Lifecycle   | Activation signals composed from IO+MQL+rIC  | `createLifecycle`, `useLifecycle`, `whenIdle`, `useIdle`, `useWhenIdle`                                                                                                                                                                                                                                                            |
+| Composition | Mount/unmount orchestration with transitions | `Presence`, `usePresence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer`                                                                                                                                                                                                                                                              |
+| Math        | Pure easing and interpolation functions      | `clamp`, `clamp01`, `lerp`, `inverseLerp`, `remap`, `easeOutCubic`, `easeOutQuart`, `easeOutBack`, `easeInOutCubic`, `linear`                                                                                                                                                                                                      |
+| Utility     | React ref/callback patterns for phase users  | `useSyncedRef`, `useStableCallback`                                                                                                                                                                                                                                                                                                |
 
 ## Audit
 
@@ -123,6 +124,7 @@ Each export has its own reference file. Read the relevant file when implementing
 | `whenIdle`                    | Running a one-off callback when the browser is idle  | [when-idle.md](references/when-idle.md)                                 |
 | `prefersReducedMotion`        | Gating expensive setup or conditional imports        | [prefers-reduced-motion.md](references/prefers-reduced-motion.md)       |
 | `createMutation`              | Lifecycle-aware MutationObserver with rAF batching   | [create-mutation.md](references/create-mutation.md)                     |
+| `createPointer`               | rAF-batched pointer tracking with visibility pause   | [create-pointer.md](references/create-pointer.md)                       |
 | `PhaseError` / `isPhaseError` | Handling or classifying phase errors                 | [errors.md](references/errors.md)                                       |
 
 ### React (`phase/react`)
@@ -137,6 +139,7 @@ Each export has its own reference file. Read the relevant file when implementing
 | `usePresence`             | Custom mount/unmount transitions (full control)          | [use-presence.md](references/use-presence.md)                             |
 | `useScrollProgress`       | Driving opacity/reveals from intersection ratio          | [use-scroll-progress.md](references/use-scroll-progress.md)               |
 | `useMutation`             | Lifecycle-aware MutationObserver with rAF batching       | [use-mutation.md](references/use-mutation.md)                             |
+| `usePointer`              | rAF-batched pointer tracking with visibility pause       | [use-pointer.md](references/use-pointer.md)                               |
 | `useRenderState`          | Pausing raw work when a `Defer` subtree is skipped       | [use-render-state.md](references/use-render-state.md)                     |
 | `useIdle`                 | Boolean that flips true once the browser is idle         | [use-idle.md](references/use-idle.md)                                     |
 | `useWhenIdle`             | Run a side effect (prefetch, `import()`) once idle       | [use-when-idle.md](references/use-when-idle.md)                           |
@@ -771,6 +774,93 @@ Not applicable. `createMutation` observes DOM changes, not animation. The visibi
 - [createSight](./create-sight.md). Visibility observation (IO-based)
 - [performance](./performance.md). Forced-reflow rules that apply inside `onMutations`
 - [abort-signals](./abort-signals.md). Tear down this observer via the `signal` option
+
+---
+
+# `createPointer`
+
+Lifecycle-aware pointer tracker that reads `getBoundingClientRect` once per rAF frame instead of per `pointermove` event. Auto-pauses when the element is off-screen.
+
+## Signature
+
+```ts
+import { createPointer } from 'phase';
+
+const pointer = createPointer(options: PointerOptions): Pointer;
+```
+
+### Options
+
+| Option                | Type                            | Default  | Description                                    |
+| --------------------- | ------------------------------- | -------- | ---------------------------------------------- |
+| `element`             | `Element`                       | required | Element to track pointer events on             |
+| `onPointer`           | `(state: PointerState) => void` | required | Called once per rAF frame with latest position |
+| `visibilityAware`     | `boolean`                       | `true`   | Pause tracking while off-screen                |
+| `intersectionOptions` | `IntersectionObserverInit`      | --       | Forwarded to the visibility observer           |
+| `signal`              | `AbortSignal`                   | --       | Stops the tracker when aborted                 |
+
+### PointerState
+
+| Field    | Type      | Description                                            |
+| -------- | --------- | ------------------------------------------------------ |
+| `x`      | `number`  | X position relative to the element's top-left (CSS px) |
+| `y`      | `number`  | Y position relative to the element's top-left (CSS px) |
+| `active` | `boolean` | Whether a pointer is currently over the element        |
+
+### Return (Pointer)
+
+| Property      | Type            | Description                                                |
+| ------------- | --------------- | ---------------------------------------------------------- |
+| `phase`       | `PointerPhase`  | `'idle' \| 'tracking' \| 'stopped'`                        |
+| `phaseReason` | `PointerReason` | `'initial' \| 'enter' \| 'leave' \| 'sight' \| 'disposed'` |
+| `state`       | `PointerState`  | Current pointer position (synchronous read)                |
+| `stop()`      | `() => void`    | Detach listeners and clean up                              |
+
+## When to use
+
+- Custom cursors, tooltips, or hover effects that need element-relative pointer coordinates.
+- Canvas or WebGL interaction where pointer position drives rendering.
+- Any `pointermove` handler that currently calls `getBoundingClientRect()` per event.
+
+## When not to use
+
+| Instead of this                    | Use                                      |
+| ---------------------------------- | ---------------------------------------- |
+| Hover state (boolean)              | CSS `:hover` (no JS needed)              |
+| Click handling                     | Standard event listeners (not per-frame) |
+| Drag-and-drop with gesture physics | External library (e.g., `@use-gesture`)  |
+| React component                    | `usePointer` (manages refs and teardown) |
+
+## Do
+
+- Use for rAF-batched pointer tracking:
+  ```ts
+  const pointer = createPointer({
+    element: el,
+    onPointer: (state) => {
+      cursor.style.transform = `translate(${state.x}px, ${state.y}px)`;
+    },
+  });
+  ```
+- Read `pointer.state` synchronously for current position outside the callback.
+- Multiple instances share the IO pool for visibility gating.
+
+## Don't
+
+- **Don't call `getBoundingClientRect()` in your own `pointermove` handler.** That is what this primitive replaces: it reads the rect once per frame, not per event.
+- **Don't use for drag-and-drop.** Drag needs velocity, gesture recognition, and momentum. Use a gesture library.
+- **Don't call `stop()` then expect to restart.** `stop()` is terminal.
+
+## Reduced motion
+
+Not applicable. `createPointer` tracks pointer position, not animation. The visibility-pausing signal composes with the same IO pool used by animation primitives.
+
+## See also
+
+- [usePointer](./use-pointer.md). React hook wrapping createPointer
+- [createSight](./create-sight.md). Visibility observation (IO-based)
+- [performance](./performance.md). Forced-reflow rules (why per-event `getBoundingClientRect` is a problem)
+- [abort-signals](./abort-signals.md). Tear down this tracker via the `signal` option
 
 ---
 
@@ -1730,6 +1820,10 @@ function tick() {
 ```
 
 **Do:** Let phase manage the loop, or call `ticker.pause()` / `ticker.resume()`.
+
+### Hidden elements pause automatically
+
+Elements with `display:none` (or whose ancestor is `display:none`) report an intersection ratio of 0 from IntersectionObserver. This means `createLoop`, `createLifecycle`, and any primitive built on `createSight` pauses automatically when the observed element is hidden via CSS. This is a documented contract, not a coincidence. You do not need to add a manual visibility check for `display:none` elements. Phase handles it through the same IO signal that catches off-screen and backgrounded-tab scenarios.
 
 ### Reduced motion by default
 
@@ -3222,6 +3316,94 @@ Not applicable. `useMutation` observes DOM changes, not animation.
 - [useSight](./use-sight.md). Visibility observation (different signal)
 - [useSize](./use-size.md). Dimension tracking via ResizeObserver
 - [performance](./performance.md). Forced-reflow rules for observer callbacks
+
+---
+
+# `usePointer`
+
+React hook wrapping `createPointer`. Lifecycle-aware pointer tracker with rAF-batched `getBoundingClientRect`. Auto-pauses when the element is off-screen, tears down on unmount.
+
+## Signature
+
+```ts
+import { usePointer } from 'phase/react';
+
+const { ref, phase, phaseReason } = usePointer<T>(options);
+```
+
+### Options
+
+| Option                | Type                            | Default  | Description                                    |
+| --------------------- | ------------------------------- | -------- | ---------------------------------------------- |
+| `ref`                 | `RefObject<T \| null>`          | returned | Bring your own ref, or attach the returned one |
+| `onPointer`           | `(state: PointerState) => void` | required | Called once per rAF frame with latest position |
+| `visibilityAware`     | `boolean`                       | `true`   | Pause tracking while off-screen                |
+| `enabled`             | `boolean`                       | `true`   | When `false`, tears down the tracker           |
+| `intersectionOptions` | `IntersectionObserverInit`      | --       | Forwarded to the visibility observer           |
+
+### Return
+
+| Property      | Type                   | Description                         |
+| ------------- | ---------------------- | ----------------------------------- |
+| `ref`         | `RefObject<T \| null>` | Attach to the tracked element       |
+| `phase`       | `PointerPhase`         | `'idle' \| 'tracking' \| 'stopped'` |
+| `phaseReason` | `PointerReason`        | Why the current phase was entered   |
+
+## When to use
+
+- Custom cursor effects that follow the pointer relative to an element.
+- Canvas interaction where pointer position drives per-frame rendering.
+- Tooltip positioning that reads element bounds without per-event reflow.
+
+## When not to use
+
+| Instead of this                  | Use                                               |
+| -------------------------------- | ------------------------------------------------- |
+| Hover state (boolean)            | CSS `:hover` or `onPointerEnter`/`onPointerLeave` |
+| Click handling                   | Standard `onClick` handler                        |
+| Drag-and-drop or gesture physics | External library (`@use-gesture`)                 |
+| Framework-agnostic code          | `createPointer` (core)                            |
+
+## Do
+
+- Cleanup is automatic. The effect teardown detaches listeners on unmount.
+- Use for custom cursor tracking:
+  ```tsx
+  const cursorRef = useRef<HTMLDivElement>(null);
+  const { ref } = usePointer({
+    onPointer: (state) => {
+      if (!cursorRef.current) return;
+      cursorRef.current.style.transform = `translate(${state.x}px, ${state.y}px)`;
+      cursorRef.current.style.opacity = state.active ? '1' : '0';
+    },
+  });
+  return (
+    <div ref={ref}>
+      <div ref={cursorRef} className="custom-cursor" />
+    </div>
+  );
+  ```
+- Use `enabled` to conditionally track:
+  ```tsx
+  usePointer({ ref, onPointer: handlePointer, enabled: isInteractive });
+  ```
+- `onPointer` is synced via ref so its identity never restarts the tracker.
+
+## Don't
+
+- **Don't read layout inside `onPointer`.** The callback already provides element-relative coordinates computed from one `getBoundingClientRect` call per frame. Calling layout-triggering APIs again defeats the purpose.
+- **Don't use for drag gestures.** Pointer tracking stops at `pointerleave`. Drag needs pointer capture, velocity, and momentum. Use a gesture library.
+
+## Reduced motion
+
+Not applicable. `usePointer` tracks pointer position, not animation.
+
+## See also
+
+- [createPointer](./create-pointer.md). Framework-agnostic core
+- [useLoop](./use-loop.md). Per-frame DOM animation (common pairing with pointer data)
+- [useCanvas](./use-canvas.md). Canvas animation with pointer interaction
+- [useSize](./use-size.md). Element dimensions via ResizeObserver (no reflow)
 
 ---
 

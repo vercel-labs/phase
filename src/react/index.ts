@@ -19,6 +19,7 @@ export { useIdle } from './use-idle';
 export { useWhenIdle } from './use-when-idle';
 export { useCanvas } from './use-canvas';
 export { useMutation } from './use-mutation';
+export { usePointer } from './use-pointer';
 export { useTween } from './use-tween';
 export { usePresence } from './use-presence';
 export { Presence } from './presence';
@@ -77,6 +78,11 @@ export type {
   UseMutationTransientResult,
   UseMutationResult,
 } from './use-mutation';
+export type {
+  PointerCallback,
+  UsePointerOptions,
+  UsePointerResult,
+} from './use-pointer';
 export type { UseTweenOptions } from './use-tween';
 export type {
   PresenceMode,
