@@ -120,6 +120,28 @@ Safe behavior is automatic. Visibility awareness, reduced motion, observer clean
 
 This narrow scope is deliberate. Shipping only the performance-critical plumbing (and nothing else) is what keeps every export [sub-kilobyte to a few kilobytes](#bundle-size).
 
+### Admission criteria
+
+Every export must pass all four:
+
+1. **Wraps a commonly misused browser API** that causes measurable perf regressions without care.
+2. **Needs lifecycle awareness** (visibility-pausing, reduced-motion, observer pooling, or rAF-batching).
+3. **Makes the safe path shorter than the raw path.** The primitive is less code and less error-prone than the browser API directly.
+4. **Ships sub-KB** per the bundle-size contract.
+
+If a gap fails any criterion, phase closes it in the [skill](#agent-skill) (audit rules, recipes, scanner signals) rather than shipping code.
+
+### Export taxonomy
+
+| Category    | What it covers                               | Examples                                            |
+| ----------- | -------------------------------------------- | --------------------------------------------------- |
+| Timing      | Frame clocks and animation loops             | createLoop, useLoop, useCanvas, useTween            |
+| Observation | Reactive wrappers around browser observers   | useSight, useSize, useScrollProgress, useMediaQuery |
+| Lifecycle   | Activation signals composed from IO+MQL+rIC  | useLifecycle, useIdle, useWhenIdle                  |
+| Composition | Mount/unmount orchestration with transitions | Presence, Swap, WhenVisible, WhenIdle, Defer        |
+| Math        | Pure easing and interpolation functions      | lerp, clamp, easeOutCubic                           |
+| Utility     | React ref/callback patterns for phase users  | useSyncedRef, useStableCallback                     |
+
 ## Entry points
 
 | Import        | Contents                                                                                              |

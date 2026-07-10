@@ -147,6 +147,38 @@ Minimal footprint is a core promise of phase. Every public export is individuall
 7. **Observer pooling.** IO keyed by serialized options, RO is a singleton, MQL keyed by query string. Never create raw observers outside the pool.
 8. **Phases + reasons.** Every state machine exposes both. Phase describes _what_ state; reason describes _why_.
 
+## Admission criteria
+
+Every proposed export must pass all four criteria. If any fails, the solution belongs in the **skill** as a pattern or recipe, not in the library as shipped code.
+
+1. **Wraps a commonly misused browser API.** The raw API causes measurable perf regressions when used without care (forced reflows, leaked observers, unbatched callbacks, always-on scheduling).
+2. **Needs lifecycle awareness.** The primitive must compose visibility-pausing, reduced-motion, observer pooling, or rAF-batching to be correct. A pure utility that works identically regardless of lifecycle does not belong here.
+3. **Makes the safe path shorter than the raw path.** Using the primitive is less code and less error-prone than using the browser API directly. The wrong thing is impossible or harder than the right thing.
+4. **Ships sub-KB.** The export stays within the bundle-size contract enforced by `.size-limit.json`. If it cannot, it is too large for phase.
+
+### What does NOT belong in phase
+
+- CSS linting or build-time stylesheet analysis
+- Bundler or code-splitting configuration
+- Design system components or modal layers
+- General DOM scheduling beyond rAF batching
+- React component architecture patterns (conditional rendering is React, not phase)
+
+When a gap exists but fails the criteria, close it in the skill: add an audit rule, a recipe, or a scanner signal.
+
+### Export taxonomy
+
+Every export falls into one category. New exports must fit an existing category or justify a new one.
+
+| Category    | Exports                                                                                                                                                                                                                                  | What they wrap                                                      |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Timing      | createTicker, createLoop, useTween, useLoop, useCanvas                                                                                                                                                                                   | rAF, frame clock                                                    |
+| Observation | createSight, createScrollProgress, createRenderState, createDevicePixelRatio, useSight, useScrollProgress, useSize, useContainerQuery, useMediaQuery, useRenderState, useDevicePixelRatio, usePrefersReducedMotion, prefersReducedMotion | IO, RO, MQL, contentvisibilityautostatechange, matchMedia           |
+| Lifecycle   | createLifecycle, useLifecycle, whenIdle, useIdle, useWhenIdle                                                                                                                                                                            | IO + MQL + rIC composed into activation signals                     |
+| Composition | Presence, usePresence, Swap, WhenVisible, WhenIdle, Defer                                                                                                                                                                                | Mount/unmount orchestration with transition coordination            |
+| Math        | clamp, clamp01, lerp, inverseLerp, remap, easeOutCubic, easeOutQuart, easeOutBack, easeInOutCubic, linear                                                                                                                                | Pure functions, no browser API                                      |
+| Utility     | useSyncedRef, useStableCallback                                                                                                                                                                                                          | React ref/callback patterns needed by phase internals and consumers |
+
 ## How to add new features
 
 ### New core primitive
