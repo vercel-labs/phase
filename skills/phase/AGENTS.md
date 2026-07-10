@@ -7,7 +7,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
 author: vercel
-version: '0.0.5'
+version: '0.0.6'
 abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend CSS-only, minimal JS, phase, or an external library.'
 
 ---
@@ -79,6 +79,19 @@ Tests enforce these guarantees for animation hot paths. Violating them in consum
 6. **Frame-locked shared clock.** One `performance.now()` per rAF frame. Multiple animations stay in sync.
 
 For the full performance ruleset, read [references/performance.md](references/performance.md).
+
+## Export taxonomy
+
+Every export belongs to a category. The choosing table above picks the primitive; this table shows the organizational structure.
+
+| Category    | What it covers                               | Exports                                                                                                                                                                                                                                                            |
+| ----------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Timing      | Frame clocks and animation loops             | `createTicker`, `createLoop`, `useLoop`, `useCanvas`, `useTween`                                                                                                                                                                                                   |
+| Observation | Reactive wrappers around browser observers   | `createSight`, `createScrollProgress`, `createRenderState`, `createDevicePixelRatio`, `useSight`, `useScrollProgress`, `useSize`, `useContainerQuery`, `useMediaQuery`, `useRenderState`, `useDevicePixelRatio`, `usePrefersReducedMotion`, `prefersReducedMotion` |
+| Lifecycle   | Activation signals composed from IO+MQL+rIC  | `createLifecycle`, `useLifecycle`, `whenIdle`, `useIdle`, `useWhenIdle`                                                                                                                                                                                            |
+| Composition | Mount/unmount orchestration with transitions | `Presence`, `usePresence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer`                                                                                                                                                                                              |
+| Math        | Pure easing and interpolation functions      | `clamp`, `clamp01`, `lerp`, `inverseLerp`, `remap`, `easeOutCubic`, `easeOutQuart`, `easeOutBack`, `easeInOutCubic`, `linear`                                                                                                                                      |
+| Utility     | React ref/callback patterns for phase users  | `useSyncedRef`, `useStableCallback`                                                                                                                                                                                                                                |
 
 ## Audit
 
