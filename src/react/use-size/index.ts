@@ -16,6 +16,12 @@ export interface UseSizeOptions<T extends Element = HTMLDivElement> {
    */
   ref?: RefObject<T | null>;
   /**
+   * Which CSS box model to measure. `'content-box'` returns the content area
+   * (inside padding). `'border-box'` returns content + padding + border.
+   * Default `'content-box'`.
+   */
+  box?: 'content-box' | 'border-box';
+  /**
    * Called on every resize. When provided, `size` is omitted from the return
    * type and no re-renders occur, the right path for canvas and animation
    * consumers that read dimensions imperatively.
@@ -72,35 +78,44 @@ export function useSize<T extends Element = HTMLDivElement>(
 
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
+  const boxOption: 'content-box' | 'border-box' | undefined = options?.box;
 
   useEffect(() => {
     const element: Element | null = ref.current;
     if (!element) return;
 
-    const unobserve: () => void = observeResize(element, (entry) => {
-      const box = entry.contentBoxSize[0];
-      if (!box) return;
+    const unobserve: () => void = observeResize(
+      element,
+      (entry) => {
+        const resolved: ResizeObserverSize | undefined =
+          boxOption === 'border-box'
+            ? entry.borderBoxSize[0]
+            : entry.contentBoxSize[0];
+        if (!resolved) return;
 
-      const width: number = box.inlineSize;
-      const height: number = box.blockSize;
+        const width: number = resolved.inlineSize;
+        const height: number = resolved.blockSize;
 
-      if (width === prevWidth.current && height === prevHeight.current) return;
-      prevWidth.current = width;
-      prevHeight.current = height;
+        if (width === prevWidth.current && height === prevHeight.current)
+          return;
+        prevWidth.current = width;
+        prevHeight.current = height;
 
-      const next: Size = { width, height };
-      sizeRef.current = next;
+        const next: Size = { width, height };
+        sizeRef.current = next;
 
-      if (onResizeRef.current) {
-        onResizeRef.current(next);
-      } else {
-        setSize(next);
-      }
-    });
+        if (onResizeRef.current) {
+          onResizeRef.current(next);
+        } else {
+          setSize(next);
+        }
+      },
+      boxOption,
+    );
 
     return unobserve;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [boxOption]);
 
   return { ref, size, sizeRef };
 }

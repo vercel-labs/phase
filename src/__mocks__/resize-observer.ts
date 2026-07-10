@@ -7,6 +7,13 @@ export interface MockResizeObserverResult {
   MockClass: typeof ResizeObserver;
   instances: MockROInstance[];
   trigger: (element: Element, width: number, height: number) => void;
+  triggerWithBorderBox: (
+    element: Element,
+    contentWidth: number,
+    contentHeight: number,
+    borderWidth: number,
+    borderHeight: number,
+  ) => void;
   triggerWithPhysicalSize: (
     element: Element,
     cssWidth: number,
@@ -68,6 +75,45 @@ export function createMockResizeObserver(): MockResizeObserverResult {
               left: 0,
               bottom: height,
               right: width,
+            } as DOMRectReadOnly,
+          } as ResizeObserverEntry;
+          cb([entry], inst as unknown as ResizeObserver);
+        }
+      }
+    }
+  }
+
+  function triggerWithBorderBox(
+    element: Element,
+    contentWidth: number,
+    contentHeight: number,
+    borderWidth: number,
+    borderHeight: number,
+  ): void {
+    for (const inst of instances) {
+      if (inst.observed.has(element)) {
+        const cb = callbacksByInstance.get(inst);
+        if (cb) {
+          const entry = {
+            target: element,
+            contentBoxSize: [
+              { inlineSize: contentWidth, blockSize: contentHeight },
+            ],
+            borderBoxSize: [
+              { inlineSize: borderWidth, blockSize: borderHeight },
+            ],
+            devicePixelContentBoxSize: [
+              { inlineSize: contentWidth, blockSize: contentHeight },
+            ],
+            contentRect: {
+              width: contentWidth,
+              height: contentHeight,
+              x: 0,
+              y: 0,
+              top: 0,
+              left: 0,
+              bottom: contentHeight,
+              right: contentWidth,
             } as DOMRectReadOnly,
           } as ResizeObserverEntry;
           cb([entry], inst as unknown as ResizeObserver);
@@ -145,6 +191,7 @@ export function createMockResizeObserver(): MockResizeObserverResult {
     MockClass: MockRO as unknown as typeof ResizeObserver,
     instances,
     trigger,
+    triggerWithBorderBox,
     triggerWithPhysicalSize,
     triggerWithoutPhysicalSize,
   };

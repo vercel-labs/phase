@@ -879,12 +879,12 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useLoop`                 |           2.81 kB |
 | `useLifecycle`            |           1.68 kB |
 | `useSight`                |           1.19 kB |
-| `useCanvas`               |           3.43 kB |
+| `useCanvas`               |           3.44 kB |
 | `useTween`                |             614 B |
 | `usePresence`             |             592 B |
 | `useScrollProgress`       |             996 B |
-| `useSize`                 |             337 B |
-| `useContainerQuery`       |             334 B |
+| `useSize`                 |             388 B |
+| `useContainerQuery`       |             347 B |
 | `useMediaQuery`           |             245 B |
 | `usePrefersReducedMotion` |             272 B |
 | `useDevicePixelRatio`     |             231 B |

@@ -5,16 +5,18 @@ const callbacks = new Map<Element, ROCallback>();
 
 /**
  * Observe an element via a singleton ResizeObserver.
- * One RO instance for the entire page. RO takes zero constructor options.
+ * One RO instance for the entire page. Per-element `box` options are
+ * forwarded to `ResizeObserver.observe()`.
  *
  * @returns Cleanup function that unobserves the element.
  */
 export function observeResize(
   element: Element,
   callback: ROCallback,
+  box?: ResizeObserverBoxOptions,
 ): () => void {
   callbacks.set(element, callback);
-  getObserver().observe(element);
+  getObserver().observe(element, box ? { box } : undefined);
 
   let disposed = false;
 
