@@ -41,7 +41,7 @@ render.stop();
 
 | Instead of this                 | Use                              |
 | ------------------------------- | -------------------------------- |
-| Pausing a phase loop off-screen | Nothing — phase loops self-pause |
+| Pausing a phase loop off-screen | Nothing (phase loops self-pause) |
 | Boolean viewport visibility     | `createSight`                    |
 | React component                 | `useRenderState`                 |
 

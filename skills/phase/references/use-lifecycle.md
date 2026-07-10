@@ -41,7 +41,7 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 | Instead of this                            | Use                      |
 | ------------------------------------------ | ------------------------ |
 | You want phase to drive the loop           | `useLoop` or `useCanvas` |
-| Just need visibility (no animation gating) | `useSight`               |
+| Need visibility only (no animation gating) | `useSight`               |
 | Framework-agnostic code                    | `createLifecycle`        |
 
 ## Do

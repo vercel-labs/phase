@@ -46,7 +46,7 @@ const sight = createSight(options: SightOptions): Sight;
 ## Do
 
 - Rely on observer pooling: 20 elements with the same `intersectionOptions` share one `IntersectionObserver` instance.
-- Use `onPhaseChange` instead of polling `phase` — it fires only on transitions.
+- Use `onPhaseChange` instead of polling `phase`. It fires only on transitions.
 - Call `stop()` in cleanup to free the observer slot.
 
 ## Don't

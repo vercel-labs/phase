@@ -18,7 +18,7 @@ const ref: RefObject<T> = useSyncedRef(value);
 
 ### Return
 
-`RefObject<T>` — `.current` is always the latest `value`.
+`RefObject<T>`. `.current` is always the latest `value`.
 
 ## When to use
 

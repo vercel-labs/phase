@@ -9,7 +9,7 @@ This is purely additive. `stop()` and the cancel return value still work; `signa
 | Situation                                                                | Use      |
 | ------------------------------------------------------------------------ | -------- |
 | One controller tears down several primitives from a single cleanup path  | `signal` |
-| You already hold the instance and want to stop just that one             | `stop()` |
+| You already hold the instance and want to stop that one specifically     | `stop()` |
 | A parent already exposes an `AbortSignal` (fetch, event handler, effect) | `signal` |
 | Composing with `AbortSignal.timeout()` or `AbortSignal.any([...])`       | `signal` |
 

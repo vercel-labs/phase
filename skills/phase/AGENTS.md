@@ -219,7 +219,7 @@ This is purely additive. `stop()` and the cancel return value still work; `signa
 | Situation                                                                | Use      |
 | ------------------------------------------------------------------------ | -------- |
 | One controller tears down several primitives from a single cleanup path  | `signal` |
-| You already hold the instance and want to stop just that one             | `stop()` |
+| You already hold the instance and want to stop that one specifically     | `stop()` |
 | A parent already exposes an `AbortSignal` (fetch, event handler, effect) | `signal` |
 | Composing with `AbortSignal.timeout()` or `AbortSignal.any([...])`       | `signal` |
 
@@ -342,7 +342,7 @@ CSS-only  →  Minimal JS (useTween)  →  phase primitives  →  External libra
 For each finding, emit a structured recommendation:
 
 ````
-### [file:line] — <brief description>
+### [file:line]. <brief description>
 
 **Current pattern:** <what's there now, 1-2 lines>
 **Problem:** <what's wrong and why it matters>
@@ -972,7 +972,7 @@ render.stop();
 
 | Instead of this                 | Use                              |
 | ------------------------------- | -------------------------------- |
-| Pausing a phase loop off-screen | Nothing — phase loops self-pause |
+| Pausing a phase loop off-screen | Nothing (phase loops self-pause) |
 | Boolean viewport visibility     | `createSight`                    |
 | React component                 | `useRenderState`                 |
 
@@ -1133,7 +1133,7 @@ const sight = createSight(options: SightOptions): Sight;
 ## Do
 
 - Rely on observer pooling: 20 elements with the same `intersectionOptions` share one `IntersectionObserver` instance.
-- Use `onPhaseChange` instead of polling `phase` — it fires only on transitions.
+- Use `onPhaseChange` instead of polling `phase`. It fires only on transitions.
 - Call `stop()` in cleanup to free the observer slot.
 
 ## Don't
@@ -1512,7 +1512,7 @@ import { Defer } from 'phase/react';
     <Comments />
   </Defer>
   ```
-- **Keep content that must be in the DOM** (SEO, in-page search, anchor links) — `Defer` SSRs its children. The whole `phase/react` entry is a client boundary (`'use client'`), but server-component children passed into `Defer` still render on the server and stream through.
+- **Keep content that must be in the DOM** (SEO, in-page search, anchor links). `Defer` SSRs its children. The whole `phase/react` entry is a client boundary (`'use client'`), but server-component children passed into `Defer` still render on the server and stream through.
 - **Use the `as` prop for semantic elements** when a wrapper `div` would break document structure:
   ```tsx
   <ul>
@@ -2050,7 +2050,7 @@ requestAnimationFrame(function loop2() {
 });
 ```
 
-**Do:** Use multiple `createTicker` / `useLoop` instances — they automatically share the clock.
+**Do:** Use multiple `createTicker` / `useLoop` instances. They automatically share the clock.
 
 ### Delta clamping
 
@@ -2066,7 +2066,7 @@ onTick: (frame) => {
 };
 ```
 
-**Do:** Use `frame.delta` and `frame.elapsed` — both account for pause time and clamping.
+**Do:** Use `frame.delta` and `frame.elapsed`, which both account for pause time and clamping.
 
 ### Observer pooling
 
@@ -2080,7 +2080,7 @@ const io = new IntersectionObserver(callback, options);
 io.observe(element);
 ```
 
-**Do:** Use `createSight`, `createScrollProgress`, `useSize`, `useMediaQuery` — all use the shared pools automatically. 20 elements with the same IO options share one observer instance.
+**Do:** Use `createSight`, `createScrollProgress`, `useSize`, `useMediaQuery`. All use the shared pools automatically. 20 elements with the same IO options share one observer instance.
 
 ### Never drive layout from a `MutationObserver`
 
@@ -2239,7 +2239,7 @@ No options. Returns `false` on the server (no `matchMedia`).
 | Instead of this                            | Use                                                             |
 | ------------------------------------------ | --------------------------------------------------------------- |
 | Reactive subscription to motion preference | `usePrefersReducedMotion()` (re-renders on change)              |
-| Gating an animation loop                   | `createLoop` / `useLoop` — handles reduced motion automatically |
+| Gating an animation loop                   | `createLoop` / `useLoop` (handles reduced motion automatically) |
 | Checking inside a React component          | The hooks handle it for you (no manual check needed)            |
 
 ## Do
@@ -2957,7 +2957,7 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 | Instead of this                            | Use                      |
 | ------------------------------------------ | ------------------------ |
 | You want phase to drive the loop           | `useLoop` or `useCanvas` |
-| Just need visibility (no animation gating) | `useSight`               |
+| Need visibility only (no animation gating) | `useSight`               |
 | Framework-agnostic code                    | `createLifecycle`        |
 
 ## Do
@@ -3556,7 +3556,7 @@ const phase = useRenderState(ref); // 'rendered' | 'skipped'
 
 | Instead of this                 | Use                              |
 | ------------------------------- | -------------------------------- |
-| Pausing a phase loop off-screen | Nothing — phase loops self-pause |
+| Pausing a phase loop off-screen | Nothing (phase loops self-pause) |
 | Viewport visibility as a phase  | `useSight`                       |
 | Non-React usage                 | `createRenderState`              |
 
@@ -3939,7 +3939,7 @@ const stable = useStableCallback(callback);
 
 ### Return
 
-`(...args: Args) => R` — same signature, stable identity across renders.
+`(...args: Args) => R` (same signature, stable identity across renders).
 
 ## When to use
 
@@ -3952,7 +3952,7 @@ const stable = useStableCallback(callback);
 | Instead of this                   | Use                                                                       |
 | --------------------------------- | ------------------------------------------------------------------------- |
 | Per-frame callback (onTick, draw) | `useSyncedRef` (phase hooks use it internally, no consumer action needed) |
-| Simple memoized value             | `useMemo` / `useCallback` with proper deps                                |
+| Standard memoized value           | `useMemo` / `useCallback` with proper deps                                |
 
 ## Do
 
@@ -4000,7 +4000,7 @@ const ref: RefObject<T> = useSyncedRef(value);
 
 ### Return
 
-`RefObject<T>` — `.current` is always the latest `value`.
+`RefObject<T>`. `.current` is always the latest `value`.
 
 ## When to use
 
@@ -4129,7 +4129,7 @@ useWhenIdle(() => void import('./heavy-panel'), { timeout: 2000 });
 | Argument   | Type          | Description                                      |
 | ---------- | ------------- | ------------------------------------------------ |
 | `callback` | `() => void`  | Runs once when the browser is idle after mount   |
-| `options`  | `IdleOptions` | `{ timeout?: number }` — max ms to wait for idle |
+| `options`  | `IdleOptions` | `{ timeout?: number }` (max ms to wait for idle) |
 
 ## When to use
 
@@ -4331,7 +4331,7 @@ import { WhenVisible } from 'phase/react';
 
 ## Ref forwarding
 
-A forwarded `ref` is attached to whichever div is currently rendered: the sentinel before intersection, the entered div after. `ref.current` is populated at mount — safe to read for measurement or to attach a listener to an ancestor via `.closest()` without waiting for visibility. Both nodes live inside the same subtree, so ancestor lookups resolve identically in either state.
+A forwarded `ref` is attached to whichever div is currently rendered: the sentinel before intersection, the entered div after. `ref.current` is populated at mount, safe to read for measurement or to attach a listener to an ancestor via `.closest()` without waiting for visibility. Both nodes live inside the same subtree, so ancestor lookups resolve identically in either state.
 
 ## Reduced motion
 

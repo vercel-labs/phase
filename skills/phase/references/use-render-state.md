@@ -28,7 +28,7 @@ const phase = useRenderState(ref); // 'rendered' | 'skipped'
 
 | Instead of this                 | Use                              |
 | ------------------------------- | -------------------------------- |
-| Pausing a phase loop off-screen | Nothing — phase loops self-pause |
+| Pausing a phase loop off-screen | Nothing (phase loops self-pause) |
 | Viewport visibility as a phase  | `useSight`                       |
 | Non-React usage                 | `createRenderState`              |
 

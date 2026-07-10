@@ -155,7 +155,7 @@ requestAnimationFrame(function loop2() {
 });
 ```
 
-**Do:** Use multiple `createTicker` / `useLoop` instances — they automatically share the clock.
+**Do:** Use multiple `createTicker` / `useLoop` instances. They automatically share the clock.
 
 ### Delta clamping
 
@@ -171,7 +171,7 @@ onTick: (frame) => {
 };
 ```
 
-**Do:** Use `frame.delta` and `frame.elapsed` — both account for pause time and clamping.
+**Do:** Use `frame.delta` and `frame.elapsed`, which both account for pause time and clamping.
 
 ### Observer pooling
 
@@ -185,7 +185,7 @@ const io = new IntersectionObserver(callback, options);
 io.observe(element);
 ```
 
-**Do:** Use `createSight`, `createScrollProgress`, `useSize`, `useMediaQuery` — all use the shared pools automatically. 20 elements with the same IO options share one observer instance.
+**Do:** Use `createSight`, `createScrollProgress`, `useSize`, `useMediaQuery`. All use the shared pools automatically. 20 elements with the same IO options share one observer instance.
 
 ### Never drive layout from a `MutationObserver`
 

@@ -29,7 +29,7 @@ No options. Returns `false` on the server (no `matchMedia`).
 | Instead of this                            | Use                                                             |
 | ------------------------------------------ | --------------------------------------------------------------- |
 | Reactive subscription to motion preference | `usePrefersReducedMotion()` (re-renders on change)              |
-| Gating an animation loop                   | `createLoop` / `useLoop` — handles reduced motion automatically |
+| Gating an animation loop                   | `createLoop` / `useLoop` (handles reduced motion automatically) |
 | Checking inside a React component          | The hooks handle it for you (no manual check needed)            |
 
 ## Do

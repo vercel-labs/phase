@@ -15,7 +15,7 @@ useWhenIdle(() => void import('./heavy-panel'), { timeout: 2000 });
 | Argument   | Type          | Description                                      |
 | ---------- | ------------- | ------------------------------------------------ |
 | `callback` | `() => void`  | Runs once when the browser is idle after mount   |
-| `options`  | `IdleOptions` | `{ timeout?: number }` — max ms to wait for idle |
+| `options`  | `IdleOptions` | `{ timeout?: number }` (max ms to wait for idle) |
 
 ## When to use
 

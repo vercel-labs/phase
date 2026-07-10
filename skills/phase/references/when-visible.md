@@ -71,7 +71,7 @@ import { WhenVisible } from 'phase/react';
 
 ## Ref forwarding
 
-A forwarded `ref` is attached to whichever div is currently rendered: the sentinel before intersection, the entered div after. `ref.current` is populated at mount — safe to read for measurement or to attach a listener to an ancestor via `.closest()` without waiting for visibility. Both nodes live inside the same subtree, so ancestor lookups resolve identically in either state.
+A forwarded `ref` is attached to whichever div is currently rendered: the sentinel before intersection, the entered div after. `ref.current` is populated at mount, safe to read for measurement or to attach a listener to an ancestor via `.closest()` without waiting for visibility. Both nodes live inside the same subtree, so ancestor lookups resolve identically in either state.
 
 ## Reduced motion
 

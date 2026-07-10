@@ -18,7 +18,7 @@ const stable = useStableCallback(callback);
 
 ### Return
 
-`(...args: Args) => R` — same signature, stable identity across renders.
+`(...args: Args) => R` (same signature, stable identity across renders).
 
 ## When to use
 
@@ -31,7 +31,7 @@ const stable = useStableCallback(callback);
 | Instead of this                   | Use                                                                       |
 | --------------------------------- | ------------------------------------------------------------------------- |
 | Per-frame callback (onTick, draw) | `useSyncedRef` (phase hooks use it internally, no consumer action needed) |
-| Simple memoized value             | `useMemo` / `useCallback` with proper deps                                |
+| Standard memoized value           | `useMemo` / `useCallback` with proper deps                                |
 
 ## Do
 

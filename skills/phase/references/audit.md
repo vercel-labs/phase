@@ -74,7 +74,7 @@ CSS-only  →  Minimal JS (useTween)  →  phase primitives  →  External libra
 For each finding, emit a structured recommendation:
 
 ````
-### [file:line] — <brief description>
+### [file:line]. <brief description>
 
 **Current pattern:** <what's there now, 1-2 lines>
 **Problem:** <what's wrong and why it matters>
