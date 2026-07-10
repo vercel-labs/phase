@@ -1,16 +1,30 @@
-import type { ComponentProps, CSSProperties, JSX, Ref } from 'react';
+import {
+  createElement,
+  type CSSProperties,
+  type ElementType,
+  type HTMLAttributes,
+  type JSX,
+  type ReactNode,
+  type Ref,
+} from 'react';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface DeferProps extends Omit<ComponentProps<'div'>, 'style'> {
+export interface DeferProps extends Omit<HTMLAttributes<HTMLElement>, 'style'> {
+  /**
+   * HTML element to render. Default `'div'`. Use `'li'`, `'tr'`, or any
+   * semantic element when a wrapper div would break document structure.
+   */
+  as?: ElementType;
   /**
    * Approximate size reserved before first paint (any CSS length, e.g. `'800px'`).
    * After the first render the browser remembers the real size. Default `'1000px'`.
    */
   estimatedHeight?: string;
-  ref?: Ref<HTMLDivElement>;
+  children?: ReactNode;
+  ref?: Ref<HTMLElement>;
 }
 
 // ---------------------------------------------------------------------------
@@ -34,25 +48,26 @@ export interface DeferProps extends Omit<ComponentProps<'div'>, 'style'> {
  *   <ArticleSection />
  * </Defer>
  *
- * @remarks
- * Animations inside a `Defer` keep running while paint is skipped. phase loops
- * self-pause off-screen on their own; for raw rAF/interval work, gate it with
- * `useRenderState`.
+ * @example
+ * <Defer as="li" estimatedHeight="80px">
+ *   <ListItemContent />
+ * </Defer>
  */
 export function Defer({
+  as: Component = 'div',
   estimatedHeight = '1000px',
   children,
   ref,
-  ...divProps
+  ...rest
 }: DeferProps): JSX.Element {
   const deferStyle: CSSProperties = {
     contentVisibility: 'auto',
     containIntrinsicSize: `auto ${estimatedHeight}`,
   };
 
-  return (
-    <div {...divProps} ref={ref} style={deferStyle}>
-      {children}
-    </div>
+  return createElement(
+    Component,
+    { ...rest, ref, style: deferStyle },
+    children,
   );
 }

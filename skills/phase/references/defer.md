@@ -1,6 +1,6 @@
 # `Defer`
 
-Skips the browser's rendering work (style, layout, paint) for off-screen content via `content-visibility: auto`. Runtime-free: no hooks, no observer, only a styled `<div>`. Children stay in the DOM and are server-rendered.
+Skips the browser's rendering work (style, layout, paint) for off-screen content via `content-visibility: auto`. Runtime-free: no hooks, no observer, only a styled element. Children stay in the DOM and are server-rendered.
 
 ## Signature
 
@@ -14,11 +14,12 @@ import { Defer } from 'phase/react';
 
 ### Props
 
-| Prop              | Type                                   | Default    | Description                                                 |
-| ----------------- | -------------------------------------- | ---------- | ----------------------------------------------------------- |
-| `estimatedHeight` | `string`                               | `'1000px'` | Reserved size before first paint (any CSS length)           |
-| `ref`             | `Ref<HTMLDivElement>`                  | —          | Forward a ref (read render-skip state via `useRenderState`) |
-| ...rest           | `Omit<ComponentProps<'div'>, 'style'>` | —          | Standard div props except `style` — use `className`         |
+| Prop              | Type                                         | Default    | Description                                                 |
+| ----------------- | -------------------------------------------- | ---------- | ----------------------------------------------------------- |
+| `as`              | `ElementType`                                | `'div'`    | HTML element to render (`'li'`, `'tr'`, `'section'`, etc.)  |
+| `estimatedHeight` | `string`                                     | `'1000px'` | Reserved size before first paint (any CSS length)           |
+| `ref`             | `Ref<HTMLElement>`                           | --         | Forward a ref (read render-skip state via `useRenderState`) |
+| ...rest           | `Omit<HTMLAttributes<HTMLElement>, 'style'>` | --         | Standard HTML attributes except `style` -- use `className`  |
 
 > **No `style` prop.** The render-skip styles (`content-visibility`, `contain-intrinsic-size`) are encapsulated so they can't be accidentally overridden. Style the wrapper with `className`.
 
@@ -45,6 +46,16 @@ import { Defer } from 'phase/react';
   </Defer>
   ```
 - **Keep content that must be in the DOM** (SEO, in-page search, anchor links) — `Defer` SSRs its children. The whole `phase/react` entry is a client boundary (`'use client'`), but server-component children passed into `Defer` still render on the server and stream through.
+- **Use the `as` prop for semantic elements** when a wrapper `div` would break document structure:
+  ```tsx
+  <ul>
+    {items.map((item) => (
+      <Defer as="li" key={item.id} estimatedHeight="80px">
+        <ItemContent item={item} />
+      </Defer>
+    ))}
+  </ul>
+  ```
 
 ## Don't
 
