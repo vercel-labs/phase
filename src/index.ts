@@ -23,6 +23,7 @@ export { createDevicePixelRatio } from './core/device-pixel-ratio';
 export { whenIdle } from './core/idle';
 export { prefersReducedMotion } from './core/reduced-motion';
 export { createMutation } from './core/mutation';
+export { createPointer } from './core/pointer';
 export { PhaseError, isPhaseError } from './core/error';
 
 // Types
@@ -77,4 +78,11 @@ export type {
   MutationPhase,
   MutationReason,
 } from './core/mutation';
+export type {
+  Pointer,
+  PointerOptions,
+  PointerPhase,
+  PointerReason,
+  PointerState,
+} from './core/pointer';
 export type { PhaseErrorCode } from './core/error';

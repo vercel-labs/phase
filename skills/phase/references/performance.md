@@ -107,6 +107,10 @@ function tick() {
 
 **Do:** Let phase manage the loop, or call `ticker.pause()` / `ticker.resume()`.
 
+### Hidden elements pause automatically
+
+Elements with `display:none` (or whose ancestor is `display:none`) report an intersection ratio of 0 from IntersectionObserver. This means `createLoop`, `createLifecycle`, and any primitive built on `createSight` pauses automatically when the observed element is hidden via CSS. This is a documented contract, not a coincidence. You do not need to add a manual visibility check for `display:none` elements. Phase handles it through the same IO signal that catches off-screen and backgrounded-tab scenarios.
+
 ### Reduced motion by default
 
 All phase primitives respect `prefers-reduced-motion: reduce` automatically. Bypassing requires explicit `reducedMotion: 'ignore'`.
