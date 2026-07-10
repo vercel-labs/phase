@@ -129,9 +129,45 @@ const SIGNALS = [
     matcher: matchesSyncedRef,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
   },
+  // --- CSS/DOM-scale signals ---
+  {
+    id: 'global-has-selector',
+    label: 'Global :has() selector (document-wide has-invalidation)',
+    pattern: /body:has\(|html:has\(/,
+    exclude: /node_modules|\.spec\.|\.test\./,
+    fileTypes: 'css',
+  },
+  {
+    id: 'permanent-will-change',
+    label: 'Permanent will-change (wastes GPU memory when idle)',
+    pattern: /will-change:\s*transform/,
+    negativePattern:
+      /animation-play-state|data-active|isActive|\?.*will-change/,
+    exclude: /node_modules|\.spec\.|\.test\./,
+    fileTypes: 'css',
+  },
+  // --- Loading/architecture signals ---
+  {
+    id: 'bare-window-listener',
+    label: 'Bare window resize/scroll listener with layout read',
+    pattern: /addEventListener\s*\(\s*['"](?:resize|scroll)['"]/,
+    contextPattern:
+      /getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight/,
+    exclude: /node_modules|phase|\.spec\.|\.test\./,
+  },
+  {
+    id: 'redundant-mutation-observers',
+    label: 'Multiple MutationObservers on html/documentElement',
+    pattern: /new\s+MutationObserver/,
+    contextPattern:
+      /document\.documentElement|<html|\.observe\s*\(\s*document\s*\./,
+    exclude: /node_modules|phase|\.spec\.|\.test\./,
+  },
 ];
 
-const EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs']);
+const JS_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs']);
+const CSS_EXTENSIONS = new Set(['.css', '.scss', '.module.css']);
+const EXTENSIONS = new Set([...JS_EXTENSIONS, ...CSS_EXTENSIONS]);
 
 function walk(dir) {
   const results = [];
@@ -172,8 +208,16 @@ for (const filePath of files) {
 
   const lines = content.split('\n');
 
+  const ext = filePath.slice(filePath.lastIndexOf('.'));
+  const isCSS = CSS_EXTENSIONS.has(ext);
+  const isJS = JS_EXTENSIONS.has(ext);
+
   for (const signal of SIGNALS) {
     if (signal.exclude && signal.exclude.test(rel)) continue;
+
+    // File-type filtering: 'css' signals only match CSS files, all others match JS
+    if (signal.fileTypes === 'css' && !isCSS) continue;
+    if (!signal.fileTypes && !isJS) continue;
 
     // File-level negative pattern: skip if the file also contains the mitigation
     if (signal.negativePattern && signal.negativePattern.test(content))

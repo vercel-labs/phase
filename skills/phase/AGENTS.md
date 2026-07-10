@@ -94,6 +94,28 @@ Every export belongs to a category. The choosing table above picks the primitive
 | Math        | Pure easing and interpolation functions      | `clamp`, `clamp01`, `lerp`, `inverseLerp`, `remap`, `easeOutCubic`, `easeOutQuart`, `easeOutBack`, `easeInOutCubic`, `linear`                                                                                                                                                                       |
 | Utility     | React ref/callback patterns for phase users  | `useSyncedRef`, `useStableCallback`                                                                                                                                                                                                                                                                 |
 
+## Performance beyond JavaScript
+
+The audit procedure and invariants above catch JS anti-patterns. These rules catch the rest. Many page-level perf regressions come from CSS, loading patterns, or architecture decisions that phase cannot fix with a primitive but can diagnose and recommend against.
+
+### CSS and style-recalc rules
+
+- **No global `:has()` selectors.** `body:has(...)` or `html:has(...)` in a global stylesheet forces document-wide has-invalidation on every DOM mutation. Scope the rule to a subtree or replace with a data attribute.
+- **Large repeated lists need `content-visibility`.** Tables, log lists, and card grids without `content-visibility: auto` + `contain-intrinsic-size` pay full style/layout cost off-screen. Use `Defer` (with the `as` prop for semantic elements).
+- **Scope expensive selectors.** Deeply nested combinators and broad `*` selectors in global sheets increase style-recalc time proportionally to DOM size.
+
+### Loading rules
+
+- **Heavy imports must be lazy in always-mounted subtrees.** Markdown renderers, syntax highlighters, AI SDK, and animation libraries imported at the top level of an always-mounted component load on every route. Use `next/dynamic`, `lazy()`, or `useWhenIdle(() => void import(...))` to defer.
+- **Compose `WhenVisible` with `next/dynamic` to defer the download.** `next/dynamic` splits the chunk; `WhenVisible` holds the mount (and the download) until the element nears the viewport. See [rendering-recipes.md](references/rendering-recipes.md).
+
+### Architecture rules
+
+- **Do not ship heavy subtrees as `display:none`-when-closed.** Their JS, observers, subscriptions, and bundle still run. Unmount with conditional rendering or `Presence`, warm on idle with `useWhenIdle`.
+- **Pool window listeners.** Never attach a bare `window` resize/scroll listener that reads layout. Use `useSize`, `useMediaQuery`, or `useContainerQuery`. Flag N components each owning their own listener.
+- **No redundant MutationObservers on the same target.** Coalesce into one `useMutation` call or coordinate via a shared hook.
+- **No per-frame `setState`.** Write to refs or DOM in `useLoop`/`useCanvas`, or use `useTween` for single values.
+
 ## Audit
 
 When you review, optimize, or audit animation code, follow [references/audit.md](references/audit.md). It provides a repeatable procedure backed by a deterministic scanner (`scripts/scan.mjs`) that surfaces anti-pattern candidates before judgment.
@@ -168,13 +190,14 @@ grep -ri "starting:opacity\|data-\[phase=exiting\]" skills/phase/references/  # 
 
 ## Cross-cutting references
 
-| Reference                                               | Use when                                                             |
-| ------------------------------------------------------- | -------------------------------------------------------------------- |
-| [decision-guide.md](references/decision-guide.md)       | Choosing between CSS, phase, or an external library                  |
-| [rendering-recipes.md](references/rendering-recipes.md) | Composing `Defer` / `WhenIdle` / `WhenVisible` / `useRenderState`    |
-| [performance.md](references/performance.md)             | Writing or reviewing hot-path animation code                         |
-| [audit.md](references/audit.md)                         | Auditing existing animations for optimization opportunities          |
-| [abort-signals.md](references/abort-signals.md)         | Tearing down core primitives with an `AbortSignal` (`signal` option) |
+| Reference                                                   | Use when                                                             |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| [decision-guide.md](references/decision-guide.md)           | Choosing between CSS, phase, or an external library                  |
+| [rendering-recipes.md](references/rendering-recipes.md)     | Composing `Defer` / `WhenIdle` / `WhenVisible` / `useRenderState`    |
+| [performance-recipes.md](references/performance-recipes.md) | Fixing common perf problems (observer storms, hidden panels, lists)  |
+| [performance.md](references/performance.md)                 | Writing or reviewing hot-path animation code                         |
+| [audit.md](references/audit.md)                             | Auditing existing animations for optimization opportunities          |
+| [abort-signals.md](references/abort-signals.md)             | Tearing down core primitives with an `AbortSignal` (`signal` option) |
 
 ## Full compiled document
 
@@ -344,6 +367,61 @@ After:
 - **Always address cleanup.** If the candidate leaks listeners/observers/rAF handles, the recommendation must include proper teardown.
 - **Show before/after code.** Keep snippets minimal, only the relevant change, not the entire file.
 
+## Step 1.5: CSS, loading, and architecture pass
+
+After the JS scan, check for non-JS anti-patterns. The scanner covers some of these automatically; others require manual inspection.
+
+### CSS/DOM-scale checks
+
+- **Global `:has()` selectors.** Search `.css`/`.scss` files for `body:has(` or `html:has(`. Each forces document-wide has-invalidation on every DOM mutation.
+- **Missing `content-visibility`.** Large repeated lists (`.map()` returning many items) without `content-visibility: auto` or `Defer` pay full off-screen style/layout cost.
+- **Permanent `will-change`.** CSS with `will-change: transform` that is never toggled wastes GPU memory when idle.
+
+### Loading checks
+
+- **Heavy static imports in always-mounted subtrees.** Look for top-level imports of heavy packages (markdown renderers, syntax highlighters, animation libraries) in components that mount on every route.
+- **`display:none` as a close mechanism.** Components that hide with `display:none` or `visibility:hidden` instead of unmounting keep all JS/observers/subscriptions running.
+
+### Architecture checks
+
+- **Redundant observers.** Multiple `new MutationObserver` calls targeting `<html>` or `document.documentElement` in the same codebase, each firing on class changes.
+- **Bare window listeners with layout reads.** Multiple components each attaching `addEventListener('resize', ...)` or `addEventListener('scroll', ...)` with `getBoundingClientRect` or `offset*` reads in the handler.
+
+### Classification ladders
+
+In addition to the animation ladder (`CSS → useTween → phase → external library`), classify loading and containment candidates:
+
+**Loading ladder** (prefer the cheapest tier):
+
+```
+Static import  →  next/dynamic  →  WhenVisible + dynamic  →  useWhenIdle prefetch
+```
+
+**Containment ladder** (prefer the cheapest tier):
+
+```
+CSS content-visibility  →  Defer  →  WhenVisible / WhenIdle  →  conditional unmount
+```
+
+### When NOT to run the audit
+
+Skip the scan when the codebase:
+
+- Uses only CSS transitions/animations with no JS animation code
+- Has no raw observer usage (no `new IntersectionObserver/ResizeObserver/MutationObserver`)
+- Has already been audited and the scanner confirms zero candidates
+
+### Severity weighting
+
+When the scan returns many candidates, prioritize by impact:
+
+1. **Forced reflows in hot paths** (observer callbacks, event handlers, rAF) cause visible jank. Fix first.
+2. **Always-on background work** (rAF without visibility pausing, MO subtree storms) wastes CPU and battery. Fix second.
+3. **Redundant observers** and **missing pooling** leak resources over time. Fix third.
+4. **Dedup opportunities** (manual synced refs) are correct code with a phase shorthand. Fix last or never.
+
+When in doubt, measure frame time before and after. An audit without measurement is speculation.
+
 ## Common replacements
 
 | Current pattern                                                      | Replace with                                                             |
@@ -353,11 +431,14 @@ After:
 | `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                             |
 | `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                                      |
 | `new ResizeObserver` for dimensions                                  | `useSize`                                                                |
+| Raw `MutationObserver` with reflow reads in callback                 | `useMutation` (rAF-batched, visibility-aware)                            |
 | `MutationObserver` on `style`/`attributes` to track size or position | `useSize` (ResizeObserver) / `useSight` (IO); reserve MO for `childList` |
+| Multiple `MutationObserver` on `<html>` for class changes            | Single `useMutation` with coalesced callback                             |
 | `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)              |
 | `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                               |
 | `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                          |
 | `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                             |
+| `getBoundingClientRect()` in `pointermove` handler                   | rAF-batched read (one `getBoundingClientRect` per frame, not per event)  |
 | `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                            |
 | Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                              |
 | CSS-only animation that's working fine                               | No change. Don't add JS where it's not needed.                           |
@@ -366,6 +447,10 @@ After:
 | Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops             |
 | `setInterval` rotation with visibility gating                        | CSS `@keyframes` + `useLifecycle` toggling `animation-play-state`        |
 | `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)      |
+| Heavy panel always mounted with `display:none`                       | Conditional rendering + `Presence` + `useWhenIdle` prefetch              |
+| N components with bare `window.addEventListener('resize', ...)`      | `useSize` or `useMediaQuery` (pooled observers, no raw listeners)        |
+| Global `body:has(...)` in stylesheet                                 | Scope with a subtree-scoped `<style>` or data-attribute pattern          |
+| Large list without `content-visibility`                              | `Defer` with `as` prop for semantic elements                             |
 
 ## Output format
 
@@ -1549,6 +1634,172 @@ Not applicable. Errors are not affected by motion preferences.
 - [create-ticker](./create-ticker.md). Throws `server_context`, `ticker_stopped`
 - [use-tween](./use-tween.md). Throws `invalid_duration`
 - [swap](./swap.md). Throws `missing_context`
+
+---
+
+# Performance recipes
+
+Patterns for solving common performance problems that surfaced in production audits. Each recipe is a scenario, a minimal pattern, and when to reach for it. For rendering-specific compositions (`Defer` + `WhenVisible` + `lazy()`), see [rendering-recipes.md](./rendering-recipes.md).
+
+## Recipe: sync a class from DOM state without an observer storm
+
+**Scenario:** a theme switcher or third-party library writes a class to `<html>` and several components need to react.
+
+```tsx
+function useThemeClass() {
+  const [theme, setTheme] = useState('light');
+  const htmlRef = useRef(document.documentElement);
+
+  useMutation({
+    ref: htmlRef,
+    mutation: { attributes: true, attributeFilter: ['class'] },
+    onMutations: () => {
+      const cl = document.documentElement.classList;
+      setTheme(cl.contains('dark') ? 'dark' : 'light');
+    },
+    visibilityAware: false,
+  });
+
+  return theme;
+}
+```
+
+**Why this works:** `useMutation` coalesces all class mutations into one rAF callback. Observing a single element (not a subtree) and a narrow `attributeFilter` keeps the callback count low. `visibilityAware: false` because `<html>` is always in the DOM.
+
+**What it replaces:** N separate `MutationObserver` instances on `<html>`, each firing synchronously per class change.
+
+## Recipe: custom scrollbar without layout thrash
+
+**Scenario:** a custom scrollbar that needs to sync thumb position with scroll height.
+
+```tsx
+function useScrollbarSync(containerRef: RefObject<HTMLElement | null>) {
+  const { size } = useSize({ ref: containerRef });
+
+  const thumbHeight = size
+    ? (size.height / (containerRef.current?.scrollHeight ?? size.height)) *
+      size.height
+    : 0;
+
+  return { thumbHeight, trackHeight: size?.height ?? 0 };
+}
+```
+
+**Why this works:** `useSize` reads dimensions via ResizeObserver (async, compositor-aligned). No `scrollHeight` read inside a MutationObserver callback, no forced reflow.
+
+**What it replaces:** a MutationObserver on `style` + synchronous `scrollHeight`/`clientHeight` reads in the callback.
+
+## Recipe: canvas that truly stops when hidden
+
+**Scenario:** a canvas animation that should stop when its parent is `display:none` (e.g., inside a tab panel).
+
+```tsx
+function ParticleCanvas() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useCanvas({
+    containerRef,
+    canvasRef,
+    draw: (ctx, frame, size) => {
+      ctx.clearRect(0, 0, size.width, size.height);
+      drawParticles(ctx, frame, size);
+    },
+  });
+
+  return (
+    <div ref={containerRef}>
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
+```
+
+**Why this works:** `useCanvas` pauses via `createSight` (IntersectionObserver). When the container's parent is `display:none`, IO reports the element as non-intersecting, and the loop pauses. The shared clock means no desync on resume.
+
+**What it replaces:** a raw `requestAnimationFrame` loop that schedules unconditionally and never checks visibility.
+
+## Recipe: close a panel without wasting resources
+
+**Scenario:** a heavy panel (chat, AI assistant, debug tools) that mounts on every route but is usually closed.
+
+```tsx
+function ChatWrapper() {
+  const [open, setOpen] = useState(false);
+
+  useWhenIdle(() => void import('./chat-panel'));
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>Open Chat</button>
+      <Presence show={open}>
+        <Suspense fallback={<Skeleton className="h-[480px]" />}>
+          <ChatPanel />
+        </Suspense>
+      </Presence>
+    </>
+  );
+}
+
+const ChatPanel = lazy(() => import('./chat-panel'));
+```
+
+**Why this works:** `Presence` unmounts the panel when closed (no JS, no observers, no subscriptions running). `useWhenIdle` prefetches the chunk during idle so it opens instantly. `Suspense` shows a skeleton while the chunk loads on first open.
+
+**What it replaces:** a heavy panel always mounted with `display:none`, whose JS/observers/subscriptions run on every route.
+
+## Recipe: delete a global `:has()` rule
+
+**Scenario:** a global stylesheet contains `body:has(.modal-open) { overflow: hidden; }`, forcing document-wide has-invalidation on every DOM mutation.
+
+```tsx
+function ModalOverflowGuard({ open }: { open: boolean }) {
+  useEffect(() => {
+    if (open) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [open]);
+
+  return null;
+}
+```
+
+**Why this works:** direct `style` write on `body` avoids the CSS selector engine. No global `:has()` rule, no has-invalidation on every DOM mutation.
+
+**What it replaces:** `body:has(.modal-open) { overflow: hidden; }` in a global stylesheet that forces the browser to re-evaluate on every class/attribute change across the entire document.
+
+## Recipe: make a long list cheap with `Defer`
+
+**Scenario:** a log viewer, card feed, or data table with hundreds of rows, each with meaningful DOM cost.
+
+```tsx
+function LogViewer({ entries }: { entries: LogEntry[] }) {
+  return (
+    <ul>
+      {entries.map((entry) => (
+        <Defer as="li" key={entry.id} estimatedHeight="48px">
+          <LogRow entry={entry} />
+        </Defer>
+      ))}
+    </ul>
+  );
+}
+```
+
+**Why this works:** `Defer` with `as="li"` applies `content-visibility: auto` to each list item without a wrapper `div`. Off-screen items skip style, layout, and paint. `contain-intrinsic-size: auto 48px` reserves space so the scrollbar stays stable.
+
+**What it replaces:** a long list where every row pays full rendering cost, even when off-screen.
+
+**Caveat:** `content-visibility: auto` skips accessibility tree building for off-screen content, and elements inside a skipped subtree are excluded from find-in-page. For lists with focusable or interactive children, test with assistive technology to confirm the trade-off is acceptable. Prefer `contain-intrinsic-size: auto <estimate>` so the browser remembers real sizes after first paint.
+
+## See also
+
+- [rendering-recipes](./rendering-recipes.md). Composing `Defer` / `WhenIdle` / `WhenVisible` / `useRenderState`
+- [audit](./audit.md). The audit procedure that surfaces candidates for these recipes
+- [performance](./performance.md). The hot-path performance rules
+- [decision-guide](./decision-guide.md). Choosing the right tier before reaching for a recipe
 
 ---
 

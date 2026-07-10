@@ -102,6 +102,61 @@ After:
 - **Always address cleanup.** If the candidate leaks listeners/observers/rAF handles, the recommendation must include proper teardown.
 - **Show before/after code.** Keep snippets minimal, only the relevant change, not the entire file.
 
+## Step 1.5: CSS, loading, and architecture pass
+
+After the JS scan, check for non-JS anti-patterns. The scanner covers some of these automatically; others require manual inspection.
+
+### CSS/DOM-scale checks
+
+- **Global `:has()` selectors.** Search `.css`/`.scss` files for `body:has(` or `html:has(`. Each forces document-wide has-invalidation on every DOM mutation.
+- **Missing `content-visibility`.** Large repeated lists (`.map()` returning many items) without `content-visibility: auto` or `Defer` pay full off-screen style/layout cost.
+- **Permanent `will-change`.** CSS with `will-change: transform` that is never toggled wastes GPU memory when idle.
+
+### Loading checks
+
+- **Heavy static imports in always-mounted subtrees.** Look for top-level imports of heavy packages (markdown renderers, syntax highlighters, animation libraries) in components that mount on every route.
+- **`display:none` as a close mechanism.** Components that hide with `display:none` or `visibility:hidden` instead of unmounting keep all JS/observers/subscriptions running.
+
+### Architecture checks
+
+- **Redundant observers.** Multiple `new MutationObserver` calls targeting `<html>` or `document.documentElement` in the same codebase, each firing on class changes.
+- **Bare window listeners with layout reads.** Multiple components each attaching `addEventListener('resize', ...)` or `addEventListener('scroll', ...)` with `getBoundingClientRect` or `offset*` reads in the handler.
+
+### Classification ladders
+
+In addition to the animation ladder (`CSS → useTween → phase → external library`), classify loading and containment candidates:
+
+**Loading ladder** (prefer the cheapest tier):
+
+```
+Static import  →  next/dynamic  →  WhenVisible + dynamic  →  useWhenIdle prefetch
+```
+
+**Containment ladder** (prefer the cheapest tier):
+
+```
+CSS content-visibility  →  Defer  →  WhenVisible / WhenIdle  →  conditional unmount
+```
+
+### When NOT to run the audit
+
+Skip the scan when the codebase:
+
+- Uses only CSS transitions/animations with no JS animation code
+- Has no raw observer usage (no `new IntersectionObserver/ResizeObserver/MutationObserver`)
+- Has already been audited and the scanner confirms zero candidates
+
+### Severity weighting
+
+When the scan returns many candidates, prioritize by impact:
+
+1. **Forced reflows in hot paths** (observer callbacks, event handlers, rAF) cause visible jank. Fix first.
+2. **Always-on background work** (rAF without visibility pausing, MO subtree storms) wastes CPU and battery. Fix second.
+3. **Redundant observers** and **missing pooling** leak resources over time. Fix third.
+4. **Dedup opportunities** (manual synced refs) are correct code with a phase shorthand. Fix last or never.
+
+When in doubt, measure frame time before and after. An audit without measurement is speculation.
+
 ## Common replacements
 
 | Current pattern                                                      | Replace with                                                             |
@@ -111,11 +166,14 @@ After:
 | `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                             |
 | `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                                      |
 | `new ResizeObserver` for dimensions                                  | `useSize`                                                                |
+| Raw `MutationObserver` with reflow reads in callback                 | `useMutation` (rAF-batched, visibility-aware)                            |
 | `MutationObserver` on `style`/`attributes` to track size or position | `useSize` (ResizeObserver) / `useSight` (IO); reserve MO for `childList` |
+| Multiple `MutationObserver` on `<html>` for class changes            | Single `useMutation` with coalesced callback                             |
 | `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)              |
 | `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                               |
 | `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                          |
 | `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                             |
+| `getBoundingClientRect()` in `pointermove` handler                   | rAF-batched read (one `getBoundingClientRect` per frame, not per event)  |
 | `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                            |
 | Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                              |
 | CSS-only animation that's working fine                               | No change. Don't add JS where it's not needed.                           |
@@ -124,6 +182,10 @@ After:
 | Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops             |
 | `setInterval` rotation with visibility gating                        | CSS `@keyframes` + `useLifecycle` toggling `animation-play-state`        |
 | `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)      |
+| Heavy panel always mounted with `display:none`                       | Conditional rendering + `Presence` + `useWhenIdle` prefetch              |
+| N components with bare `window.addEventListener('resize', ...)`      | `useSize` or `useMediaQuery` (pooled observers, no raw listeners)        |
+| Global `body:has(...)` in stylesheet                                 | Scope with a subtree-scoped `<style>` or data-attribute pattern          |
+| Large list without `content-visibility`                              | `Defer` with `as` prop for semantic elements                             |
 
 ## Output format
 

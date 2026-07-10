@@ -90,6 +90,28 @@ Every export belongs to a category. The choosing table above picks the primitive
 | Math        | Pure easing and interpolation functions      | `clamp`, `clamp01`, `lerp`, `inverseLerp`, `remap`, `easeOutCubic`, `easeOutQuart`, `easeOutBack`, `easeInOutCubic`, `linear`                                                                                                                                                                       |
 | Utility     | React ref/callback patterns for phase users  | `useSyncedRef`, `useStableCallback`                                                                                                                                                                                                                                                                 |
 
+## Performance beyond JavaScript
+
+The audit procedure and invariants above catch JS anti-patterns. These rules catch the rest. Many page-level perf regressions come from CSS, loading patterns, or architecture decisions that phase cannot fix with a primitive but can diagnose and recommend against.
+
+### CSS and style-recalc rules
+
+- **No global `:has()` selectors.** `body:has(...)` or `html:has(...)` in a global stylesheet forces document-wide has-invalidation on every DOM mutation. Scope the rule to a subtree or replace with a data attribute.
+- **Large repeated lists need `content-visibility`.** Tables, log lists, and card grids without `content-visibility: auto` + `contain-intrinsic-size` pay full style/layout cost off-screen. Use `Defer` (with the `as` prop for semantic elements).
+- **Scope expensive selectors.** Deeply nested combinators and broad `*` selectors in global sheets increase style-recalc time proportionally to DOM size.
+
+### Loading rules
+
+- **Heavy imports must be lazy in always-mounted subtrees.** Markdown renderers, syntax highlighters, AI SDK, and animation libraries imported at the top level of an always-mounted component load on every route. Use `next/dynamic`, `lazy()`, or `useWhenIdle(() => void import(...))` to defer.
+- **Compose `WhenVisible` with `next/dynamic` to defer the download.** `next/dynamic` splits the chunk; `WhenVisible` holds the mount (and the download) until the element nears the viewport. See [rendering-recipes.md](references/rendering-recipes.md).
+
+### Architecture rules
+
+- **Do not ship heavy subtrees as `display:none`-when-closed.** Their JS, observers, subscriptions, and bundle still run. Unmount with conditional rendering or `Presence`, warm on idle with `useWhenIdle`.
+- **Pool window listeners.** Never attach a bare `window` resize/scroll listener that reads layout. Use `useSize`, `useMediaQuery`, or `useContainerQuery`. Flag N components each owning their own listener.
+- **No redundant MutationObservers on the same target.** Coalesce into one `useMutation` call or coordinate via a shared hook.
+- **No per-frame `setState`.** Write to refs or DOM in `useLoop`/`useCanvas`, or use `useTween` for single values.
+
 ## Audit
 
 When you review, optimize, or audit animation code, follow [references/audit.md](references/audit.md). It provides a repeatable procedure backed by a deterministic scanner (`scripts/scan.mjs`) that surfaces anti-pattern candidates before judgment.
@@ -164,13 +186,14 @@ grep -ri "starting:opacity\|data-\[phase=exiting\]" skills/phase/references/  # 
 
 ## Cross-cutting references
 
-| Reference                                               | Use when                                                             |
-| ------------------------------------------------------- | -------------------------------------------------------------------- |
-| [decision-guide.md](references/decision-guide.md)       | Choosing between CSS, phase, or an external library                  |
-| [rendering-recipes.md](references/rendering-recipes.md) | Composing `Defer` / `WhenIdle` / `WhenVisible` / `useRenderState`    |
-| [performance.md](references/performance.md)             | Writing or reviewing hot-path animation code                         |
-| [audit.md](references/audit.md)                         | Auditing existing animations for optimization opportunities          |
-| [abort-signals.md](references/abort-signals.md)         | Tearing down core primitives with an `AbortSignal` (`signal` option) |
+| Reference                                                   | Use when                                                             |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| [decision-guide.md](references/decision-guide.md)           | Choosing between CSS, phase, or an external library                  |
+| [rendering-recipes.md](references/rendering-recipes.md)     | Composing `Defer` / `WhenIdle` / `WhenVisible` / `useRenderState`    |
+| [performance-recipes.md](references/performance-recipes.md) | Fixing common perf problems (observer storms, hidden panels, lists)  |
+| [performance.md](references/performance.md)                 | Writing or reviewing hot-path animation code                         |
+| [audit.md](references/audit.md)                             | Auditing existing animations for optimization opportunities          |
+| [abort-signals.md](references/abort-signals.md)             | Tearing down core primitives with an `AbortSignal` (`signal` option) |
 
 ## Full compiled document
 
