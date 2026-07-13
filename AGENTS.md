@@ -110,19 +110,20 @@ Minimal footprint is a core promise of phase. Every public export is individuall
 
 ## Code style
 
-| Convention            | Rule                                                             |
-| --------------------- | ---------------------------------------------------------------- |
-| File and folder names | `kebab-case`                                                     |
-| Type names            | `PascalCase`                                                     |
-| Function names        | `camelCase`                                                      |
-| `any`                 | Banned. Use `unknown` and narrow.                                |
-| Import extensions     | No `.js` extensions                                              |
-| Index imports         | No `/index` (directory index is inferred)                        |
-| Type imports          | Use `import type` / `export type` for type-only                  |
-| Barrel files          | Separate API exports from type exports (API first, types second) |
-| JSDoc                 | On public APIs: explain _what_ and _why_, not _how_              |
-| Inline comments       | Only where code cannot speak for itself                          |
-| Boolean props         | Banned. Use string unions (e.g. `enter: 'animate' \| 'instant'`) |
+| Convention            | Rule                                                                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| File and folder names | `kebab-case`                                                                                                                                    |
+| Type names            | `PascalCase`                                                                                                                                    |
+| Function names        | `camelCase`                                                                                                                                     |
+| `any`                 | Banned. Use `unknown` and narrow.                                                                                                               |
+| Import extensions     | No `.js` extensions                                                                                                                             |
+| Index imports         | No `/index` (directory index is inferred)                                                                                                       |
+| Type imports          | Use `import type` / `export type` for type-only                                                                                                 |
+| Barrel files          | Separate API exports from type exports (API first, types second)                                                                                |
+| JSDoc                 | On public APIs: explain _what_ and _why_, not _how_                                                                                             |
+| Inline comments       | Only where code cannot speak for itself                                                                                                         |
+| Boolean props         | Banned. Use string unions (e.g. `enter: 'animate' \| 'instant'`). Exception: `enabled` is boolean across all hooks (binary on/off, not a mode). |
+| Exported type names   | Must not shadow global `lib.dom` types (e.g. avoid exporting `MutationCallback` when the DOM defines one)                                       |
 
 ## Testing conventions
 
@@ -145,7 +146,7 @@ Minimal footprint is a core promise of phase. Every public export is individuall
 5. **No circular imports.** `ease/` has no deps, `core/` depends on `ease/` and `_internal/`, `react/` depends on `core/`. Never import upward.
 6. **Co-located tests.** Every module has a sibling `.spec.ts(x)` file.
 7. **Observer pooling.** IO keyed by serialized options, RO is a singleton, MQL keyed by query string. Never create raw observers outside the pool.
-8. **Phases + reasons.** Every state machine exposes both. Phase describes _what_ state; reason describes _why_.
+8. **Phases + reasons.** Every state machine exposes both. Phase describes _what_ state; reason describes _why_. Core primitives with phases must expose an `onPhaseChange` callback so React hooks can subscribe without polling. React hooks must use `useState` for phase/reason (reactive by default) and provide a transient (zero-re-render) escape hatch via a callback option, matching the `useSight` dual-mode pattern.
 
 ## Admission criteria
 
@@ -171,14 +172,14 @@ When a gap exists but fails the criteria, close it in the skill: add an audit ru
 
 Every export falls into one category. New exports must fit an existing category or justify a new one.
 
-| Category    | Exports                                                                                                                                                                                                                                  | What they wrap                                                      |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Timing      | createTicker, createLoop, useTween, useLoop, useCanvas                                                                                                                                                                                   | rAF, frame clock                                                    |
-| Observation | createSight, createScrollProgress, createRenderState, createDevicePixelRatio, useSight, useScrollProgress, useSize, useContainerQuery, useMediaQuery, useRenderState, useDevicePixelRatio, usePrefersReducedMotion, prefersReducedMotion | IO, RO, MQL, contentvisibilityautostatechange, matchMedia           |
-| Lifecycle   | createLifecycle, useLifecycle, whenIdle, useIdle, useWhenIdle                                                                                                                                                                            | IO + MQL + rIC composed into activation signals                     |
-| Composition | Presence, usePresence, Swap, WhenVisible, WhenIdle, Defer                                                                                                                                                                                | Mount/unmount orchestration with transition coordination            |
-| Math        | clamp, clamp01, lerp, inverseLerp, remap, easeOutCubic, easeOutQuart, easeOutBack, easeInOutCubic, linear                                                                                                                                | Pure functions, no browser API                                      |
-| Utility     | useSyncedRef, useStableCallback                                                                                                                                                                                                          | React ref/callback patterns needed by phase internals and consumers |
+| Category    | Exports                                                                                                                                                                                                                                                               | What they wrap                                                      |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Timing      | createTicker, createLoop, useTween, useLoop, useCanvas                                                                                                                                                                                                                | rAF, frame clock                                                    |
+| Observation | createSight, createScrollProgress, createRenderState, createDevicePixelRatio, createMutation, useSight, useScrollProgress, useSize, useContainerQuery, useMediaQuery, useRenderState, useDevicePixelRatio, usePrefersReducedMotion, useMutation, prefersReducedMotion | IO, RO, MQL, MO, contentvisibilityautostatechange, matchMedia       |
+| Lifecycle   | createLifecycle, useLifecycle, whenIdle, useIdle, useWhenIdle                                                                                                                                                                                                         | IO + MQL + rIC composed into activation signals                     |
+| Composition | Presence, usePresence, Swap, WhenVisible, WhenIdle, Defer                                                                                                                                                                                                             | Mount/unmount orchestration with transition coordination            |
+| Math        | clamp, clamp01, lerp, inverseLerp, remap, easeOutCubic, easeOutQuart, easeOutBack, easeInOutCubic, linear                                                                                                                                                             | Pure functions, no browser API                                      |
+| Utility     | useSyncedRef, useStableCallback                                                                                                                                                                                                                                       | React ref/callback patterns needed by phase internals and consumers |
 
 ## How to add new features
 
@@ -189,7 +190,9 @@ Every export falls into one category. New exports must fit an existing category 
 3. Add exports to `src/index.ts` (API section, then types section)
 4. Add a size-limit entry to `.size-limit.json`. Run `pnpm size` and set the limit to ~20% above measured size for exports under 500 B, ~10% for larger exports.
 5. Add a skill reference at `skills/phase/references/<name>.md` following `_template.md`
-6. Run `pnpm format:fix && pnpm validate && pnpm skill:check`
+6. If the primitive has phases: expose `onPhaseChange` callback in options (see rule 8)
+7. Verify exported type names do not collide with `lib.dom` globals
+8. Run `pnpm format:fix && pnpm size:readme && pnpm validate && pnpm skill:check`
 
 ### New React hook
 
@@ -198,7 +201,10 @@ Every export falls into one category. New exports must fit an existing category 
 3. Add exports to `src/react/index.ts` (API section, then types section)
 4. Add a size-limit entry to `.size-limit.json` with `"ignore": ["react"]`. Run `pnpm size` and set the limit to ~20% above measured size for exports under 500 B, ~10% for larger exports.
 5. Add a skill reference at `skills/phase/references/<use-name>.md` following `_template.md`
-6. Run `pnpm format:fix && pnpm validate && pnpm skill:check`
+6. If the hook exposes phase state: use `useState` (reactive by default), expose `phaseRef`/`phaseReasonRef` (always-current via ref), and provide a transient callback option that suppresses `setState` (see rule 8, match the `useSight` dual-mode pattern)
+7. No boolean props except `enabled`. Use string unions for modes and behaviors.
+8. Verify exported type names do not collide with `lib.dom` globals
+9. Run `pnpm format:fix && pnpm size:readme && pnpm validate && pnpm skill:check`
 
 ### New easing function
 
@@ -232,7 +238,8 @@ When asked to bump the version (patch, minor, or major):
 1. Bump `version` in `package.json`.
 2. Bump `version` in `skills/phase/SKILL.md` frontmatter (skill version is independent, but bump it alongside package changes that alter the public API or skill references).
 3. **Prepend** a new section to `CHANGELOG.md` under the new version number. Keep all previous entries intact (newest first, oldest last). Follow the existing format: `## X.Y.Z`, then `### Patch Changes` / `### Minor Changes` / `### Major Changes`, then bullet points.
-4. Never overwrite or truncate older changelog entries.
+4. **Keep entries short.** State what changed, not why. One line per change. Only elaborate if it directly affects how consumers use the API. Internal refactors, test infrastructure, and agent file updates get one line at most.
+5. Never overwrite or truncate older changelog entries.
 
 ## Skill sync
 

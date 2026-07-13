@@ -7,7 +7,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
 author: vercel
-version: '0.0.6'
+version: '0.0.7'
 abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend CSS-only, minimal JS, phase, or an external library.'
 
 ---
@@ -62,6 +62,7 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 | Mount non-critical UI when idle?                    | `WhenIdle` / `useIdle`                                                                      |
 | Run a side effect (prefetch, `import()`) when idle? | `useWhenIdle`                                                                               |
 | Pause raw work inside a `Defer` subtree?            | `useRenderState`                                                                            |
+| React to DOM mutations without reflow?              | `useMutation`                                                                               |
 | Reactive scroll/size/media values?                  | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
 | Scroll/size/visibility without re-renders?          | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
 | Reactive reduced-motion check for non-phase code?   | `usePrefersReducedMotion`                                                                   |
@@ -84,14 +85,14 @@ For the full performance ruleset, read [references/performance.md](references/pe
 
 Every export belongs to a category. The choosing table above picks the primitive; this table shows the organizational structure.
 
-| Category    | What it covers                               | Exports                                                                                                                                                                                                                                                            |
-| ----------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Timing      | Frame clocks and animation loops             | `createTicker`, `createLoop`, `useLoop`, `useCanvas`, `useTween`                                                                                                                                                                                                   |
-| Observation | Reactive wrappers around browser observers   | `createSight`, `createScrollProgress`, `createRenderState`, `createDevicePixelRatio`, `useSight`, `useScrollProgress`, `useSize`, `useContainerQuery`, `useMediaQuery`, `useRenderState`, `useDevicePixelRatio`, `usePrefersReducedMotion`, `prefersReducedMotion` |
-| Lifecycle   | Activation signals composed from IO+MQL+rIC  | `createLifecycle`, `useLifecycle`, `whenIdle`, `useIdle`, `useWhenIdle`                                                                                                                                                                                            |
-| Composition | Mount/unmount orchestration with transitions | `Presence`, `usePresence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer`                                                                                                                                                                                              |
-| Math        | Pure easing and interpolation functions      | `clamp`, `clamp01`, `lerp`, `inverseLerp`, `remap`, `easeOutCubic`, `easeOutQuart`, `easeOutBack`, `easeInOutCubic`, `linear`                                                                                                                                      |
-| Utility     | React ref/callback patterns for phase users  | `useSyncedRef`, `useStableCallback`                                                                                                                                                                                                                                |
+| Category    | What it covers                               | Exports                                                                                                                                                                                                                                                                                             |
+| ----------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Timing      | Frame clocks and animation loops             | `createTicker`, `createLoop`, `useLoop`, `useCanvas`, `useTween`                                                                                                                                                                                                                                    |
+| Observation | Reactive wrappers around browser observers   | `createSight`, `createScrollProgress`, `createRenderState`, `createDevicePixelRatio`, `createMutation`, `useSight`, `useScrollProgress`, `useSize`, `useContainerQuery`, `useMediaQuery`, `useRenderState`, `useDevicePixelRatio`, `usePrefersReducedMotion`, `useMutation`, `prefersReducedMotion` |
+| Lifecycle   | Activation signals composed from IO+MQL+rIC  | `createLifecycle`, `useLifecycle`, `whenIdle`, `useIdle`, `useWhenIdle`                                                                                                                                                                                                                             |
+| Composition | Mount/unmount orchestration with transitions | `Presence`, `usePresence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer`                                                                                                                                                                                                                               |
+| Math        | Pure easing and interpolation functions      | `clamp`, `clamp01`, `lerp`, `inverseLerp`, `remap`, `easeOutCubic`, `easeOutQuart`, `easeOutBack`, `easeInOutCubic`, `linear`                                                                                                                                                                       |
+| Utility     | React ref/callback patterns for phase users  | `useSyncedRef`, `useStableCallback`                                                                                                                                                                                                                                                                 |
 
 ## Audit
 
@@ -114,6 +115,7 @@ Each export has its own reference file. Read the relevant file when implementing
 | `createDevicePixelRatio`      | Tracking DPR changes in framework-free code          | [create-device-pixel-ratio.md](references/create-device-pixel-ratio.md) |
 | `whenIdle`                    | Running a one-off callback when the browser is idle  | [when-idle.md](references/when-idle.md)                                 |
 | `prefersReducedMotion`        | Gating expensive setup or conditional imports        | [prefers-reduced-motion.md](references/prefers-reduced-motion.md)       |
+| `createMutation`              | Lifecycle-aware MutationObserver with rAF batching   | [create-mutation.md](references/create-mutation.md)                     |
 | `PhaseError` / `isPhaseError` | Handling or classifying phase errors                 | [errors.md](references/errors.md)                                       |
 
 ### React (`phase/react`)
@@ -127,6 +129,7 @@ Each export has its own reference file. Read the relevant file when implementing
 | `useTween`                | Animating a single number into React render output       | [use-tween.md](references/use-tween.md)                                   |
 | `usePresence`             | Custom mount/unmount transitions (full control)          | [use-presence.md](references/use-presence.md)                             |
 | `useScrollProgress`       | Driving opacity/reveals from intersection ratio          | [use-scroll-progress.md](references/use-scroll-progress.md)               |
+| `useMutation`             | Lifecycle-aware MutationObserver with rAF batching       | [use-mutation.md](references/use-mutation.md)                             |
 | `useRenderState`          | Pausing raw work when a `Defer` subtree is skipped       | [use-render-state.md](references/use-render-state.md)                     |
 | `useIdle`                 | Boolean that flips true once the browser is idle         | [use-idle.md](references/use-idle.md)                                     |
 | `useWhenIdle`             | Run a side effect (prefetch, `import()`) once idle       | [use-when-idle.md](references/use-when-idle.md)                           |
@@ -644,6 +647,111 @@ Default: `'pause'`. The loop pauses entirely when reduced motion is enabled. The
 - [useLoop](./use-loop.md). React hook wrapping createLoop with ref management
 - [useCanvas](./use-canvas.md). React hook for canvas/WebGL with DPR handling on top of createLoop
 - [abort-signals](./abort-signals.md). Stop this loop via the `signal` option
+
+---
+
+# `createMutation`
+
+Lifecycle-aware MutationObserver that coalesces records into one rAF-batched callback. Never fires per-record synchronously. Auto-pauses when the observed element is off-screen via pooled IntersectionObserver.
+
+## Signature
+
+```ts
+import { createMutation } from 'phase';
+
+const mutation = createMutation(options: MutationOptions): Mutation;
+```
+
+### Options
+
+| Option                | Type                                  | Default   | Description                                      |
+| --------------------- | ------------------------------------- | --------- | ------------------------------------------------ |
+| `element`             | `Element`                             | required  | Element to observe                               |
+| `mutation`            | `MutationObserverInit`                | required  | Standard MutationObserver configuration          |
+| `onMutations`         | `(records: MutationRecord[]) => void` | required  | Called once per rAF frame with coalesced records |
+| `onPhaseChange`       | `(phase, reason) => void`             | --        | Called on phase transitions                      |
+| `visibility`          | `'pause' \| 'ignore'`                 | `'pause'` | Pause observation when off-screen, or ignore     |
+| `intersectionOptions` | `IntersectionObserverInit`            | --        | Forwarded to the visibility observer             |
+| `signal`              | `AbortSignal`                         | --        | Stops the observer when aborted                  |
+
+### Return (Mutation)
+
+| Property      | Type             | Description                                       |
+| ------------- | ---------------- | ------------------------------------------------- |
+| `phase`       | `MutationPhase`  | `'observing' \| 'paused' \| 'stopped'`            |
+| `phaseReason` | `MutationReason` | `'initial' \| 'started' \| 'sight' \| 'disposed'` |
+| `stop()`      | `() => void`     | Disconnect and clean up                           |
+
+### Phases
+
+| Phase       | Meaning                                    |
+| ----------- | ------------------------------------------ |
+| `observing` | MutationObserver is connected and batching |
+| `paused`    | Disconnected (off-screen or initial)       |
+| `stopped`   | Permanently disposed                       |
+
+### Reasons
+
+| Reason     | Meaning                          |
+| ---------- | -------------------------------- |
+| `initial`  | Not yet started                  |
+| `started`  | Element is visible, observing    |
+| `sight`    | Paused because element is hidden |
+| `disposed` | `stop()` or signal aborted       |
+
+## When to use
+
+- Reacting to DOM structure changes (`childList`) while the element is visible.
+- Observing attribute changes on a narrow target without reflow storms.
+- Coalescing frequent mutations (e.g., framework churn) into one batched read per frame.
+- Replacing raw `new MutationObserver` calls that lack visibility pausing and rAF batching.
+
+## When not to use
+
+| Instead of this                             | Use                                          |
+| ------------------------------------------- | -------------------------------------------- |
+| Tracking element size changes               | `useSize` (ResizeObserver, async, no reflow) |
+| Observing scroll position                   | `createScrollProgress`                       |
+| Checking `style` or `class` changes broadly | Narrower signals (`useMediaQuery`, CSS vars) |
+| React component                             | `useMutation` (manages refs and teardown)    |
+
+## Do
+
+- Observe `childList` for structural changes with visibility gating:
+  ```ts
+  const mutation = createMutation({
+    element: list,
+    mutation: { childList: true },
+    onMutations: (records) => updateCount(records.length),
+  });
+  ```
+- Observe specific attributes on a single element (not subtree):
+  ```ts
+  const mutation = createMutation({
+    element: el,
+    mutation: { attributes: true, attributeFilter: ['data-state'] },
+    onMutations: (records) => syncState(records),
+  });
+  ```
+- Use `visibility: 'ignore'` when the observer must run regardless of viewport position (rare, for document-level coordination).
+
+## Don't
+
+- **Don't observe `subtree` + `attributeFilter: ['style']` or `['class']`.** This fires on every descendant style/class change (animations, hovers, framework churn). A dev-mode warning fires when this shape is detected. Narrow the scope or use a different signal.
+- **Don't read layout inside `onMutations`.** The callback runs in a rAF batch, but reading `getBoundingClientRect`, `offsetWidth`, `getComputedStyle` inside it still forces a synchronous reflow. Read from `useSize` or cached values instead.
+- **Don't call `stop()` then expect to restart.** `stop()` is terminal. Create a new instance.
+- **Don't use for visibility detection.** Use `createSight` (IntersectionObserver, pooled, async).
+
+## Reduced motion
+
+Not applicable. `createMutation` observes DOM changes, not animation. The visibility-pausing signal composes with the same IO pool used by animation primitives.
+
+## See also
+
+- [useMutation](./use-mutation.md). React hook wrapping createMutation
+- [createSight](./create-sight.md). Visibility observation (IO-based)
+- [performance](./performance.md). Forced-reflow rules that apply inside `onMutations`
+- [abort-signals](./abort-signals.md). Tear down this observer via the `signal` option
 
 ---
 
@@ -2721,6 +2829,123 @@ const matches: boolean = useMediaQuery(query);
 - [use-prefers-reduced-motion](./use-prefers-reduced-motion.md). Reactive reduced-motion boolean
 - [prefers-reduced-motion](./prefers-reduced-motion.md). Synchronous one-shot check
 - [useSize](./use-size.md). Raw element dimensions
+
+---
+
+# `useMutation`
+
+React hook wrapping `createMutation`. Lifecycle-aware MutationObserver with rAF-coalesced callbacks. Auto-pauses when the element is off-screen, tears down on unmount.
+
+## Signature
+
+Two overloads. When `onPhaseChange` is provided, `phase` and `phaseReason` are omitted from the return type (compile-time error to access them).
+
+```ts
+import { useMutation } from 'phase/react';
+
+// Reactive (re-renders on phase transitions)
+const { ref, phase, phaseReason, phaseRef, phaseReasonRef } =
+  useMutation<T>(options);
+
+// Transient (zero re-renders)
+const { ref, phaseRef, phaseReasonRef } = useMutation<T>({
+  ...options,
+  onPhaseChange: (phase, reason) => {
+    /* imperative work */
+  },
+});
+```
+
+### Options
+
+| Option                | Type                                  | Default   | Description                                                              |
+| --------------------- | ------------------------------------- | --------- | ------------------------------------------------------------------------ |
+| `ref`                 | `RefObject<T \| null>`                | returned  | Bring your own ref, or attach the returned one                           |
+| `mutation`            | `MutationObserverInit`                | required  | Standard MutationObserver configuration (must be stable across renders)  |
+| `onMutations`         | `(records: MutationRecord[]) => void` | required  | Called once per rAF frame with coalesced records                         |
+| `onPhaseChange`       | `(phase, reason) => void`             | --        | When provided, no re-renders occur on phase transitions (transient mode) |
+| `visibility`          | `'pause' \| 'ignore'`                 | `'pause'` | Pause observation when off-screen, or ignore visibility                  |
+| `enabled`             | `boolean`                             | `true`    | When `false`, tears down the observer entirely                           |
+| `intersectionOptions` | `IntersectionObserverInit`            | --        | Forwarded to the visibility observer                                     |
+
+### Return (reactive, no `onPhaseChange`)
+
+| Property         | Type                        | Description                                              |
+| ---------------- | --------------------------- | -------------------------------------------------------- |
+| `ref`            | `RefObject<T \| null>`      | Attach to the observed element                           |
+| `phase`          | `MutationPhase`             | `'observing' \| 'paused' \| 'stopped'`                   |
+| `phaseReason`    | `MutationReason`            | `'initial' \| 'started' \| 'sight' \| 'disposed'`        |
+| `phaseRef`       | `RefObject<MutationPhase>`  | Phase via ref. Always current, never triggers re-render  |
+| `phaseReasonRef` | `RefObject<MutationReason>` | Reason via ref. Always current, never triggers re-render |
+
+### Return (transient, with `onPhaseChange`)
+
+| Property         | Type                        | Description                                              |
+| ---------------- | --------------------------- | -------------------------------------------------------- |
+| `ref`            | `RefObject<T \| null>`      | Attach to the observed element                           |
+| `phaseRef`       | `RefObject<MutationPhase>`  | Phase via ref. Always current, never triggers re-render  |
+| `phaseReasonRef` | `RefObject<MutationReason>` | Reason via ref. Always current, never triggers re-render |
+
+`phase` and `phaseReason` are not available in transient mode. Accessing them is a TypeScript error.
+
+## When to use
+
+- Reacting to DOM changes (child additions, attribute mutations) inside a React component.
+- Syncing external DOM state into your component without reflow storms.
+- Replacing raw `MutationObserver` usage in `useEffect` that lacks visibility pausing and rAF batching.
+- Coalescing frequent mutations from animation libraries or framework churn into one callback per frame.
+
+## When not to use
+
+| Instead of this                            | Use                                          |
+| ------------------------------------------ | -------------------------------------------- |
+| Tracking element dimensions                | `useSize` (ResizeObserver, async, no reflow) |
+| Viewport visibility as a boolean           | `useSight`                                   |
+| Observing `style`/`class` across a subtree | Narrower signals or `useMediaQuery`          |
+| Framework-agnostic code                    | `createMutation` (core)                      |
+
+## Do
+
+- Cleanup is automatic. The effect teardown disconnects the observer on unmount.
+- Observe structural changes:
+  ```tsx
+  const { ref } = useMutation({
+    mutation: { childList: true },
+    onMutations: (records) => {
+      const added = records.filter((r) => r.addedNodes.length > 0);
+      countRef.current += added.length;
+    },
+  });
+  return <ul ref={ref}>{items}</ul>;
+  ```
+- Use `onPhaseChange` for zero-re-render observation:
+  ```tsx
+  const { ref, phaseRef } = useMutation({
+    mutation: { childList: true },
+    onMutations: handleRecords,
+    onPhaseChange: (phase) => {
+      worker.postMessage({ observing: phase === 'observing' });
+    },
+  });
+  ```
+- Read `phaseRef.current` inside callbacks for the latest phase without closure staleness.
+
+## Don't
+
+- **Don't read layout inside `onMutations`.** Reading `getBoundingClientRect`, `offsetWidth`, or `getComputedStyle` forces a synchronous reflow even inside the rAF batch. Use `useSize` for dimensions.
+- **Don't observe `subtree` + `attributeFilter: ['style', 'class']`.** Fires on every descendant style/class change. A dev-mode warning fires for this pattern.
+- **Don't pass an unstable `mutation` object.** Define it outside the component or memoize it. Changes to the object are not tracked and will not restart the observer.
+
+## Reduced motion
+
+Not applicable. `useMutation` observes DOM changes, not animation.
+
+## See also
+
+- [createMutation](./create-mutation.md). Framework-agnostic core
+- [useSight](./use-sight.md). Visibility observation (different signal)
+- [useSize](./use-size.md). Dimension tracking via ResizeObserver
+- [performance](./performance.md). Forced-reflow rules for observer callbacks
 
 ---
 

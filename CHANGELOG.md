@@ -1,5 +1,12 @@
 # phase
 
+## 0.0.4
+
+### Patch Changes
+
+- Add `createMutation` and `useMutation`: lifecycle-aware MutationObserver with rAF-coalesced callbacks, off-screen pausing, and reactive/transient dual mode.
+- Add admission criteria and export taxonomy to AGENTS.md.
+
 ## 0.0.3
 
 ### Patch Changes

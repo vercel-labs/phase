@@ -886,13 +886,14 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |             834 B |
+| `createTicker`            |             837 B |
 | `createSight`             |             963 B |
-| `createLifecycle`         |           1.47 kB |
+| `createLifecycle`         |           1.48 kB |
 | `createLoop`              |            2.6 kB |
-| `createScrollProgress`    |             868 B |
+| `createScrollProgress`    |             869 B |
 | `createRenderState`       |             495 B |
 | `createDevicePixelRatio`  |             544 B |
+| `createMutation`          |            1.2 kB |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
 | **Ease**                  |                   |
@@ -900,26 +901,27 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **React**                 |                   |
 | `useLoop`                 |           2.81 kB |
 | `useLifecycle`            |           1.68 kB |
-| `useSight`                |           1.19 kB |
+| `useSight`                |           1.18 kB |
 | `useCanvas`               |           3.44 kB |
-| `useTween`                |             614 B |
-| `usePresence`             |             592 B |
+| `useMutation`             |           1.38 kB |
+| `useTween`                |             620 B |
+| `usePresence`             |             593 B |
 | `useScrollProgress`       |             996 B |
 | `useSize`                 |             388 B |
-| `useContainerQuery`       |             347 B |
-| `useMediaQuery`           |             245 B |
-| `usePrefersReducedMotion` |             272 B |
+| `useContainerQuery`       |             365 B |
+| `useMediaQuery`           |             246 B |
+| `usePrefersReducedMotion` |             273 B |
 | `useDevicePixelRatio`     |             231 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             745 B |
+| `Presence`                |             743 B |
 | `WhenVisible`             |           1.44 kB |
-| `WhenIdle`                |             592 B |
+| `WhenIdle`                |             593 B |
 | `Defer`                   |             104 B |
 | `useIdle`                 |             435 B |
-| `useWhenIdle`             |             448 B |
+| `useWhenIdle`             |             449 B |
 | `useRenderState`          |             527 B |
-| `Swap`                    |           1.12 kB |
+| `Swap`                    |           1.13 kB |
 
 <!-- SIZE-TABLE:END -->
 

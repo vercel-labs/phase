@@ -22,6 +22,7 @@ export { createRenderState } from './core/render-state';
 export { createDevicePixelRatio } from './core/device-pixel-ratio';
 export { whenIdle } from './core/idle';
 export { prefersReducedMotion } from './core/reduced-motion';
+export { createMutation } from './core/mutation';
 export { PhaseError, isPhaseError } from './core/error';
 
 // Types
@@ -70,4 +71,10 @@ export type {
   DevicePixelRatioOptions,
 } from './core/device-pixel-ratio';
 export type { IdleOptions } from './core/idle';
+export type {
+  Mutation,
+  MutationOptions,
+  MutationPhase,
+  MutationReason,
+} from './core/mutation';
 export type { PhaseErrorCode } from './core/error';

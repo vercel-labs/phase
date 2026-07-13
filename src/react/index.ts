@@ -18,6 +18,7 @@ export { useRenderState } from './use-render-state';
 export { useIdle } from './use-idle';
 export { useWhenIdle } from './use-when-idle';
 export { useCanvas } from './use-canvas';
+export { useMutation } from './use-mutation';
 export { useTween } from './use-tween';
 export { usePresence } from './use-presence';
 export { Presence } from './presence';
@@ -68,6 +69,14 @@ export type {
   UseCanvasOptions,
   UseCanvasResult,
 } from './use-canvas';
+export type {
+  MutationRecordsCallback,
+  MutationPhaseCallback,
+  UseMutationOptions,
+  UseMutationReactiveResult,
+  UseMutationTransientResult,
+  UseMutationResult,
+} from './use-mutation';
 export type { UseTweenOptions } from './use-tween';
 export type {
   PresenceMode,
