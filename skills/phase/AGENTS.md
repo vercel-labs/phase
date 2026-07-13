@@ -7,7 +7,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
 author: vercel
-version: '0.0.8'
+version: '0.0.9'
 abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend CSS-only, minimal JS, phase, or an external library.'
 
 ---
@@ -51,22 +51,29 @@ Two idle hooks defer work off the critical path: `useIdle` gates rendering with 
 
 The ladder picks a _tier_; this table picks the _primitive_ once phase is the right tier.
 
-| Need                                                | Use                                                                                         |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Know if it's on screen?                             | `useSight`                                                                                  |
-| Want phase to run your frame loop?                  | `useLoop` (DOM) / `useCanvas` (canvas)                                                      |
-| You own the loop (WebGL, three.js, Web Worker)?     | `useLifecycle` (active/paused signal)                                                       |
-| Animating one value into render?                    | `useTween`                                                                                  |
-| Mount/unmount transitions?                          | `Presence` / `Swap` / `WhenVisible`                                                         |
-| Skip painting off-screen content (keep in DOM)?     | `Defer`                                                                                     |
-| Mount non-critical UI when idle?                    | `WhenIdle` / `useIdle`                                                                      |
-| Run a side effect (prefetch, `import()`) when idle? | `useWhenIdle`                                                                               |
-| Pause raw work inside a `Defer` subtree?            | `useRenderState`                                                                            |
-| React to DOM mutations without reflow?              | `useMutation`                                                                               |
-| Reactive scroll/size/media values?                  | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
-| Scroll/size/visibility without re-renders?          | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
-| Reactive reduced-motion check for non-phase code?   | `usePrefersReducedMotion`                                                                   |
-| Need reactive `devicePixelRatio` for buffer sizing? | `useDevicePixelRatio`                                                                       |
+| Need                                                 | Use                                                                                         |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Know if it's on screen?                              | `useSight`                                                                                  |
+| Want phase to run your frame loop?                   | `useLoop` (DOM) / `useCanvas` (canvas)                                                      |
+| You own the loop (WebGL, three.js, Web Worker)?      | `useLifecycle` (active/paused signal)                                                       |
+| Animating one value into render?                     | `useTween`                                                                                  |
+| Mount/unmount transitions?                           | `Presence` / `Swap` / `WhenVisible`                                                         |
+| Skip painting off-screen content (keep in DOM)?      | `Defer`                                                                                     |
+| Mount non-critical UI when idle?                     | `WhenIdle` / `useIdle`                                                                      |
+| Run a side effect (prefetch, `import()`) when idle?  | `useWhenIdle`                                                                               |
+| Pause raw work inside a `Defer` subtree?             | `useRenderState`                                                                            |
+| React to DOM mutations without reflow?               | `useMutation`                                                                               |
+| Reactive scroll/size/media values?                   | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
+| Scroll/size/visibility without re-renders?           | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
+| Reactive reduced-motion check for non-phase code?    | `usePrefersReducedMotion`                                                                   |
+| Need reactive `devicePixelRatio` for buffer sizing?  | `useDevicePixelRatio`                                                                       |
+| Visibility-aware timed sequences (do X, wait, do Y)? | `useLoop` with `fps: 1–2` and `frame.elapsed`-based steps                                   |
+
+## React first
+
+In React components, prefer the React hooks (`useLoop`, `useCanvas`, `useLifecycle`, `useSight`, etc.) over the core API (`createLoop`, `createTicker`, `createLifecycle`, `createSight`). Hooks manage refs, teardown, and React lifecycle automatically. Using `createLoop` inside a `useEffect` when `useLoop` would work is a bug waiting to happen (manual cleanup, stale refs, no `enabled` prop).
+
+Reach for core primitives in React when the hook doesn't fit, such as building a custom hook on top of `createLoop`, composing multiple primitives via a shared `AbortController`, or wiring up an imperative manager that owns its own lifecycle. In those cases you own the teardown. Call `stop()` or abort the signal in the effect cleanup.
 
 ## Non-negotiable invariants
 
@@ -175,6 +182,7 @@ grep -ri "starting:opacity\|data-\[phase=exiting\]" skills/phase/references/  # 
 | [performance.md](references/performance.md)             | Writing or reviewing hot-path animation code                         |
 | [audit.md](references/audit.md)                         | Auditing existing animations for optimization opportunities          |
 | [abort-signals.md](references/abort-signals.md)         | Tearing down core primitives with an `AbortSignal` (`signal` option) |
+| [timed-sequences.md](references/timed-sequences.md)     | Building multi-step timed animation sequences with `useLoop`         |
 
 ## Full compiled document
 
@@ -346,26 +354,37 @@ After:
 
 ## Common replacements
 
-| Current pattern                                                      | Replace with                                                             |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Manual `requestAnimationFrame` loop + `cancelAnimationFrame` cleanup | `useLoop` (if DOM) or `useCanvas` (if canvas)                            |
-| `requestAnimationFrame` without `cancelAnimationFrame`               | Same, plus the cleanup is now automatic                                  |
-| `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                             |
-| `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                                      |
-| `new ResizeObserver` for dimensions                                  | `useSize`                                                                |
-| `MutationObserver` on `style`/`attributes` to track size or position | `useSize` (ResizeObserver) / `useSight` (IO); reserve MO for `childList` |
-| `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)              |
-| `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                               |
-| `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                          |
-| `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                             |
-| `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                            |
-| Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                              |
-| CSS-only animation that's working fine                               | No change. Don't add JS where it's not needed.                           |
-| Hand-wired IO + visibilitychange + reduced motion → boolean          | `useLifecycle` (single hook, same signals, pooled IO)                    |
-| `getBoundingClientRect()` for initial in-view check                  | Trust IO (one-frame delay is invisible) or `rootMargin`                  |
-| Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops             |
-| `setInterval` rotation with visibility gating                        | CSS `@keyframes` + `useLifecycle` toggling `animation-play-state`        |
-| `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)      |
+| Current pattern                                                      | Replace with                                                                                                                                                                                          |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Manual `requestAnimationFrame` loop + `cancelAnimationFrame` cleanup | `useLoop` (if DOM) or `useCanvas` (if canvas)                                                                                                                                                         |
+| `requestAnimationFrame` without `cancelAnimationFrame`               | Same, plus the cleanup is now automatic                                                                                                                                                               |
+| `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                                                                                                                                                          |
+| `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                                                                                                                                                                   |
+| `new ResizeObserver` for dimensions                                  | `useSize`                                                                                                                                                                                             |
+| `MutationObserver` on `style`/`attributes` to track size or position | `useSize` (ResizeObserver) / `useSight` (IO); reserve MO for `childList`                                                                                                                              |
+| `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)                                                                                                                                           |
+| `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                                                                                                                                                            |
+| `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                                                                                                                                                       |
+| `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                                                                                                                                                          |
+| `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                                                                                                                                                         |
+| Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                                                                                                                                                           |
+| CSS-only animation that's working fine                               | No change. Don't add JS where it's not needed.                                                                                                                                                        |
+| Hand-wired IO + visibilitychange + reduced motion → boolean          | `useLifecycle` (single hook, same signals, pooled IO)                                                                                                                                                 |
+| `getBoundingClientRect()` for initial in-view check                  | Trust IO (one-frame delay is invisible) or `rootMargin`                                                                                                                                               |
+| Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops                                                                                                                                          |
+| `setTimeout`/`setInterval` for timed animation sequences             | `useLoop` with `fps: 1–2` and `frame.elapsed`-based steps (see [timed-sequences.md](./timed-sequences.md)); or CSS `@keyframes` + `useLifecycle` toggling `animation-play-state` if purely CSS-driven |
+| `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)                                                                                                                                   |
+
+## Reviewing phase code
+
+After implementing, migrating, or reviewing animation code that uses phase, ask: **is it using phase to the best of its ability?** Four questions frame the review:
+
+1. **Right tier?** Could CSS handle this alone? Could `useTween` replace a `useLoop` that only animates one value? Is an external library needed (springs, gestures)? The cheapest tier that works wins.
+2. **Right primitive?** Within the phase tier, is each primitive the best fit for what it's doing? Read the relevant reference file's "When to use" / "When not to use" tables.
+3. **Right options?** Is `fps` set appropriately (e.g., `fps: 1–2` for state-machine transitions, not 60)? Should a hook use transient mode (`onProgress` / `onResize` / `onVisibilityChange`) instead of re-rendering? Is `observe: 'once'` appropriate for one-shot triggers?
+4. **Missing phase?** Is there animation or rendering code with no lifecycle management — animations running off-screen, raw observers, missing reduced-motion handling, long pages without `Defer`?
+
+The specific failure modes and correct patterns live in the reference files: [timed-sequences.md](./timed-sequences.md) for the timer anti-pattern and initial-state flash, [performance.md](./performance.md) for hot-path rules, [decision-guide.md](./decision-guide.md) for tier selection and migration mappings.
 
 ## Output format
 
@@ -1108,22 +1127,23 @@ Use when you need any of:
 - Mount/unmount transitions with exit animations
 - Scroll-driven reveals, element sizing, or media-query reactivity
 
-| Scenario                            | Primitive                      |
-| ----------------------------------- | ------------------------------ |
-| DOM animation loop                  | `useLoop`                      |
-| Canvas/WebGL loop                   | `useCanvas`                    |
-| Signal for your own renderer        | `useLifecycle`                 |
-| Mount/unmount with exit             | `Presence`, `usePresence`      |
-| Swap between states with exit→enter | `Swap`                         |
-| Lazy mount on viewport entry        | `WhenVisible`                  |
-| Lazy mount when the browser is idle | `WhenIdle`, `useIdle`          |
-| Prefetch / side effect when idle    | `useWhenIdle`                  |
-| Skip painting off-screen (keep DOM) | `Defer`                        |
-| Pause raw work inside a `Defer`     | `useRenderState`               |
-| Visibility ratio (reveal effects)   | `useScrollProgress`            |
-| Element dimensions                  | `useSize`, `useContainerQuery` |
-| Media query subscription            | `useMediaQuery`                |
-| Visibility boolean                  | `useSight`                     |
+| Scenario                            | Primitive                                     |
+| ----------------------------------- | --------------------------------------------- |
+| DOM animation loop                  | `useLoop`                                     |
+| Canvas/WebGL loop                   | `useCanvas`                                   |
+| Signal for your own renderer        | `useLifecycle`                                |
+| Mount/unmount with exit             | `Presence`, `usePresence`                     |
+| Swap between states with exit→enter | `Swap`                                        |
+| Lazy mount on viewport entry        | `WhenVisible`                                 |
+| Lazy mount when the browser is idle | `WhenIdle`, `useIdle`                         |
+| Prefetch / side effect when idle    | `useWhenIdle`                                 |
+| Skip painting off-screen (keep DOM) | `Defer`                                       |
+| Pause raw work inside a `Defer`     | `useRenderState`                              |
+| Visibility ratio (reveal effects)   | `useScrollProgress`                           |
+| Element dimensions                  | `useSize`, `useContainerQuery`                |
+| Media query subscription            | `useMediaQuery`                               |
+| Visibility boolean                  | `useSight`                                    |
+| Timed multi-step animation sequence | `useLoop` (`fps: 1–2`, `frame.elapsed` steps) |
 
 All phase primitives share:
 
@@ -1272,6 +1292,7 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 - Animations that keep running in background tabs → `useLoop` (auto-pauses)
 - Missing `prefers-reduced-motion` handling → any phase primitive (automatic)
 - Manual `transitionend` listeners for unmount → `Presence` / `Swap`
+- `setTimeout`/`setInterval` chains for multi-step animation sequences → `useLoop` with `fps: 1–2` and `frame.elapsed`-based step derivation (see [timed-sequences.md](./timed-sequences.md))
 
 ## When NOT to replace with phase
 
@@ -1279,6 +1300,27 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 - Spring animations with interruption. Keep your spring library.
 - Gesture-driven animations. Keep your gesture library.
 - Server-side code that imports easing math. Use `phase/ease` (no browser APIs).
+
+## Migrating from animation libraries
+
+When converting from framer-motion (or similar), map patterns to the cheapest tier that works. Don't convert every `motion.div` to a phase primitive — many are CSS-only transitions that don't need JS at all.
+
+| framer-motion pattern                                             | phase equivalent                                                                                          |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `<AnimatePresence>` + `exit` prop                                 | `<Presence>` or `<Swap>` with CSS `@starting-style` + `data-[phase=exiting]`                              |
+| `motion.div` with `initial`/`animate` (opacity, transform)        | CSS `transition` + `@starting-style` (Tier 1). No JS needed for enter/exit.                               |
+| `animate()` with `delay` chains (do X, wait, do Y)                | `useLoop` with `fps: 1–2` and `frame.elapsed` thresholds (see [timed-sequences.md](./timed-sequences.md)) |
+| `stagger` children                                                | `useLoop` with per-child elapsed-time offsets (see [timed-sequences.md](./timed-sequences.md))            |
+| `useInView`                                                       | `useSight` (reactive phase) or `useLifecycle` (animation gating)                                          |
+| `useScroll` (scroll-position scrubbing)                           | `useScrollProgress` for intersection ratio; native `ScrollTimeline` for position-based                    |
+| `layout` animations (animating between measured positions)        | Keep framer-motion. Phase does not do layout animation.                                                   |
+| Spring physics (`type: 'spring'`)                                 | Keep framer-motion. Phase does not do springs.                                                            |
+| Gesture-driven (`drag`, `whileTap`)                               | Keep framer-motion or `@use-gesture`. Phase does not handle gestures.                                     |
+| `useMotionValue` + `useTransform` (continuous computed animation) | `useLoop` with `onTick` for per-frame DOM writes, or `useScrollProgress` if scroll-driven                 |
+
+### Reviewing phase code
+
+After any phase work, ask: is it using phase to the best of its ability? Right tier, right primitive, right options, nothing missing? See [audit.md](./audit.md) for the review framework.
 
 ## Common mistakes
 
@@ -1288,6 +1330,8 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 - **Forgetting that `createLoop` has no `pause()`/`resume()`.** It's signal-driven (visibility, reduced motion, quality). For manual control, use `createLifecycle` which exposes `pause()`/`resume()`, or use the React hook's `enabled` prop.
 - **Reaching for an external library for enter/exit transitions.** `Presence`, `Swap`, and `WhenVisible` handle mount/unmount with CSS `@starting-style` + `transitionend`. You don't need a library for this.
 - **Using `useScrollProgress` expecting continuous scroll-scrubbing.** It reports intersection ratio, which plateaus for tall elements. For scroll-position-driven animation, use `ScrollTimeline` or `motion`'s `useScroll`.
+- **Using `useLifecycle` + `setTimeout`/`setInterval` to build timed animation sequences.** `useLifecycle` only provides visibility signals — it doesn't drive timing. The timers keep firing off-screen, restart from zero when scrolling back, and don't participate in phase's lifecycle. Use `useLoop` with `frame.elapsed` instead: elapsed time freezes during pause, so sequences resume where they left off. See [timed-sequences.md](./timed-sequences.md).
+- **Using `createLoop` / `createTicker` / `createLifecycle` in React when the hook would work.** Prefer the hook equivalents (`useLoop`, `useCanvas`, `useLifecycle`) — they manage refs, teardown, and `enabled` automatically. Reach for core primitives only when the hook doesn't fit: custom hooks composed from multiple primitives, `AbortController`-based teardown, or imperative managers that own their lifecycle.
 
 ---
 
@@ -2296,6 +2340,201 @@ Automatic: enter animation skipped for the incoming state, exit is instant for t
 
 ---
 
+# Timed sequence animations
+
+How to build visibility-aware, multi-step animation sequences (do X, wait, do Y, wait, do Z) with phase. This is the most common marketing animation pattern and the one most likely to be built incorrectly.
+
+## Why `useLifecycle` + `setTimeout` fails
+
+The wrong approach combines `useLifecycle` (for visibility) with `setTimeout`/`setInterval` (for timing):
+
+```tsx
+const { ref, isActive } = useLifecycle();
+const [step, setStep] = useState(0);
+
+useEffect(() => {
+  if (!isActive) return;
+  const t1 = setTimeout(() => setStep(1), 500);
+  const t2 = setTimeout(() => setStep(2), 1200);
+  const t3 = setTimeout(() => setStep(3), 2000);
+  return () => {
+    clearTimeout(t1);
+    clearTimeout(t2);
+    clearTimeout(t3);
+  };
+}, [isActive]);
+```
+
+This fails in three ways:
+
+1. **Timers restart from zero on re-entry.** Scroll away then back — the sequence replays from the beginning instead of resuming where it left off.
+2. **Timers don't participate in phase's lifecycle.** If the cleanup races or `isActive` flips rapidly, timers can fire out of order or after unmount.
+3. **Each step triggers a React re-render.** `setStep` causes reconciliation for what should be a DOM-only operation.
+
+## The correct pattern: `useLoop` with `frame.elapsed`
+
+Derive which animation step you're in from `frame.elapsed` thresholds. The loop auto-pauses off-screen, `elapsed` freezes during pause, and the sequence resumes exactly where it left off.
+
+The loop doesn't fire until the element enters the viewport, so there's a gap between the browser's first paint and the first `onTick` call. If an element's CSS renders it at full width but the animation starts from zero, the user sees a flash: full width → snap to zero → animate back. Set each element's CSS to its animation start state (e.g., `scaleX(0)`, `opacity: 0`) so the browser paints the pre-animation state from the start:
+
+```tsx
+const { ref } = useLoop({
+  fps: 2,
+  onTick: (frame) => {
+    const el = ref.current;
+    if (!el) return;
+
+    const e = frame.elapsed;
+    const bar1 = el.querySelector<HTMLElement>('[data-bar="1"]');
+    const bar2 = el.querySelector<HTMLElement>('[data-bar="2"]');
+    const bar3 = el.querySelector<HTMLElement>('[data-bar="3"]');
+    if (!bar1 || !bar2 || !bar3) return;
+
+    bar1.style.transform = `scaleX(${clamp01(e / 500)})`;
+    bar2.style.transform = `scaleX(${clamp01((e - 500) / 700)})`;
+    bar3.style.transform = `scaleX(${clamp01((e - 1200) / 800)})`;
+  },
+});
+
+return (
+  <div ref={ref}>
+    {/* CSS initial state matches animation start (scaleX(0)) */}
+    <div data-bar="1" className="origin-left scale-x-0" />
+    <div data-bar="2" className="origin-left scale-x-0" />
+    <div data-bar="3" className="origin-left scale-x-0" />
+  </div>
+);
+```
+
+### Why this works
+
+- **No flash on first entry.** Elements start at `scaleX(0)` in CSS, matching the animation's start state, so there's no visible snap when the loop fires its first tick.
+- **`frame.elapsed` freezes during pause.** Scroll away, come back — the sequence picks up exactly where it stopped. No restart on re-entry.
+- **`fps: 2` (or `fps: 1`) keeps CPU near zero.** Step transitions happen on second or half-second boundaries. You don't need 60fps to check which step you're in.
+- **Zero re-renders.** `onTick` writes to the DOM directly via refs. React never reconciles.
+- **Visibility-aware by default.** The loop pauses off-screen and under reduced motion. No manual `IntersectionObserver` needed.
+
+## How to build a timed sequence
+
+1. **Identify the sequence steps.** Each step has a start time (ms from the beginning) and a duration.
+2. **Set CSS initial state.** Each animated element should render in its animation start state via CSS (e.g., `scaleX(0)`, `opacity: 0`, `translateY(20px)`). Otherwise, the element flashes at its natural size before the loop's first tick overrides it.
+3. **Use `useLoop` with a low `fps`.** `fps: 1` or `fps: 2` is enough for step-based sequences. Use higher FPS only if you need smooth interpolation between steps.
+4. **Derive step state from `frame.elapsed` in `onTick`.** Compare against your timing thresholds. Write to DOM directly.
+5. **Use `clamp01` for progress within each step.** `clamp01((elapsed - stepStart) / stepDuration)` gives you a 0–1 progress for each step.
+6. **Apply easing if needed.** Pipe the clamped progress through an easing function: `easeOutCubic(clamp01((e - start) / duration))`.
+
+## Variations
+
+### Staggered reveal (multiple elements animate in sequence)
+
+Set CSS initial state on each item (`opacity-0` + offset) so nothing flashes before the loop starts:
+
+```tsx
+const STAGGER_DELAY = 200;
+
+const { ref } = useLoop({
+  fps: 2,
+  onTick: (frame) => {
+    const el = ref.current;
+    if (!el) return;
+    const items = el.querySelectorAll<HTMLElement>('[data-reveal]');
+    for (let i = 0; i < items.length; i++) {
+      const progress = clamp01((frame.elapsed - i * STAGGER_DELAY) / 600);
+      const eased = easeOutCubic(progress);
+      items[i].style.opacity = String(eased);
+      items[i].style.transform = `translateY(${(1 - eased) * 20}px)`;
+    }
+  },
+});
+
+return (
+  <div ref={ref}>
+    {items.map((item, i) => (
+      <div key={i} data-reveal className="opacity-0 translate-y-5">
+        {item}
+      </div>
+    ))}
+  </div>
+);
+```
+
+### Finite sequence (stop after the last step)
+
+Use `enabled` to stop the loop once the sequence is done:
+
+```tsx
+const [done, setDone] = useState(false);
+
+const { ref } = useLoop({
+  fps: 2,
+  enabled: !done,
+  onTick: (frame) => {
+    const el = ref.current;
+    if (!el) return;
+
+    const bar = el.querySelector<HTMLElement>('[data-bar]');
+    if (!bar) return;
+
+    const progress = clamp01(frame.elapsed / 1000);
+    bar.style.transform = `scaleX(${easeOutCubic(progress)})`;
+
+    if (progress >= 1) setDone(true);
+  },
+});
+
+return (
+  <div ref={ref}>
+    {/* CSS initial state: bar starts at zero width */}
+    <div data-bar className="origin-left scale-x-0" />
+  </div>
+);
+```
+
+`setDone(true)` fires once, not per frame. This is a phase transition (one re-render), not a hot-path allocation.
+
+### CSS-only sequences that need lifecycle gating
+
+If the sequence is pure CSS (`@keyframes` with `animation-delay`), use `useLifecycle` to toggle `animation-play-state` instead:
+
+```tsx
+const { ref, isActive } = useLifecycle();
+
+return (
+  <div ref={ref}>
+    <div
+      className={cn(
+        'motion-safe:[animation-name:reveal-bar]',
+        'motion-safe:[animation-fill-mode:forwards]',
+        'motion-safe:[animation-delay:0s,0.5s,1.2s]',
+        isActive
+          ? 'motion-safe:[animation-play-state:running]'
+          : 'motion-safe:[animation-play-state:paused]',
+      )}
+    />
+  </div>
+);
+```
+
+This is the right choice when CSS handles the timing and interpolation and you only need phase for visibility-aware pausing. No `setTimeout`, no JS timing.
+
+## When to use each
+
+| Timing driven by          | Use                                                   |
+| ------------------------- | ----------------------------------------------------- |
+| JS (`frame.elapsed`)      | `useLoop` with `fps: 1–2` and elapsed-time thresholds |
+| CSS (`@keyframes`, delay) | `useLifecycle` toggling `animation-play-state`        |
+| Neither (enter/exit only) | `Presence` / `WhenVisible` with CSS transitions       |
+
+## See also
+
+- [use-loop](./use-loop.md). The hook that drives the sequence
+- [use-lifecycle](./use-lifecycle.md). For CSS-driven sequences that need visibility gating
+- [ease](./ease.md). Easing functions for smooth step transitions
+- [decision-guide](./decision-guide.md). Choosing between CSS, phase, and external libraries
+- [performance](./performance.md). Rules for `onTick` (zero allocations, no setState)
+
+---
+
 # `useCanvas`
 
 Everything `useLoop` provides, plus DPR-aware buffer sizing, ResizeObserver coalescing, and GPU context loss recovery.
@@ -2698,6 +2937,7 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 ## Don't
 
 - **Don't use `useLifecycle` when `useLoop` would work.** If phase can drive the loop, let it (you get quality signals, frame budget tracking, and shared clock for free).
+- **Don't combine `useLifecycle` with `setTimeout`/`setInterval` for animation sequencing.** The timers don't participate in phase's lifecycle — they keep running off-screen, restart from zero on re-entry, and race with cleanup. Use `useLoop` with `frame.elapsed`-based steps instead: elapsed time freezes during pause, so sequences resume where they left off. See [timed-sequences.md](./timed-sequences.md).
 - **Don't set `paused` to implement visibility pausing.** That's automatic. Manual pause is for UI scenarios only.
 - **Don't ship a generic `<Lifecycle>` component.** Unlike `Presence` (which has real transitionend/timeout logic), the lifecycle wrapper is 4 lines. Name it contextually and own those lines.
 

@@ -101,6 +101,7 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 ## Don't
 
 - **Don't use `useLifecycle` when `useLoop` would work.** If phase can drive the loop, let it (you get quality signals, frame budget tracking, and shared clock for free).
+- **Don't combine `useLifecycle` with `setTimeout`/`setInterval` for animation sequencing.** The timers don't participate in phase's lifecycle — they keep running off-screen, restart from zero on re-entry, and race with cleanup. Use `useLoop` with `frame.elapsed`-based steps instead: elapsed time freezes during pause, so sequences resume where they left off. See [timed-sequences.md](./timed-sequences.md).
 - **Don't set `paused` to implement visibility pausing.** That's automatic. Manual pause is for UI scenarios only.
 - **Don't ship a generic `<Lifecycle>` component.** Unlike `Presence` (which has real transitionend/timeout logic), the lifecycle wrapper is 4 lines. Name it contextually and own those lines.
 

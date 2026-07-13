@@ -101,6 +101,7 @@ const crossCutting = new Set([
   'audit.md',
   'rendering-recipes.md',
   'abort-signals.md',
+  'timed-sequences.md',
 ]);
 
 // --- Check actual reference files ---
