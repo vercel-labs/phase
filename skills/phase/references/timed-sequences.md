@@ -33,7 +33,7 @@ This fails in three ways:
 
 Derive which animation step you're in from `frame.elapsed` thresholds. The loop auto-pauses off-screen, `elapsed` freezes during pause, and the sequence resumes exactly where it left off.
 
-**Critical: set CSS initial state.** Elements must start in their pre-animation state via CSS. The loop doesn't fire its first tick until the element enters the viewport. Without an initial CSS state, the element renders at its natural size, then snaps to the animation start on the first tick — causing a visible flash (full width → zero → animate to full width). Set the initial state in CSS so there's nothing to flash:
+The loop doesn't fire until the element enters the viewport, so there's a gap between the browser's first paint and the first `onTick` call. If an element's CSS renders it at full width but the animation starts from zero, the user sees a flash: full width → snap to zero → animate back. Set each element's CSS to its animation start state (e.g., `scaleX(0)`, `opacity: 0`) so the browser paints the pre-animation state from the start:
 
 ```tsx
 const { ref } = useLoop({
@@ -66,7 +66,7 @@ return (
 
 ### Why this works
 
-- **CSS initial state prevents flash.** Elements start at `scaleX(0)` in CSS, so they're already in the animation start state before the loop fires its first tick. No visible snap on first entry.
+- **No flash on first entry.** Elements start at `scaleX(0)` in CSS, matching the animation's start state, so there's no visible snap when the loop fires its first tick.
 - **`frame.elapsed` freezes during pause.** Scroll away, come back — the sequence picks up exactly where it stopped. No restart on re-entry.
 - **`fps: 2` (or `fps: 1`) keeps CPU near zero.** Step transitions happen on second or half-second boundaries. You don't need 60fps to check which step you're in.
 - **Zero re-renders.** `onTick` writes to the DOM directly via refs. React never reconciles.
@@ -75,7 +75,7 @@ return (
 ## How to build a timed sequence
 
 1. **Identify the sequence steps.** Each step has a start time (ms from the beginning) and a duration.
-2. **Set CSS initial state.** Each animated element's CSS must match its animation start state (e.g., `scaleX(0)`, `opacity: 0`, `translateY(20px)`). This prevents the flash between the browser's first paint and the loop's first tick.
+2. **Set CSS initial state.** Each animated element should render in its animation start state via CSS (e.g., `scaleX(0)`, `opacity: 0`, `translateY(20px)`). Otherwise, the element flashes at its natural size before the loop's first tick overrides it.
 3. **Use `useLoop` with a low `fps`.** `fps: 1` or `fps: 2` is enough for step-based sequences. Use higher FPS only if you need smooth interpolation between steps.
 4. **Derive step state from `frame.elapsed` in `onTick`.** Compare against your timing thresholds. Write to DOM directly.
 5. **Use `clamp01` for progress within each step.** `clamp01((elapsed - stepStart) / stepDuration)` gives you a 0–1 progress for each step.
