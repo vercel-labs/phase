@@ -125,6 +125,19 @@ After:
 | `setTimeout`/`setInterval` for timed animation sequences             | `useLoop` with `fps: 1–2` and `frame.elapsed`-based steps (see [timed-sequences.md](./timed-sequences.md)); or CSS `@keyframes` + `useLifecycle` toggling `animation-play-state` if purely CSS-driven |
 | `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)                                                                                                                                   |
 
+## Post-migration verification
+
+After converting animation code to phase (from framer-motion, raw rAF, timers, or any other source), verify these properties hold. This is separate from the scan-classify-recommend workflow above — it validates a completed migration.
+
+1. **No `setTimeout`/`setInterval` in animation paths.** Timers don't participate in phase's lifecycle. Use `useLoop` with `frame.elapsed` for timed sequences.
+2. **No `createLoop`/`createTicker`/`createLifecycle` in React components when hooks would work.** Prefer `useLoop`/`useCanvas`/`useLifecycle`. Core API is valid in custom hooks or imperative managers.
+3. **Animations pause off-screen.** Scroll the element out of view. CPU should be zero while off-screen.
+4. **Animations resume without restarting.** Scroll away mid-sequence, scroll back. The animation should pick up where it left off, not flash and replay from the beginning.
+5. **No `setState` in frame callbacks.** `onTick`/`draw` must write to refs or DOM directly.
+6. **Reduced motion works.** Enable `prefers-reduced-motion: reduce`. Decorative animations should pause or complete.
+
+For the full migration pattern mapping (framer-motion → phase), see [decision-guide.md](./decision-guide.md).
+
 ## Output format
 
 Present findings as a numbered list, grouped by impact:

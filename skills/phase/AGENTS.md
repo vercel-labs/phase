@@ -375,6 +375,19 @@ After:
 | `setTimeout`/`setInterval` for timed animation sequences             | `useLoop` with `fps: 1–2` and `frame.elapsed`-based steps (see [timed-sequences.md](./timed-sequences.md)); or CSS `@keyframes` + `useLifecycle` toggling `animation-play-state` if purely CSS-driven |
 | `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)                                                                                                                                   |
 
+## Post-migration verification
+
+After converting animation code to phase (from framer-motion, raw rAF, timers, or any other source), verify these properties hold. This is separate from the scan-classify-recommend workflow above — it validates a completed migration.
+
+1. **No `setTimeout`/`setInterval` in animation paths.** Timers don't participate in phase's lifecycle. Use `useLoop` with `frame.elapsed` for timed sequences.
+2. **No `createLoop`/`createTicker`/`createLifecycle` in React components when hooks would work.** Prefer `useLoop`/`useCanvas`/`useLifecycle`. Core API is valid in custom hooks or imperative managers.
+3. **Animations pause off-screen.** Scroll the element out of view. CPU should be zero while off-screen.
+4. **Animations resume without restarting.** Scroll away mid-sequence, scroll back. The animation should pick up where it left off, not flash and replay from the beginning.
+5. **No `setState` in frame callbacks.** `onTick`/`draw` must write to refs or DOM directly.
+6. **Reduced motion works.** Enable `prefers-reduced-motion: reduce`. Decorative animations should pause or complete.
+
+For the full migration pattern mapping (framer-motion → phase), see [decision-guide.md](./decision-guide.md).
+
 ## Output format
 
 Present findings as a numbered list, grouped by impact:
@@ -1289,6 +1302,34 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 - Spring animations with interruption. Keep your spring library.
 - Gesture-driven animations. Keep your gesture library.
 - Server-side code that imports easing math. Use `phase/ease` (no browser APIs).
+
+## Migrating from animation libraries
+
+When converting from framer-motion (or similar), map patterns to the cheapest tier that works. Don't convert every `motion.div` to a phase primitive — many are CSS-only transitions that don't need JS at all.
+
+| framer-motion pattern                                             | phase equivalent                                                                                          |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `<AnimatePresence>` + `exit` prop                                 | `<Presence>` or `<Swap>` with CSS `@starting-style` + `data-[phase=exiting]`                              |
+| `motion.div` with `initial`/`animate` (opacity, transform)        | CSS `transition` + `@starting-style` (Tier 1). No JS needed for enter/exit.                               |
+| `animate()` with `delay` chains (do X, wait, do Y)                | `useLoop` with `fps: 1–2` and `frame.elapsed` thresholds (see [timed-sequences.md](./timed-sequences.md)) |
+| `stagger` children                                                | `useLoop` with per-child elapsed-time offsets (see [timed-sequences.md](./timed-sequences.md))            |
+| `useInView`                                                       | `useSight` (reactive phase) or `useLifecycle` (animation gating)                                          |
+| `useScroll` (scroll-position scrubbing)                           | `useScrollProgress` for intersection ratio; native `ScrollTimeline` for position-based                    |
+| `layout` animations (animating between measured positions)        | Keep framer-motion. Phase does not do layout animation.                                                   |
+| Spring physics (`type: 'spring'`)                                 | Keep framer-motion. Phase does not do springs.                                                            |
+| Gesture-driven (`drag`, `whileTap`)                               | Keep framer-motion or `@use-gesture`. Phase does not handle gestures.                                     |
+| `useMotionValue` + `useTransform` (continuous computed animation) | `useLoop` with `onTick` for per-frame DOM writes, or `useScrollProgress` if scroll-driven                 |
+
+### Post-migration checklist
+
+After converting animation code to phase, verify:
+
+1. **No `setTimeout`/`setInterval` in animation paths.** Timers don't participate in phase's lifecycle. They keep running off-screen and restart from zero on re-entry. Use `useLoop` with `frame.elapsed` for timed sequences.
+2. **No `createLoop`/`createTicker`/`createLifecycle` in React components when hooks would work.** Prefer `useLoop`/`useCanvas`/`useLifecycle`. Core API is valid in custom hooks or imperative managers, but not as a drop-in replacement for what hooks already do.
+3. **Animations pause off-screen.** Scroll the element out of view, wait, scroll back. CPU should be zero while off-screen. If timers or rAF loops are still firing, something bypasses phase's lifecycle.
+4. **Animations resume without restarting.** Scroll away mid-sequence, scroll back. The animation should pick up where it left off, not flash back to the initial state and replay. If it restarts, the timing is probably `Date.now()`-based or timer-based instead of `frame.elapsed`-based.
+5. **No `setState` in frame callbacks.** `onTick`/`draw` must write to refs or DOM directly. `setState` in a 60fps callback causes 60 re-renders/sec.
+6. **Reduced motion works.** Enable `prefers-reduced-motion: reduce` in devtools. Decorative animations should pause or complete. Phase handles this automatically, but timer-based workarounds bypass it.
 
 ## Common mistakes
 
