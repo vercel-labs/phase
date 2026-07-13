@@ -238,13 +238,11 @@ When converting from framer-motion (or similar), map patterns to the cheapest ti
 
 ### Verification checklist
 
-After any phase work — new code, migration, or refactor — verify the code uses phase optimally and that lifecycle guarantees hold. The full checklist with static and runtime checks is in [audit.md](./audit.md). The essentials:
+After any phase work — new code, migration, or refactor — verify that each usage is at the right tier, with the right primitive, and the right options. The full checklist is in [audit.md](./audit.md). It covers:
 
-1. **No `setTimeout`/`setInterval` in animation paths.** Replace with `useLoop` + `frame.elapsed` (see [timed-sequences.md](./timed-sequences.md)).
-2. **No core API in React when hooks would work.** `createLoop` in a component should be `useLoop`.
-3. **No `setState` in `onTick`/`draw`.** Write to refs or DOM directly.
-4. **Animations pause off-screen and resume without restarting.** Scroll away mid-sequence, scroll back — it should pick up, not flash and replay.
-5. **Reduced motion works.** `prefers-reduced-motion: reduce` should pause or complete decorative animations.
+- **Optimal usage review.** Right tier? Right primitive? Right options? Missing phase where it should be?
+- **Known gotchas.** No timers in animation paths, no core API in React when hooks work, no `setState`/allocations/reflows in `onTick`.
+- **Runtime checks.** Animations pause off-screen and on tab switch, resume without restarting, reduced motion works.
 
 ## Common mistakes
 
