@@ -375,58 +375,16 @@ After:
 | `setTimeout`/`setInterval` for timed animation sequences             | `useLoop` with `fps: 1–2` and `frame.elapsed`-based steps (see [timed-sequences.md](./timed-sequences.md)); or CSS `@keyframes` + `useLifecycle` toggling `animation-play-state` if purely CSS-driven |
 | `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)                                                                                                                                   |
 
-## Verification checklist
+## Reviewing phase code
 
-Run after any phase work — new implementation, migration, refactor, or review. Two parts: a holistic review (is the code using phase optimally?) followed by specific gotcha checks.
+After implementing, migrating, or reviewing animation code that uses phase, ask: **is it using phase to the best of its ability?** Four questions frame the review:
 
-### Optimal usage review
+1. **Right tier?** Could CSS handle this alone? Could `useTween` replace a `useLoop` that only animates one value? Is an external library needed (springs, gestures)? The cheapest tier that works wins.
+2. **Right primitive?** Within the phase tier, is each primitive the best fit for what it's doing? Read the relevant reference file's "When to use" / "When not to use" tables.
+3. **Right options?** Is `fps` set appropriately (e.g., `fps: 1–2` for state-machine transitions, not 60)? Should a hook use transient mode (`onProgress` / `onResize` / `onVisibilityChange`) instead of re-rendering? Is `observe: 'once'` appropriate for one-shot triggers?
+4. **Missing phase?** Is there animation or rendering code with no lifecycle management — animations running off-screen, raw observers, missing reduced-motion handling, long pages without `Defer`?
 
-For each animation or rendering concern in the code, walk through these questions. The goal is to verify that every usage is at the cheapest tier, with the right primitive, and the right options.
-
-1. **Right tier?** Re-read the [decision guide ladder](./decision-guide.md). Could CSS handle this without JS (`transition`, `@starting-style`, `animation`)? Could `useTween` replace a `useLoop` that only animates one value into render? Is phase being used where an external library is genuinely needed (springs, gestures, layout animation)? The cheapest working tier always wins.
-
-2. **Right primitive?** Within the phase tier, is each primitive the best fit? Common mismatches:
-   - `useLifecycle` for timed sequences → should be `useLoop` with `frame.elapsed` (see [timed-sequences.md](./timed-sequences.md))
-   - `useLoop` for a single cheap value → should be `useTween`
-   - `useLifecycle` when phase should drive the clock → should be `useLoop` or `useCanvas`
-   - Raw `IntersectionObserver` / `ResizeObserver` / `MutationObserver` → should be `useSight` / `useSize` / `useMutation` (pooled, lifecycle-aware)
-   - Manual rAF loops → should be `useLoop` or `useCanvas`
-
-3. **Right options?** Check for suboptimal configuration:
-   - `useLoop` at 60fps for state-machine transitions that only need `fps: 1` or `fps: 2`
-   - `useSight` / `useScrollProgress` / `useSize` re-rendering when the value only drives imperative work → use transient mode (`onVisibilityChange` / `onProgress` / `onResize`)
-   - `useSight` with `observe: 'continuous'` for a one-shot trigger → use `observe: 'once'`
-   - `WhenVisible` with default `rootMargin` when preloading headroom should be tuned
-
-4. **Missing phase?** Look for animation or rendering code that has no lifecycle management:
-   - Animations that keep running in background tabs or off-screen
-   - Raw `requestAnimationFrame` loops without visibility pausing
-   - Long pages with heavy off-screen sections → candidates for `Defer`
-   - Heavy below-fold components → candidates for `WhenVisible` or `WhenIdle`
-   - Missing `prefers-reduced-motion` handling on non-phase animations
-
-### Known gotchas (static)
-
-These are the most common specific mistakes. Grep for them.
-
-5. **CSS initial state matches animation start.** Elements animated by `useLoop` must have their pre-animation state set in CSS (e.g., `scaleX(0)`, `opacity: 0`). The loop doesn't fire until the element enters the viewport. Without a CSS initial state, the element renders at its natural size, then snaps to the animation start on the first tick — causing a visible flash. See [timed-sequences.md](./timed-sequences.md).
-6. **No `setTimeout`/`setInterval` in animation paths.** Timers don't participate in phase's lifecycle. They keep running off-screen and restart from zero on re-entry. Replace with `useLoop` + `frame.elapsed` (see [timed-sequences.md](./timed-sequences.md)).
-7. **No core API in React when hooks would work.** `createLoop`/`createTicker`/`createLifecycle` in a React component should be `useLoop`/`useCanvas`/`useLifecycle` unless there's a specific reason (custom hook composition, `AbortController` teardown, imperative manager).
-8. **No `setState` in frame callbacks.** `onTick`/`draw` must write to refs or DOM directly. `setState` at 60fps causes 60 re-renders/sec.
-9. **No allocations in `onTick`/`draw`.** No object/array literals, no `.map()`/`.filter()`, no closures, no spreads. Template literals for the final `style.*` write are acceptable.
-10. **No forced reflows in animation paths.** No `getBoundingClientRect()`, `offsetWidth`, `getComputedStyle()`. Use `useSize` for dimensions.
-
-### Runtime checks (behavioral)
-
-If you can run the code, verify these at runtime.
-
-11. **No flash on first entry.** Refresh the page above the animated section, then scroll down to it. The animation should start cleanly from its initial state — no flash where the element appears at full size then snaps to zero. If it flashes, the CSS initial state doesn't match the animation start (see item 5).
-12. **Animations pause off-screen.** Scroll the element out of view, wait, scroll back. CPU should be zero while hidden. If timers or rAF loops are still firing, something bypasses phase's lifecycle.
-13. **Animations resume without restarting.** Scroll away mid-sequence, scroll back. The animation should pick up where it left off, not replay from the beginning. A restart means timing is `Date.now()`-based or timer-based instead of `frame.elapsed`-based.
-14. **Reduced motion works.** Enable `prefers-reduced-motion: reduce` in devtools. Decorative animations should pause or complete instantly. Phase handles this automatically, but timer-based or manual rAF workarounds bypass it.
-15. **Tab switch pauses correctly.** Switch to another tab, wait, switch back. Same as off-screen: zero CPU while hidden, smooth resume without restart.
-
-For migration pattern mappings (framer-motion → phase), see [decision-guide.md](./decision-guide.md).
+The specific failure modes and correct patterns live in the reference files: [timed-sequences.md](./timed-sequences.md) for the timer anti-pattern and initial-state flash, [performance.md](./performance.md) for hot-path rules, [decision-guide.md](./decision-guide.md) for tier selection and migration mappings.
 
 ## Output format
 
@@ -1360,13 +1318,9 @@ When converting from framer-motion (or similar), map patterns to the cheapest ti
 | Gesture-driven (`drag`, `whileTap`)                               | Keep framer-motion or `@use-gesture`. Phase does not handle gestures.                                     |
 | `useMotionValue` + `useTransform` (continuous computed animation) | `useLoop` with `onTick` for per-frame DOM writes, or `useScrollProgress` if scroll-driven                 |
 
-### Verification checklist
+### Reviewing phase code
 
-After any phase work — new code, migration, or refactor — verify that each usage is at the right tier, with the right primitive, and the right options. The full checklist is in [audit.md](./audit.md). It covers:
-
-- **Optimal usage review.** Right tier? Right primitive? Right options? Missing phase where it should be?
-- **Known gotchas.** CSS initial state matches animation start (no flash on first entry), no timers in animation paths, no core API in React when hooks work, no `setState`/allocations/reflows in `onTick`.
-- **Runtime checks.** No flash on first scroll-into-view, animations pause off-screen and on tab switch, resume without restarting, reduced motion works.
+After any phase work, ask: is it using phase to the best of its ability? Right tier, right primitive, right options, nothing missing? See [audit.md](./audit.md) for the review framework.
 
 ## Common mistakes
 
