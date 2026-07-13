@@ -1,5 +1,12 @@
 # phase
 
+## 0.0.5
+
+### Patch Changes
+
+- Add polymorphic `as` prop to `Defer` (default `'div'`). Renders semantic elements (`li`, `tr`, `section`) without a wrapper div.
+- Skill: document overflow clipping, Safari caveats, and when-to-skip guidance for `Defer`.
+
 ## 0.0.4
 
 ### Patch Changes

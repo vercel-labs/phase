@@ -740,14 +740,26 @@ import { Defer } from 'phase/react';
 <Defer estimatedHeight="600px" className="my-section">
   <ArticleSection />
 </Defer>;
+
+// Use `as` for semantic elements (no wrapper div needed)
+<ul>
+  {items.map((item) => (
+    <Defer as="li" key={item.id} estimatedHeight="80px">
+      <ItemContent item={item} />
+    </Defer>
+  ))}
+</ul>;
 ```
 
-| Prop              | Type                                   | Default    | Description                                         |
-| ----------------- | -------------------------------------- | ---------- | --------------------------------------------------- |
-| `estimatedHeight` | `string`                               | `'1000px'` | Reserved size before first paint (any CSS length)   |
-| ...rest           | `Omit<ComponentProps<'div'>, 'style'>` | —          | Standard div props except `style` (use `className`) |
+| Prop              | Type                                         | Default    | Description                                                |
+| ----------------- | -------------------------------------------- | ---------- | ---------------------------------------------------------- |
+| `as`              | `ElementType`                                | `'div'`    | HTML element to render (`'li'`, `'tr'`, `'section'`, etc.) |
+| `estimatedHeight` | `string`                                     | `'1000px'` | Reserved size before first paint (any CSS length)          |
+| ...rest           | `Omit<HTMLAttributes<HTMLElement>, 'style'>` | —          | Standard HTML attributes except `style` (use `className`)  |
 
 `contain-intrinsic-size: auto <estimatedHeight>` reserves space, so there is no layout shift. The browser remembers the real size after first paint. `Defer` defers rendering only, not hydration or mounting. There is no `style` prop: the render-skip styles are encapsulated so they can't be overridden. Style the wrapper with `className`.
+
+`content-visibility: auto` applies paint containment, which clips all overflow to the element's padding edge. Box shadows, negative margins, and positioned content that bleeds outside the boundary will be cut off. If your content needs to overflow, move it outside the `Defer` or skip `Defer` for that container.
 
 **Animations inside a `Defer` keep running.** `content-visibility` skips paint, not JavaScript. `phase`'s own loops (`useLoop`, `useCanvas`, `useLifecycle`) already self-pause off-screen via their own visibility observer. For raw work (a hand-written `requestAnimationFrame` loop, `setInterval`), gate it with `useRenderState`.
 
@@ -917,7 +929,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `Presence`                |             743 B |
 | `WhenVisible`             |           1.44 kB |
 | `WhenIdle`                |             593 B |
-| `Defer`                   |             104 B |
+| `Defer`                   |              85 B |
 | `useIdle`                 |             435 B |
 | `useWhenIdle`             |             449 B |
 | `useRenderState`          |             527 B |
