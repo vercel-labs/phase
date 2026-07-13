@@ -238,7 +238,8 @@ When asked to bump the version (patch, minor, or major):
 1. Bump `version` in `package.json`.
 2. Bump `version` in `skills/phase/SKILL.md` frontmatter (skill version is independent, but bump it alongside package changes that alter the public API or skill references).
 3. **Prepend** a new section to `CHANGELOG.md` under the new version number. Keep all previous entries intact (newest first, oldest last). Follow the existing format: `## X.Y.Z`, then `### Patch Changes` / `### Minor Changes` / `### Major Changes`, then bullet points.
-4. Never overwrite or truncate older changelog entries.
+4. **Keep entries short.** State what changed, not why. One line per change. Only elaborate if it directly affects how consumers use the API. Internal refactors, test infrastructure, and agent file updates get one line at most.
+5. Never overwrite or truncate older changelog entries.
 
 ## Skill sync
 
