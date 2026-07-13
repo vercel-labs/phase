@@ -241,8 +241,8 @@ When converting from framer-motion (or similar), map patterns to the cheapest ti
 After any phase work — new code, migration, or refactor — verify that each usage is at the right tier, with the right primitive, and the right options. The full checklist is in [audit.md](./audit.md). It covers:
 
 - **Optimal usage review.** Right tier? Right primitive? Right options? Missing phase where it should be?
-- **Known gotchas.** No timers in animation paths, no core API in React when hooks work, no `setState`/allocations/reflows in `onTick`.
-- **Runtime checks.** Animations pause off-screen and on tab switch, resume without restarting, reduced motion works.
+- **Known gotchas.** CSS initial state matches animation start (no flash on first entry), no timers in animation paths, no core API in React when hooks work, no `setState`/allocations/reflows in `onTick`.
+- **Runtime checks.** No flash on first scroll-into-view, animations pause off-screen and on tab switch, resume without restarting, reduced motion works.
 
 ## Common mistakes
 

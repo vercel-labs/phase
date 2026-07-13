@@ -159,20 +159,22 @@ For each animation or rendering concern in the code, walk through these question
 
 These are the most common specific mistakes. Grep for them.
 
-5. **No `setTimeout`/`setInterval` in animation paths.** Timers don't participate in phase's lifecycle. They keep running off-screen and restart from zero on re-entry. Replace with `useLoop` + `frame.elapsed` (see [timed-sequences.md](./timed-sequences.md)).
-6. **No core API in React when hooks would work.** `createLoop`/`createTicker`/`createLifecycle` in a React component should be `useLoop`/`useCanvas`/`useLifecycle` unless there's a specific reason (custom hook composition, `AbortController` teardown, imperative manager).
-7. **No `setState` in frame callbacks.** `onTick`/`draw` must write to refs or DOM directly. `setState` at 60fps causes 60 re-renders/sec.
-8. **No allocations in `onTick`/`draw`.** No object/array literals, no `.map()`/`.filter()`, no closures, no spreads. Template literals for the final `style.*` write are acceptable.
-9. **No forced reflows in animation paths.** No `getBoundingClientRect()`, `offsetWidth`, `getComputedStyle()`. Use `useSize` for dimensions.
+5. **CSS initial state matches animation start.** Elements animated by `useLoop` must have their pre-animation state set in CSS (e.g., `scaleX(0)`, `opacity: 0`). The loop doesn't fire until the element enters the viewport. Without a CSS initial state, the element renders at its natural size, then snaps to the animation start on the first tick — causing a visible flash. See [timed-sequences.md](./timed-sequences.md).
+6. **No `setTimeout`/`setInterval` in animation paths.** Timers don't participate in phase's lifecycle. They keep running off-screen and restart from zero on re-entry. Replace with `useLoop` + `frame.elapsed` (see [timed-sequences.md](./timed-sequences.md)).
+7. **No core API in React when hooks would work.** `createLoop`/`createTicker`/`createLifecycle` in a React component should be `useLoop`/`useCanvas`/`useLifecycle` unless there's a specific reason (custom hook composition, `AbortController` teardown, imperative manager).
+8. **No `setState` in frame callbacks.** `onTick`/`draw` must write to refs or DOM directly. `setState` at 60fps causes 60 re-renders/sec.
+9. **No allocations in `onTick`/`draw`.** No object/array literals, no `.map()`/`.filter()`, no closures, no spreads. Template literals for the final `style.*` write are acceptable.
+10. **No forced reflows in animation paths.** No `getBoundingClientRect()`, `offsetWidth`, `getComputedStyle()`. Use `useSize` for dimensions.
 
 ### Runtime checks (behavioral)
 
 If you can run the code, verify these at runtime.
 
-10. **Animations pause off-screen.** Scroll the element out of view, wait, scroll back. CPU should be zero while hidden. If timers or rAF loops are still firing, something bypasses phase's lifecycle.
-11. **Animations resume without restarting.** Scroll away mid-sequence, scroll back. The animation should pick up where it left off, not flash back to the initial state and replay. A restart means timing is `Date.now()`-based or timer-based instead of `frame.elapsed`-based.
-12. **Reduced motion works.** Enable `prefers-reduced-motion: reduce` in devtools. Decorative animations should pause or complete instantly. Phase handles this automatically, but timer-based or manual rAF workarounds bypass it.
-13. **Tab switch pauses correctly.** Switch to another tab, wait, switch back. Same as off-screen: zero CPU while hidden, smooth resume without restart.
+11. **No flash on first entry.** Refresh the page above the animated section, then scroll down to it. The animation should start cleanly from its initial state — no flash where the element appears at full size then snaps to zero. If it flashes, the CSS initial state doesn't match the animation start (see item 5).
+12. **Animations pause off-screen.** Scroll the element out of view, wait, scroll back. CPU should be zero while hidden. If timers or rAF loops are still firing, something bypasses phase's lifecycle.
+13. **Animations resume without restarting.** Scroll away mid-sequence, scroll back. The animation should pick up where it left off, not replay from the beginning. A restart means timing is `Date.now()`-based or timer-based instead of `frame.elapsed`-based.
+14. **Reduced motion works.** Enable `prefers-reduced-motion: reduce` in devtools. Decorative animations should pause or complete instantly. Phase handles this automatically, but timer-based or manual rAF workarounds bypass it.
+15. **Tab switch pauses correctly.** Switch to another tab, wait, switch back. Same as off-screen: zero CPU while hidden, smooth resume without restart.
 
 For migration pattern mappings (framer-motion → phase), see [decision-guide.md](./decision-guide.md).
 
