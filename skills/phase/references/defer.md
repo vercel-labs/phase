@@ -68,8 +68,14 @@ import { Defer } from 'phase/react';
 
 - **Don't expect it to defer hydration or mounting.** React still mounts and hydrates. It defers only the browser's rendering of off-screen content.
 - **Don't assume animations inside stop.** Paint is skipped but JS keeps running. phase loops self-pause off-screen on their own; gate raw rAF/interval work with `useRenderState`.
+- **Don't place overflowing content inside a `Defer`.** `content-visibility: auto` applies paint containment (per the CSS Containment spec), which clips all overflow to the element's padding edge. Box shadows, negative margins, tooltips, dropdowns, and any decorative bleed that extends outside the `Defer` boundary will be cut off. `overflow: visible` has no effect because paint containment overrides it. Move overflowing elements outside the `Defer`, or remove `Defer` from that container.
 - **Don't rely on `useSize` or `useContainerQuery` inside a skipped subtree.** Per the CSS Containment spec, `ResizeObserver` callbacks pause for elements inside skipped `content-visibility: auto` subtrees. Size observations resume automatically when the element scrolls back into view, but any size changes that occurred while skipped are only delivered at that point. If you need to react to the skip/unskip transition itself, use `useRenderState`.
 - **Don't mutate layout or unmount based on skip state.** That reintroduces the layout shift `contain-intrinsic-size` prevents.
+
+## Safari caveats
+
+- **Find-in-page (Cmd+F) may not find text inside skipped subtrees.** Safari's native search does not consistently scan content hidden by `content-visibility: auto`. Chrome and Firefox handle this correctly. If search is critical, disable `Defer` for that content or implement application-level search.
+- **SVG `<text>` elements** inside a `Defer` may fail to paint in older Safari versions. This was fixed in WebKit (late 2024) but may not have shipped to all Safari releases.
 
 ## Does this affect layout or CLS?
 
