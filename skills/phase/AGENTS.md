@@ -73,7 +73,7 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 
 In React components, prefer the React hooks (`useLoop`, `useCanvas`, `useLifecycle`, `useSight`, etc.) over the core API (`createLoop`, `createTicker`, `createLifecycle`, `createSight`). Hooks manage refs, teardown, and React lifecycle automatically. Using `createLoop` inside a `useEffect` when `useLoop` would work is a bug waiting to happen (manual cleanup, stale refs, no `enabled` prop).
 
-Reach for core primitives in React when the hook doesn't fit: building a custom hook on top of `createLoop`, composing multiple primitives via a shared `AbortController`, or wiring up an imperative manager that owns its own lifecycle. In those cases you own the teardown — call `stop()` or abort the signal in the effect cleanup.
+Reach for core primitives in React when the hook doesn't fit, such as building a custom hook on top of `createLoop`, composing multiple primitives via a shared `AbortController`, or wiring up an imperative manager that owns its own lifecycle. In those cases you own the teardown. Call `stop()` or abort the signal in the effect cleanup.
 
 ## Non-negotiable invariants
 
@@ -2344,7 +2344,7 @@ Automatic: enter animation skipped for the incoming state, exit is instant for t
 
 How to build visibility-aware, multi-step animation sequences (do X, wait, do Y, wait, do Z) with phase. This is the most common marketing animation pattern and the one most likely to be built incorrectly.
 
-## The anti-pattern
+## Why `useLifecycle` + `setTimeout` fails
 
 The wrong approach combines `useLifecycle` (for visibility) with `setTimeout`/`setInterval` (for timing):
 
@@ -2414,7 +2414,7 @@ return (
 - **Zero re-renders.** `onTick` writes to the DOM directly via refs. React never reconciles.
 - **Visibility-aware by default.** The loop pauses off-screen and under reduced motion. No manual `IntersectionObserver` needed.
 
-## Step-by-step
+## How to build a timed sequence
 
 1. **Identify the sequence steps.** Each step has a start time (ms from the beginning) and a duration.
 2. **Set CSS initial state.** Each animated element's CSS must match its animation start state (e.g., `scaleX(0)`, `opacity: 0`, `translateY(20px)`). This prevents the flash between the browser's first paint and the loop's first tick.

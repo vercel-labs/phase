@@ -2,7 +2,7 @@
 
 How to build visibility-aware, multi-step animation sequences (do X, wait, do Y, wait, do Z) with phase. This is the most common marketing animation pattern and the one most likely to be built incorrectly.
 
-## The anti-pattern
+## Why `useLifecycle` + `setTimeout` fails
 
 The wrong approach combines `useLifecycle` (for visibility) with `setTimeout`/`setInterval` (for timing):
 
@@ -72,7 +72,7 @@ return (
 - **Zero re-renders.** `onTick` writes to the DOM directly via refs. React never reconciles.
 - **Visibility-aware by default.** The loop pauses off-screen and under reduced motion. No manual `IntersectionObserver` needed.
 
-## Step-by-step
+## How to build a timed sequence
 
 1. **Identify the sequence steps.** Each step has a start time (ms from the beginning) and a duration.
 2. **Set CSS initial state.** Each animated element's CSS must match its animation start state (e.g., `scaleX(0)`, `opacity: 0`, `translateY(20px)`). This prevents the flash between the browser's first paint and the loop's first tick.
