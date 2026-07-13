@@ -67,7 +67,9 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 
 ## React first
 
-In React components, always use the React hooks (`useLoop`, `useCanvas`, `useLifecycle`, `useSight`, etc.), never the core API (`createLoop`, `createTicker`, `createLifecycle`, `createSight`). The core API is for framework-agnostic or non-React code. Hooks manage refs, teardown, and React lifecycle automatically. Using `createLoop` inside a `useEffect` is a bug waiting to happen (manual cleanup, stale refs, no `enabled` prop).
+In React components, prefer the React hooks (`useLoop`, `useCanvas`, `useLifecycle`, `useSight`, etc.) over the core API (`createLoop`, `createTicker`, `createLifecycle`, `createSight`). Hooks manage refs, teardown, and React lifecycle automatically. Using `createLoop` inside a `useEffect` when `useLoop` would work is a bug waiting to happen (manual cleanup, stale refs, no `enabled` prop).
+
+Reach for core primitives in React when the hook doesn't fit: building a custom hook on top of `createLoop`, composing multiple primitives via a shared `AbortController`, or wiring up an imperative manager that owns its own lifecycle. In those cases you own the teardown — call `stop()` or abort the signal in the effect cleanup.
 
 ## Non-negotiable invariants
 

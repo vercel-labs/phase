@@ -71,7 +71,9 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 
 ## React first
 
-In React components, always use the React hooks (`useLoop`, `useCanvas`, `useLifecycle`, `useSight`, etc.), never the core API (`createLoop`, `createTicker`, `createLifecycle`, `createSight`). The core API is for framework-agnostic or non-React code. Hooks manage refs, teardown, and React lifecycle automatically. Using `createLoop` inside a `useEffect` is a bug waiting to happen (manual cleanup, stale refs, no `enabled` prop).
+In React components, prefer the React hooks (`useLoop`, `useCanvas`, `useLifecycle`, `useSight`, etc.) over the core API (`createLoop`, `createTicker`, `createLifecycle`, `createSight`). Hooks manage refs, teardown, and React lifecycle automatically. Using `createLoop` inside a `useEffect` when `useLoop` would work is a bug waiting to happen (manual cleanup, stale refs, no `enabled` prop).
+
+Reach for core primitives in React when the hook doesn't fit: building a custom hook on top of `createLoop`, composing multiple primitives via a shared `AbortController`, or wiring up an imperative manager that owns its own lifecycle. In those cases you own the teardown — call `stop()` or abort the signal in the effect cleanup.
 
 ## Non-negotiable invariants
 
@@ -1297,7 +1299,7 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 - **Reaching for an external library for enter/exit transitions.** `Presence`, `Swap`, and `WhenVisible` handle mount/unmount with CSS `@starting-style` + `transitionend`. You don't need a library for this.
 - **Using `useScrollProgress` expecting continuous scroll-scrubbing.** It reports intersection ratio, which plateaus for tall elements. For scroll-position-driven animation, use `ScrollTimeline` or `motion`'s `useScroll`.
 - **Using `useLifecycle` + `setTimeout`/`setInterval` to build timed animation sequences.** `useLifecycle` only provides visibility signals — it doesn't drive timing. The timers keep firing off-screen, restart from zero when scrolling back, and don't participate in phase's lifecycle. Use `useLoop` with `frame.elapsed` instead: elapsed time freezes during pause, so sequences resume where they left off. See [timed-sequences.md](./timed-sequences.md).
-- **Using `createLoop` / `createTicker` / `createLifecycle` inside React components.** In React, always use the hook equivalents (`useLoop`, `useCanvas`, `useLifecycle`). The core API is for framework-agnostic code. Using it in `useEffect` means manual cleanup, stale refs, and no `enabled` prop.
+- **Using `createLoop` / `createTicker` / `createLifecycle` in React when the hook would work.** Prefer the hook equivalents (`useLoop`, `useCanvas`, `useLifecycle`) — they manage refs, teardown, and `enabled` automatically. Reach for core primitives only when the hook doesn't fit: custom hooks composed from multiple primitives, `AbortController`-based teardown, or imperative managers that own their lifecycle.
 
 ---
 
