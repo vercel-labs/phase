@@ -45,22 +45,23 @@ Use when you need any of:
 - Mount/unmount transitions with exit animations
 - Scroll-driven reveals, element sizing, or media-query reactivity
 
-| Scenario                            | Primitive                      |
-| ----------------------------------- | ------------------------------ |
-| DOM animation loop                  | `useLoop`                      |
-| Canvas/WebGL loop                   | `useCanvas`                    |
-| Signal for your own renderer        | `useLifecycle`                 |
-| Mount/unmount with exit             | `Presence`, `usePresence`      |
-| Swap between states with exit→enter | `Swap`                         |
-| Lazy mount on viewport entry        | `WhenVisible`                  |
-| Lazy mount when the browser is idle | `WhenIdle`, `useIdle`          |
-| Prefetch / side effect when idle    | `useWhenIdle`                  |
-| Skip painting off-screen (keep DOM) | `Defer`                        |
-| Pause raw work inside a `Defer`     | `useRenderState`               |
-| Visibility ratio (reveal effects)   | `useScrollProgress`            |
-| Element dimensions                  | `useSize`, `useContainerQuery` |
-| Media query subscription            | `useMediaQuery`                |
-| Visibility boolean                  | `useSight`                     |
+| Scenario                            | Primitive                                     |
+| ----------------------------------- | --------------------------------------------- |
+| DOM animation loop                  | `useLoop`                                     |
+| Canvas/WebGL loop                   | `useCanvas`                                   |
+| Signal for your own renderer        | `useLifecycle`                                |
+| Mount/unmount with exit             | `Presence`, `usePresence`                     |
+| Swap between states with exit→enter | `Swap`                                        |
+| Lazy mount on viewport entry        | `WhenVisible`                                 |
+| Lazy mount when the browser is idle | `WhenIdle`, `useIdle`                         |
+| Prefetch / side effect when idle    | `useWhenIdle`                                 |
+| Skip painting off-screen (keep DOM) | `Defer`                                       |
+| Pause raw work inside a `Defer`     | `useRenderState`                              |
+| Visibility ratio (reveal effects)   | `useScrollProgress`                           |
+| Element dimensions                  | `useSize`, `useContainerQuery`                |
+| Media query subscription            | `useMediaQuery`                               |
+| Visibility boolean                  | `useSight`                                    |
+| Timed multi-step animation sequence | `useLoop` (`fps: 1–2`, `frame.elapsed` steps) |
 
 All phase primitives share:
 
@@ -209,6 +210,7 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 - Animations that keep running in background tabs → `useLoop` (auto-pauses)
 - Missing `prefers-reduced-motion` handling → any phase primitive (automatic)
 - Manual `transitionend` listeners for unmount → `Presence` / `Swap`
+- `setTimeout`/`setInterval` chains for multi-step animation sequences → `useLoop` with `fps: 1–2` and `frame.elapsed`-based step derivation (see [timed-sequences.md](./timed-sequences.md))
 
 ## When NOT to replace with phase
 
@@ -225,3 +227,5 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 - **Forgetting that `createLoop` has no `pause()`/`resume()`.** It's signal-driven (visibility, reduced motion, quality). For manual control, use `createLifecycle` which exposes `pause()`/`resume()`, or use the React hook's `enabled` prop.
 - **Reaching for an external library for enter/exit transitions.** `Presence`, `Swap`, and `WhenVisible` handle mount/unmount with CSS `@starting-style` + `transitionend`. You don't need a library for this.
 - **Using `useScrollProgress` expecting continuous scroll-scrubbing.** It reports intersection ratio, which plateaus for tall elements. For scroll-position-driven animation, use `ScrollTimeline` or `motion`'s `useScroll`.
+- **Using `useLifecycle` + `setTimeout`/`setInterval` to build timed animation sequences.** `useLifecycle` only provides visibility signals — it doesn't drive timing. The timers keep firing off-screen, restart from zero when scrolling back, and don't participate in phase's lifecycle. Use `useLoop` with `frame.elapsed` instead: elapsed time freezes during pause, so sequences resume where they left off. See [timed-sequences.md](./timed-sequences.md).
+- **Using `createLoop` / `createTicker` / `createLifecycle` inside React components.** In React, always use the hook equivalents (`useLoop`, `useCanvas`, `useLifecycle`). The core API is for framework-agnostic code. Using it in `useEffect` means manual cleanup, stale refs, and no `enabled` prop.

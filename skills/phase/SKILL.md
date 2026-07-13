@@ -47,22 +47,27 @@ Two idle hooks defer work off the critical path: `useIdle` gates rendering with 
 
 The ladder picks a _tier_; this table picks the _primitive_ once phase is the right tier.
 
-| Need                                                | Use                                                                                         |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Know if it's on screen?                             | `useSight`                                                                                  |
-| Want phase to run your frame loop?                  | `useLoop` (DOM) / `useCanvas` (canvas)                                                      |
-| You own the loop (WebGL, three.js, Web Worker)?     | `useLifecycle` (active/paused signal)                                                       |
-| Animating one value into render?                    | `useTween`                                                                                  |
-| Mount/unmount transitions?                          | `Presence` / `Swap` / `WhenVisible`                                                         |
-| Skip painting off-screen content (keep in DOM)?     | `Defer`                                                                                     |
-| Mount non-critical UI when idle?                    | `WhenIdle` / `useIdle`                                                                      |
-| Run a side effect (prefetch, `import()`) when idle? | `useWhenIdle`                                                                               |
-| Pause raw work inside a `Defer` subtree?            | `useRenderState`                                                                            |
-| React to DOM mutations without reflow?              | `useMutation`                                                                               |
-| Reactive scroll/size/media values?                  | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
-| Scroll/size/visibility without re-renders?          | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
-| Reactive reduced-motion check for non-phase code?   | `usePrefersReducedMotion`                                                                   |
-| Need reactive `devicePixelRatio` for buffer sizing? | `useDevicePixelRatio`                                                                       |
+| Need                                                 | Use                                                                                         |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Know if it's on screen?                              | `useSight`                                                                                  |
+| Want phase to run your frame loop?                   | `useLoop` (DOM) / `useCanvas` (canvas)                                                      |
+| You own the loop (WebGL, three.js, Web Worker)?      | `useLifecycle` (active/paused signal)                                                       |
+| Animating one value into render?                     | `useTween`                                                                                  |
+| Mount/unmount transitions?                           | `Presence` / `Swap` / `WhenVisible`                                                         |
+| Skip painting off-screen content (keep in DOM)?      | `Defer`                                                                                     |
+| Mount non-critical UI when idle?                     | `WhenIdle` / `useIdle`                                                                      |
+| Run a side effect (prefetch, `import()`) when idle?  | `useWhenIdle`                                                                               |
+| Pause raw work inside a `Defer` subtree?             | `useRenderState`                                                                            |
+| React to DOM mutations without reflow?               | `useMutation`                                                                               |
+| Reactive scroll/size/media values?                   | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
+| Scroll/size/visibility without re-renders?           | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
+| Reactive reduced-motion check for non-phase code?    | `usePrefersReducedMotion`                                                                   |
+| Need reactive `devicePixelRatio` for buffer sizing?  | `useDevicePixelRatio`                                                                       |
+| Visibility-aware timed sequences (do X, wait, do Y)? | `useLoop` with `fps: 1–2` and `frame.elapsed`-based steps                                   |
+
+## React first
+
+In React components, always use the React hooks (`useLoop`, `useCanvas`, `useLifecycle`, `useSight`, etc.), never the core API (`createLoop`, `createTicker`, `createLifecycle`, `createSight`). The core API is for framework-agnostic or non-React code. Hooks manage refs, teardown, and React lifecycle automatically. Using `createLoop` inside a `useEffect` is a bug waiting to happen (manual cleanup, stale refs, no `enabled` prop).
 
 ## Non-negotiable invariants
 
@@ -171,6 +176,7 @@ grep -ri "starting:opacity\|data-\[phase=exiting\]" skills/phase/references/  # 
 | [performance.md](references/performance.md)             | Writing or reviewing hot-path animation code                         |
 | [audit.md](references/audit.md)                         | Auditing existing animations for optimization opportunities          |
 | [abort-signals.md](references/abort-signals.md)         | Tearing down core primitives with an `AbortSignal` (`signal` option) |
+| [timed-sequences.md](references/timed-sequences.md)     | Building multi-step timed animation sequences with `useLoop`         |
 
 ## Full compiled document
 

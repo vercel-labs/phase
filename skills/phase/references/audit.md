@@ -104,26 +104,26 @@ After:
 
 ## Common replacements
 
-| Current pattern                                                      | Replace with                                                             |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Manual `requestAnimationFrame` loop + `cancelAnimationFrame` cleanup | `useLoop` (if DOM) or `useCanvas` (if canvas)                            |
-| `requestAnimationFrame` without `cancelAnimationFrame`               | Same, plus the cleanup is now automatic                                  |
-| `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                             |
-| `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                                      |
-| `new ResizeObserver` for dimensions                                  | `useSize`                                                                |
-| `MutationObserver` on `style`/`attributes` to track size or position | `useSize` (ResizeObserver) / `useSight` (IO); reserve MO for `childList` |
-| `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)              |
-| `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                               |
-| `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                          |
-| `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                             |
-| `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                            |
-| Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                              |
-| CSS-only animation that's working fine                               | No change. Don't add JS where it's not needed.                           |
-| Hand-wired IO + visibilitychange + reduced motion → boolean          | `useLifecycle` (single hook, same signals, pooled IO)                    |
-| `getBoundingClientRect()` for initial in-view check                  | Trust IO (one-frame delay is invisible) or `rootMargin`                  |
-| Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops             |
-| `setInterval` rotation with visibility gating                        | CSS `@keyframes` + `useLifecycle` toggling `animation-play-state`        |
-| `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)      |
+| Current pattern                                                      | Replace with                                                                                                                                                                                          |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Manual `requestAnimationFrame` loop + `cancelAnimationFrame` cleanup | `useLoop` (if DOM) or `useCanvas` (if canvas)                                                                                                                                                         |
+| `requestAnimationFrame` without `cancelAnimationFrame`               | Same, plus the cleanup is now automatic                                                                                                                                                               |
+| `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                                                                                                                                                          |
+| `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                                                                                                                                                                   |
+| `new ResizeObserver` for dimensions                                  | `useSize`                                                                                                                                                                                             |
+| `MutationObserver` on `style`/`attributes` to track size or position | `useSize` (ResizeObserver) / `useSight` (IO); reserve MO for `childList`                                                                                                                              |
+| `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)                                                                                                                                           |
+| `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                                                                                                                                                            |
+| `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                                                                                                                                                       |
+| `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                                                                                                                                                          |
+| `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                                                                                                                                                         |
+| Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                                                                                                                                                           |
+| CSS-only animation that's working fine                               | No change. Don't add JS where it's not needed.                                                                                                                                                        |
+| Hand-wired IO + visibilitychange + reduced motion → boolean          | `useLifecycle` (single hook, same signals, pooled IO)                                                                                                                                                 |
+| `getBoundingClientRect()` for initial in-view check                  | Trust IO (one-frame delay is invisible) or `rootMargin`                                                                                                                                               |
+| Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops                                                                                                                                          |
+| `setTimeout`/`setInterval` for timed animation sequences             | `useLoop` with `fps: 1–2` and `frame.elapsed`-based steps (see [timed-sequences.md](./timed-sequences.md)); or CSS `@keyframes` + `useLifecycle` toggling `animation-play-state` if purely CSS-driven |
+| `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)                                                                                                                                   |
 
 ## Output format
 
