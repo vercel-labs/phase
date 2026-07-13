@@ -929,7 +929,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `Presence`                |             743 B |
 | `WhenVisible`             |           1.44 kB |
 | `WhenIdle`                |             593 B |
-| `Defer`                   |             104 B |
+| `Defer`                   |              85 B |
 | `useIdle`                 |             435 B |
 | `useWhenIdle`             |             449 B |
 | `useRenderState`          |             527 B |
