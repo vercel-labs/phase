@@ -236,16 +236,15 @@ When converting from framer-motion (or similar), map patterns to the cheapest ti
 | Gesture-driven (`drag`, `whileTap`)                               | Keep framer-motion or `@use-gesture`. Phase does not handle gestures.                                     |
 | `useMotionValue` + `useTransform` (continuous computed animation) | `useLoop` with `onTick` for per-frame DOM writes, or `useScrollProgress` if scroll-driven                 |
 
-### Post-migration checklist
+### Verification checklist
 
-After converting animation code to phase, verify:
+After any phase work — new code, migration, or refactor — verify the code uses phase optimally and that lifecycle guarantees hold. The full checklist with static and runtime checks is in [audit.md](./audit.md). The essentials:
 
-1. **No `setTimeout`/`setInterval` in animation paths.** Timers don't participate in phase's lifecycle. They keep running off-screen and restart from zero on re-entry. Use `useLoop` with `frame.elapsed` for timed sequences.
-2. **No `createLoop`/`createTicker`/`createLifecycle` in React components when hooks would work.** Prefer `useLoop`/`useCanvas`/`useLifecycle`. Core API is valid in custom hooks or imperative managers, but not as a drop-in replacement for what hooks already do.
-3. **Animations pause off-screen.** Scroll the element out of view, wait, scroll back. CPU should be zero while off-screen. If timers or rAF loops are still firing, something bypasses phase's lifecycle.
-4. **Animations resume without restarting.** Scroll away mid-sequence, scroll back. The animation should pick up where it left off, not flash back to the initial state and replay. If it restarts, the timing is probably `Date.now()`-based or timer-based instead of `frame.elapsed`-based.
-5. **No `setState` in frame callbacks.** `onTick`/`draw` must write to refs or DOM directly. `setState` in a 60fps callback causes 60 re-renders/sec.
-6. **Reduced motion works.** Enable `prefers-reduced-motion: reduce` in devtools. Decorative animations should pause or complete. Phase handles this automatically, but timer-based workarounds bypass it.
+1. **No `setTimeout`/`setInterval` in animation paths.** Replace with `useLoop` + `frame.elapsed` (see [timed-sequences.md](./timed-sequences.md)).
+2. **No core API in React when hooks would work.** `createLoop` in a component should be `useLoop`.
+3. **No `setState` in `onTick`/`draw`.** Write to refs or DOM directly.
+4. **Animations pause off-screen and resume without restarting.** Scroll away mid-sequence, scroll back — it should pick up, not flash and replay.
+5. **Reduced motion works.** `prefers-reduced-motion: reduce` should pause or complete decorative animations.
 
 ## Common mistakes
 

@@ -125,18 +125,26 @@ After:
 | `setTimeout`/`setInterval` for timed animation sequences             | `useLoop` with `fps: 1–2` and `frame.elapsed`-based steps (see [timed-sequences.md](./timed-sequences.md)); or CSS `@keyframes` + `useLifecycle` toggling `animation-play-state` if purely CSS-driven |
 | `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)                                                                                                                                   |
 
-## Post-migration verification
+## Verification checklist
 
-After converting animation code to phase (from framer-motion, raw rAF, timers, or any other source), verify these properties hold. This is separate from the scan-classify-recommend workflow above — it validates a completed migration.
+Run this checklist after any phase work — new implementation, migration, refactor, or review. It verifies that the code uses phase optimally and that the lifecycle guarantees actually hold at runtime.
 
-1. **No `setTimeout`/`setInterval` in animation paths.** Timers don't participate in phase's lifecycle. Use `useLoop` with `frame.elapsed` for timed sequences.
-2. **No `createLoop`/`createTicker`/`createLifecycle` in React components when hooks would work.** Prefer `useLoop`/`useCanvas`/`useLifecycle`. Core API is valid in custom hooks or imperative managers.
-3. **Animations pause off-screen.** Scroll the element out of view. CPU should be zero while off-screen.
-4. **Animations resume without restarting.** Scroll away mid-sequence, scroll back. The animation should pick up where it left off, not flash and replay from the beginning.
-5. **No `setState` in frame callbacks.** `onTick`/`draw` must write to refs or DOM directly.
-6. **Reduced motion works.** Enable `prefers-reduced-motion: reduce`. Decorative animations should pause or complete.
+### Code-level checks (static)
 
-For the full migration pattern mapping (framer-motion → phase), see [decision-guide.md](./decision-guide.md).
+1. **No `setTimeout`/`setInterval` in animation paths.** Timers don't participate in phase's lifecycle. They keep running off-screen and restart from zero on re-entry. Replace with `useLoop` + `frame.elapsed` for timed sequences (see [timed-sequences.md](./timed-sequences.md)).
+2. **No core API in React when hooks would work.** `createLoop`/`createTicker`/`createLifecycle` in a React component should be `useLoop`/`useCanvas`/`useLifecycle` unless there's a specific reason (custom hook composition, `AbortController` teardown, imperative manager).
+3. **No `setState` in frame callbacks.** `onTick`/`draw` must write to refs or DOM directly. `setState` at 60fps causes 60 re-renders/sec.
+4. **No allocations in `onTick`/`draw`.** No object/array literals, no `.map()`/`.filter()`, no closures, no spreads. Template literals for the final `style.*` write are acceptable.
+5. **No forced reflows in animation paths.** No `getBoundingClientRect()`, `offsetWidth`, `getComputedStyle()`. Use `useSize` for dimensions.
+
+### Runtime checks (behavioral)
+
+6. **Animations pause off-screen.** Scroll the element out of view, wait, scroll back. CPU should be zero while hidden. If timers or rAF loops are still firing, something bypasses phase's lifecycle.
+7. **Animations resume without restarting.** Scroll away mid-sequence, scroll back. The animation should pick up where it left off, not flash back to the initial state and replay. A restart means timing is `Date.now()`-based or timer-based instead of `frame.elapsed`-based.
+8. **Reduced motion works.** Enable `prefers-reduced-motion: reduce` in devtools. Decorative animations should pause or complete instantly. Phase handles this automatically, but timer-based or manual rAF workarounds bypass it.
+9. **Tab switch pauses correctly.** Switch to another tab, wait, switch back. Same as off-screen: zero CPU while hidden, smooth resume without restart.
+
+For migration pattern mappings (framer-motion → phase), see [decision-guide.md](./decision-guide.md).
 
 ## Output format
 
