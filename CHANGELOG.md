@@ -1,5 +1,15 @@
 # phase
 
+## 0.0.4
+
+### Patch Changes
+
+- Add `createMutation` (core) and `useMutation` (React hook): lifecycle-aware MutationObserver with rAF-coalesced callbacks. Auto-pauses off-screen via pooled IO. Dev-mode warning for reflow-storm-shaped observer configurations (`subtree` + `attributeFilter: ['style'|'class']`).
+- Core `createMutation` exposes `onPhaseChange` callback for phase-transition observation, matching `createSight` and `createLifecycle`.
+- React `useMutation` follows the `useSight` dual-mode pattern: reactive by default (phase transitions trigger re-renders via `useState`), transient when `onPhaseChange` is provided (zero re-renders, `phaseRef`/`phaseReasonRef` always current).
+- Add `createMockMutationObserver` shared test mock, matching the IO/RO/MQL mock pattern.
+- AGENTS.md: add admission criteria and export taxonomy. Expand rule 8 (phases + reasons) to require `onPhaseChange` on core primitives and `useState` + transient mode on React hooks. Add `lib.dom` type-name collision check and `pnpm size:readme` to new-export checklists.
+
 ## 0.0.3
 
 ### Patch Changes
