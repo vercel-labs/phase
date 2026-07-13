@@ -1,16 +1,30 @@
-import type { ComponentProps, CSSProperties, JSX, Ref } from 'react';
+import {
+  createElement,
+  type CSSProperties,
+  type ElementType,
+  type HTMLAttributes,
+  type JSX,
+  type ReactNode,
+  type Ref,
+} from 'react';
 
 // ---------------------------------------------------------------------------
-// Types
+// Public types
 // ---------------------------------------------------------------------------
 
-export interface DeferProps extends Omit<ComponentProps<'div'>, 'style'> {
+export interface DeferProps extends Omit<HTMLAttributes<HTMLElement>, 'style'> {
   /**
-   * Approximate size reserved before first paint (any CSS length, e.g. `'800px'`).
-   * After the first render the browser remembers the real size. Default `'1000px'`.
+   * HTML element to render. Default `'div'`. Use `'li'`, `'tr'`, or any
+   * semantic element when a wrapper div would break document structure.
+   */
+  as?: ElementType;
+  /**
+   * Approximate size reserved before first paint (any CSS length).
+   * After first render the browser remembers the real size. Default `'1000px'`.
    */
   estimatedHeight?: string;
-  ref?: Ref<HTMLDivElement>;
+  children?: ReactNode;
+  ref?: Ref<HTMLElement>;
 }
 
 // ---------------------------------------------------------------------------
@@ -18,41 +32,25 @@ export interface DeferProps extends Omit<ComponentProps<'div'>, 'style'> {
 // ---------------------------------------------------------------------------
 
 /**
- * Skip the browser's rendering work (style, layout, paint) for off-screen
- * content via `content-visibility: auto`. Pure CSS, no JS, no observer.
- *
- * Children stay in the DOM and are server-rendered (SEO- and CLS-safe).
- * `contain-intrinsic-size: auto <estimatedHeight>` reserves space so the
- * scrollbar does not jump. Defers rendering only, not hydration or mounting.
- *
- * The render-skip styles are encapsulated and cannot be overridden. There is
- * no `style` prop. Style the wrapper with `className`; this keeps the
- * no-layout-shift guarantee intact.
- *
- * @example
- * <Defer estimatedHeight="600px" className="my-section">
- *   <ArticleSection />
- * </Defer>
- *
- * @remarks
- * Animations inside a `Defer` keep running while paint is skipped. phase loops
- * self-pause off-screen on their own; for raw rAF/interval work, gate it with
- * `useRenderState`.
+ * Skip browser rendering (style, layout, paint) for off-screen content via
+ * `content-visibility: auto`. Pure CSS, no JS, no observer. Children stay
+ * in the DOM and are server-rendered (SEO- and CLS-safe).
  */
 export function Defer({
+  as: Component = 'div',
   estimatedHeight = '1000px',
   children,
   ref,
-  ...divProps
+  ...rest
 }: DeferProps): JSX.Element {
   const deferStyle: CSSProperties = {
     contentVisibility: 'auto',
     containIntrinsicSize: `auto ${estimatedHeight}`,
   };
 
-  return (
-    <div {...divProps} ref={ref} style={deferStyle}>
-      {children}
-    </div>
+  return createElement(
+    Component,
+    { ...rest, ref, style: deferStyle },
+    children,
   );
 }
