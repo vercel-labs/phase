@@ -192,7 +192,7 @@ Every export falls into one category. New exports must fit an existing category 
 5. Add a skill reference at `skills/phase/references/<name>.md` following `_template.md`
 6. If the primitive has phases: expose `onPhaseChange` callback in options (see rule 8)
 7. Verify exported type names do not collide with `lib.dom` globals
-8. Run `pnpm format:fix && pnpm validate && pnpm skill:check`
+8. Run `pnpm format:fix && pnpm size:readme && pnpm validate && pnpm skill:check`
 
 ### New React hook
 
@@ -204,7 +204,7 @@ Every export falls into one category. New exports must fit an existing category 
 6. If the hook exposes phase state: use `useState` (reactive by default), expose `phaseRef`/`phaseReasonRef` (always-current via ref), and provide a transient callback option that suppresses `setState` (see rule 8, match the `useSight` dual-mode pattern)
 7. No boolean props except `enabled`. Use string unions for modes and behaviors.
 8. Verify exported type names do not collide with `lib.dom` globals
-9. Run `pnpm format:fix && pnpm validate && pnpm skill:check`
+9. Run `pnpm format:fix && pnpm size:readme && pnpm validate && pnpm skill:check`
 
 ### New easing function
 
