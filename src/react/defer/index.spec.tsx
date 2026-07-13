@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { createRef } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 import { Defer } from '.';
 
@@ -86,5 +87,27 @@ describe('Defer component', () => {
     );
     expect(ref.current).toBe(screen.getByTestId('defer'));
     expect(ref.current?.tagName).toBe('ARTICLE');
+  });
+
+  it('renders to static markup on the server', () => {
+    const html = renderToStaticMarkup(
+      <Defer estimatedHeight="400px" className="ssr-test">
+        <p>server content</p>
+      </Defer>,
+    );
+    expect(html).toContain('server content');
+    expect(html).toContain('content-visibility:auto');
+    expect(html).toContain('contain-intrinsic-size:auto 400px');
+  });
+
+  it('renders with as prop in static markup', () => {
+    const html = renderToStaticMarkup(
+      <Defer as="section" estimatedHeight="200px">
+        <p>section content</p>
+      </Defer>,
+    );
+    expect(html).toContain('<section');
+    expect(html).toContain('section content');
+    expect(html).toContain('content-visibility:auto');
   });
 });
