@@ -31,10 +31,22 @@ import { Defer } from 'phase/react';
 
 ## When to use
 
-- Long pages with many off-screen sections (articles, feeds, docs).
-- Heavy DOM subtrees that should exist and be crawlable but need not paint until near the viewport.
+- Large repeated lists (dozens or hundreds of rows) where each row has meaningful DOM cost. Use `as="li"` or `as="tr"` to match the list structure.
+- Heavy DOM subtrees below the fold (complex nested layouts, large tables, rich text).
+- Long-form content pages (articles, docs, feeds) where most sections are off-screen.
 - You want to keep server-rendered HTML (SEO, deep links) while skipping render cost.
-- Repeated list items where each row has meaningful DOM cost. Use `as="li"` or `as="tr"` to avoid a wrapper `div` inside the list.
+
+## When to skip it
+
+`Defer` is not a blanket "wrap everything." Paint containment has constraints. Skip it when:
+
+- The content has intentional overflow (box shadows, negative margins, tooltips, popover triggers, decorative bleeds that extend beyond the element boundary).
+- The subtree is small or cheap to paint. A few simple elements do not benefit from `content-visibility`, and the containment constraints add complexity without meaningful savings.
+- The element is above the fold or in the initial viewport. There is nothing to defer.
+- Users rely on find-in-page (Cmd+F) to locate text in this content (Safari does not reliably search inside skipped subtrees).
+- The content contains focusable elements that assistive technology needs to reach while off-screen.
+
+The right default: include `Defer` where the rendering cost is real (large lists, complex trees), skip it where the containment constraints cause problems or the content is too simple to benefit.
 
 ## When not to use
 
