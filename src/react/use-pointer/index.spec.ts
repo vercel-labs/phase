@@ -209,44 +209,15 @@ describe('stateRef', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Transient mode (onPhaseChange provided)
+// onPointer delivery
 // ---------------------------------------------------------------------------
 
-describe('transient mode', () => {
-  it('does not update state when onPhaseChange is provided', async () => {
-    const usePointer = await getHook();
-    const { ref, el } = createRefWithElement();
-    const phaseCb = vi.fn();
-    const { result } = renderHook(() =>
-      usePointer({
-        ref,
-        onPointer: vi.fn(),
-        onPhaseChange: phaseCb,
-        visibility: 'ignore',
-      }),
-    );
-
-    act(() => {
-      el.dispatchEvent(new Event('pointerenter'));
-    });
-
-    expect(phaseCb).toHaveBeenCalledWith('tracking', 'enter');
-    // phaseRef still updates in transient mode.
-    expect(result.current.phaseRef.current).toBe('tracking');
-  });
-
-  it('forwards pointer state through onPointer on leave', async () => {
+describe('onPointer', () => {
+  it('forwards pointer state on leave', async () => {
     const usePointer = await getHook();
     const { ref, el } = createRefWithElement();
     const onPointer = vi.fn();
-    renderHook(() =>
-      usePointer({
-        ref,
-        onPointer,
-        onPhaseChange: vi.fn(),
-        visibility: 'ignore',
-      }),
-    );
+    renderHook(() => usePointer({ ref, onPointer, visibility: 'ignore' }));
 
     act(() => {
       el.dispatchEvent(new Event('pointerenter'));

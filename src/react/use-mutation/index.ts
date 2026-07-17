@@ -13,11 +13,6 @@ import { useSyncedRef } from '../use-synced-ref';
 
 export type MutationRecordsCallback = (records: MutationRecord[]) => void;
 
-export type MutationPhaseCallback = (
-  phase: MutationPhase,
-  phaseReason: MutationReason,
-) => void;
-
 export interface UseMutationOptions<T extends Element = HTMLDivElement> {
   /**
    * Element to observe. When omitted, attach the returned `ref`.
@@ -31,11 +26,6 @@ export interface UseMutationOptions<T extends Element = HTMLDivElement> {
   mutation: MutationObserverInit;
   /** Called once per rAF frame with coalesced records. Never per-record. */
   onMutations: MutationRecordsCallback;
-  /**
-   * Called on every phase transition. When provided, `phase` and `phaseReason`
-   * stay at initial values and no re-renders occur (transient mode).
-   */
-  onPhaseChange?: MutationPhaseCallback;
   /** Pause when off-screen or ignore visibility. Default `'pause'`. */
   visibility?: 'pause' | 'ignore';
   /** When `false`, tears down the observer entirely. Default `true`. */
@@ -44,7 +34,7 @@ export interface UseMutationOptions<T extends Element = HTMLDivElement> {
   intersectionOptions?: IntersectionObserverInit;
 }
 
-export interface UseMutationReactiveResult<T extends Element = HTMLDivElement> {
+export interface UseMutationResult<T extends Element = HTMLDivElement> {
   ref: RefObject<T | null>;
   phase: MutationPhase;
   phaseReason: MutationReason;
@@ -53,19 +43,6 @@ export interface UseMutationReactiveResult<T extends Element = HTMLDivElement> {
   /** Reason via ref. Always current, never triggers re-render. */
   phaseReasonRef: RefObject<MutationReason>;
 }
-
-export interface UseMutationTransientResult<
-  T extends Element = HTMLDivElement,
-> {
-  ref: RefObject<T | null>;
-  /** Phase via ref. Always current, never triggers re-render. */
-  phaseRef: RefObject<MutationPhase>;
-  /** Reason via ref. Always current, never triggers re-render. */
-  phaseReasonRef: RefObject<MutationReason>;
-}
-
-export type UseMutationResult<T extends Element = HTMLDivElement> =
-  UseMutationReactiveResult<T>;
 
 // ---------------------------------------------------------------------------
 // useMutation
@@ -82,18 +59,15 @@ const INITIAL_STATE: MutationState = {
  * Lifecycle-aware MutationObserver with rAF-coalesced callbacks.
  * Auto-pauses off-screen and tears down on unmount.
  *
- * Pass `onPhaseChange` for zero-re-render mode (transient). Without it,
- * `phase` and `phaseReason` update via state on every transition.
+ * Records are always delivered imperatively via `onMutations` (never state).
+ * Phase transitions (observing/paused) are infrequent, so `phase`/`phaseReason`
+ * are reactive state; read `phaseRef`/`phaseReasonRef` for the latest value
+ * inside `onMutations` without closure staleness. For synchronous phase
+ * reactions, use the core `createMutation` primitive.
  */
 export function useMutation<T extends Element = HTMLDivElement>(
-  options: UseMutationOptions<T> & { onPhaseChange: MutationPhaseCallback },
-): UseMutationTransientResult<T>;
-export function useMutation<T extends Element = HTMLDivElement>(
   options: UseMutationOptions<T>,
-): UseMutationReactiveResult<T>;
-export function useMutation<T extends Element = HTMLDivElement>(
-  options: UseMutationOptions<T>,
-): UseMutationReactiveResult<T> | UseMutationTransientResult<T> {
+): UseMutationResult<T> {
   const [state, setState] = useState<MutationState>(INITIAL_STATE);
   const {
     mutation: mutationInit,
@@ -105,7 +79,6 @@ export function useMutation<T extends Element = HTMLDivElement>(
   const phaseRef = useRef<MutationPhase>('paused');
   const phaseReasonRef = useRef<MutationReason>('initial');
   const onMutationsRef = useSyncedRef(options.onMutations);
-  const onPhaseChangeRef = useSyncedRef(options.onPhaseChange);
 
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options.ref ?? internalRef;
@@ -126,12 +99,7 @@ export function useMutation<T extends Element = HTMLDivElement>(
       onPhaseChange: (phase, reason) => {
         phaseRef.current = phase;
         phaseReasonRef.current = reason;
-
-        if (onPhaseChangeRef.current) {
-          onPhaseChangeRef.current(phase, reason);
-        } else {
-          setState({ phase, phaseReason: reason });
-        }
+        setState({ phase, phaseReason: reason });
       },
       visibility,
       intersectionOptions,

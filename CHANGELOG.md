@@ -4,8 +4,9 @@
 
 ### Patch Changes
 
-- Add `createPointer` and `usePointer`: lifecycle-aware pointer tracker that reads `getBoundingClientRect` once per rAF frame instead of per `pointermove` event, auto-pauses off-screen via the shared IntersectionObserver pool, and supports reactive/transient dual mode. `usePointer` also exposes an always-current `stateRef` for reading the latest `{ x, y, active }` on demand (e.g. inside a `useLoop` tick).
-- Document the `display:none` pause behavior in `performance.md` as a contract: IO reports intersection ratio 0 for hidden elements, so all phase primitives built on `createSight` pause automatically.
+- Add `createPointer` and `usePointer`: lifecycle-aware pointer tracker that reads `getBoundingClientRect` once per rAF frame instead of per `pointermove` event, and auto-pauses off-screen via the shared IntersectionObserver pool. `usePointer` delivers position imperatively via `onPointer`, exposes reactive `phase`/`phaseReason` (plus `phaseRef`/`phaseReasonRef`), and mirrors the latest `{ x, y, active }` in an always-current `stateRef` for on-demand reads (e.g. inside a `useLoop` tick).
+- Align `useMutation` and `usePointer` with the per-frame producer shape used by `useLoop`/`useCanvas`. The hooks no longer accept `onPhaseChange` or return the reactive/transient overload pair. Phase transitions are infrequent, so `phase`/`phaseReason` are now always reactive state (with `phaseRef`/`phaseReasonRef` for imperative reads). For a synchronous phase reaction, use the core `createMutation`/`createPointer`, which still expose `onPhaseChange`. Removed type exports: `MutationPhaseCallback`, `PointerPhaseCallback`, `UseMutation{Reactive,Transient}Result`, `UsePointer{Reactive,Transient}Result`.
+- Document the `display:none` pause behavior in `performance.md` as a contract: elements removed from layout report intersection ratio 0, so every phase primitive built on `createSight` pauses automatically (`visibility: hidden` / `opacity: 0` keep their box and do not pause).
 
 ## 0.0.5
 

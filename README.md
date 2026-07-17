@@ -913,29 +913,29 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
 | `useLoop`                 |           2.81 kB |
-| `useLifecycle`            |           1.68 kB |
+| `useLifecycle`            |           1.69 kB |
 | `useSight`                |           1.18 kB |
 | `useCanvas`               |           3.44 kB |
-| `useMutation`             |           1.38 kB |
-| `usePointer`              |           1.49 kB |
-| `useTween`                |             619 B |
-| `usePresence`             |             598 B |
-| `useScrollProgress`       |             997 B |
-| `useSize`                 |             389 B |
-| `useContainerQuery`       |             354 B |
+| `useMutation`             |           1.36 kB |
+| `usePointer`              |           1.48 kB |
+| `useTween`                |             617 B |
+| `usePresence`             |             593 B |
+| `useScrollProgress`       |             993 B |
+| `useSize`                 |             384 B |
+| `useContainerQuery`       |             356 B |
 | `useMediaQuery`           |             246 B |
-| `usePrefersReducedMotion` |             273 B |
+| `usePrefersReducedMotion` |             272 B |
 | `useDevicePixelRatio`     |             231 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             744 B |
+| `Presence`                |             742 B |
 | `WhenVisible`             |           1.44 kB |
-| `WhenIdle`                |             591 B |
+| `WhenIdle`                |             593 B |
 | `Defer`                   |              85 B |
 | `useIdle`                 |             435 B |
 | `useWhenIdle`             |             449 B |
 | `useRenderState`          |             527 B |
-| `Swap`                    |           1.13 kB |
+| `Swap`                    |           1.12 kB |
 
 <!-- SIZE-TABLE:END -->
 

@@ -177,49 +177,6 @@ describe('reactive mode', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Transient mode (onPhaseChange provided)
-// ---------------------------------------------------------------------------
-
-describe('transient mode', () => {
-  it('does not update state when onPhaseChange is provided', async () => {
-    const useMutation = await getHook();
-    const { ref, el } = createRefWithElement();
-    const phaseCb = vi.fn();
-    const { result } = renderHook(() =>
-      useMutation({
-        ref,
-        mutation: { childList: true },
-        onMutations: vi.fn(),
-        onPhaseChange: phaseCb,
-      }),
-    );
-
-    act(() => mockIO.trigger(el, true));
-
-    expect(phaseCb).toHaveBeenCalledWith('observing', 'started');
-    // State stays at initial (transient mode skips setState).
-    // phaseRef is updated though.
-    expect(result.current.phaseRef.current).toBe('observing');
-  });
-
-  it('phaseRef is still current in transient mode', async () => {
-    const useMutation = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() =>
-      useMutation({
-        ref,
-        mutation: { childList: true },
-        onMutations: vi.fn(),
-        onPhaseChange: vi.fn(),
-      }),
-    );
-
-    act(() => mockIO.trigger(el, true));
-    expect(result.current.phaseRef.current).toBe('observing');
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Teardown
 // ---------------------------------------------------------------------------
 

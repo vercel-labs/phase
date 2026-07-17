@@ -72,18 +72,12 @@ export type {
 } from './use-canvas';
 export type {
   MutationRecordsCallback,
-  MutationPhaseCallback,
   UseMutationOptions,
-  UseMutationReactiveResult,
-  UseMutationTransientResult,
   UseMutationResult,
 } from './use-mutation';
 export type {
   PointerCallback,
-  PointerPhaseCallback,
   UsePointerOptions,
-  UsePointerReactiveResult,
-  UsePointerTransientResult,
   UsePointerResult,
 } from './use-pointer';
 export type { UseTweenOptions } from './use-tween';
