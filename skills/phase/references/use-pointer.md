@@ -4,7 +4,7 @@ React hook wrapping `createPointer`. Lifecycle-aware pointer tracker with rAF-ba
 
 ## Signature
 
-Position is always delivered imperatively via `onPointer` (never state) and mirrored in `stateRef`; phase is reactive state (transitions are infrequent). This mirrors `useLoop` / `useCanvas`.
+Position is always delivered imperatively via `onPointer` (never state) and mirrored in `stateRef`; phase is reactive state (transitions are infrequent). This mirrors `useLoop` / `useCanvas`, not the transient overloads of `useSize` / `useScrollProgress` / `useSight`. Those omit the reactive value when you pass a callback because the callback delivers that same value. `onPointer` instead carries the position — a separate quantity from `phase` — so there is nothing for it to replace, and `phase` stays in the return.
 
 ```ts
 import { usePointer } from 'phase/react';
