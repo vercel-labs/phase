@@ -44,12 +44,33 @@ Phase transitions (tracking ⇄ idle) fire only on pointer enter/leave, so react
 
 ## When not to use
 
-| Instead of this                  | Use                                               |
-| -------------------------------- | ------------------------------------------------- |
-| Hover state (boolean)            | CSS `:hover` or `onPointerEnter`/`onPointerLeave` |
-| Click handling                   | Standard `onClick` handler                        |
-| Drag-and-drop or gesture physics | External library (`@use-gesture`)                 |
-| Framework-agnostic code          | `createPointer` (core)                            |
+| Instead of this                   | Use                                                |
+| --------------------------------- | -------------------------------------------------- |
+| Hover state (boolean)             | CSS `:hover` or `onPointerEnter`/`onPointerLeave`  |
+| Click handling                    | Standard `onClick` handler                         |
+| Drag-and-drop or gesture physics  | External library (`@use-gesture`)                  |
+| Document- or window-level pointer | Plain listener or core `createPointer` (see below) |
+| Framework-agnostic code           | `createPointer` (core)                             |
+
+## Tracking the document or window
+
+`usePointer`'s `ref` is for a React-rendered element. Don't force `document` (or `window`) through it — pick the layer that fits:
+
+- **Viewport coordinates anywhere:** a plain `window` `pointermove` listener in `useEffect`. `clientX` / `clientY` ride on the event with no reflow, so phase adds nothing.
+- **Page-relative coordinates or rAF-coalesced callbacks:** the core `createPointer` on `document.documentElement` with `visibility: 'ignore'` (see [createPointer](./create-pointer.md) — the root yields scroll-inclusive coords and IO on it is degenerate):
+
+  ```tsx
+  useEffect(() => {
+    const pointer = createPointer({
+      element: document.documentElement,
+      visibility: 'ignore',
+      onPointer: (state) => {
+        cursorRef.current?.style.setProperty('--x', `${state.x}px`);
+      },
+    });
+    return () => pointer.stop();
+  }, []);
+  ```
 
 ## Do
 
@@ -90,6 +111,8 @@ Phase transitions (tracking ⇄ idle) fire only on pointer enter/leave, so react
 ## Don't
 
 - **Don't read layout inside `onPointer`.** The callback already provides element-relative coordinates computed from one `getBoundingClientRect` call per frame. Calling layout-triggering APIs again defeats the purpose.
+- **Don't use it just for hover / enter-leave.** That's a discrete event with no layout read and no frame loop — CSS `:hover` or `onPointerEnter` / `onPointerLeave` are the right tools. Reach for `usePointer` only when you also need the per-frame position.
+- **Don't force `document` through the `ref`.** For document- or window-level tracking, use a plain listener or the core `createPointer` (see above).
 - **Don't use for drag gestures.** Pointer tracking stops at `pointerleave`. Drag needs pointer capture, velocity, and momentum. Use a gesture library.
 
 ## Reduced motion

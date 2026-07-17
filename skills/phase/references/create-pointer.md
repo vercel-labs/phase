@@ -53,6 +53,25 @@ const pointer = createPointer(options: PointerOptions): Pointer;
 | Drag-and-drop with gesture physics | External library (e.g., `@use-gesture`)  |
 | React component                    | `usePointer` (manages refs and teardown) |
 
+## Tracking the document or window
+
+`createPointer` exists to batch a per-element `getBoundingClientRect` into element-relative coordinates. For document- or window-level tracking there is no element rect worth batching — the pointer's viewport position is `clientX` / `clientY`, which ride on the event with no layout read and no reflow.
+
+- **Viewport coordinates anywhere on the page:** use a plain listener. `window.addEventListener('pointermove', (e) => …e.clientX…)` is reflow-free; phase adds nothing.
+- **Page-relative (scroll-inclusive) coordinates, or rAF-coalesced callbacks:** pass `document.documentElement` (the `<html>` element — `document` and `window` are not `Element`s) with `visibility: 'ignore'`. Tracking the root yields page coordinates, because its `rect.top` is `-scrollY`, and you still get one batched rect read + one `onPointer` per frame:
+
+  ```ts
+  const pointer = createPointer({
+    element: document.documentElement,
+    visibility: 'ignore', // the root is never meaningfully off-screen
+    onPointer: (state) => {
+      // state.x / state.y are page-relative (include scroll)
+    },
+  });
+  ```
+
+  Use `visibility: 'ignore'` here: an `IntersectionObserver` on the root is degenerate (it effectively always intersects), so the default `'pause'` mode buys nothing.
+
 ## Do
 
 - Use for rAF-batched pointer tracking:
@@ -70,6 +89,7 @@ const pointer = createPointer(options: PointerOptions): Pointer;
 ## Don't
 
 - **Don't call `getBoundingClientRect()` in your own `pointermove` handler.** That is what this primitive replaces: it reads the rect once per frame, not per event.
+- **Don't reach for it just to know if the pointer is over the element.** Enter/leave are discrete events with no layout read — use CSS `:hover` or `pointerenter`/`pointerleave` listeners. This primitive is for continuous, per-frame position.
 - **Don't use for drag-and-drop.** Drag needs velocity, gesture recognition, and momentum. Use a gesture library.
 - **Don't call `stop()` then expect to restart.** `stop()` is terminal.
 
