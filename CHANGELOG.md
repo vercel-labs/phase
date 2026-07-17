@@ -1,5 +1,12 @@
 # phase
 
+## 0.0.6
+
+### Patch Changes
+
+- Add `createPointer` and `usePointer`: lifecycle-aware pointer tracker that reads `getBoundingClientRect` once per rAF frame instead of per `pointermove` event, auto-pauses off-screen via the shared IntersectionObserver pool, and supports reactive/transient dual mode.
+- Document the `display:none` pause behavior in `performance.md` as a contract: IO reports intersection ratio 0 for hidden elements, so all phase primitives built on `createSight` pause automatically.
+
 ## 0.0.5
 
 ### Patch Changes
