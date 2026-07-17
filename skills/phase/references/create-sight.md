@@ -48,6 +48,7 @@ const sight = createSight(options: SightOptions): Sight;
 - Rely on observer pooling: 20 elements with the same `intersectionOptions` share one `IntersectionObserver` instance.
 - Use `onPhaseChange` instead of polling `phase` — it fires only on transitions.
 - Call `stop()` in cleanup to free the observer slot.
+- Treat `display:none` as `hidden`. An element (or ancestor) with `display:none` has no layout box, so IO reports it as not intersecting and `createSight` goes `hidden`. This is why every primitive composed on it (`createLifecycle`, `createLoop`, `useCanvas`, `visibility: 'pause'` observers) pauses when hidden via `display:none` — no manual check needed. Note: `visibility: hidden` and `opacity: 0` keep a box and stay `visible`. See [performance.md](./performance.md).
 
 ## Don't
 
