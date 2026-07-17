@@ -80,7 +80,10 @@ export type {
 } from './use-mutation';
 export type {
   PointerCallback,
+  PointerPhaseCallback,
   UsePointerOptions,
+  UsePointerReactiveResult,
+  UsePointerTransientResult,
   UsePointerResult,
 } from './use-pointer';
 export type { UseTweenOptions } from './use-tween';

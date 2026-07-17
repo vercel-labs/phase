@@ -12,13 +12,14 @@ const pointer = createPointer(options: PointerOptions): Pointer;
 
 ### Options
 
-| Option                | Type                            | Default  | Description                                    |
-| --------------------- | ------------------------------- | -------- | ---------------------------------------------- |
-| `element`             | `Element`                       | required | Element to track pointer events on             |
-| `onPointer`           | `(state: PointerState) => void` | required | Called once per rAF frame with latest position |
-| `visibilityAware`     | `boolean`                       | `true`   | Pause tracking while off-screen                |
-| `intersectionOptions` | `IntersectionObserverInit`      | --       | Forwarded to the visibility observer           |
-| `signal`              | `AbortSignal`                   | --       | Stops the tracker when aborted                 |
+| Option                | Type                            | Default   | Description                                    |
+| --------------------- | ------------------------------- | --------- | ---------------------------------------------- |
+| `element`             | `Element`                       | required  | Element to track pointer events on             |
+| `onPointer`           | `(state: PointerState) => void` | required  | Called once per rAF frame with latest position |
+| `onPhaseChange`       | `(phase, reason) => void`       | --        | Called on phase transitions                    |
+| `visibility`          | `'pause' \| 'ignore'`           | `'pause'` | Pause when off-screen or ignore visibility     |
+| `intersectionOptions` | `IntersectionObserverInit`      | --        | Forwarded to the visibility observer           |
+| `signal`              | `AbortSignal`                   | --        | Stops the tracker when aborted                 |
 
 ### PointerState
 

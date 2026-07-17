@@ -900,12 +900,13 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Core**                  |                   |
 | `createTicker`            |             837 B |
 | `createSight`             |             963 B |
-| `createLifecycle`         |           1.48 kB |
-| `createLoop`              |            2.6 kB |
-| `createScrollProgress`    |             869 B |
+| `createLifecycle`         |           1.47 kB |
+| `createLoop`              |           2.59 kB |
+| `createScrollProgress`    |             857 B |
 | `createRenderState`       |             495 B |
 | `createDevicePixelRatio`  |             544 B |
-| `createMutation`          |            1.2 kB |
+| `createMutation`          |           1.17 kB |
+| `createPointer`           |           1.26 kB |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
 | **Ease**                  |                   |
@@ -916,19 +917,20 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useSight`                |           1.18 kB |
 | `useCanvas`               |           3.44 kB |
 | `useMutation`             |           1.38 kB |
-| `useTween`                |             620 B |
-| `usePresence`             |             593 B |
-| `useScrollProgress`       |             996 B |
-| `useSize`                 |             388 B |
-| `useContainerQuery`       |             365 B |
+| `usePointer`              |           1.47 kB |
+| `useTween`                |             619 B |
+| `usePresence`             |             598 B |
+| `useScrollProgress`       |             997 B |
+| `useSize`                 |             389 B |
+| `useContainerQuery`       |             354 B |
 | `useMediaQuery`           |             246 B |
 | `usePrefersReducedMotion` |             273 B |
 | `useDevicePixelRatio`     |             231 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             743 B |
+| `Presence`                |             744 B |
 | `WhenVisible`             |           1.44 kB |
-| `WhenIdle`                |             593 B |
+| `WhenIdle`                |             591 B |
 | `Defer`                   |              85 B |
 | `useIdle`                 |             435 B |
 | `useWhenIdle`             |             449 B |

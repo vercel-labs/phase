@@ -74,7 +74,7 @@ describe('initial state', () => {
     const pointer = createPointer({
       element: el,
       onPointer: vi.fn(),
-      visibilityAware: false,
+      visibility: 'ignore',
     });
     expect(pointer.phase).toBe('idle');
     expect(pointer.phaseReason).toBe('initial');
@@ -95,7 +95,7 @@ describe('pointer events', () => {
     const pointer = createPointer({
       element: el,
       onPointer: cb,
-      visibilityAware: false,
+      visibility: 'ignore',
     });
 
     el.dispatchEvent(new Event('pointerenter'));
@@ -129,7 +129,7 @@ describe('pointer events', () => {
     const pointer = createPointer({
       element: el,
       onPointer: cb,
-      visibilityAware: false,
+      visibility: 'ignore',
     });
 
     el.dispatchEvent(new Event('pointerenter'));
@@ -206,7 +206,7 @@ describe('stop', () => {
     const pointer = createPointer({
       element: el,
       onPointer: vi.fn(),
-      visibilityAware: false,
+      visibility: 'ignore',
     });
     pointer.stop();
     expect(pointer.phase).toBe('stopped');
@@ -219,7 +219,7 @@ describe('stop', () => {
     const pointer = createPointer({
       element: el,
       onPointer: vi.fn(),
-      visibilityAware: false,
+      visibility: 'ignore',
     });
     pointer.stop();
     expect(() => pointer.stop()).not.toThrow();
@@ -233,7 +233,7 @@ describe('stop', () => {
       element: el,
       onPointer: vi.fn(),
       signal: controller.signal,
-      visibilityAware: false,
+      visibility: 'ignore',
     });
     controller.abort();
     expect(pointer.phase).toBe('stopped');
@@ -246,7 +246,7 @@ describe('stop', () => {
     const pointer = createPointer({
       element: el,
       onPointer: cb,
-      visibilityAware: false,
+      visibility: 'ignore',
     });
 
     el.dispatchEvent(new Event('pointerenter'));

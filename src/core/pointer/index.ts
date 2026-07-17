@@ -3,7 +3,7 @@ import { noElementError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 
 // ---------------------------------------------------------------------------
-// Types
+// Public types
 // ---------------------------------------------------------------------------
 
 export type PointerPhase = 'idle' | 'tracking' | 'stopped';
@@ -25,16 +25,15 @@ export interface PointerState {
 
 export interface PointerOptions {
   element: Element;
-  /**
-   * Called once per rAF frame with the latest pointer position.
-   * Reads `getBoundingClientRect` at most once per frame.
-   */
+  /** Called once per rAF frame with the latest pointer position. */
   onPointer: (state: PointerState) => void;
-  /** Pause tracking while the element is off-screen. Default `true`. */
-  visibilityAware?: boolean;
+  /** Called on phase transitions (idle, tracking, stopped). */
+  onPhaseChange?: (phase: PointerPhase, reason: PointerReason) => void;
+  /** Pause when off-screen or ignore visibility. Default `'pause'`. */
+  visibility?: 'pause' | 'ignore';
   /** IO options forwarded to the visibility observer. */
   intersectionOptions?: IntersectionObserverInit;
-  /** Abort signal that stops the tracker when aborted. */
+  /** Stops the tracker when aborted. */
   signal?: AbortSignal;
 }
 
@@ -49,11 +48,7 @@ export interface Pointer {
 // createPointer
 // ---------------------------------------------------------------------------
 
-/**
- * Lifecycle-aware pointer tracker that reads `getBoundingClientRect` once per
- * rAF frame instead of per `pointermove` event. Auto-pauses when the element
- * is off-screen.
- */
+/** Lifecycle-aware pointer tracker with rAF-batched `getBoundingClientRect`. */
 export function createPointer(options: PointerOptions): Pointer {
   if (typeof document === 'undefined') {
     serverContextError('createPointer');
@@ -62,7 +57,8 @@ export function createPointer(options: PointerOptions): Pointer {
   const {
     element,
     onPointer,
-    visibilityAware = true,
+    onPhaseChange,
+    visibility = 'pause',
     intersectionOptions,
     signal,
   } = options;
@@ -72,20 +68,24 @@ export function createPointer(options: PointerOptions): Pointer {
   let _phase: PointerPhase = 'idle';
   let _reason: PointerReason = 'initial';
   let stopped = false;
-
   const _state: PointerState = { x: 0, y: 0, active: false };
 
-  // rAF batching — one getBoundingClientRect per frame maximum
   let rafId = 0;
   let lastClientX = 0;
   let lastClientY = 0;
   let dirty = false;
 
+  function setPhase(phase: PointerPhase, reason: PointerReason): void {
+    const prev = _phase;
+    _phase = phase;
+    _reason = reason;
+    if (prev !== phase) onPhaseChange?.(phase, reason);
+  }
+
   function flush(): void {
     rafId = 0;
     if (!dirty || stopped) return;
     dirty = false;
-
     const rect = element.getBoundingClientRect();
     _state.x = lastClientX - rect.left;
     _state.y = lastClientY - rect.top;
@@ -96,8 +96,6 @@ export function createPointer(options: PointerOptions): Pointer {
     if (rafId !== 0) return;
     rafId = requestAnimationFrame(flush);
   }
-
-  // --- Pointer event handlers ---
 
   function onPointerMove(e: Event): void {
     if (stopped || _phase !== 'tracking') return;
@@ -111,19 +109,15 @@ export function createPointer(options: PointerOptions): Pointer {
   function onPointerEnter(): void {
     if (stopped) return;
     _state.active = true;
-    _phase = 'tracking';
-    _reason = 'enter';
+    setPhase('tracking', 'enter');
   }
 
   function onPointerLeave(): void {
     if (stopped) return;
     _state.active = false;
-    _phase = 'idle';
-    _reason = 'leave';
+    setPhase('idle', 'leave');
     onPointer(_state);
   }
-
-  // --- Visibility gating ---
 
   let cleanupVisibility: (() => void) | undefined;
   let listenersAttached = false;
@@ -144,7 +138,7 @@ export function createPointer(options: PointerOptions): Pointer {
     element.removeEventListener('pointerleave', onPointerLeave);
   }
 
-  if (visibilityAware) {
+  if (visibility === 'pause') {
     let elementInView = false;
     let documentVisible = !document.hidden;
 
@@ -156,8 +150,7 @@ export function createPointer(options: PointerOptions): Pointer {
         detachListeners();
         if (_state.active) {
           _state.active = false;
-          _phase = 'idle';
-          _reason = 'sight';
+          setPhase('idle', 'sight');
         }
       }
     }
@@ -167,7 +160,14 @@ export function createPointer(options: PointerOptions): Pointer {
       recompute();
     }
 
+    function onPageShow(event: PageTransitionEvent): void {
+      if (!event.persisted) return;
+      documentVisible = true;
+      recompute();
+    }
+
     document.addEventListener('visibilitychange', onVisChange);
+    window.addEventListener('pageshow', onPageShow);
 
     const unobserveIO = observeIntersection({
       element,
@@ -180,13 +180,12 @@ export function createPointer(options: PointerOptions): Pointer {
 
     cleanupVisibility = () => {
       document.removeEventListener('visibilitychange', onVisChange);
+      window.removeEventListener('pageshow', onPageShow);
       unobserveIO();
     };
   } else {
     attachListeners();
   }
-
-  // --- Teardown ---
 
   let unlinkAbort: (() => void) | undefined;
 
@@ -201,8 +200,7 @@ export function createPointer(options: PointerOptions): Pointer {
       rafId = 0;
     }
     _state.active = false;
-    _phase = 'stopped';
-    _reason = 'disposed';
+    setPhase('stopped', 'disposed');
   }
 
   unlinkAbort = linkAbortSignal(signal, stop);

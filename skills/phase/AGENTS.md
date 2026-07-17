@@ -791,13 +791,14 @@ const pointer = createPointer(options: PointerOptions): Pointer;
 
 ### Options
 
-| Option                | Type                            | Default  | Description                                    |
-| --------------------- | ------------------------------- | -------- | ---------------------------------------------- |
-| `element`             | `Element`                       | required | Element to track pointer events on             |
-| `onPointer`           | `(state: PointerState) => void` | required | Called once per rAF frame with latest position |
-| `visibilityAware`     | `boolean`                       | `true`   | Pause tracking while off-screen                |
-| `intersectionOptions` | `IntersectionObserverInit`      | --       | Forwarded to the visibility observer           |
-| `signal`              | `AbortSignal`                   | --       | Stops the tracker when aborted                 |
+| Option                | Type                            | Default   | Description                                    |
+| --------------------- | ------------------------------- | --------- | ---------------------------------------------- |
+| `element`             | `Element`                       | required  | Element to track pointer events on             |
+| `onPointer`           | `(state: PointerState) => void` | required  | Called once per rAF frame with latest position |
+| `onPhaseChange`       | `(phase, reason) => void`       | --        | Called on phase transitions                    |
+| `visibility`          | `'pause' \| 'ignore'`           | `'pause'` | Pause when off-screen or ignore visibility     |
+| `intersectionOptions` | `IntersectionObserverInit`      | --        | Forwarded to the visibility observer           |
+| `signal`              | `AbortSignal`                   | --        | Stops the tracker when aborted                 |
 
 ### PointerState
 
@@ -3325,29 +3326,54 @@ React hook wrapping `createPointer`. Lifecycle-aware pointer tracker with rAF-ba
 
 ## Signature
 
+Two overloads. When `onPhaseChange` is provided, `phase` and `phaseReason` are omitted from the return type.
+
 ```ts
 import { usePointer } from 'phase/react';
 
-const { ref, phase, phaseReason } = usePointer<T>(options);
+// Reactive (re-renders on phase transitions)
+const { ref, phase, phaseReason, phaseRef, phaseReasonRef } =
+  usePointer<T>(options);
+
+// Transient (zero re-renders)
+const { ref, phaseRef, phaseReasonRef } = usePointer<T>({
+  ...options,
+  onPhaseChange: (phase, reason) => {
+    /* imperative work */
+  },
+});
 ```
 
 ### Options
 
-| Option                | Type                            | Default  | Description                                    |
-| --------------------- | ------------------------------- | -------- | ---------------------------------------------- |
-| `ref`                 | `RefObject<T \| null>`          | returned | Bring your own ref, or attach the returned one |
-| `onPointer`           | `(state: PointerState) => void` | required | Called once per rAF frame with latest position |
-| `visibilityAware`     | `boolean`                       | `true`   | Pause tracking while off-screen                |
-| `enabled`             | `boolean`                       | `true`   | When `false`, tears down the tracker           |
-| `intersectionOptions` | `IntersectionObserverInit`      | --       | Forwarded to the visibility observer           |
+| Option                | Type                            | Default   | Description                                                        |
+| --------------------- | ------------------------------- | --------- | ------------------------------------------------------------------ |
+| `ref`                 | `RefObject<T \| null>`          | returned  | Bring your own ref, or attach the returned one                     |
+| `onPointer`           | `(state: PointerState) => void` | required  | Called once per rAF frame with latest position                     |
+| `onPhaseChange`       | `(phase, reason) => void`       | --        | When provided, no re-renders on phase transitions (transient mode) |
+| `visibility`          | `'pause' \| 'ignore'`           | `'pause'` | Pause when off-screen or ignore visibility                         |
+| `enabled`             | `boolean`                       | `true`    | When `false`, tears down the tracker                               |
+| `intersectionOptions` | `IntersectionObserverInit`      | --        | Forwarded to the visibility observer                               |
 
-### Return
+### Return (reactive, no `onPhaseChange`)
 
-| Property      | Type                   | Description                         |
-| ------------- | ---------------------- | ----------------------------------- |
-| `ref`         | `RefObject<T \| null>` | Attach to the tracked element       |
-| `phase`       | `PointerPhase`         | `'idle' \| 'tracking' \| 'stopped'` |
-| `phaseReason` | `PointerReason`        | Why the current phase was entered   |
+| Property         | Type                       | Description                                                |
+| ---------------- | -------------------------- | ---------------------------------------------------------- |
+| `ref`            | `RefObject<T \| null>`     | Attach to the tracked element                              |
+| `phase`          | `PointerPhase`             | `'idle' \| 'tracking' \| 'stopped'`                        |
+| `phaseReason`    | `PointerReason`            | `'initial' \| 'enter' \| 'leave' \| 'sight' \| 'disposed'` |
+| `phaseRef`       | `RefObject<PointerPhase>`  | Phase via ref. Always current, never triggers re-render    |
+| `phaseReasonRef` | `RefObject<PointerReason>` | Reason via ref. Always current, never triggers re-render   |
+
+### Return (transient, with `onPhaseChange`)
+
+| Property         | Type                       | Description                                              |
+| ---------------- | -------------------------- | -------------------------------------------------------- |
+| `ref`            | `RefObject<T \| null>`     | Attach to the tracked element                            |
+| `phaseRef`       | `RefObject<PointerPhase>`  | Phase via ref. Always current, never triggers re-render  |
+| `phaseReasonRef` | `RefObject<PointerReason>` | Reason via ref. Always current, never triggers re-render |
+
+`phase` and `phaseReason` are not available in transient mode.
 
 ## When to use
 
@@ -3383,11 +3409,15 @@ const { ref, phase, phaseReason } = usePointer<T>(options);
     </div>
   );
   ```
-- Use `enabled` to conditionally track:
+- Use `onPhaseChange` for zero-re-render observation:
   ```tsx
-  usePointer({ ref, onPointer: handlePointer, enabled: isInteractive });
+  const { ref, phaseRef } = usePointer({
+    onPointer: handlePointer,
+    onPhaseChange: (phase) => {
+      worker.postMessage({ tracking: phase === 'tracking' });
+    },
+  });
   ```
-- `onPointer` is synced via ref so its identity never restarts the tracker.
 
 ## Don't
 
