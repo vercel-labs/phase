@@ -150,6 +150,35 @@ describe('pointer events', () => {
     expect(pointer.state.y).toBe(45); // 65 - 20
     pointer.stop();
   });
+
+  it('cancels a pending rAF flush when the pointer leaves', async () => {
+    const { createPointer } = await getModule();
+    const el = document.createElement('div');
+    const cb = vi.fn();
+    const pointer = createPointer({
+      element: el,
+      onPointer: cb,
+      visibility: 'ignore',
+    });
+
+    el.dispatchEvent(new Event('pointerenter'));
+    el.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 50, clientY: 60 }),
+    );
+    expect(cb).toHaveBeenCalledTimes(0);
+
+    // Leave before the scheduled frame runs: reports once, synchronously.
+    el.dispatchEvent(new Event('pointerleave'));
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb).toHaveBeenLastCalledWith(
+      expect.objectContaining({ active: false }),
+    );
+
+    // The stale frame must not fire a redundant callback.
+    flushRAF();
+    expect(cb).toHaveBeenCalledTimes(1);
+    pointer.stop();
+  });
 });
 
 // ---------------------------------------------------------------------------

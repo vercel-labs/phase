@@ -97,6 +97,14 @@ export function createPointer(options: PointerOptions): Pointer {
     rafId = requestAnimationFrame(flush);
   }
 
+  function cancelFlush(): void {
+    if (rafId !== 0) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    dirty = false;
+  }
+
   function onPointerMove(e: Event): void {
     if (stopped || _phase !== 'tracking') return;
     const pe = e as PointerEvent;
@@ -114,6 +122,7 @@ export function createPointer(options: PointerOptions): Pointer {
 
   function onPointerLeave(): void {
     if (stopped) return;
+    cancelFlush();
     _state.active = false;
     setPhase('idle', 'leave');
     onPointer(_state);
@@ -149,6 +158,7 @@ export function createPointer(options: PointerOptions): Pointer {
       } else {
         detachListeners();
         if (_state.active) {
+          cancelFlush();
           _state.active = false;
           setPhase('idle', 'sight');
         }
@@ -195,10 +205,7 @@ export function createPointer(options: PointerOptions): Pointer {
     unlinkAbort?.();
     cleanupVisibility?.();
     detachListeners();
-    if (rafId !== 0) {
-      cancelAnimationFrame(rafId);
-      rafId = 0;
-    }
+    cancelFlush();
     _state.active = false;
     setPhase('stopped', 'disposed');
   }
