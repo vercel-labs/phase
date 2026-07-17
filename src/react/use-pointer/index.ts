@@ -43,12 +43,16 @@ export interface UsePointerReactiveResult<T extends Element = HTMLDivElement> {
   phaseReason: PointerReason;
   phaseRef: RefObject<PointerPhase>;
   phaseReasonRef: RefObject<PointerReason>;
+  /** Latest pointer position via ref. Always current, never triggers re-render. */
+  stateRef: RefObject<PointerState>;
 }
 
 export interface UsePointerTransientResult<T extends Element = HTMLDivElement> {
   ref: RefObject<T | null>;
   phaseRef: RefObject<PointerPhase>;
   phaseReasonRef: RefObject<PointerReason>;
+  /** Latest pointer position via ref. Always current, never triggers re-render. */
+  stateRef: RefObject<PointerState>;
 }
 
 export type UsePointerResult<T extends Element = HTMLDivElement> =
@@ -70,7 +74,9 @@ const INITIAL_STATE: PointerPhaseState = {
  * Auto-pauses off-screen and tears down on unmount.
  *
  * Pass `onPhaseChange` for zero-re-render mode (transient). Without it,
- * `phase` and `phaseReason` update via state on every transition.
+ * `phase` and `phaseReason` update via state on every transition. The pointer
+ * position is always delivered imperatively via `onPointer` (never state) and
+ * mirrored in `stateRef` for on-demand reads (e.g. inside a `useLoop` tick).
  */
 export function usePointer<T extends Element = HTMLDivElement>(
   options: UsePointerOptions<T> & { onPhaseChange: PointerPhaseCallback },
@@ -86,6 +92,7 @@ export function usePointer<T extends Element = HTMLDivElement>(
 
   const phaseRef = useRef<PointerPhase>('idle');
   const phaseReasonRef = useRef<PointerReason>('initial');
+  const stateRef = useRef<PointerState>({ x: 0, y: 0, active: false });
   const onPointerRef = useSyncedRef(options.onPointer);
   const onPhaseChangeRef = useSyncedRef(options.onPhaseChange);
 
@@ -98,12 +105,16 @@ export function usePointer<T extends Element = HTMLDivElement>(
       setState(INITIAL_STATE);
       phaseRef.current = 'idle';
       phaseReasonRef.current = 'initial';
+      stateRef.current = { x: 0, y: 0, active: false };
       return;
     }
 
     const instance = createPointer({
       element,
-      onPointer: (pointerState) => onPointerRef.current(pointerState),
+      onPointer: (pointerState) => {
+        stateRef.current = pointerState;
+        onPointerRef.current(pointerState);
+      },
       onPhaseChange: (phase, reason) => {
         phaseRef.current = phase;
         phaseReasonRef.current = reason;
@@ -122,5 +133,5 @@ export function usePointer<T extends Element = HTMLDivElement>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, visibility]);
 
-  return { ref, ...state, phaseRef, phaseReasonRef };
+  return { ref, ...state, phaseRef, phaseReasonRef, stateRef };
 }

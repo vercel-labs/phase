@@ -10,11 +10,11 @@ Two overloads. When `onPhaseChange` is provided, `phase` and `phaseReason` are o
 import { usePointer } from 'phase/react';
 
 // Reactive (re-renders on phase transitions)
-const { ref, phase, phaseReason, phaseRef, phaseReasonRef } =
+const { ref, phase, phaseReason, phaseRef, phaseReasonRef, stateRef } =
   usePointer<T>(options);
 
 // Transient (zero re-renders)
-const { ref, phaseRef, phaseReasonRef } = usePointer<T>({
+const { ref, phaseRef, phaseReasonRef, stateRef } = usePointer<T>({
   ...options,
   onPhaseChange: (phase, reason) => {
     /* imperative work */
@@ -35,21 +35,23 @@ const { ref, phaseRef, phaseReasonRef } = usePointer<T>({
 
 ### Return (reactive, no `onPhaseChange`)
 
-| Property         | Type                       | Description                                                |
-| ---------------- | -------------------------- | ---------------------------------------------------------- |
-| `ref`            | `RefObject<T \| null>`     | Attach to the tracked element                              |
-| `phase`          | `PointerPhase`             | `'idle' \| 'tracking' \| 'stopped'`                        |
-| `phaseReason`    | `PointerReason`            | `'initial' \| 'enter' \| 'leave' \| 'sight' \| 'disposed'` |
-| `phaseRef`       | `RefObject<PointerPhase>`  | Phase via ref. Always current, never triggers re-render    |
-| `phaseReasonRef` | `RefObject<PointerReason>` | Reason via ref. Always current, never triggers re-render   |
+| Property         | Type                       | Description                                                 |
+| ---------------- | -------------------------- | ----------------------------------------------------------- |
+| `ref`            | `RefObject<T \| null>`     | Attach to the tracked element                               |
+| `phase`          | `PointerPhase`             | `'idle' \| 'tracking' \| 'stopped'`                         |
+| `phaseReason`    | `PointerReason`            | `'initial' \| 'enter' \| 'leave' \| 'sight' \| 'disposed'`  |
+| `phaseRef`       | `RefObject<PointerPhase>`  | Phase via ref. Always current, never triggers re-render     |
+| `phaseReasonRef` | `RefObject<PointerReason>` | Reason via ref. Always current, never triggers re-render    |
+| `stateRef`       | `RefObject<PointerState>`  | Latest `{ x, y, active }` via ref. Never triggers re-render |
 
 ### Return (transient, with `onPhaseChange`)
 
-| Property         | Type                       | Description                                              |
-| ---------------- | -------------------------- | -------------------------------------------------------- |
-| `ref`            | `RefObject<T \| null>`     | Attach to the tracked element                            |
-| `phaseRef`       | `RefObject<PointerPhase>`  | Phase via ref. Always current, never triggers re-render  |
-| `phaseReasonRef` | `RefObject<PointerReason>` | Reason via ref. Always current, never triggers re-render |
+| Property         | Type                       | Description                                                 |
+| ---------------- | -------------------------- | ----------------------------------------------------------- |
+| `ref`            | `RefObject<T \| null>`     | Attach to the tracked element                               |
+| `phaseRef`       | `RefObject<PointerPhase>`  | Phase via ref. Always current, never triggers re-render     |
+| `phaseReasonRef` | `RefObject<PointerReason>` | Reason via ref. Always current, never triggers re-render    |
+| `stateRef`       | `RefObject<PointerState>`  | Latest `{ x, y, active }` via ref. Never triggers re-render |
 
 `phase` and `phaseReason` are not available in transient mode.
 
@@ -93,6 +95,17 @@ const { ref, phaseRef, phaseReasonRef } = usePointer<T>({
     onPointer: handlePointer,
     onPhaseChange: (phase) => {
       worker.postMessage({ tracking: phase === 'tracking' });
+    },
+  });
+  ```
+- Read `stateRef.current` inside a `useLoop` tick for the latest position without wiring your own ref or risking closure staleness:
+  ```tsx
+  const { ref, stateRef } = usePointer({ onPointer: () => {} });
+  useLoop({
+    ref,
+    onTick: () => {
+      const { x, y, active } = stateRef.current;
+      if (active) draw(x, y);
     },
   });
   ```

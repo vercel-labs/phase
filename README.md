@@ -917,7 +917,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useSight`                |           1.18 kB |
 | `useCanvas`               |           3.44 kB |
 | `useMutation`             |           1.38 kB |
-| `usePointer`              |           1.48 kB |
+| `usePointer`              |           1.49 kB |
 | `useTween`                |             619 B |
 | `usePresence`             |             598 B |
 | `useScrollProgress`       |             997 B |

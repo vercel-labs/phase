@@ -2,6 +2,12 @@ import { renderHook, act } from '@testing-library/react';
 
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 
+// jsdom lacks PointerEvent — MouseEvent already carries clientX/clientY.
+if (typeof globalThis.PointerEvent === 'undefined') {
+  (globalThis as Record<string, unknown>).PointerEvent =
+    class PointerEvent extends MouseEvent {};
+}
+
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 
 beforeEach(() => {
@@ -159,6 +165,46 @@ describe('reactive mode', () => {
       usePointer({ ref, onPointer: vi.fn() }),
     );
     expect(result.current.phase).toBe('idle');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// stateRef
+// ---------------------------------------------------------------------------
+
+describe('stateRef', () => {
+  it('starts at the default position', async () => {
+    const usePointer = await getHook();
+    const { ref } = createRefWithElement();
+    const { result } = renderHook(() =>
+      usePointer({ ref, onPointer: vi.fn(), visibility: 'ignore' }),
+    );
+    expect(result.current.stateRef.current).toEqual({
+      x: 0,
+      y: 0,
+      active: false,
+    });
+  });
+
+  it('mirrors the latest pointer position without a re-render', async () => {
+    const usePointer = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() =>
+      usePointer({ ref, onPointer: vi.fn(), visibility: 'ignore' }),
+    );
+
+    await act(async () => {
+      el.dispatchEvent(new Event('pointerenter'));
+      el.dispatchEvent(
+        new PointerEvent('pointermove', { clientX: 50, clientY: 60 }),
+      );
+      // rAF is stubbed to a macrotask; let the batched flush run.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(result.current.stateRef.current.x).toBe(50);
+    expect(result.current.stateRef.current.y).toBe(60);
+    expect(result.current.stateRef.current.active).toBe(true);
   });
 });
 

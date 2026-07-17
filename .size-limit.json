@@ -110,7 +110,7 @@
     "path": "src/react/index.ts",
     "import": "{ usePointer }",
     "ignore": ["react"],
-    "limit": "1.5 kB"
+    "limit": "1.6 kB"
   },
   {
     "name": "useTween",
