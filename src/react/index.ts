@@ -20,6 +20,7 @@ export { useWhenIdle } from './use-when-idle';
 export { useCanvas } from './use-canvas';
 export { useMutation } from './use-mutation';
 export { usePointer } from './use-pointer';
+export { useScroll } from './use-scroll';
 export { useTween } from './use-tween';
 export { usePresence } from './use-presence';
 export { Presence } from './presence';
@@ -80,6 +81,11 @@ export type {
   UsePointerOptions,
   UsePointerResult,
 } from './use-pointer';
+export type {
+  ScrollCallback,
+  UseScrollOptions,
+  UseScrollResult,
+} from './use-scroll';
 export type { UseTweenOptions } from './use-tween';
 export type {
   PresenceMode,

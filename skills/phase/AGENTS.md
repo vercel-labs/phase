@@ -64,6 +64,7 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 | Pause raw work inside a `Defer` subtree?             | `useRenderState`                                                                            |
 | React to DOM mutations without reflow?               | `useMutation`                                                                               |
 | Track pointer position without layout thrash?        | `usePointer`                                                                                |
+| Track scroll offset/progress without reflow?         | `useScroll`                                                                                 |
 | Reactive scroll/size/media values?                   | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
 | Scroll/size/visibility without re-renders?           | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
 | Reactive reduced-motion check for non-phase code?    | `usePrefersReducedMotion`                                                                   |
@@ -93,14 +94,14 @@ For the full performance ruleset, read [references/performance.md](references/pe
 
 Every export belongs to a category. The choosing table above picks the primitive; this table shows the organizational structure.
 
-| Category    | What it covers                               | Exports                                                                                                                                                                                                                                                                                                                            |
-| ----------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Timing      | Frame clocks and animation loops             | `createTicker`, `createLoop`, `useLoop`, `useCanvas`, `useTween`                                                                                                                                                                                                                                                                   |
-| Observation | Reactive wrappers around browser observers   | `createSight`, `createScrollProgress`, `createRenderState`, `createDevicePixelRatio`, `createMutation`, `createPointer`, `useSight`, `useScrollProgress`, `useSize`, `useContainerQuery`, `useMediaQuery`, `useRenderState`, `useDevicePixelRatio`, `usePrefersReducedMotion`, `useMutation`, `usePointer`, `prefersReducedMotion` |
-| Lifecycle   | Activation signals composed from IO+MQL+rIC  | `createLifecycle`, `useLifecycle`, `whenIdle`, `useIdle`, `useWhenIdle`                                                                                                                                                                                                                                                            |
-| Composition | Mount/unmount orchestration with transitions | `Presence`, `usePresence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer`                                                                                                                                                                                                                                                              |
-| Math        | Pure easing and interpolation functions      | `clamp`, `clamp01`, `lerp`, `inverseLerp`, `remap`, `easeOutCubic`, `easeOutQuart`, `easeOutBack`, `easeInOutCubic`, `linear`                                                                                                                                                                                                      |
-| Utility     | React ref/callback patterns for phase users  | `useSyncedRef`, `useStableCallback`                                                                                                                                                                                                                                                                                                |
+| Category    | What it covers                               | Exports                                                                                                                                                                                                                                                                                                                                                         |
+| ----------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Timing      | Frame clocks and animation loops             | `createTicker`, `createLoop`, `useLoop`, `useCanvas`, `useTween`                                                                                                                                                                                                                                                                                                |
+| Observation | Reactive wrappers around browser observers   | `createSight`, `createScrollProgress`, `createRenderState`, `createDevicePixelRatio`, `createMutation`, `createPointer`, `createScroll`, `useSight`, `useScrollProgress`, `useScroll`, `useSize`, `useContainerQuery`, `useMediaQuery`, `useRenderState`, `useDevicePixelRatio`, `usePrefersReducedMotion`, `useMutation`, `usePointer`, `prefersReducedMotion` |
+| Lifecycle   | Activation signals composed from IO+MQL+rIC  | `createLifecycle`, `useLifecycle`, `whenIdle`, `useIdle`, `useWhenIdle`                                                                                                                                                                                                                                                                                         |
+| Composition | Mount/unmount orchestration with transitions | `Presence`, `usePresence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer`                                                                                                                                                                                                                                                                                           |
+| Math        | Pure easing and interpolation functions      | `clamp`, `clamp01`, `lerp`, `inverseLerp`, `remap`, `easeOutCubic`, `easeOutQuart`, `easeOutBack`, `easeInOutCubic`, `linear`                                                                                                                                                                                                                                   |
+| Utility     | React ref/callback patterns for phase users  | `useSyncedRef`, `useStableCallback`                                                                                                                                                                                                                                                                                                                             |
 
 ## Audit
 
@@ -125,6 +126,7 @@ Each export has its own reference file. Read the relevant file when implementing
 | `prefersReducedMotion`        | Gating expensive setup or conditional imports        | [prefers-reduced-motion.md](references/prefers-reduced-motion.md)       |
 | `createMutation`              | Lifecycle-aware MutationObserver with rAF batching   | [create-mutation.md](references/create-mutation.md)                     |
 | `createPointer`               | rAF-batched pointer tracking with visibility pause   | [create-pointer.md](references/create-pointer.md)                       |
+| `createScroll`                | rAF-batched scroll offset/progress, reflow-safe      | [create-scroll.md](references/create-scroll.md)                         |
 | `PhaseError` / `isPhaseError` | Handling or classifying phase errors                 | [errors.md](references/errors.md)                                       |
 
 ### React (`phase/react`)
@@ -140,6 +142,7 @@ Each export has its own reference file. Read the relevant file when implementing
 | `useScrollProgress`       | Driving opacity/reveals from intersection ratio          | [use-scroll-progress.md](references/use-scroll-progress.md)               |
 | `useMutation`             | Lifecycle-aware MutationObserver with rAF batching       | [use-mutation.md](references/use-mutation.md)                             |
 | `usePointer`              | rAF-batched pointer tracking with visibility pause       | [use-pointer.md](references/use-pointer.md)                               |
+| `useScroll`               | rAF-batched scroll offset/progress, reflow-safe          | [use-scroll.md](references/use-scroll.md)                                 |
 | `useRenderState`          | Pausing raw work when a `Defer` subtree is skipped       | [use-render-state.md](references/use-render-state.md)                     |
 | `useIdle`                 | Boolean that flips true once the browser is idle         | [use-idle.md](references/use-idle.md)                                     |
 | `useWhenIdle`             | Run a side effect (prefetch, `import()`) once idle       | [use-when-idle.md](references/use-when-idle.md)                           |
@@ -1038,6 +1041,104 @@ const progress = createScrollProgress(options: ScrollProgressOptions): ScrollPro
 - [createSight](./create-sight.md). Boolean visibility (visible/hidden) instead of ratio
 - [prefers-reduced-motion](./prefers-reduced-motion.md). Check before animating with the ratio
 - [abort-signals](./abort-signals.md). Tear down this observer via the `signal` option
+
+---
+
+# `createScroll`
+
+Lifecycle-aware scroll tracker. Reads `scrollLeft`/`scrollTop` once per rAF frame and reads the reflow-heavy geometry (`scrollWidth`/`clientWidth`) only on resize or explicit `measure()`, never on the scroll path. Auto-pauses off-screen. The framework-agnostic core behind `useScroll`.
+
+## Signature
+
+```ts
+import { createScroll } from 'phase';
+
+const scroll = createScroll(options: CreateScrollOptions): Scroll;
+```
+
+### Options
+
+| Option                | Type                                                 | Default   | Description                                        |
+| --------------------- | ---------------------------------------------------- | --------- | -------------------------------------------------- |
+| `element`             | `Element`                                            | required  | Scroll container to track                          |
+| `onScroll`            | `(state: ScrollState) => void`                       | required  | Called once per rAF frame with position + progress |
+| `onPhaseChange`       | `(phase: ScrollPhase, reason: ScrollReason) => void` | —         | Called on phase transitions                        |
+| `visibility`          | `'pause' \| 'ignore'`                                | `'pause'` | Pause tracking when off-screen, or ignore          |
+| `intersectionOptions` | `IntersectionObserverInit`                           | —         | Forwarded to the visibility observer               |
+| `signal`              | `AbortSignal`                                        | —         | Stops the tracker when aborted                     |
+
+> The options type is `CreateScrollOptions`, not `ScrollOptions` — the latter is a `lib.dom` global and must not be shadowed.
+
+### ScrollState
+
+| Field       | Type     | Description                                                         |
+| ----------- | -------- | ------------------------------------------------------------------- |
+| `x`         | `number` | `scrollLeft`, clamped to `[0, maxX]`                                |
+| `y`         | `number` | `scrollTop`, clamped to `[0, maxY]`                                 |
+| `maxX`      | `number` | Max horizontal scroll (`scrollWidth - clientWidth`, never negative) |
+| `maxY`      | `number` | Max vertical scroll (`scrollHeight - clientHeight`, never negative) |
+| `progressX` | `number` | `x / maxX` (0–1), `0` when not scrollable                           |
+| `progressY` | `number` | `y / maxY` (0–1), `0` when not scrollable                           |
+| `visibleX`  | `number` | `clientWidth / scrollWidth` (0–1) — the horizontal thumb `scaleX`   |
+| `visibleY`  | `number` | `clientHeight / scrollHeight` (0–1) — the vertical thumb `scaleY`   |
+
+### Return (Scroll)
+
+| Property      | Type           | Description                                       |
+| ------------- | -------------- | ------------------------------------------------- |
+| `phase`       | `ScrollPhase`  | `'tracking' \| 'paused' \| 'stopped'`             |
+| `phaseReason` | `ScrollReason` | `'initial' \| 'started' \| 'sight' \| 'disposed'` |
+| `state`       | `ScrollState`  | Latest scroll state (synchronous read)            |
+| `measure()`   | `() => void`   | Re-read geometry after a content change           |
+| `stop()`      | `() => void`   | Detach listeners and clean up                     |
+
+## When to use
+
+- Custom scrollbars/carousels: drive a thumb transform, `disabled` buttons, and `aria-valuenow` from scroll position without re-renders.
+- Any `scroll` handler that currently reads `scrollWidth`/`clientWidth` (forced reflow) or calls `setState` per event.
+- Imperative scroll-driven DOM updates that are **not** expressible as a CSS scroll timeline.
+
+## When not to use
+
+| Instead of this                                | Use                                         |
+| ---------------------------------------------- | ------------------------------------------- |
+| Fraction of an element visible in the viewport | `createScrollProgress` (intersection ratio) |
+| CSS-declarative scroll-linked animation        | Native `ScrollTimeline`                     |
+| Element dimensions only                        | `useSize` / `createSight`                   |
+| React component                                | `useScroll` (manages refs and teardown)     |
+
+## Do
+
+- Drive a custom scrollbar from cached geometry:
+  ```ts
+  const scroll = createScroll({
+    element: viewport,
+    onScroll: (s) => {
+      thumb.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;
+      prevBtn.disabled = s.x <= 1;
+      nextBtn.disabled = s.x >= s.maxX - 1;
+    },
+  });
+  ```
+- Call `measure()` after mutating scrollable content (adding/removing children). The `ResizeObserver` catches container resizes automatically; content-driven `scrollWidth` changes need `measure()`.
+
+## Don't
+
+- **Don't read `scrollWidth`/`clientWidth` in your own `scroll` handler.** That is the reflow this primitive removes: geometry is read on resize/`measure()` and cached; the scroll path reads only `scrollLeft`/`scrollTop`.
+- **Don't call `stop()` then expect to restart.** `stop()` is terminal. Create a new instance.
+- **Don't use it for viewport reveal effects.** That is intersection ratio — use `createScrollProgress`.
+
+## Reduced motion
+
+Not applicable. `createScroll` reports scroll position, not animation. Gate any motion you derive from it with the usual reduced-motion handling. The visibility-pausing signal composes with the same IO pool used by animation primitives.
+
+## See also
+
+- [use-scroll](./use-scroll.md). React hook wrapping createScroll
+- [create-pointer](./create-pointer.md). The structural sibling: rAF-batched `getBoundingClientRect`
+- [create-scroll-progress](./create-scroll-progress.md). Intersection ratio (viewport reveal), not scroll offset
+- [performance](./performance.md). Why per-event `scrollWidth`/`clientWidth` reads are a problem
+- [abort-signals](./abort-signals.md). Tear down this tracker via the `signal` option
 
 ---
 
@@ -3785,6 +3886,102 @@ const { ref, progressRef } = useScrollProgress<T>({
 - [createScrollProgress](./create-scroll-progress.md). Framework-agnostic core
 - [useSight](./use-sight.md). Boolean visibility instead of ratio
 - [useLoop](./use-loop.md). If you need per-frame writes, combine with createScrollProgress
+
+---
+
+# `useScroll`
+
+React hook wrapping `createScroll`. Lifecycle-aware scroll tracker with rAF-batched position reads. Auto-pauses when the element is off-screen, tears down on unmount.
+
+Scroll position is delivered imperatively via `onScroll` (never state) and mirrored in `stateRef`; only the phase (tracking/paused) is reactive, since it flips rarely. This mirrors `usePointer`.
+
+## Signature
+
+```ts
+import { useScroll } from 'phase/react';
+
+const { ref, phase, phaseReason, phaseRef, phaseReasonRef, stateRef, measure } =
+  useScroll<T>(options);
+```
+
+### Options
+
+| Option                | Type                           | Default   | Description                                        |
+| --------------------- | ------------------------------ | --------- | -------------------------------------------------- |
+| `ref`                 | `RefObject<T \| null>`         | returned  | Bring your own ref, or attach the returned one     |
+| `onScroll`            | `(state: ScrollState) => void` | required  | Called once per rAF frame with position + progress |
+| `visibility`          | `'pause' \| 'ignore'`          | `'pause'` | Pause when off-screen or ignore visibility         |
+| `enabled`             | `boolean`                      | `true`    | When `false`, tears down the tracker               |
+| `intersectionOptions` | `IntersectionObserverInit`     | —         | Forwarded to the visibility observer               |
+
+### Return
+
+| Property         | Type                      | Description                                               |
+| ---------------- | ------------------------- | --------------------------------------------------------- |
+| `ref`            | `RefObject<T \| null>`    | Attach to the scroll container                            |
+| `phase`          | `ScrollPhase`             | `'tracking' \| 'paused' \| 'stopped'`                     |
+| `phaseReason`    | `ScrollReason`            | `'initial' \| 'started' \| 'sight' \| 'disposed'`         |
+| `phaseRef`       | `RefObject<ScrollPhase>`  | Phase via ref. Always current, never triggers re-render   |
+| `phaseReasonRef` | `RefObject<ScrollReason>` | Reason via ref. Always current, never triggers re-render  |
+| `stateRef`       | `RefObject<ScrollState>`  | Latest `ScrollState` via ref. Never triggers re-render    |
+| `measure`        | `() => void`              | Re-read geometry after a content change (stable identity) |
+
+See [create-scroll](./create-scroll.md) for the `ScrollState` fields. For a synchronous phase reaction (before React commits), use the core `createScroll`, which exposes `onPhaseChange`.
+
+## When to use
+
+- Custom scrollbars, carousels, and scroll-position indicators that write to the DOM directly (thumb transform, `disabled`, `aria-valuenow`) without re-rendering per scroll.
+- Replacing a `scroll` handler that reads `scrollWidth`/`clientWidth` (forced reflow) or calls `setState` on every event.
+
+## When not to use
+
+| Instead of this                                | Use                                      |
+| ---------------------------------------------- | ---------------------------------------- |
+| Fraction of an element visible in the viewport | `useScrollProgress` (intersection ratio) |
+| CSS-declarative scroll-linked animation        | Native `ScrollTimeline`                  |
+| Element dimensions only                        | `useSize`                                |
+| Framework-agnostic code                        | `createScroll` (core)                    |
+
+## Do
+
+- Drive a carousel scrollbar with zero re-renders:
+  ```tsx
+  const { ref, measure } = useScroll<HTMLDivElement>({
+    onScroll: (s) => {
+      thumbRef.current!.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;
+      prevRef.current!.disabled = s.x <= 1;
+      nextRef.current!.disabled = s.x >= s.maxX - 1;
+      barRef.current!.setAttribute(
+        'aria-valuenow',
+        String(Math.round(s.progressX * 100)),
+      );
+    },
+  });
+  return (
+    <div ref={ref} className="overflow-x-auto">
+      {children}
+    </div>
+  );
+  ```
+- Read `stateRef.current` inside a `useLoop` tick for the latest position without closure staleness.
+- Call `measure()` after changing scrollable content (the pooled `ResizeObserver` already handles container resizes).
+
+## Don't
+
+- **Don't read `scrollWidth`/`clientWidth` inside `onScroll`.** Geometry is cached and recomputed on resize/`measure()`; the callback already carries `maxX`/`visibleX`.
+- **Don't expect `onScroll` to fire off-screen.** With `visibility: 'pause'` (default) the scroll listener detaches when the element is not visible.
+- **Don't store the `ScrollState` object.** It is mutated in place each frame — read the values you need immediately.
+
+## Reduced motion
+
+Not applicable. `useScroll` reports scroll position, not animation. Gate any motion you derive from it with the usual reduced-motion handling.
+
+## See also
+
+- [create-scroll](./create-scroll.md). Framework-agnostic core and the `ScrollState` fields
+- [use-pointer](./use-pointer.md). The structural sibling: rAF-batched pointer position
+- [use-scroll-progress](./use-scroll-progress.md). Intersection ratio (viewport reveal), not scroll offset
+- [use-loop](./use-loop.md). Per-frame DOM animation (common pairing with scroll data)
 
 ---
 

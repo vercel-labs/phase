@@ -898,15 +898,16 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |             837 B |
+| `createTicker`            |             834 B |
 | `createSight`             |             963 B |
 | `createLifecycle`         |           1.47 kB |
 | `createLoop`              |           2.59 kB |
-| `createScrollProgress`    |             857 B |
+| `createScrollProgress`    |             878 B |
 | `createRenderState`       |             495 B |
 | `createDevicePixelRatio`  |             544 B |
 | `createMutation`          |           1.17 kB |
 | `createPointer`           |           1.26 kB |
+| `createScroll`            |           1.44 kB |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
 | **Ease**                  |                   |
@@ -918,20 +919,21 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useCanvas`               |           3.44 kB |
 | `useMutation`             |           1.36 kB |
 | `usePointer`              |           1.48 kB |
+| `useScroll`               |           1.71 kB |
 | `useTween`                |             617 B |
 | `usePresence`             |             593 B |
 | `useScrollProgress`       |             993 B |
 | `useSize`                 |             384 B |
-| `useContainerQuery`       |             356 B |
-| `useMediaQuery`           |             246 B |
+| `useContainerQuery`       |             357 B |
+| `useMediaQuery`           |             245 B |
 | `usePrefersReducedMotion` |             272 B |
 | `useDevicePixelRatio`     |             231 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             742 B |
+| `Presence`                |             739 B |
 | `WhenVisible`             |           1.44 kB |
-| `WhenIdle`                |             593 B |
-| `Defer`                   |              85 B |
+| `WhenIdle`                |             592 B |
+| `Defer`                   |              86 B |
 | `useIdle`                 |             435 B |
 | `useWhenIdle`             |             449 B |
 | `useRenderState`          |             527 B |

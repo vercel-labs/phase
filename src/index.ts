@@ -24,6 +24,7 @@ export { whenIdle } from './core/idle';
 export { prefersReducedMotion } from './core/reduced-motion';
 export { createMutation } from './core/mutation';
 export { createPointer } from './core/pointer';
+export { createScroll } from './core/scroll';
 export { PhaseError, isPhaseError } from './core/error';
 
 // Types
@@ -85,4 +86,11 @@ export type {
   PointerReason,
   PointerState,
 } from './core/pointer';
+export type {
+  CreateScrollOptions,
+  Scroll,
+  ScrollPhase,
+  ScrollReason,
+  ScrollState,
+} from './core/scroll';
 export type { PhaseErrorCode } from './core/error';
