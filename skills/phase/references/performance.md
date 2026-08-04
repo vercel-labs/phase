@@ -107,6 +107,18 @@ function tick() {
 
 **Do:** Let phase manage the loop, or call `ticker.pause()` / `ticker.resume()`.
 
+### `display:none` is a first-class pause signal
+
+An element (or ancestor) set to `display:none` has no layout box, so `IntersectionObserver` reports it as `isIntersecting: false` (ratio `0`). Every phase primitive built on `createSight` — `createLoop` / `useLoop`, `createLifecycle` / `useLifecycle`, `useCanvas`, and the `visibility: 'pause'` mode of `createMutation` / `createPointer` — treats that as "not visible" and strong-pauses (`cancelAnimationFrame`, zero CPU), alongside off-screen and backgrounded-tab. The ratio-0 report is plain browser behavior; phase's contract is composing it into a strong pause uniformly across every lifecycle primitive (a raw `IntersectionObserver` only gives you the signal).
+
+**Don't** re-check it by hand — it's already handled, and reading layout to do so forces a reflow:
+
+```ts
+if (getComputedStyle(el).display === 'none') loop.pause(); // redundant + forced reflow
+```
+
+**Scope: only `display:none`.** `visibility: hidden` and `opacity: 0` keep the layout box, so IO still reports them as intersecting and phase keeps running. Pause those yourself (`enabled`, `stop()`, `pause()`).
+
 ### Reduced motion by default
 
 All phase primitives respect `prefers-reduced-motion: reduce` automatically. Bypassing requires explicit `reducedMotion: 'ignore'`.

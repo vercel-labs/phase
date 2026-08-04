@@ -48,6 +48,12 @@
     "limit": "1.3 kB"
   },
   {
+    "name": "createPointer",
+    "path": "src/index.ts",
+    "import": "{ createPointer }",
+    "limit": "1.3 kB"
+  },
+  {
     "name": "whenIdle",
     "path": "src/index.ts",
     "import": "{ whenIdle }",
@@ -98,6 +104,13 @@
     "import": "{ useMutation }",
     "ignore": ["react"],
     "limit": "1.5 kB"
+  },
+  {
+    "name": "usePointer",
+    "path": "src/react/index.ts",
+    "import": "{ usePointer }",
+    "ignore": ["react"],
+    "limit": "1.6 kB"
   },
   {
     "name": "useTween",
