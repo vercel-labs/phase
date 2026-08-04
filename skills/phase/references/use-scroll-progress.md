@@ -54,11 +54,13 @@ const { ref, progressRef } = useScrollProgress<T>({
 
 ## When not to use
 
-| Instead of this                       | Use                                                               |
-| ------------------------------------- | ----------------------------------------------------------------- |
-| Continuous scroll-scrubbing           | `motion`'s `useScroll` or native `ScrollTimeline`                 |
-| Boolean visibility                    | `useSight`                                                        |
-| Per-frame DOM writes driven by scroll | `createScrollProgress` + `useLoop` (avoid setState per threshold) |
+| Instead of this                                 | Use                                                               |
+| ----------------------------------------------- | ----------------------------------------------------------------- |
+| A container's own scroll offset                 | `useScroll` (scrollbars, carousels, position indicators)          |
+| CSS-declarative scroll-linked animation         | native `ScrollTimeline`                                           |
+| Spring- or gesture-driven scroll                | `motion`                                                          |
+| Boolean visibility                              | `useSight`                                                        |
+| Per-frame DOM writes driven by visibility ratio | `createScrollProgress` + `useLoop` (avoid setState per threshold) |
 
 ## Do
 
@@ -86,7 +88,7 @@ const { ref, progressRef } = useScrollProgress<T>({
 ## Don't
 
 - **Don't expect continuous values.** Updates only at threshold crossings (~20 per viewport traversal at default steps).
-- **Don't use for tall elements expecting full 0→1 scroll.** Ratio plateaus once the element fills the viewport. Use `ScrollTimeline`.
+- **Don't use for a container's scroll offset.** Ratio plateaus once the element fills the viewport, and it is a visibility fraction, not a position. Use [`useScroll`](./use-scroll.md) for scrollbars/carousels, or `ScrollTimeline` for CSS scroll-linked animation.
 
 ## Reduced motion
 
@@ -95,5 +97,6 @@ const { ref, progressRef } = useScrollProgress<T>({
 ## See also
 
 - [createScrollProgress](./create-scroll-progress.md). Framework-agnostic core
+- [useScroll](./use-scroll.md). A scroll container's own offset/progress, not viewport visibility ratio
 - [useSight](./use-sight.md). Boolean visibility instead of ratio
 - [useLoop](./use-loop.md). If you need per-frame writes, combine with createScrollProgress

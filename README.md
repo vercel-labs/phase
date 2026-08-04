@@ -325,7 +325,7 @@ Pause priority is `reduced-motion` > `sight` > `manual`.
 
 Reports what fraction of an element is currently visible in the viewport (0–1), via the shared IntersectionObserver pool. Zero forced reflows, zero extra observers. Ideal for reveal/opacity effects.
 
-> **Not a scroll-scrubbing engine.** This reports `intersectionRatio`, which plateaus for tall elements once they fill the viewport. For continuous scroll-driven animation, use `motion`'s `useScroll` or the native `ScrollTimeline` API.
+> **Visibility ratio, not scroll offset.** This reports `intersectionRatio` (how much of an element is visible in the viewport), which plateaus for tall elements once they fill it. For a scroll container's _own_ offset (scrollbars, carousels) use [`createScroll`](#createscroll); for CSS-declarative scroll-linked animation use the native `ScrollTimeline` API; for spring/gesture scroll use `motion`.
 
 ```ts
 import { createScrollProgress } from 'phase';
@@ -620,7 +620,7 @@ return (
 
 ### useScrollProgress
 
-Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with React lifecycle management (see its [note on scope](#createscrollprogress) for the distinction between visibility ratio and scroll-scrubbing).
+Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with React lifecycle management. This is a _visibility_ fraction (how much of the element is on screen); for a scroll container's own _position_ (scrollbars, carousels) use [`useScroll`](#usescroll) instead. See the [note on scope](#createscrollprogress) for the full distinction.
 
 ```tsx
 import { useScrollProgress } from 'phase/react';

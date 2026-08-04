@@ -36,13 +36,15 @@ const progress = createScrollProgress(options: ScrollProgressOptions): ScrollPro
 
 ## When not to use
 
-| Instead of this                                           | Use                                                   |
-| --------------------------------------------------------- | ----------------------------------------------------- |
-| Continuous scroll-scrubbing (scroll position as progress) | `motion`'s `useScroll` or native `ScrollTimeline` API |
-| Boolean visibility (in view or not)                       | `createSight`                                         |
-| React component                                           | `useScrollProgress`                                   |
+| Instead of this                                         | Use                         |
+| ------------------------------------------------------- | --------------------------- |
+| A container's own scroll offset (scrollbars, carousels) | `createScroll`              |
+| CSS-declarative scroll-linked animation                 | native `ScrollTimeline` API |
+| Spring- or gesture-driven scroll                        | `motion`                    |
+| Boolean visibility (in view or not)                     | `createSight`               |
+| React component                                         | `useScrollProgress`         |
 
-**Important limitation:** `intersectionRatio` plateaus for tall elements once they fill the viewport. This tracks visibility fraction, not scroll position. For scroll-driven animation of tall content, use `ScrollTimeline`.
+**Important limitation:** `intersectionRatio` plateaus for tall elements once they fill the viewport. This tracks visibility fraction, not scroll position. For a scroll container's own offset (scrollbars, carousels) use [`createScroll`](./create-scroll.md); for CSS-declarative scroll-linked animation of tall content use `ScrollTimeline`.
 
 ## Do
 
@@ -57,7 +59,7 @@ const progress = createScrollProgress(options: ScrollProgressOptions): ScrollPro
 
 ## Don't
 
-- **Don't use for full scroll-scrubbing.** Ratio plateaus for tall elements. Use ScrollTimeline.
+- **Don't use for a container's scroll offset.** Ratio plateaus for tall elements and is a visibility fraction, not a position. Use [`createScroll`](./create-scroll.md) for scrollbars/carousels, or `ScrollTimeline` for CSS scroll-linked animation.
 - **Don't set `steps` extremely high** (e.g. 1000). Creates that many thresholds. 20–50 is appropriate for smooth visual results.
 - **Don't call `getBoundingClientRect()` as a workaround.** That forces a reflow. Trust the async IO callback.
 
@@ -68,6 +70,7 @@ const progress = createScrollProgress(options: ScrollProgressOptions): ScrollPro
 ## See also
 
 - [useScrollProgress](./use-scroll-progress.md). React hook wrapping createScrollProgress
+- [createScroll](./create-scroll.md). A scroll container's own offset/progress, not viewport visibility ratio
 - [createSight](./create-sight.md). Boolean visibility (visible/hidden) instead of ratio
 - [prefers-reduced-motion](./prefers-reduced-motion.md). Check before animating with the ratio
 - [abort-signals](./abort-signals.md). Tear down this observer via the `signal` option

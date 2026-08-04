@@ -45,23 +45,24 @@ Use when you need any of:
 - Mount/unmount transitions with exit animations
 - Scroll-driven reveals, element sizing, or media-query reactivity
 
-| Scenario                            | Primitive                                     |
-| ----------------------------------- | --------------------------------------------- |
-| DOM animation loop                  | `useLoop`                                     |
-| Canvas/WebGL loop                   | `useCanvas`                                   |
-| Signal for your own renderer        | `useLifecycle`                                |
-| Mount/unmount with exit             | `Presence`, `usePresence`                     |
-| Swap between states with exit→enter | `Swap`                                        |
-| Lazy mount on viewport entry        | `WhenVisible`                                 |
-| Lazy mount when the browser is idle | `WhenIdle`, `useIdle`                         |
-| Prefetch / side effect when idle    | `useWhenIdle`                                 |
-| Skip painting off-screen (keep DOM) | `Defer`                                       |
-| Pause raw work inside a `Defer`     | `useRenderState`                              |
-| Visibility ratio (reveal effects)   | `useScrollProgress`                           |
-| Element dimensions                  | `useSize`, `useContainerQuery`                |
-| Media query subscription            | `useMediaQuery`                               |
-| Visibility boolean                  | `useSight`                                    |
-| Timed multi-step animation sequence | `useLoop` (`fps: 1–2`, `frame.elapsed` steps) |
+| Scenario                                        | Primitive                                     |
+| ----------------------------------------------- | --------------------------------------------- |
+| DOM animation loop                              | `useLoop`                                     |
+| Canvas/WebGL loop                               | `useCanvas`                                   |
+| Signal for your own renderer                    | `useLifecycle`                                |
+| Mount/unmount with exit                         | `Presence`, `usePresence`                     |
+| Swap between states with exit→enter             | `Swap`                                        |
+| Lazy mount on viewport entry                    | `WhenVisible`                                 |
+| Lazy mount when the browser is idle             | `WhenIdle`, `useIdle`                         |
+| Prefetch / side effect when idle                | `useWhenIdle`                                 |
+| Skip painting off-screen (keep DOM)             | `Defer`                                       |
+| Pause raw work inside a `Defer`                 | `useRenderState`                              |
+| Visibility ratio (reveal effects)               | `useScrollProgress`                           |
+| Scroll container offset (scrollbars, carousels) | `useScroll`                                   |
+| Element dimensions                              | `useSize`, `useContainerQuery`                |
+| Media query subscription                        | `useMediaQuery`                               |
+| Visibility boolean                              | `useSight`                                    |
+| Timed multi-step animation sequence             | `useLoop` (`fps: 1–2`, `frame.elapsed` steps) |
 
 All phase primitives share:
 
@@ -69,6 +70,19 @@ All phase primitives share:
 - Automatic reduced-motion handling
 - Pooled observers (IO/RO/MQL, no raw `new IntersectionObserver`)
 - Clean teardown on unmount
+
+#### Which scroll primitive?
+
+Four different questions, four different answers. The two phase primitives are named alike but are not interchangeable:
+
+| You want                                                        | Reach for                      | Why                                                                                           |
+| --------------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------- |
+| How much of element X is visible in the viewport (reveal, fade) | `useScrollProgress`            | IntersectionObserver ratio (0–1); no scroll listener; plateaus when X fills the viewport      |
+| How far container X is scrolled through its content (scrollbar) | `useScroll`                    | scroll offset + progress + thumb ratio; reads `scrollLeft` per frame, geometry only on resize |
+| A CSS-declarative scroll-linked animation                       | native `ScrollTimeline`        | compositor-driven, no JS per frame                                                            |
+| Spring- or gesture-driven scroll                                | `motion` (its own `useScroll`) | phase does not do springs or gestures                                                         |
+
+The trap: both phase hooks return a 0–1 number, but `useScrollProgress`'s is a _visibility_ fraction and `useScroll`'s `progressX/Y` is a _position_ fraction. Pick by the question, not by the number.
 
 ### Rendering: when to render, not only when to animate
 
@@ -223,18 +237,18 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 
 When converting from framer-motion (or similar), map patterns to the cheapest tier that works. Don't convert every `motion.div` to a phase primitive — many are CSS-only transitions that don't need JS at all.
 
-| framer-motion pattern                                             | phase equivalent                                                                                          |
-| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `<AnimatePresence>` + `exit` prop                                 | `<Presence>` or `<Swap>` with CSS `@starting-style` + `data-[phase=exiting]`                              |
-| `motion.div` with `initial`/`animate` (opacity, transform)        | CSS `transition` + `@starting-style` (Tier 1). No JS needed for enter/exit.                               |
-| `animate()` with `delay` chains (do X, wait, do Y)                | `useLoop` with `fps: 1–2` and `frame.elapsed` thresholds (see [timed-sequences.md](./timed-sequences.md)) |
-| `stagger` children                                                | `useLoop` with per-child elapsed-time offsets (see [timed-sequences.md](./timed-sequences.md))            |
-| `useInView`                                                       | `useSight` (reactive phase) or `useLifecycle` (animation gating)                                          |
-| `useScroll` (scroll-position scrubbing)                           | `useScrollProgress` for intersection ratio; native `ScrollTimeline` for position-based                    |
-| `layout` animations (animating between measured positions)        | Keep framer-motion. Phase does not do layout animation.                                                   |
-| Spring physics (`type: 'spring'`)                                 | Keep framer-motion. Phase does not do springs.                                                            |
-| Gesture-driven (`drag`, `whileTap`)                               | Keep framer-motion or `@use-gesture`. Phase does not handle gestures.                                     |
-| `useMotionValue` + `useTransform` (continuous computed animation) | `useLoop` with `onTick` for per-frame DOM writes, or `useScrollProgress` if scroll-driven                 |
+| framer-motion pattern                                             | phase equivalent                                                                                                                                                     |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<AnimatePresence>` + `exit` prop                                 | `<Presence>` or `<Swap>` with CSS `@starting-style` + `data-[phase=exiting]`                                                                                         |
+| `motion.div` with `initial`/`animate` (opacity, transform)        | CSS `transition` + `@starting-style` (Tier 1). No JS needed for enter/exit.                                                                                          |
+| `animate()` with `delay` chains (do X, wait, do Y)                | `useLoop` with `fps: 1–2` and `frame.elapsed` thresholds (see [timed-sequences.md](./timed-sequences.md))                                                            |
+| `stagger` children                                                | `useLoop` with per-child elapsed-time offsets (see [timed-sequences.md](./timed-sequences.md))                                                                       |
+| `useInView`                                                       | `useSight` (reactive phase) or `useLifecycle` (animation gating)                                                                                                     |
+| `useScroll` (motion's scroll-position hook)                       | phase's `useScroll` for a container's offset (scrollbars/carousels); `useScrollProgress` for viewport reveal ratio; `ScrollTimeline` for CSS scroll-linked animation |
+| `layout` animations (animating between measured positions)        | Keep framer-motion. Phase does not do layout animation.                                                                                                              |
+| Spring physics (`type: 'spring'`)                                 | Keep framer-motion. Phase does not do springs.                                                                                                                       |
+| Gesture-driven (`drag`, `whileTap`)                               | Keep framer-motion or `@use-gesture`. Phase does not handle gestures.                                                                                                |
+| `useMotionValue` + `useTransform` (continuous computed animation) | `useLoop` with `onTick` for per-frame DOM writes, or `useScrollProgress` if scroll-driven                                                                            |
 
 ### Reviewing phase code
 
@@ -247,6 +261,6 @@ After any phase work, ask: is it using phase to the best of its ability? Right t
 - **Using `useLifecycle` expecting it to drive frames.** It only gives you an active/paused signal. It does not schedule `requestAnimationFrame`. Use `useLoop` or `useCanvas` when you want phase to drive the clock.
 - **Forgetting that `createLoop` has no `pause()`/`resume()`.** It's signal-driven (visibility, reduced motion, quality). For manual control, use `createLifecycle` which exposes `pause()`/`resume()`, or use the React hook's `enabled` prop.
 - **Reaching for an external library for enter/exit transitions.** `Presence`, `Swap`, and `WhenVisible` handle mount/unmount with CSS `@starting-style` + `transitionend`. You don't need a library for this.
-- **Using `useScrollProgress` expecting continuous scroll-scrubbing.** It reports intersection ratio, which plateaus for tall elements. For scroll-position-driven animation, use `ScrollTimeline` or `motion`'s `useScroll`.
+- **Confusing `useScrollProgress` with `useScroll`.** `useScrollProgress` reports IntersectionObserver ratio — _how much of an element is visible in the viewport_ (reveals, parallax, impressions); it plateaus for tall elements. `useScroll` reports a scroll container's own offset — _how far it is scrolled through its content_ (scrollbars, carousels, position indicators). Different question, different observer. For CSS-declarative scroll-linked animation use `ScrollTimeline`; for spring/gesture scroll use `motion`.
 - **Using `useLifecycle` + `setTimeout`/`setInterval` to build timed animation sequences.** `useLifecycle` only provides visibility signals — it doesn't drive timing. The timers keep firing off-screen, restart from zero when scrolling back, and don't participate in phase's lifecycle. Use `useLoop` with `frame.elapsed` instead: elapsed time freezes during pause, so sequences resume where they left off. See [timed-sequences.md](./timed-sequences.md).
 - **Using `createLoop` / `createTicker` / `createLifecycle` in React when the hook would work.** Prefer the hook equivalents (`useLoop`, `useCanvas`, `useLifecycle`) — they manage refs, teardown, and `enabled` automatically. Reach for core primitives only when the hook doesn't fit: custom hooks composed from multiple primitives, `AbortController`-based teardown, or imperative managers that own their lifecycle.
