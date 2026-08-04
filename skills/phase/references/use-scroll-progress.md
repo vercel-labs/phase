@@ -88,7 +88,7 @@ const { ref, progressRef } = useScrollProgress<T>({
 ## Don't
 
 - **Don't expect continuous values.** Updates only at threshold crossings (~20 per viewport traversal at default steps).
-- **Don't use for a container's scroll offset.** Ratio plateaus once the element fills the viewport, and it is a visibility fraction, not a position. Use [`useScroll`](./use-scroll.md) for scrollbars/carousels, or `ScrollTimeline` for CSS scroll-linked animation.
+- **Don't use for a container's scroll offset.** Ratio is a visibility fraction, not a position; use [`useScroll`](./use-scroll.md) for scrollbars/carousels.
 
 ## Reduced motion
 

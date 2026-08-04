@@ -367,6 +367,7 @@ import { createScroll } from 'phase';
 const scroll = createScroll({
   element: viewport,
   onScroll: (s) => {
+    // thumb CSS needs `transform-origin: left` so scaleX anchors to the track start
     thumb.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;
     prevButton.disabled = s.x <= 1;
     nextButton.disabled = s.x >= s.maxX - 1;
@@ -646,6 +647,7 @@ import { useRef } from 'react';
 import { useScroll } from 'phase/react';
 
 function Carousel({ children }) {
+  // thumb uses `origin-left` so scaleX anchors to the track start
   const thumbRef = useRef<HTMLDivElement>(null);
   const { ref, measure } = useScroll<HTMLDivElement>({
     onScroll: (s) => {

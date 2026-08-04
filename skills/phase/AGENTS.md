@@ -882,6 +882,7 @@ Not applicable. `createPointer` tracks pointer position, not animation. The visi
 ## See also
 
 - [usePointer](./use-pointer.md). React hook wrapping createPointer
+- [createScroll](./create-scroll.md). The same rAF-batched, visibility-aware shape for scroll offset
 - [createSight](./create-sight.md). Visibility observation (IO-based)
 - [performance](./performance.md). Forced-reflow rules (why per-event `getBoundingClientRect` is a problem)
 - [abort-signals](./abort-signals.md). Tear down this tracker via the `signal` option
@@ -1029,7 +1030,7 @@ const progress = createScrollProgress(options: ScrollProgressOptions): ScrollPro
 
 ## Don't
 
-- **Don't use for a container's scroll offset.** Ratio plateaus for tall elements and is a visibility fraction, not a position. Use [`createScroll`](./create-scroll.md) for scrollbars/carousels, or `ScrollTimeline` for CSS scroll-linked animation.
+- **Don't use for a container's scroll offset.** See the limitation above; use [`createScroll`](./create-scroll.md) for scrollbars/carousels.
 - **Don't set `steps` extremely high** (e.g. 1000). Creates that many thresholds. 20–50 is appropriate for smooth visual results.
 - **Don't call `getBoundingClientRect()` as a workaround.** That forces a reflow. Trust the async IO callback.
 
@@ -1074,26 +1075,26 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 
 ### ScrollState
 
-| Field       | Type     | Description                                                         |
-| ----------- | -------- | ------------------------------------------------------------------- |
-| `x`         | `number` | `scrollLeft`, clamped to `[0, maxX]`                                |
-| `y`         | `number` | `scrollTop`, clamped to `[0, maxY]`                                 |
-| `maxX`      | `number` | Max horizontal scroll (`scrollWidth - clientWidth`, never negative) |
-| `maxY`      | `number` | Max vertical scroll (`scrollHeight - clientHeight`, never negative) |
-| `progressX` | `number` | `x / maxX` (0–1), `0` when not scrollable                           |
-| `progressY` | `number` | `y / maxY` (0–1), `0` when not scrollable                           |
-| `visibleX`  | `number` | `clientWidth / scrollWidth` (0–1), the horizontal thumb `scaleX`    |
-| `visibleY`  | `number` | `clientHeight / scrollHeight` (0–1), the vertical thumb `scaleY`    |
+| Field       | Type     | Description                                                                               |
+| ----------- | -------- | ----------------------------------------------------------------------------------------- |
+| `x`         | `number` | `scrollLeft`, clamped to `[0, maxX]`                                                      |
+| `y`         | `number` | `scrollTop`, clamped to `[0, maxY]`                                                       |
+| `maxX`      | `number` | Max horizontal scroll (`scrollWidth - clientWidth`, never negative)                       |
+| `maxY`      | `number` | Max vertical scroll (`scrollHeight - clientHeight`, never negative)                       |
+| `progressX` | `number` | `x / maxX` (0–1), `0` when not scrollable                                                 |
+| `progressY` | `number` | `y / maxY` (0–1), `0` when not scrollable                                                 |
+| `visibleX`  | `number` | `clientWidth / scrollWidth` (0–1), `1` when not scrollable; the horizontal thumb `scaleX` |
+| `visibleY`  | `number` | `clientHeight / scrollHeight` (0–1), `1` when not scrollable; the vertical thumb `scaleY` |
 
 ### Return (Scroll)
 
-| Property      | Type           | Description                                       |
-| ------------- | -------------- | ------------------------------------------------- |
-| `phase`       | `ScrollPhase`  | `'tracking' \| 'paused' \| 'stopped'`             |
-| `phaseReason` | `ScrollReason` | `'initial' \| 'started' \| 'sight' \| 'disposed'` |
-| `state`       | `ScrollState`  | Latest scroll state (synchronous read)            |
-| `measure()`   | `() => void`   | Re-read geometry after a content change           |
-| `stop()`      | `() => void`   | Detach listeners and clean up                     |
+| Property      | Type                    | Description                                           |
+| ------------- | ----------------------- | ----------------------------------------------------- |
+| `phase`       | `ScrollPhase`           | `'tracking' \| 'paused' \| 'stopped'`                 |
+| `phaseReason` | `ScrollReason`          | `'initial' \| 'started' \| 'sight' \| 'disposed'`     |
+| `state`       | `Readonly<ScrollState>` | Latest scroll state, synchronous read (do not mutate) |
+| `measure()`   | `() => void`            | Re-read geometry after a content change               |
+| `stop()`      | `() => void`            | Detach listeners and clean up                         |
 
 ## When to use
 
@@ -1117,6 +1118,7 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
   const scroll = createScroll({
     element: viewport,
     onScroll: (s) => {
+      // thumb CSS needs `transform-origin: left` so scaleX anchors to the track start
       thumb.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;
       prevBtn.disabled = s.x <= 1;
       nextBtn.disabled = s.x >= s.maxX - 1;
@@ -1131,9 +1133,15 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 - **Don't call `stop()` then expect to restart.** `stop()` is terminal. Create a new instance.
 - **Don't use it for viewport reveal effects.** That is intersection ratio. Use `createScrollProgress`.
 
+## Limitations
+
+- **LTR only.** Position clamps to `[0, maxX]`; RTL's negative or max-origin `scrollLeft` is not yet handled.
+- **Content resize needs `measure()`.** The `ResizeObserver` catches container resizes; adding or removing scrollable children changes `scrollWidth` without firing it.
+- **Element scrollers only.** Document and window scroll fire on `document`/`window` rather than the element, so they need separate handling not included here.
+
 ## Reduced motion
 
-Not applicable. `createScroll` reports scroll position, not animation. Gate any motion you derive from it with the usual reduced-motion handling. The visibility-pausing signal composes with the same IO pool used by animation primitives.
+Not applicable. `createScroll` reports scroll position, not animation. Gate any motion you derive from it with the usual reduced-motion handling.
 
 ## See also
 
@@ -1559,7 +1567,7 @@ After any phase work, ask: is it using phase to the best of its ability? Right t
 - **Using `useLifecycle` expecting it to drive frames.** It only gives you an active/paused signal. It does not schedule `requestAnimationFrame`. Use `useLoop` or `useCanvas` when you want phase to drive the clock.
 - **Forgetting that `createLoop` has no `pause()`/`resume()`.** It's signal-driven (visibility, reduced motion, quality). For manual control, use `createLifecycle` which exposes `pause()`/`resume()`, or use the React hook's `enabled` prop.
 - **Reaching for an external library for enter/exit transitions.** `Presence`, `Swap`, and `WhenVisible` handle mount/unmount with CSS `@starting-style` + `transitionend`. You don't need a library for this.
-- **Confusing `useScrollProgress` with `useScroll`.** `useScrollProgress` reports IntersectionObserver ratio, meaning how much of an element is visible in the viewport (reveals, parallax, impressions); it plateaus for tall elements. `useScroll` reports a scroll container's own offset, meaning how far it is scrolled through its content (scrollbars, carousels, position indicators). Different question, different observer. For CSS-declarative scroll-linked animation use `ScrollTimeline`; for spring/gesture scroll use `motion`.
+- **Confusing `useScrollProgress` with `useScroll`.** The first is a viewport visibility ratio (reveals, parallax); the second is a scroll container's own offset (scrollbars, carousels). See the "Which scroll primitive?" table above.
 - **Using `useLifecycle` + `setTimeout`/`setInterval` to build timed animation sequences.** `useLifecycle` only provides visibility signals — it doesn't drive timing. The timers keep firing off-screen, restart from zero when scrolling back, and don't participate in phase's lifecycle. Use `useLoop` with `frame.elapsed` instead: elapsed time freezes during pause, so sequences resume where they left off. See [timed-sequences.md](./timed-sequences.md).
 - **Using `createLoop` / `createTicker` / `createLifecycle` in React when the hook would work.** Prefer the hook equivalents (`useLoop`, `useCanvas`, `useLifecycle`) — they manage refs, teardown, and `enabled` automatically. Reach for core primitives only when the hook doesn't fit: custom hooks composed from multiple primitives, `AbortController`-based teardown, or imperative managers that own their lifecycle.
 
@@ -3571,6 +3579,7 @@ Not applicable. `usePointer` tracks pointer position, not animation.
 ## See also
 
 - [createPointer](./create-pointer.md). Framework-agnostic core
+- [useScroll](./use-scroll.md). The same imperative-position, reactive-phase shape for scroll offset
 - [useLoop](./use-loop.md). Per-frame DOM animation (common pairing with pointer data)
 - [useCanvas](./use-canvas.md). Canvas animation with pointer interaction
 - [useSize](./use-size.md). Element dimensions via ResizeObserver (no reflow)
@@ -3894,7 +3903,7 @@ const { ref, progressRef } = useScrollProgress<T>({
 ## Don't
 
 - **Don't expect continuous values.** Updates only at threshold crossings (~20 per viewport traversal at default steps).
-- **Don't use for a container's scroll offset.** Ratio plateaus once the element fills the viewport, and it is a visibility fraction, not a position. Use [`useScroll`](./use-scroll.md) for scrollbars/carousels, or `ScrollTimeline` for CSS scroll-linked animation.
+- **Don't use for a container's scroll offset.** Ratio is a visibility fraction, not a position; use [`useScroll`](./use-scroll.md) for scrollbars/carousels.
 
 ## Reduced motion
 
@@ -3968,6 +3977,7 @@ See [create-scroll](./create-scroll.md) for the `ScrollState` fields. For a sync
   ```tsx
   const { ref, measure } = useScroll<HTMLDivElement>({
     onScroll: (s) => {
+      // thumb CSS needs `transform-origin: left` (Tailwind `origin-left`)
       thumbRef.current!.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;
       prevRef.current!.disabled = s.x <= 1;
       nextRef.current!.disabled = s.x >= s.maxX - 1;

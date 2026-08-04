@@ -57,6 +57,7 @@ See [create-scroll](./create-scroll.md) for the `ScrollState` fields. For a sync
   ```tsx
   const { ref, measure } = useScroll<HTMLDivElement>({
     onScroll: (s) => {
+      // thumb CSS needs `transform-origin: left` (Tailwind `origin-left`)
       thumbRef.current!.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;
       prevRef.current!.disabled = s.x <= 1;
       nextRef.current!.disabled = s.x >= s.maxX - 1;

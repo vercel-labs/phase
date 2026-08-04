@@ -59,7 +59,7 @@ const progress = createScrollProgress(options: ScrollProgressOptions): ScrollPro
 
 ## Don't
 
-- **Don't use for a container's scroll offset.** Ratio plateaus for tall elements and is a visibility fraction, not a position. Use [`createScroll`](./create-scroll.md) for scrollbars/carousels, or `ScrollTimeline` for CSS scroll-linked animation.
+- **Don't use for a container's scroll offset.** See the limitation above; use [`createScroll`](./create-scroll.md) for scrollbars/carousels.
 - **Don't set `steps` extremely high** (e.g. 1000). Creates that many thresholds. 20–50 is appropriate for smooth visual results.
 - **Don't call `getBoundingClientRect()` as a workaround.** That forces a reflow. Trust the async IO callback.
 

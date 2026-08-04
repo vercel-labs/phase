@@ -123,9 +123,10 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   }
 
   // The one reflow-heavy path. Runs on attach, on ResizeObserver, and on an
-  // explicit `measure()`, never per scroll event.
+  // explicit `measure()`, never per scroll event. Skipped while paused/off-screen
+  // (re-entry re-measures), so `measure()` never forces an off-screen reflow.
   function measure(): void {
-    if (stopped) return;
+    if (stopped || !listenersAttached) return;
     const scrollWidth = element.scrollWidth;
     const clientWidth = element.clientWidth;
     const scrollHeight = element.scrollHeight;
@@ -250,6 +251,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     unlinkAbort?.();
     cleanupVisibility?.();
     detachListeners();
+    cancelFlush();
     setPhase('stopped', 'disposed');
   }
 

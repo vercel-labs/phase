@@ -25,26 +25,26 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 
 ### ScrollState
 
-| Field       | Type     | Description                                                         |
-| ----------- | -------- | ------------------------------------------------------------------- |
-| `x`         | `number` | `scrollLeft`, clamped to `[0, maxX]`                                |
-| `y`         | `number` | `scrollTop`, clamped to `[0, maxY]`                                 |
-| `maxX`      | `number` | Max horizontal scroll (`scrollWidth - clientWidth`, never negative) |
-| `maxY`      | `number` | Max vertical scroll (`scrollHeight - clientHeight`, never negative) |
-| `progressX` | `number` | `x / maxX` (0–1), `0` when not scrollable                           |
-| `progressY` | `number` | `y / maxY` (0–1), `0` when not scrollable                           |
-| `visibleX`  | `number` | `clientWidth / scrollWidth` (0–1), the horizontal thumb `scaleX`    |
-| `visibleY`  | `number` | `clientHeight / scrollHeight` (0–1), the vertical thumb `scaleY`    |
+| Field       | Type     | Description                                                                               |
+| ----------- | -------- | ----------------------------------------------------------------------------------------- |
+| `x`         | `number` | `scrollLeft`, clamped to `[0, maxX]`                                                      |
+| `y`         | `number` | `scrollTop`, clamped to `[0, maxY]`                                                       |
+| `maxX`      | `number` | Max horizontal scroll (`scrollWidth - clientWidth`, never negative)                       |
+| `maxY`      | `number` | Max vertical scroll (`scrollHeight - clientHeight`, never negative)                       |
+| `progressX` | `number` | `x / maxX` (0–1), `0` when not scrollable                                                 |
+| `progressY` | `number` | `y / maxY` (0–1), `0` when not scrollable                                                 |
+| `visibleX`  | `number` | `clientWidth / scrollWidth` (0–1), `1` when not scrollable; the horizontal thumb `scaleX` |
+| `visibleY`  | `number` | `clientHeight / scrollHeight` (0–1), `1` when not scrollable; the vertical thumb `scaleY` |
 
 ### Return (Scroll)
 
-| Property      | Type           | Description                                       |
-| ------------- | -------------- | ------------------------------------------------- |
-| `phase`       | `ScrollPhase`  | `'tracking' \| 'paused' \| 'stopped'`             |
-| `phaseReason` | `ScrollReason` | `'initial' \| 'started' \| 'sight' \| 'disposed'` |
-| `state`       | `ScrollState`  | Latest scroll state (synchronous read)            |
-| `measure()`   | `() => void`   | Re-read geometry after a content change           |
-| `stop()`      | `() => void`   | Detach listeners and clean up                     |
+| Property      | Type                    | Description                                           |
+| ------------- | ----------------------- | ----------------------------------------------------- |
+| `phase`       | `ScrollPhase`           | `'tracking' \| 'paused' \| 'stopped'`                 |
+| `phaseReason` | `ScrollReason`          | `'initial' \| 'started' \| 'sight' \| 'disposed'`     |
+| `state`       | `Readonly<ScrollState>` | Latest scroll state, synchronous read (do not mutate) |
+| `measure()`   | `() => void`            | Re-read geometry after a content change               |
+| `stop()`      | `() => void`            | Detach listeners and clean up                         |
 
 ## When to use
 
@@ -68,6 +68,7 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
   const scroll = createScroll({
     element: viewport,
     onScroll: (s) => {
+      // thumb CSS needs `transform-origin: left` so scaleX anchors to the track start
       thumb.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;
       prevBtn.disabled = s.x <= 1;
       nextBtn.disabled = s.x >= s.maxX - 1;
@@ -82,9 +83,15 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 - **Don't call `stop()` then expect to restart.** `stop()` is terminal. Create a new instance.
 - **Don't use it for viewport reveal effects.** That is intersection ratio. Use `createScrollProgress`.
 
+## Limitations
+
+- **LTR only.** Position clamps to `[0, maxX]`; RTL's negative or max-origin `scrollLeft` is not yet handled.
+- **Content resize needs `measure()`.** The `ResizeObserver` catches container resizes; adding or removing scrollable children changes `scrollWidth` without firing it.
+- **Element scrollers only.** Document and window scroll fire on `document`/`window` rather than the element, so they need separate handling not included here.
+
 ## Reduced motion
 
-Not applicable. `createScroll` reports scroll position, not animation. Gate any motion you derive from it with the usual reduced-motion handling. The visibility-pausing signal composes with the same IO pool used by animation primitives.
+Not applicable. `createScroll` reports scroll position, not animation. Gate any motion you derive from it with the usual reduced-motion handling.
 
 ## See also
 

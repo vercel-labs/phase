@@ -214,4 +214,120 @@ describe('teardown', () => {
     const { unmount } = renderHook(() => useScroll({ ref, onScroll: vi.fn() }));
     expect(() => unmount()).not.toThrow();
   });
+
+  it('stops delivering onScroll after unmount', async () => {
+    const useScroll = await getHook();
+    const { ref, el } = createRefWithElement(400, 100);
+    const onScroll = vi.fn();
+    const { unmount } = renderHook(() =>
+      useScroll({ ref, onScroll, visibility: 'ignore' }),
+    );
+    unmount();
+    onScroll.mockClear();
+
+    await act(async () => {
+      el.scrollLeft = 100;
+      el.dispatchEvent(new Event('scroll'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(onScroll).not.toHaveBeenCalled();
+  });
+
+  it('measure() is null-safe after unmount', async () => {
+    const useScroll = await getHook();
+    const { ref } = createRefWithElement();
+    const { result, unmount } = renderHook(() =>
+      useScroll({ ref, onScroll: vi.fn(), visibility: 'ignore' }),
+    );
+    unmount();
+    expect(() => result.current.measure()).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Zero re-render on scroll (the core guarantee)
+// ---------------------------------------------------------------------------
+
+describe('re-render behavior', () => {
+  it('does not re-render on scroll', async () => {
+    const useScroll = await getHook();
+    const { ref, el } = createRefWithElement(400, 100);
+    let renders = 0;
+    const { result } = renderHook(() => {
+      renders++;
+      return useScroll({ ref, onScroll: vi.fn(), visibility: 'ignore' });
+    });
+
+    const baseline = renders; // settled after mount + the tracking phase setState
+
+    await act(async () => {
+      el.scrollLeft = 100;
+      el.dispatchEvent(new Event('scroll'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      el.scrollLeft = 200;
+      el.dispatchEvent(new Event('scroll'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(renders).toBe(baseline); // scrolling never triggers a render
+    expect(result.current.stateRef.current.x).toBe(200);
+  });
+
+  it('phaseRef is current alongside state', async () => {
+    const useScroll = await getHook();
+    const { ref } = createRefWithElement();
+    const { result } = renderHook(() =>
+      useScroll({ ref, onScroll: vi.fn(), visibility: 'ignore' }),
+    );
+    expect(result.current.phase).toBe('tracking');
+    expect(result.current.phaseRef.current).toBe('tracking');
+    expect(result.current.phaseReasonRef.current).toBe('started');
+  });
+
+  it('resets stateRef when enabled is false', async () => {
+    const useScroll = await getHook();
+    const { ref } = createRefWithElement(400, 100);
+    const { result, rerender } = renderHook(
+      ({ enabled }) =>
+        useScroll({ ref, onScroll: vi.fn(), visibility: 'ignore', enabled }),
+      { initialProps: { enabled: true } },
+    );
+    expect(result.current.stateRef.current.maxX).toBe(300);
+
+    rerender({ enabled: false });
+    expect(result.current.stateRef.current).toEqual({
+      x: 0,
+      y: 0,
+      maxX: 0,
+      maxY: 0,
+      progressX: 0,
+      progressY: 0,
+      visibleX: 1,
+      visibleY: 1,
+    });
+  });
+
+  it('re-subscribes when the visibility prop changes', async () => {
+    const useScroll = await getHook();
+    const { ref, el } = createRefWithElement(400, 100);
+    const { result, rerender } = renderHook(
+      ({ visibility }: { visibility: 'ignore' | 'pause' }) =>
+        useScroll({ ref, onScroll: vi.fn(), visibility }),
+      { initialProps: { visibility: 'ignore' as 'ignore' | 'pause' } },
+    );
+    expect(result.current.phase).toBe('tracking');
+
+    rerender({ visibility: 'pause' });
+    act(() => {
+      mockIO.trigger(el, true); // only a pause-mode instance observes IO
+    });
+    expect(result.current.phase).toBe('tracking');
+    expect(result.current.phaseReason).toBe('started');
+
+    act(() => {
+      mockIO.trigger(el, false);
+    });
+    expect(result.current.phase).toBe('paused');
+    expect(result.current.phaseReason).toBe('sight');
+  });
 });

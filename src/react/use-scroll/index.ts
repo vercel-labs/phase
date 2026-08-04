@@ -54,7 +54,7 @@ export interface UseScrollResult<T extends Element = HTMLDivElement> {
 
 type ScrollPhaseState = { phase: ScrollPhase; phaseReason: ScrollReason };
 
-const INITIAL_PHASE: ScrollPhaseState = {
+const INITIAL_STATE: ScrollPhaseState = {
   phase: 'paused',
   phaseReason: 'initial',
 };
@@ -85,7 +85,7 @@ function initialState(): ScrollState {
 export function useScroll<T extends Element = HTMLDivElement>(
   options: UseScrollOptions<T>,
 ): UseScrollResult<T> {
-  const [state, setState] = useState<ScrollPhaseState>(INITIAL_PHASE);
+  const [state, setState] = useState<ScrollPhaseState>(INITIAL_STATE);
   const { visibility = 'pause', enabled = true, intersectionOptions } = options;
 
   const phaseRef = useRef<ScrollPhase>('paused');
@@ -104,7 +104,8 @@ export function useScroll<T extends Element = HTMLDivElement>(
   useEffect(() => {
     const element = ref.current;
     if (!element || !enabled) {
-      setState(INITIAL_PHASE);
+      instanceRef.current = null;
+      setState(INITIAL_STATE);
       phaseRef.current = 'paused';
       phaseReasonRef.current = 'initial';
       stateRef.current = initialState();

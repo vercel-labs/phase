@@ -394,3 +394,213 @@ describe('error guards', () => {
     ).toThrowError(/DOM element/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Geometry is read only on measure, never on the scroll path
+// ---------------------------------------------------------------------------
+
+describe('geometry read discipline', () => {
+  it('reads scrollWidth/clientWidth only on measure, never per scroll', async () => {
+    const { createScroll } = await getModule();
+    const el = document.createElement('div');
+    let geoReads = 0;
+    let left = 0;
+    const countingGetter = (key: string, value: number) =>
+      Object.defineProperty(el, key, {
+        get: () => {
+          geoReads++;
+          return value;
+        },
+        configurable: true,
+      });
+    countingGetter('scrollWidth', 400);
+    countingGetter('clientWidth', 100);
+    countingGetter('scrollHeight', 0);
+    countingGetter('clientHeight', 0);
+    Object.defineProperty(el, 'scrollLeft', {
+      get: () => left,
+      set: (v: number) => {
+        left = v;
+      },
+      configurable: true,
+    });
+    Object.defineProperty(el, 'scrollTop', { value: 0, configurable: true });
+
+    const scroll = createScroll({
+      element: el,
+      onScroll: vi.fn(),
+      visibility: 'ignore',
+    });
+
+    const afterAttach = geoReads; // one measure() on attach = 4 geometry reads
+    expect(afterAttach).toBe(4);
+
+    for (let i = 0; i < 5; i++) {
+      left = i * 10;
+      el.dispatchEvent(new Event('scroll'));
+      flushRAF();
+    }
+    expect(geoReads).toBe(afterAttach); // scroll path reads zero geometry
+
+    scroll.measure();
+    expect(geoReads).toBe(afterAttach + 4); // one measure = one read each
+    scroll.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Strong pause: pending frame is cancelled off-screen; resumes on re-entry
+// ---------------------------------------------------------------------------
+
+describe('strong pause', () => {
+  it('cancels a pending scroll flush when the element leaves, and resumes on re-entry', async () => {
+    const { createScroll } = await getModule();
+    const el = document.createElement('div');
+    const geo = makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
+    const cb = vi.fn();
+
+    const scroll = createScroll({ element: el, onScroll: cb });
+    mockIO.trigger(el, true); // attach + initial measure
+    cb.mockClear();
+
+    geo.setLeft(150);
+    el.dispatchEvent(new Event('scroll')); // schedules a rAF flush
+    mockIO.trigger(el, false); // leaves before the frame runs
+    flushRAF();
+    expect(cb).not.toHaveBeenCalled(); // the stale frame fires nothing
+
+    mockIO.trigger(el, true); // re-entry re-attaches and re-measures
+    expect(cb).toHaveBeenCalledTimes(1);
+    cb.mockClear();
+
+    geo.setLeft(240);
+    el.dispatchEvent(new Event('scroll'));
+    flushRAF();
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(scroll.state.x).toBe(240);
+    scroll.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Vertical axis
+// ---------------------------------------------------------------------------
+
+describe('vertical axis', () => {
+  it('tracks scrollTop, maxY, progressY and visibleY', async () => {
+    const { createScroll } = await getModule();
+    const el = document.createElement('div');
+    makeScrollable(el, {
+      scrollWidth: 0,
+      clientWidth: 0,
+      scrollHeight: 500,
+      clientHeight: 100,
+    });
+
+    const scroll = createScroll({
+      element: el,
+      onScroll: vi.fn(),
+      visibility: 'ignore',
+    });
+    expect(scroll.state.maxY).toBe(400);
+    expect(scroll.state.visibleY).toBe(0.2); // 100 / 500
+
+    el.scrollTop = 200;
+    el.dispatchEvent(new Event('scroll'));
+    flushRAF();
+    expect(scroll.state.y).toBe(200);
+    expect(scroll.state.progressY).toBe(0.5);
+    scroll.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// measure() guards
+// ---------------------------------------------------------------------------
+
+describe('measure guards', () => {
+  it('is a no-op while paused (never forces an off-screen reflow)', async () => {
+    const { createScroll } = await getModule();
+    const el = document.createElement('div');
+    makeScrollable(el, { scrollWidth: 400, clientWidth: 100 }); // never visible → paused
+    const cb = vi.fn();
+
+    const scroll = createScroll({ element: el, onScroll: cb });
+    scroll.measure();
+    expect(cb).not.toHaveBeenCalled();
+    expect(scroll.state.maxX).toBe(0); // geometry never applied while paused
+    scroll.stop();
+  });
+
+  it('is a no-op after stop', async () => {
+    const { createScroll } = await getModule();
+    const el = document.createElement('div');
+    makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
+    const cb = vi.fn();
+    const scroll = createScroll({
+      element: el,
+      onScroll: cb,
+      visibility: 'ignore',
+    });
+    scroll.stop();
+    cb.mockClear();
+    scroll.measure();
+    expect(cb).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Teardown frees observers and follows the phase sequence
+// ---------------------------------------------------------------------------
+
+describe('teardown', () => {
+  it('unobserves IO and RO on stop', async () => {
+    const { createScroll } = await getModule();
+    const el = document.createElement('div');
+    makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
+    const scroll = createScroll({ element: el, onScroll: vi.fn() });
+    mockIO.trigger(el, true); // attaches RO too
+
+    expect(mockIO.instances.some((i) => i.observed.has(el))).toBe(true);
+    expect(mockRO.instances.some((i) => i.observed.has(el))).toBe(true);
+
+    scroll.stop();
+    expect(mockIO.instances.every((i) => !i.observed.has(el))).toBe(true);
+    expect(mockRO.instances.every((i) => !i.observed.has(el))).toBe(true);
+  });
+
+  it('does not subscribe when the signal is already aborted', async () => {
+    const { createScroll } = await getModule();
+    const el = document.createElement('div');
+    makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
+    const controller = new AbortController();
+    controller.abort();
+    const scroll = createScroll({
+      element: el,
+      onScroll: vi.fn(),
+      signal: controller.signal,
+    });
+    expect(scroll.phase).toBe('stopped');
+    expect(mockIO.instances.every((i) => !i.observed.has(el))).toBe(true);
+  });
+
+  it('reports the phase sequence via onPhaseChange', async () => {
+    const { createScroll } = await getModule();
+    const el = document.createElement('div');
+    makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
+    const phases: Array<[string, string]> = [];
+    const scroll = createScroll({
+      element: el,
+      onScroll: vi.fn(),
+      onPhaseChange: (p, r) => phases.push([p, r]),
+    });
+    mockIO.trigger(el, true);
+    mockIO.trigger(el, false);
+    scroll.stop();
+    expect(phases).toEqual([
+      ['tracking', 'started'],
+      ['paused', 'sight'],
+      ['stopped', 'disposed'],
+    ]);
+  });
+});
