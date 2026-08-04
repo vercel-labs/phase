@@ -34,6 +34,7 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every ex
   - [createSight](#createsight)
   - [createLifecycle](#createlifecycle)
   - [createScrollProgress](#createscrollprogress)
+  - [createScroll](#createscroll)
   - [prefersReducedMotion](#prefersreducedmotion)
 - [Easing and math](#easing-and-math)
 - [Choosing a primitive](#choosing-a-primitive)
@@ -44,6 +45,7 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every ex
   - [useTween](#usetween)
   - [usePresence](#usepresence)
   - [useScrollProgress](#usescrollprogress)
+  - [useScroll](#usescroll)
   - [Utility hooks](#utility-hooks)
 - [React components](#react-components)
   - [How animations work](#how-animations-work)
@@ -353,6 +355,48 @@ The `steps` option controls threshold granularity. Default `20` generates 21 eve
 | `root`       | `Element \| Document \| null` | —        | IO root element                    |
 | `rootMargin` | `string`                      | —        | IO root margin                     |
 
+### createScroll
+
+Tracks a scroll container's offset and progress. Reads `scrollLeft`/`scrollTop` once per rAF frame and reads the reflow-heavy geometry (`scrollWidth`/`clientWidth`) only on resize or explicit `measure()`, never on the scroll path. Auto-pauses off-screen via the shared IntersectionObserver pool. This is to `scroll` + `scrollWidth` what `createPointer` is to `pointermove` + `getBoundingClientRect`.
+
+> **Scroll offset, not visibility ratio.** This reports the element's own scroll position (for scrollbars, carousels, position indicators). For _how much of an element is in the viewport_, use [`createScrollProgress`](#createscrollprogress); for CSS-declarative scroll-linked animation, use the native `ScrollTimeline` API.
+
+```ts
+import { createScroll } from 'phase';
+
+const scroll = createScroll({
+  element: viewport,
+  onScroll: (s) => {
+    thumb.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;
+    prevButton.disabled = s.x <= 1;
+    nextButton.disabled = s.x >= s.maxX - 1;
+  },
+});
+
+// scroll.state.progressX === 0.5 (synchronous read)
+
+// after mutating scrollable content:
+scroll.measure();
+
+// cleanup:
+scroll.stop();
+```
+
+`onScroll` receives the same `ScrollState` object every frame (mutated in place, zero per-frame allocations): `x`, `y`, `maxX`, `maxY`, `progressX`, `progressY`, and the visible fractions `visibleX`/`visibleY` (`clientWidth / scrollWidth`, i.e. a scrollbar thumb's `scaleX`). The `ResizeObserver` recomputes geometry on container resize; call `measure()` after content changes that alter `scrollWidth`.
+
+#### Scroll options
+
+| Option                | Type                           | Default   | Description                                        |
+| --------------------- | ------------------------------ | --------- | -------------------------------------------------- |
+| `element`             | `Element`                      | required  | Scroll container to track                          |
+| `onScroll`            | `(state: ScrollState) => void` | required  | Called once per rAF frame with position + progress |
+| `onPhaseChange`       | `(phase, reason) => void`      | —         | Called on phase transitions                        |
+| `visibility`          | `'pause' \| 'ignore'`          | `'pause'` | Pause tracking when off-screen, or ignore          |
+| `intersectionOptions` | `IntersectionObserverInit`     | —         | Forwarded to the visibility observer               |
+| `signal`              | `AbortSignal`                  | —         | Stops the tracker when aborted                     |
+
+The options type is `CreateScrollOptions` (`ScrollOptions` is a `lib.dom` global and must not be shadowed).
+
 ### prefersReducedMotion
 
 Returns `true` when reduced motion is enabled at the OS level. Use it to gate expensive setup or dynamic imports.
@@ -592,6 +636,35 @@ function FadeIn({ children }) {
 ```
 
 Re-renders only at threshold crossings (~20 per full viewport traversal at default steps). `progress` is `0` before first observation.
+
+### useScroll
+
+Scroll offset and progress for a scroll container. Wraps `createScroll` with React lifecycle management. Position is delivered imperatively via `onScroll` (never per-frame state); only the phase (`tracking`/`paused`) is reactive. Mirrors `usePointer`.
+
+```tsx
+import { useRef } from 'react';
+import { useScroll } from 'phase/react';
+
+function Carousel({ children }) {
+  const thumbRef = useRef<HTMLDivElement>(null);
+  const { ref, measure } = useScroll<HTMLDivElement>({
+    onScroll: (s) => {
+      thumbRef.current?.style.setProperty(
+        'transform',
+        `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`,
+      );
+    },
+  });
+
+  return (
+    <div ref={ref} className="overflow-x-auto">
+      {children}
+    </div>
+  );
+}
+```
+
+Scrolling writes to the DOM directly with zero re-renders. Read the latest position on demand from `stateRef.current` (e.g. inside a `useLoop` tick), and call `measure()` after changing scrollable content.
 
 ### Utility hooks
 

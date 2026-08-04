@@ -1,5 +1,11 @@
 # phase
 
+## 0.0.7
+
+### Patch Changes
+
+- Add `createScroll` and `useScroll`: lifecycle-aware scroll tracker that reads `scrollLeft`/`scrollTop` once per rAF frame and reads geometry (`scrollWidth`/`clientWidth`) only on resize or explicit `measure()`, never on the scroll path. Auto-pauses off-screen and exposes an always-current `stateRef` for reading `{ x, y, maxX, progressX, visibleX, … }` on demand. The scroll-offset sibling of `createPointer`.
+
 ## 0.0.6
 
 ### Patch Changes
