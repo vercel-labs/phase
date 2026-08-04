@@ -982,7 +982,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `createDevicePixelRatio`  |             544 B |
 | `createMutation`          |           1.17 kB |
 | `createPointer`           |           1.26 kB |
-| `createScroll`            |           1.44 kB |
+| `createScroll`            |           1.45 kB |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
 | **Ease**                  |                   |
