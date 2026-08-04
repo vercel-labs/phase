@@ -387,7 +387,7 @@ describe('error guards', () => {
     const { createScroll } = await getModule();
     expect(() =>
       createScroll({
-        // @ts-expect-error — testing the runtime guard
+        // @ts-expect-error testing the runtime guard
         element: null,
         onScroll: vi.fn(),
       }),

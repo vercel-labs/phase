@@ -21,7 +21,7 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 | `intersectionOptions` | `IntersectionObserverInit`                           | —         | Forwarded to the visibility observer               |
 | `signal`              | `AbortSignal`                                        | —         | Stops the tracker when aborted                     |
 
-> The options type is `CreateScrollOptions`, not `ScrollOptions` — the latter is a `lib.dom` global and must not be shadowed.
+> The options type is `CreateScrollOptions`. `ScrollOptions` is a `lib.dom` global and must not be shadowed.
 
 ### ScrollState
 
@@ -33,8 +33,8 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 | `maxY`      | `number` | Max vertical scroll (`scrollHeight - clientHeight`, never negative) |
 | `progressX` | `number` | `x / maxX` (0–1), `0` when not scrollable                           |
 | `progressY` | `number` | `y / maxY` (0–1), `0` when not scrollable                           |
-| `visibleX`  | `number` | `clientWidth / scrollWidth` (0–1) — the horizontal thumb `scaleX`   |
-| `visibleY`  | `number` | `clientHeight / scrollHeight` (0–1) — the vertical thumb `scaleY`   |
+| `visibleX`  | `number` | `clientWidth / scrollWidth` (0–1), the horizontal thumb `scaleX`    |
+| `visibleY`  | `number` | `clientHeight / scrollHeight` (0–1), the vertical thumb `scaleY`    |
 
 ### Return (Scroll)
 
@@ -80,7 +80,7 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 
 - **Don't read `scrollWidth`/`clientWidth` in your own `scroll` handler.** That is the reflow this primitive removes: geometry is read on resize/`measure()` and cached; the scroll path reads only `scrollLeft`/`scrollTop`.
 - **Don't call `stop()` then expect to restart.** `stop()` is terminal. Create a new instance.
-- **Don't use it for viewport reveal effects.** That is intersection ratio — use `createScrollProgress`.
+- **Don't use it for viewport reveal effects.** That is intersection ratio. Use `createScrollProgress`.
 
 ## Reduced motion
 

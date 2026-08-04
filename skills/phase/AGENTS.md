@@ -1070,7 +1070,7 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 | `intersectionOptions` | `IntersectionObserverInit`                           | —         | Forwarded to the visibility observer               |
 | `signal`              | `AbortSignal`                                        | —         | Stops the tracker when aborted                     |
 
-> The options type is `CreateScrollOptions`, not `ScrollOptions` — the latter is a `lib.dom` global and must not be shadowed.
+> The options type is `CreateScrollOptions`. `ScrollOptions` is a `lib.dom` global and must not be shadowed.
 
 ### ScrollState
 
@@ -1082,8 +1082,8 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 | `maxY`      | `number` | Max vertical scroll (`scrollHeight - clientHeight`, never negative) |
 | `progressX` | `number` | `x / maxX` (0–1), `0` when not scrollable                           |
 | `progressY` | `number` | `y / maxY` (0–1), `0` when not scrollable                           |
-| `visibleX`  | `number` | `clientWidth / scrollWidth` (0–1) — the horizontal thumb `scaleX`   |
-| `visibleY`  | `number` | `clientHeight / scrollHeight` (0–1) — the vertical thumb `scaleY`   |
+| `visibleX`  | `number` | `clientWidth / scrollWidth` (0–1), the horizontal thumb `scaleX`    |
+| `visibleY`  | `number` | `clientHeight / scrollHeight` (0–1), the vertical thumb `scaleY`    |
 
 ### Return (Scroll)
 
@@ -1129,7 +1129,7 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 
 - **Don't read `scrollWidth`/`clientWidth` in your own `scroll` handler.** That is the reflow this primitive removes: geometry is read on resize/`measure()` and cached; the scroll path reads only `scrollLeft`/`scrollTop`.
 - **Don't call `stop()` then expect to restart.** `stop()` is terminal. Create a new instance.
-- **Don't use it for viewport reveal effects.** That is intersection ratio — use `createScrollProgress`.
+- **Don't use it for viewport reveal effects.** That is intersection ratio. Use `createScrollProgress`.
 
 ## Reduced motion
 
@@ -1559,7 +1559,7 @@ After any phase work, ask: is it using phase to the best of its ability? Right t
 - **Using `useLifecycle` expecting it to drive frames.** It only gives you an active/paused signal. It does not schedule `requestAnimationFrame`. Use `useLoop` or `useCanvas` when you want phase to drive the clock.
 - **Forgetting that `createLoop` has no `pause()`/`resume()`.** It's signal-driven (visibility, reduced motion, quality). For manual control, use `createLifecycle` which exposes `pause()`/`resume()`, or use the React hook's `enabled` prop.
 - **Reaching for an external library for enter/exit transitions.** `Presence`, `Swap`, and `WhenVisible` handle mount/unmount with CSS `@starting-style` + `transitionend`. You don't need a library for this.
-- **Confusing `useScrollProgress` with `useScroll`.** `useScrollProgress` reports IntersectionObserver ratio — _how much of an element is visible in the viewport_ (reveals, parallax, impressions); it plateaus for tall elements. `useScroll` reports a scroll container's own offset — _how far it is scrolled through its content_ (scrollbars, carousels, position indicators). Different question, different observer. For CSS-declarative scroll-linked animation use `ScrollTimeline`; for spring/gesture scroll use `motion`.
+- **Confusing `useScrollProgress` with `useScroll`.** `useScrollProgress` reports IntersectionObserver ratio, meaning how much of an element is visible in the viewport (reveals, parallax, impressions); it plateaus for tall elements. `useScroll` reports a scroll container's own offset, meaning how far it is scrolled through its content (scrollbars, carousels, position indicators). Different question, different observer. For CSS-declarative scroll-linked animation use `ScrollTimeline`; for spring/gesture scroll use `motion`.
 - **Using `useLifecycle` + `setTimeout`/`setInterval` to build timed animation sequences.** `useLifecycle` only provides visibility signals — it doesn't drive timing. The timers keep firing off-screen, restart from zero when scrolling back, and don't participate in phase's lifecycle. Use `useLoop` with `frame.elapsed` instead: elapsed time freezes during pause, so sequences resume where they left off. See [timed-sequences.md](./timed-sequences.md).
 - **Using `createLoop` / `createTicker` / `createLifecycle` in React when the hook would work.** Prefer the hook equivalents (`useLoop`, `useCanvas`, `useLifecycle`) — they manage refs, teardown, and `enabled` automatically. Reach for core primitives only when the hook doesn't fit: custom hooks composed from multiple primitives, `AbortController`-based teardown, or imperative managers that own their lifecycle.
 
@@ -3990,7 +3990,7 @@ See [create-scroll](./create-scroll.md) for the `ScrollState` fields. For a sync
 
 - **Don't read `scrollWidth`/`clientWidth` inside `onScroll`.** Geometry is cached and recomputed on resize/`measure()`; the callback already carries `maxX`/`visibleX`.
 - **Don't expect `onScroll` to fire off-screen.** With `visibility: 'pause'` (default) the scroll listener detaches when the element is not visible.
-- **Don't store the `ScrollState` object.** It is mutated in place each frame — read the values you need immediately.
+- **Don't store the `ScrollState` object.** It is mutated in place each frame. Read the values you need immediately.
 
 ## Reduced motion
 

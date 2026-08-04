@@ -79,7 +79,7 @@ See [create-scroll](./create-scroll.md) for the `ScrollState` fields. For a sync
 
 - **Don't read `scrollWidth`/`clientWidth` inside `onScroll`.** Geometry is cached and recomputed on resize/`measure()`; the callback already carries `maxX`/`visibleX`.
 - **Don't expect `onScroll` to fire off-screen.** With `visibility: 'pause'` (default) the scroll listener detaches when the element is not visible.
-- **Don't store the `ScrollState` object.** It is mutated in place each frame — read the values you need immediately.
+- **Don't store the `ScrollState` object.** It is mutated in place each frame. Read the values you need immediately.
 
 ## Reduced motion
 

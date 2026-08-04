@@ -29,7 +29,7 @@ export interface ScrollState {
   visibleY: number;
 }
 
-// `ScrollOptions` is a lib.dom global — do not shadow it (see code-style rules).
+// `ScrollOptions` is a lib.dom global; do not shadow it (see code-style rules).
 export interface CreateScrollOptions {
   element: Element;
   /** Called once per rAF frame with the latest scroll position + progress. */
@@ -110,7 +110,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   }
 
   // Reads only scroll offsets (cheap, post-layout) and derives progress from
-  // the cached geometry. No `scrollWidth`/`clientWidth` here — that stays on
+  // the cached geometry. No `scrollWidth`/`clientWidth` here; that stays on
   // the resize path.
   function computePosition(): void {
     const { maxX, maxY } = _state;
@@ -123,7 +123,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   }
 
   // The one reflow-heavy path. Runs on attach, on ResizeObserver, and on an
-  // explicit `measure()` — never per scroll event.
+  // explicit `measure()`, never per scroll event.
   function measure(): void {
     if (stopped) return;
     const scrollWidth = element.scrollWidth;
