@@ -1845,11 +1845,15 @@ function tick() {
 
 ### `display:none` is a first-class pause signal
 
-phase treats an element removed from layout as "not visible," identical to scrolled off-screen or in a backgrounded tab. Set an element (or any ancestor) to `display:none` and every phase primitive built on `createSight` — `createLoop` / `useLoop`, `createLifecycle` / `useLifecycle`, `useCanvas`, and the `visibility: 'pause'` mode of `createMutation` / `createPointer` — pauses automatically to zero CPU. No manual visibility check, no separate code path.
+An element (or ancestor) set to `display:none` has no layout box, so `IntersectionObserver` reports it as `isIntersecting: false` (ratio `0`). Every phase primitive built on `createSight` — `createLoop` / `useLoop`, `createLifecycle` / `useLifecycle`, `useCanvas`, and the `visibility: 'pause'` mode of `createMutation` / `createPointer` — treats that as "not visible" and strong-pauses (`cancelAnimationFrame`, zero CPU), alongside off-screen and backgrounded-tab. The ratio-0 report is plain browser behavior; phase's contract is composing it into a strong pause uniformly across every lifecycle primitive (a raw `IntersectionObserver` only gives you the signal).
 
-**What's phase and what's the browser.** The underlying report is standard `IntersectionObserver` behavior: an element with no layout box (what `display:none` produces) is reported as `isIntersecting: false`, ratio `0`. That fact is not unique to phase. What phase guarantees is composing that signal into a _strong pause_ (`cancelAnimationFrame`, not a weak early-return) consistently across every lifecycle primitive, and keeping it in sync with the off-screen and document-hidden signals. A raw `IntersectionObserver` gives you the signal; phase turns it into the pause, tested and uniform, so you never wire `IntersectionObserver` + `cancelAnimationFrame` by hand.
+**Don't** re-check it by hand — it's already handled, and reading layout to do so forces a reflow:
 
-**Scope: only `display:none`.** `visibility: hidden` and `opacity: 0` keep the element's layout box, so IO still reports it as intersecting and phase keeps running — they mean "painted but invisible," not "not rendered." To pause those, toggle `enabled` (hooks) or call `stop()` / `pause()` yourself.
+```ts
+if (getComputedStyle(el).display === 'none') loop.pause(); // redundant + forced reflow
+```
+
+**Scope: only `display:none`.** `visibility: hidden` and `opacity: 0` keep the layout box, so IO still reports them as intersecting and phase keeps running. Pause those yourself (`enabled`, `stop()`, `pause()`).
 
 ### Reduced motion by default
 
@@ -3234,7 +3238,7 @@ React hook wrapping `createMutation`. Lifecycle-aware MutationObserver with rAF-
 
 ## Signature
 
-Records are always delivered imperatively via `onMutations`; phase is reactive state (transitions are infrequent). This mirrors `useLoop` / `useCanvas`, not the transient overloads of `useSize` / `useScrollProgress` / `useSight`. Those omit the reactive value when you pass a callback because the callback delivers that same value. `onMutations` instead carries the records — a separate quantity from `phase` — so there is nothing for it to replace, and `phase` stays in the return.
+Records are always delivered imperatively via `onMutations`; phase is reactive state (transitions are infrequent). This mirrors `useLoop` / `useCanvas`.
 
 ```ts
 import { useMutation } from 'phase/react';
@@ -3331,7 +3335,7 @@ React hook wrapping `createPointer`. Lifecycle-aware pointer tracker with rAF-ba
 
 ## Signature
 
-Position is always delivered imperatively via `onPointer` (never state) and mirrored in `stateRef`; phase is reactive state (transitions are infrequent). This mirrors `useLoop` / `useCanvas`, not the transient overloads of `useSize` / `useScrollProgress` / `useSight`. Those omit the reactive value when you pass a callback because the callback delivers that same value. `onPointer` instead carries the position — a separate quantity from `phase` — so there is nothing for it to replace, and `phase` stays in the return.
+Position is always delivered imperatively via `onPointer` (never state) and mirrored in `stateRef`; phase is reactive state (transitions are infrequent). This mirrors `useLoop` / `useCanvas`.
 
 ```ts
 import { usePointer } from 'phase/react';
