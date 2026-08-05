@@ -34,6 +34,7 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every ex
   - [createSight](#createsight)
   - [createLifecycle](#createlifecycle)
   - [createScrollProgress](#createscrollprogress)
+  - [createScroll](#createscroll)
   - [prefersReducedMotion](#prefersreducedmotion)
 - [Easing and math](#easing-and-math)
 - [Choosing a primitive](#choosing-a-primitive)
@@ -44,6 +45,7 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every ex
   - [useTween](#usetween)
   - [usePresence](#usepresence)
   - [useScrollProgress](#usescrollprogress)
+  - [useScroll](#usescroll)
   - [Utility hooks](#utility-hooks)
 - [React components](#react-components)
   - [How animations work](#how-animations-work)
@@ -323,7 +325,7 @@ Pause priority is `reduced-motion` > `sight` > `manual`.
 
 Reports what fraction of an element is currently visible in the viewport (0–1), via the shared IntersectionObserver pool. Zero forced reflows, zero extra observers. Ideal for reveal/opacity effects.
 
-> **Not a scroll-scrubbing engine.** This reports `intersectionRatio`, which plateaus for tall elements once they fill the viewport. For continuous scroll-driven animation, use `motion`'s `useScroll` or the native `ScrollTimeline` API.
+> **Visibility ratio, not scroll offset.** This reports `intersectionRatio` (how much of an element is visible in the viewport), which plateaus for tall elements once they fill it. For a scroll container's _own_ offset (scrollbars, carousels) use [`createScroll`](#createscroll); for CSS-declarative scroll-linked animation use the native `ScrollTimeline` API; for spring/gesture scroll use `motion`.
 
 ```ts
 import { createScrollProgress } from 'phase';
@@ -352,6 +354,49 @@ The `steps` option controls threshold granularity. Default `20` generates 21 eve
 | `steps`      | `number`                      | `20`     | Number of evenly-spaced thresholds |
 | `root`       | `Element \| Document \| null` | —        | IO root element                    |
 | `rootMargin` | `string`                      | —        | IO root margin                     |
+
+### createScroll
+
+Tracks a scroll container's offset and progress. Reads `scrollLeft`/`scrollTop` once per rAF frame and reads the reflow-heavy geometry (`scrollWidth`/`clientWidth`) only on resize or explicit `measure()`, never on the scroll path. Auto-pauses off-screen via the shared IntersectionObserver pool. This is to `scroll` + `scrollWidth` what `createPointer` is to `pointermove` + `getBoundingClientRect`.
+
+> **Scroll offset, not visibility ratio.** This reports the element's own scroll position (for scrollbars, carousels, position indicators). For _how much of an element is in the viewport_, use [`createScrollProgress`](#createscrollprogress); for CSS-declarative scroll-linked animation, use the native `ScrollTimeline` API.
+
+```ts
+import { createScroll } from 'phase';
+
+const scroll = createScroll({
+  element: viewport,
+  onScroll: (s) => {
+    // thumb CSS needs `transform-origin: left` so scaleX anchors to the track start
+    thumb.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;
+    prevButton.disabled = s.x <= 1;
+    nextButton.disabled = s.x >= s.maxX - 1;
+  },
+});
+
+// scroll.state.progressX === 0.5 (synchronous read)
+
+// after mutating scrollable content:
+scroll.measure();
+
+// cleanup:
+scroll.stop();
+```
+
+`onScroll` receives the same `ScrollState` object every frame (mutated in place, zero per-frame allocations): `x`, `y`, `maxX`, `maxY`, `progressX`, `progressY`, and the visible fractions `visibleX`/`visibleY` (`clientWidth / scrollWidth`, i.e. a scrollbar thumb's `scaleX`). The `ResizeObserver` recomputes geometry on container resize; call `measure()` after content changes that alter `scrollWidth`.
+
+#### Scroll options
+
+| Option                | Type                           | Default   | Description                                        |
+| --------------------- | ------------------------------ | --------- | -------------------------------------------------- |
+| `element`             | `Element`                      | required  | Scroll container to track                          |
+| `onScroll`            | `(state: ScrollState) => void` | required  | Called once per rAF frame with position + progress |
+| `onPhaseChange`       | `(phase, reason) => void`      | —         | Called on phase transitions                        |
+| `visibility`          | `'pause' \| 'ignore'`          | `'pause'` | Pause tracking when off-screen, or ignore          |
+| `intersectionOptions` | `IntersectionObserverInit`     | —         | Forwarded to the visibility observer               |
+| `signal`              | `AbortSignal`                  | —         | Stops the tracker when aborted                     |
+
+The options type is `CreateScrollOptions` (`ScrollOptions` is a `lib.dom` global and must not be shadowed).
 
 ### prefersReducedMotion
 
@@ -576,7 +621,7 @@ return (
 
 ### useScrollProgress
 
-Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with React lifecycle management (see its [note on scope](#createscrollprogress) for the distinction between visibility ratio and scroll-scrubbing).
+Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with React lifecycle management. This is a _visibility_ fraction (how much of the element is on screen); for a scroll container's own _position_ (scrollbars, carousels) use [`useScroll`](#usescroll) instead. See the [note on scope](#createscrollprogress) for the full distinction.
 
 ```tsx
 import { useScrollProgress } from 'phase/react';
@@ -592,6 +637,36 @@ function FadeIn({ children }) {
 ```
 
 Re-renders only at threshold crossings (~20 per full viewport traversal at default steps). `progress` is `0` before first observation.
+
+### useScroll
+
+Scroll offset and progress for a scroll container. Wraps `createScroll` with React lifecycle management. Position is delivered imperatively via `onScroll` (never per-frame state); only the phase (`tracking`/`paused`) is reactive. Mirrors `usePointer`.
+
+```tsx
+import { useRef } from 'react';
+import { useScroll } from 'phase/react';
+
+function Carousel({ children }) {
+  // thumb uses `origin-left` so scaleX anchors to the track start
+  const thumbRef = useRef<HTMLDivElement>(null);
+  const { ref, measure } = useScroll<HTMLDivElement>({
+    onScroll: (s) => {
+      thumbRef.current?.style.setProperty(
+        'transform',
+        `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`,
+      );
+    },
+  });
+
+  return (
+    <div ref={ref} className="overflow-x-auto">
+      {children}
+    </div>
+  );
+}
+```
+
+Scrolling writes to the DOM directly with zero re-renders. Read the latest position on demand from `stateRef.current` (e.g. inside a `useLoop` tick), and call `measure()` after changing scrollable content.
 
 ### Utility hooks
 
@@ -898,15 +973,16 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |             837 B |
+| `createTicker`            |             834 B |
 | `createSight`             |             963 B |
 | `createLifecycle`         |           1.47 kB |
 | `createLoop`              |           2.59 kB |
-| `createScrollProgress`    |             857 B |
+| `createScrollProgress`    |             878 B |
 | `createRenderState`       |             495 B |
 | `createDevicePixelRatio`  |             544 B |
 | `createMutation`          |           1.17 kB |
 | `createPointer`           |           1.26 kB |
+| `createScroll`            |           1.45 kB |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
 | **Ease**                  |                   |
@@ -918,20 +994,21 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useCanvas`               |           3.44 kB |
 | `useMutation`             |           1.36 kB |
 | `usePointer`              |           1.48 kB |
+| `useScroll`               |           1.71 kB |
 | `useTween`                |             617 B |
 | `usePresence`             |             593 B |
 | `useScrollProgress`       |             993 B |
 | `useSize`                 |             384 B |
-| `useContainerQuery`       |             356 B |
-| `useMediaQuery`           |             246 B |
+| `useContainerQuery`       |             357 B |
+| `useMediaQuery`           |             245 B |
 | `usePrefersReducedMotion` |             272 B |
 | `useDevicePixelRatio`     |             231 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             742 B |
+| `Presence`                |             739 B |
 | `WhenVisible`             |           1.44 kB |
-| `WhenIdle`                |             593 B |
-| `Defer`                   |              85 B |
+| `WhenIdle`                |             592 B |
+| `Defer`                   |              86 B |
 | `useIdle`                 |             435 B |
 | `useWhenIdle`             |             449 B |
 | `useRenderState`          |             527 B |

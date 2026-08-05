@@ -100,6 +100,7 @@ Not applicable. `createPointer` tracks pointer position, not animation. The visi
 ## See also
 
 - [usePointer](./use-pointer.md). React hook wrapping createPointer
+- [createScroll](./create-scroll.md). The same rAF-batched, visibility-aware shape for scroll offset
 - [createSight](./create-sight.md). Visibility observation (IO-based)
 - [performance](./performance.md). Forced-reflow rules (why per-event `getBoundingClientRect` is a problem)
 - [abort-signals](./abort-signals.md). Tear down this tracker via the `signal` option

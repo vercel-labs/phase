@@ -1,5 +1,11 @@
 # phase
 
+## 0.0.7
+
+### Patch Changes
+
+- Add `createScroll` and `useScroll`: a lifecycle-aware scroll tracker for custom scrollbars, carousels, and scroll-position indicators.
+
 ## 0.0.6
 
 ### Patch Changes

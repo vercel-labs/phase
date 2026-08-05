@@ -122,6 +122,7 @@ Not applicable. `usePointer` tracks pointer position, not animation.
 ## See also
 
 - [createPointer](./create-pointer.md). Framework-agnostic core
+- [useScroll](./use-scroll.md). The same imperative-position, reactive-phase shape for scroll offset
 - [useLoop](./use-loop.md). Per-frame DOM animation (common pairing with pointer data)
 - [useCanvas](./use-canvas.md). Canvas animation with pointer interaction
 - [useSize](./use-size.md). Element dimensions via ResizeObserver (no reflow)
