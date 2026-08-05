@@ -20,8 +20,10 @@ export interface UseMutationOptions<T extends Element = HTMLDivElement> {
    */
   ref?: RefObject<T | null>;
   /**
-   * Standard MutationObserver configuration. Must be stable across renders
-   * (define outside the component or memoize). Changes are not tracked.
+   * Standard MutationObserver configuration. Read once at subscribe time and
+   * kept out of the effect deps, so a static config can be inline (it never
+   * re-subscribes the observer). Runtime changes are not tracked; toggle
+   * `enabled` to re-observe with a new config.
    */
   mutation: MutationObserverInit;
   /** Called once per rAF frame with coalesced records. Never per-record. */

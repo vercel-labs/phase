@@ -98,6 +98,7 @@ for (const name of easeExports) {
 const crossCutting = new Set([
   'decision-guide.md',
   'performance.md',
+  'performance-recipes.md',
   'audit.md',
   'rendering-recipes.md',
   'abort-signals.md',
