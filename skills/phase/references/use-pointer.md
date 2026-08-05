@@ -107,6 +107,10 @@ Phase transitions (tracking ⇄ idle) fire only on pointer enter/leave, so react
     },
   });
   ```
+- Throttle below the display refresh rate by capping that loop's `fps`. On a 120 Hz screen, `onPointer` can fire ~120x/sec; if the work is expensive, sample `stateRef` from a slower loop instead. Because the loop reads the latest `stateRef` each tick, the final position is never dropped (trailing-edge throttling for free):
+  ```tsx
+  useLoop({ ref, fps: 10, onTick: () => process(stateRef.current) });
+  ```
 
 ## Don't
 

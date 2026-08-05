@@ -74,6 +74,7 @@ See [create-scroll](./create-scroll.md) for the `ScrollState` fields. For a sync
   );
   ```
 - Read `stateRef.current` inside a `useLoop` tick for the latest position without closure staleness.
+- Throttle below the display refresh rate by capping that loop's `fps`. On a 120 Hz screen `onScroll` can fire ~120x/sec; for expensive work, sample `stateRef` from a slower loop instead. The loop reads the latest `stateRef` each tick, so the final offset is never dropped (trailing-edge throttling for free): `useLoop({ ref, fps: 10, onTick: () => process(stateRef.current) })`.
 - Call `measure()` after changing scrollable content (the pooled `ResizeObserver` already handles container resizes).
 
 ## Don't

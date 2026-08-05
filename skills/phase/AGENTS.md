@@ -7,7 +7,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
 author: vercel
-version: '0.0.11'
+version: '0.0.12'
 abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend CSS-only, minimal JS, phase, or an external library.'
 
 ---
@@ -3607,6 +3607,15 @@ Phase transitions (observing ⇄ paused) fire only on visibility changes, so rea
   });
   return <ul ref={ref}>{items}</ul>;
   ```
+- To handle mutations below frame rate, buffer them and flush on your own cadence. Unlike `usePointer`/`useScroll` (which expose a sampleable `stateRef`), `onMutations` delivers discrete `MutationRecord[]`, so there is no current value to sample from a slower `useLoop`. Collect records in the callback and process the batch on a timer:
+  ```tsx
+  const pending = useRef<MutationRecord[]>([]);
+  const { ref } = useMutation({
+    mutation: { childList: true },
+    onMutations: (records) => pending.current.push(...records),
+  });
+  useLoop({ ref, fps: 4, onTick: () => flush(pending.current.splice(0)) });
+  ```
 - Render from `phase` directly; transitions are rare, so re-rendering on them is cheap:
   ```tsx
   const { ref, phase } = useMutation({
@@ -3744,6 +3753,10 @@ Phase transitions (tracking ⇄ idle) fire only on pointer enter/leave, so react
       if (active) draw(x, y);
     },
   });
+  ```
+- Throttle below the display refresh rate by capping that loop's `fps`. On a 120 Hz screen, `onPointer` can fire ~120x/sec; if the work is expensive, sample `stateRef` from a slower loop instead. Because the loop reads the latest `stateRef` each tick, the final position is never dropped (trailing-edge throttling for free):
+  ```tsx
+  useLoop({ ref, fps: 10, onTick: () => process(stateRef.current) });
   ```
 
 ## Don't
@@ -4175,6 +4188,7 @@ See [create-scroll](./create-scroll.md) for the `ScrollState` fields. For a sync
   );
   ```
 - Read `stateRef.current` inside a `useLoop` tick for the latest position without closure staleness.
+- Throttle below the display refresh rate by capping that loop's `fps`. On a 120 Hz screen `onScroll` can fire ~120x/sec; for expensive work, sample `stateRef` from a slower loop instead. The loop reads the latest `stateRef` each tick, so the final offset is never dropped (trailing-edge throttling for free): `useLoop({ ref, fps: 10, onTick: () => process(stateRef.current) })`.
 - Call `measure()` after changing scrollable content (the pooled `ResizeObserver` already handles container resizes).
 
 ## Don't

@@ -66,6 +66,15 @@ Phase transitions (observing ⇄ paused) fire only on visibility changes, so rea
   });
   return <ul ref={ref}>{items}</ul>;
   ```
+- To handle mutations below frame rate, buffer them and flush on your own cadence. Unlike `usePointer`/`useScroll` (which expose a sampleable `stateRef`), `onMutations` delivers discrete `MutationRecord[]`, so there is no current value to sample from a slower `useLoop`. Collect records in the callback and process the batch on a timer:
+  ```tsx
+  const pending = useRef<MutationRecord[]>([]);
+  const { ref } = useMutation({
+    mutation: { childList: true },
+    onMutations: (records) => pending.current.push(...records),
+  });
+  useLoop({ ref, fps: 4, onTick: () => flush(pending.current.splice(0)) });
+  ```
 - Render from `phase` directly; transitions are rare, so re-rendering on them is cheap:
   ```tsx
   const { ref, phase } = useMutation({
