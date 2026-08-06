@@ -60,6 +60,18 @@
     "limit": "1.6 kB"
   },
   {
+    "name": "createThrottle",
+    "path": "src/index.ts",
+    "import": "{ createThrottle }",
+    "limit": "725 B"
+  },
+  {
+    "name": "createDebounce",
+    "path": "src/index.ts",
+    "import": "{ createDebounce }",
+    "limit": "615 B"
+  },
+  {
     "name": "whenIdle",
     "path": "src/index.ts",
     "import": "{ whenIdle }",
@@ -124,6 +136,20 @@
     "import": "{ useScroll }",
     "ignore": ["react"],
     "limit": "1.9 kB"
+  },
+  {
+    "name": "useThrottledCallback",
+    "path": "src/react/index.ts",
+    "import": "{ useThrottledCallback }",
+    "ignore": ["react"],
+    "limit": "880 B"
+  },
+  {
+    "name": "useDebouncedCallback",
+    "path": "src/react/index.ts",
+    "import": "{ useDebouncedCallback }",
+    "ignore": ["react"],
+    "limit": "760 B"
   },
   {
     "name": "useTween",

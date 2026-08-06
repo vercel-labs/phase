@@ -25,6 +25,8 @@ export { prefersReducedMotion } from './core/reduced-motion';
 export { createMutation } from './core/mutation';
 export { createPointer } from './core/pointer';
 export { createScroll } from './core/scroll';
+export { createThrottle } from './core/throttle';
+export { createDebounce } from './core/debounce';
 export { PhaseError, isPhaseError } from './core/error';
 
 // Types
@@ -93,4 +95,6 @@ export type {
   ScrollReason,
   ScrollState,
 } from './core/scroll';
+export type { Throttle, ThrottleEdge, ThrottleOptions } from './core/throttle';
+export type { Debounce, DebounceOptions } from './core/debounce';
 export type { PhaseErrorCode } from './core/error';
