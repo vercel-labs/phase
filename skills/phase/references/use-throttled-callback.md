@@ -86,6 +86,7 @@ The polling pattern samples even when the source is idle (a `fps: 10` loop does 
     { interval: 100 },
   );
   ```
+- Think in rates? `interval: 1000 / 20` reads as "at most 20 per second". `interval` is a spacing floor between event-driven fires, not a loop rate; a loop that should run at 20 fps is `useLoop({ fps: 20 })`.
 - Flush the final value in your own cleanup when it matters:
   ```tsx
   useEffect(() => () => emit.flush(), [emit]);

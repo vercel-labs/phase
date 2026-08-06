@@ -35,6 +35,7 @@ const throttle = createThrottle<T>(options: ThrottleOptions<T>): Throttle<T>;
 - Leading calls fire synchronously inside `call` (zero latency).
 - Trailing calls ride a one-shot rAF chain and fire on the first frame where `interval` has elapsed since the last invocation, so the effective interval quantizes up to frame boundaries (`interval: 50` on a 60 Hz display fires every 3-4 frames).
 - No rAF is scheduled while nothing is pending. The primitive is event-driven: zero work when the trigger is idle, unlike a polling loop.
+- To think in rates, write `interval: 1000 / 20` for "at most 20 per second". `fps` is deliberately not an option here: that vocabulary belongs to loop primitives (`createLoop`, `createTicker`), which poll every tick.
 
 ### Visibility model
 
