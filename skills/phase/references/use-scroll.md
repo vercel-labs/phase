@@ -74,7 +74,9 @@ See [create-scroll](./create-scroll.md) for the `ScrollState` fields. For a sync
   );
   ```
 - Read `stateRef.current` inside a `useLoop` tick for the latest position without closure staleness.
-- Throttle below the display refresh rate by capping that loop's `fps`. On a 120 Hz screen `onScroll` can fire ~120x/sec; for expensive work, sample `stateRef` from a slower loop instead. The loop reads the latest `stateRef` each tick, so the final offset is never dropped (trailing-edge throttling for free): `useLoop({ ref, fps: 10, onTick: () => process(stateRef.current) })`.
+- Throttle below the display refresh rate. On a 120 Hz screen `onScroll` can fire ~120x/sec; two patterns cap the downstream work, chosen by how it is driven:
+  - **Event-driven sinks** (analytics, worker messages, expensive recompute): wrap the callback with `useThrottledCallback`. It fires only while scrolling and schedules nothing when idle: `const report = useThrottledCallback((s: ScrollState) => track(s.progressY), { interval: 200 })`, then `useScroll({ onScroll: report })`.
+  - **Frame-locked sampling** (you process every tick anyway): sample `stateRef` from a capped `useLoop`. It polls each tick while visible, and because each tick reads the latest `stateRef`, the final offset is never dropped: `useLoop({ ref, fps: 10, onTick: () => process(stateRef.current) })`.
 - Call `measure()` after changing scrollable content (the pooled `ResizeObserver` already handles container resizes).
 
 ## Don't
@@ -90,6 +92,7 @@ Not applicable. `useScroll` reports scroll position, not animation. Gate any mot
 ## See also
 
 - [create-scroll](./create-scroll.md). Framework-agnostic core and the `ScrollState` fields
+- [use-throttled-callback](./use-throttled-callback.md). Event-driven rate limiting for `onScroll` sinks
 - [use-pointer](./use-pointer.md). The structural sibling: rAF-batched pointer position
 - [use-scroll-progress](./use-scroll-progress.md). Intersection ratio (viewport reveal), not scroll offset
 - [use-loop](./use-loop.md). Per-frame DOM animation (common pairing with scroll data)
