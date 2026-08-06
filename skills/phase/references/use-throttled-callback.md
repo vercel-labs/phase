@@ -13,13 +13,6 @@ throttled.flush();
 throttled.cancel();
 ```
 
-### Arguments
-
-| Argument   | Type                          | Description                                       |
-| ---------- | ----------------------------- | ------------------------------------------------- |
-| `callback` | `(value: T) => void`          | The function to throttle; latest identity is used |
-| `options`  | `UseThrottledCallbackOptions` | See below                                         |
-
 ### Options
 
 | Option     | Type                | Default   | Description                                 |
@@ -38,7 +31,7 @@ A callable with stable identity across renders, safe in deps arrays and as a pro
 | `flush()`  | `() => void`         | Invoke a pending trailing call now (no-op when idle) |
 | `cancel()` | `() => void`         | Discard a pending trailing call and reset the window |
 
-Unmount discards a pending call. Changing `interval`, `edge`, or `hidden` recreates the throttle and also drops pending work. There is no `enabled` option: a disabled throttle is one you do not call.
+The latest `callback` identity is always invoked; changing it never restarts the throttle. Unmount discards a pending call. Changing `interval`, `edge`, or `hidden` recreates the throttle and also drops pending work. There is no `enabled` option: a disabled throttle is one you do not call.
 
 ## Choosing a rate-limiting tool
 
@@ -86,12 +79,11 @@ The polling pattern samples even when the source is idle (a `fps: 10` loop does 
     { interval: 100 },
   );
   ```
-- Think in rates? `interval: 1000 / 20` reads as "at most 20 per second". `interval` is a spacing floor between event-driven fires, not a loop rate; a loop that should run at 20 fps is `useLoop({ fps: 20 })`.
+- Think in rates? `interval: 1000 / 20` reads as "at most 20 per second".
 - Flush the final value in your own cleanup when it matters:
   ```tsx
   useEffect(() => () => emit.flush(), [emit]);
   ```
-- Cleanup is otherwise automatic: unmount stops the throttle and drops pending work.
 
 ## Don't
 

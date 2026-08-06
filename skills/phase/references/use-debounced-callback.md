@@ -13,13 +13,6 @@ debounced.flush();
 debounced.cancel();
 ```
 
-### Arguments
-
-| Argument   | Type                          | Description                                       |
-| ---------- | ----------------------------- | ------------------------------------------------- |
-| `callback` | `(value: T) => void`          | The function to debounce; latest identity is used |
-| `options`  | `UseDebouncedCallbackOptions` | See below                                         |
-
 ### Options
 
 | Option   | Type                | Default   | Description                                 |
@@ -37,7 +30,7 @@ A callable with stable identity across renders, safe in deps arrays and as a pro
 | `flush()`  | `() => void`         | Invoke a pending call now (no-op when idle) |
 | `cancel()` | `() => void`         | Discard a pending call                      |
 
-Unmount discards a pending call. Changing `wait` or `hidden` recreates the debounce and also drops pending work. There is no `enabled` option: a disabled debounce is one you do not call.
+The latest `callback` identity is always invoked; changing it never restarts the debounce. Unmount discards a pending call. Changing `wait` or `hidden` recreates the debounce and also drops pending work. There is no `enabled` option: a disabled debounce is one you do not call.
 
 ## When to use
 
@@ -69,7 +62,6 @@ Unmount discards a pending call. Changing `wait` or `hidden` recreates the debou
   ```tsx
   useEffect(() => () => save.flush(), [save]);
   ```
-- Cleanup is otherwise automatic: unmount stops the debounce and drops pending work.
 
 ## Don't
 
