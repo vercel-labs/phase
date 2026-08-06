@@ -1,4 +1,4 @@
-<!-- GENERATED — do not edit. Run: node skills/phase/scripts/build-agents.mjs -->
+<!-- GENERATED — do not edit. Run: node scripts/skill/build-agents.mjs -->
 
 ---
 

@@ -16,8 +16,8 @@ import { execSync } from 'node:child_process';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const root = resolve(import.meta.dirname, '..', '..', '..');
-const skillDir = resolve(import.meta.dirname, '..');
+const root = resolve(import.meta.dirname, '..', '..');
+const skillDir = join(root, 'skills', 'phase');
 const refsDir = join(skillDir, 'references');
 
 const skillMd = readFileSync(join(skillDir, 'SKILL.md'), 'utf8');
@@ -29,7 +29,7 @@ const refFiles = readdirSync(refsDir)
   .toSorted();
 
 const separator = '\n\n---\n\n';
-let output = `<!-- GENERATED — do not edit. Run: node skills/phase/scripts/build-agents.mjs -->\n\n`;
+let output = `<!-- GENERATED — do not edit. Run: node scripts/skill/build-agents.mjs -->\n\n`;
 output += skillMd;
 
 for (const file of refFiles) {

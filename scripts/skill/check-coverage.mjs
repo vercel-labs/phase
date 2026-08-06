@@ -16,8 +16,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const root = resolve(import.meta.dirname, '..', '..', '..');
-const refsDir = resolve(import.meta.dirname, '..', 'references');
+const root = resolve(import.meta.dirname, '..', '..');
+const refsDir = join(root, 'skills', 'phase', 'references');
 
 // --- Parse exports from barrel files ---
 

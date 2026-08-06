@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Packages skills/phase/ into dist/phase-skill.zip for direct download.
+ * Packages consumer-facing files from skills/phase/ into
+ * dist/phase-skill.zip for direct download.
  *
  * Produces a deterministic, store-only (uncompressed) archive: files are sorted
  * and all timestamps are zeroed, so the same sources always yield byte-identical
@@ -18,26 +19,27 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 
-const skillDir = resolve(import.meta.dirname, '..');
+const root = resolve(import.meta.dirname, '..', '..');
+const skillDir = join(root, 'skills', 'phase');
 const distDir = join(skillDir, 'dist');
 const outPath = join(distDir, 'phase-skill.zip');
 
 mkdirSync(distDir, { recursive: true });
 
-// Collect all files except dist/ and node_modules, sorted for determinism.
+// Collect consumer-facing reference files recursively. Top-level skill files
+// and the audit scanner are allowlisted below so contributor tooling cannot be
+// added to the archive accidentally.
 function collectFiles(dir, base) {
   const results = [];
   for (const entry of readdirSync(dir)) {
-    if (entry === 'dist' || entry === 'node_modules' || entry === '.git')
-      continue;
     const full = join(dir, entry);
     const stat = statSync(full);
     if (stat.isDirectory()) {
       results.push(...collectFiles(full, base));
     } else {
-      results.push(relative(base, full));
+      results.push(relative(base, full).split(sep).join('/'));
     }
   }
   return results;
@@ -45,7 +47,14 @@ function collectFiles(dir, base) {
 
 // Deterministic store-only zip (no compression, universally extractable).
 function storeZip() {
-  const files = collectFiles(skillDir, skillDir).toSorted();
+  const files = [
+    'AGENTS.md',
+    'metadata.json',
+    'README.md',
+    'SKILL.md',
+    'scripts/scan.mjs',
+    ...collectFiles(join(skillDir, 'references'), skillDir),
+  ].toSorted();
   const entries = [];
 
   for (const rel of files) {

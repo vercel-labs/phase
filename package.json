@@ -26,9 +26,9 @@
     "prepublishOnly": "pnpm build",
     "postinstall": "lefthook install || true",
     "validate": "pnpm run --parallel '/^(typecheck|lint|format|test|skill:check)$/'",
-    "skill:check": "node skills/phase/scripts/check-coverage.mjs",
-    "skill:build": "node skills/phase/scripts/build-agents.mjs",
-    "skill:package": "node skills/phase/scripts/package.mjs"
+    "skill:check": "node scripts/skill/check-coverage.mjs",
+    "skill:build": "node scripts/skill/build-agents.mjs",
+    "skill:package": "node scripts/skill/package.mjs"
   },
   "peerDependencies": {
     "react": ">=18"
