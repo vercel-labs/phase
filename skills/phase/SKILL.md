@@ -209,7 +209,3 @@ grep -ri "starting:opacity\|data-\[phase=exiting\]" skills/phase/references/  # 
 | [audit.md](references/audit.md)                             | Auditing existing animations for optimization opportunities                     |
 | [abort-signals.md](references/abort-signals.md)             | Tearing down core primitives with an `AbortSignal` (`signal` option)            |
 | [timed-sequences.md](references/timed-sequences.md)         | Building multi-step timed animation sequences with `useLoop`                    |
-
-## Full compiled document
-
-For all references expanded inline: `AGENTS.md`

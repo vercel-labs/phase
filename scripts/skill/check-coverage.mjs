@@ -6,7 +6,7 @@
  * reference files exist.
  *
  * Skill metadata (name/version/author/license/abstract) is NOT checked here —
- * metadata.json is generated from SKILL.md frontmatter by build-agents.mjs, so
+ * metadata.json is generated from SKILL.md frontmatter by build-metadata.mjs, so
  * it can't drift; freshness is enforced by CI's rebuild-and-diff step.
  *
  * Exit code 0 = all covered, 1 = drift detected.

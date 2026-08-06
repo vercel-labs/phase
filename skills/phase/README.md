@@ -37,17 +37,16 @@ node <skill-dir>/scripts/scan.mjs <target-dir>
 | File               | Purpose                                                    |
 | ------------------ | ---------------------------------------------------------- |
 | `SKILL.md`         | Entry point — decision tables, invariants, reference index |
-| `AGENTS.md`        | Full compiled document (all references inlined)            |
 | `references/*.md`  | One file per public export + cross-cutting guides          |
 | `scripts/scan.mjs` | Deterministic anti-pattern scanner for audits              |
 
 ## Development
 
-Contributor tooling and the reference template live in the repository-level `scripts/skill/` directory.
+Contributor tooling lives in the repository-level `scripts/skill/` directory. Start new references from `references/_template.md`.
 
 ```bash
 node scripts/skill/check-coverage.mjs   # verify barrels ↔ references
-node scripts/skill/build-agents.mjs     # regenerate AGENTS.md
+node scripts/skill/build-metadata.mjs   # regenerate metadata.json
 node scripts/skill/package.mjs          # produce dist/phase-skill.zip
 ```
 

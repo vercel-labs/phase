@@ -34,6 +34,7 @@ mkdirSync(distDir, { recursive: true });
 function collectFiles(dir, base) {
   const results = [];
   for (const entry of readdirSync(dir)) {
+    if (entry.startsWith('_')) continue;
     const full = join(dir, entry);
     const stat = statSync(full);
     if (stat.isDirectory()) {
@@ -48,7 +49,6 @@ function collectFiles(dir, base) {
 // Deterministic store-only zip (no compression, universally extractable).
 function storeZip() {
   const files = [
-    'AGENTS.md',
     'metadata.json',
     'README.md',
     'SKILL.md',

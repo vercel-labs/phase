@@ -7,18 +7,17 @@ pre-commit:
       # parallel); excluding them here avoids a read-during-write race. CI's
       # repo-wide `pnpm format` still verifies them.
       exclude:
-        - 'skills/phase/AGENTS.md'
         - 'skills/phase/metadata.json'
       run: pnpm oxfmt --check {staged_files}
     lint:
       glob: '**/*.{ts,tsx}'
       run: pnpm oxlint {staged_files}
-    # Regenerate the compiled AGENTS.md + downloadable zip whenever skill
-    # sources change, then stage the regenerated outputs into the same commit.
+    # Regenerate metadata.json + the downloadable zip whenever skill sources
+    # change, then stage the regenerated outputs into the same commit.
     # `git add` is explicit (not stage_fixed) because the outputs are not part
     # of the originally-staged set, so stage_fixed would leave them unstaged and
     # force a follow-up commit. Both outputs are deterministic — no spurious
     # churn. Runs only when a skill source or its maintainer tooling is staged.
     skill-sync:
       glob: '{skills/phase/**/*,scripts/skill/**/*}'
-      run: pnpm skill:build && pnpm skill:package && git add skills/phase/AGENTS.md skills/phase/metadata.json skills/phase/dist/phase-skill.zip
+      run: pnpm skill:build && pnpm skill:package && git add skills/phase/metadata.json skills/phase/dist/phase-skill.zip
