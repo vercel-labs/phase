@@ -122,11 +122,11 @@ describe('trailing edge', () => {
     throttle.call(3);
     expect(cb).toHaveBeenCalledTimes(1);
 
-    frame(16); // 16ms elapsed — still inside the window, chain re-requests
+    frame(16); // 16ms elapsed, still inside the window, chain re-requests
     expect(cb).toHaveBeenCalledTimes(1);
     frame(16); // 32ms
     expect(cb).toHaveBeenCalledTimes(1);
-    frame(32); // 64ms — past the interval
+    frame(32); // 64ms, past the interval
     expect(cb).toHaveBeenCalledTimes(2);
     expect(cb).toHaveBeenLastCalledWith(3);
     expect(throttle.pending).toBe(false);
