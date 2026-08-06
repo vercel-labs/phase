@@ -1,5 +1,13 @@
 # phase
 
+## 0.0.8
+
+### Patch Changes
+
+- Add `createThrottle` and `useThrottledCallback`: frame-aligned, visibility-aware throttle for event-driven work below frame rate (socket emits, worker messaging). Leading calls fire synchronously; trailing calls fire frame-aligned with the latest value; pending work is flushed or dropped when the document hides.
+- Add `createDebounce` and `useDebouncedCallback`: visibility-aware trailing debounce (fire after quiet) for burst-settled work such as canvas buffer reallocation after resize.
+- Skill: document the poll-vs-event rate-limiting decision in `use-pointer`, `use-scroll`, and rewrite the `use-mutation` buffered-drain recipe on `useThrottledCallback`.
+
 ## 0.0.7
 
 ### Patch Changes
