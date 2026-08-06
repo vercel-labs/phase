@@ -15,14 +15,14 @@ const { ref, phase, phaseReason, phaseRef, phaseReasonRef } =
 
 ### Options
 
-| Option                | Type                                  | Default   | Description                                                             |
-| --------------------- | ------------------------------------- | --------- | ----------------------------------------------------------------------- |
-| `ref`                 | `RefObject<T \| null>`                | returned  | Bring your own ref, or attach the returned one                          |
-| `mutation`            | `MutationObserverInit`                | required  | Standard MutationObserver configuration (must be stable across renders) |
-| `onMutations`         | `(records: MutationRecord[]) => void` | required  | Called once per rAF frame with coalesced records                        |
-| `visibility`          | `'pause' \| 'ignore'`                 | `'pause'` | Pause observation when off-screen, or ignore visibility                 |
-| `enabled`             | `boolean`                             | `true`    | When `false`, tears down the observer entirely                          |
-| `intersectionOptions` | `IntersectionObserverInit`            | --        | Forwarded to the visibility observer                                    |
+| Option                | Type                                  | Default   | Description                                                                                                                               |
+| --------------------- | ------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `ref`                 | `RefObject<T \| null>`                | returned  | Bring your own ref, or attach the returned one                                                                                            |
+| `mutation`            | `MutationObserverInit`                | required  | Standard MutationObserver config. Read once at subscribe time; a static config can be inline. Runtime changes are not tracked (see Don't) |
+| `onMutations`         | `(records: MutationRecord[]) => void` | required  | Called once per rAF frame with coalesced records                                                                                          |
+| `visibility`          | `'pause' \| 'ignore'`                 | `'pause'` | Pause observation when off-screen, or ignore visibility                                                                                   |
+| `enabled`             | `boolean`                             | `true`    | When `false`, tears down the observer entirely                                                                                            |
+| `intersectionOptions` | `IntersectionObserverInit`            | --        | Forwarded to the visibility observer                                                                                                      |
 
 ### Return
 
@@ -66,6 +66,15 @@ Phase transitions (observing ⇄ paused) fire only on visibility changes, so rea
   });
   return <ul ref={ref}>{items}</ul>;
   ```
+- To handle mutations below frame rate, buffer them and flush on your own cadence. Unlike `usePointer`/`useScroll` (which expose a sampleable `stateRef`), `onMutations` delivers discrete `MutationRecord[]`, so there is no current value to sample from a slower `useLoop`. Collect records in the callback and process the batch on a timer:
+  ```tsx
+  const pending = useRef<MutationRecord[]>([]);
+  const { ref } = useMutation({
+    mutation: { childList: true },
+    onMutations: (records) => pending.current.push(...records),
+  });
+  useLoop({ ref, fps: 4, onTick: () => flush(pending.current.splice(0)) });
+  ```
 - Render from `phase` directly; transitions are rare, so re-rendering on them is cheap:
   ```tsx
   const { ref, phase } = useMutation({
@@ -80,7 +89,7 @@ Phase transitions (observing ⇄ paused) fire only on visibility changes, so rea
 
 - **Don't read layout inside `onMutations`.** Reading `getBoundingClientRect`, `offsetWidth`, or `getComputedStyle` forces a synchronous reflow even inside the rAF batch. Use `useSize` for dimensions.
 - **Don't observe `subtree` + `attributeFilter: ['style', 'class']`.** Fires on every descendant style/class change. A dev-mode warning fires for this pattern.
-- **Don't pass an unstable `mutation` object.** Define it outside the component or memoize it. Changes to the object are not tracked and will not restart the observer.
+- **Don't expect a changed `mutation` config to re-apply.** The observer reads it once at subscribe time; `mutation` is intentionally kept out of the effect's dependency array, so an inline static config is fine and never thrashes the observer. But a config derived from props/state that changes at runtime will _not_ take effect. To re-observe with a new config, toggle `enabled` off then on (or remount).
 
 ## Reduced motion
 

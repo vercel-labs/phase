@@ -7,7 +7,7 @@
  *
  * Usage: node skills/phase/scripts/scan.mjs <target-dir>
  *
- * Zero dependencies — uses only Node built-ins.
+ * Zero dependencies; uses only Node built-ins.
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -68,8 +68,10 @@ const SIGNALS = [
   {
     id: 'setstate-in-raf',
     label: 'setState/dispatch inside rAF callback',
-    pattern:
-      /requestAnimationFrame[\s\S]{0,200}(setState|dispatch|set[A-Z]\w*\()/,
+    // The setState call is usually on a different line than the rAF, so match
+    // rAF per line and require the state update within the surrounding window.
+    pattern: /requestAnimationFrame/,
+    contextPattern: /setState|dispatch|set[A-Z]\w*\(/,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
   },
   {
@@ -112,7 +114,10 @@ const SIGNALS = [
     id: 'missing-reduced-motion',
     label: 'Animation without reduced-motion check',
     pattern: /requestAnimationFrame|@keyframes|animation:/,
-    negativePattern: /prefers-reduced-motion|reducedMotion|phase/,
+    // Suppress when the file already handles reduced motion, or genuinely
+    // imports phase (its hooks handle it automatically). Match a real phase
+    // import, not the bare substring "phase" (which caused false negatives).
+    negativePattern: /prefers-reduced-motion|reducedMotion|from ['"]phase/,
     exclude: /node_modules|\.spec\.|\.test\./,
   },
   {
@@ -129,9 +134,58 @@ const SIGNALS = [
     matcher: matchesSyncedRef,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
   },
+  // --- CSS/DOM-scale signals ---
+  {
+    id: 'global-has-selector',
+    label: 'Global :has() selector (broad style invalidation)',
+    pattern: /body:has\(|html:has\(|:root:has\(|\*:has\(/,
+    exclude: /node_modules|\.spec\.|\.test\./,
+    fileTypes: 'css',
+  },
+  {
+    id: 'permanent-will-change',
+    label: 'Permanent will-change (wastes GPU memory when idle)',
+    pattern: /will-change:\s*transform/,
+    negativePattern:
+      /animation-play-state|data-active|isActive|\?.*will-change/,
+    exclude: /node_modules|\.spec\.|\.test\./,
+    fileTypes: 'css',
+  },
+  {
+    id: 'non-compositor-animation',
+    label:
+      'Animating a non-compositor property (layout/paint, not transform/opacity)',
+    // `transition: all` (animates whatever changes) or a transition whose
+    // value names a layout-triggering property. transform/opacity-only
+    // transitions do not match.
+    pattern:
+      /transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/,
+    exclude: /node_modules|\.spec\.|\.test\./,
+    fileTypes: 'css',
+  },
+  // --- Loading/architecture signals ---
+  {
+    id: 'bare-window-listener',
+    label: 'Bare window resize/scroll listener with layout read',
+    pattern: /addEventListener\s*\(\s*['"](?:resize|scroll)['"]/,
+    contextPattern:
+      /getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight/,
+    exclude: /node_modules|phase|\.spec\.|\.test\./,
+  },
+  {
+    id: 'redundant-mutation-observers',
+    label:
+      'MutationObserver on html/documentElement (coalesce into one useMutation)',
+    pattern: /new\s+MutationObserver/,
+    contextPattern:
+      /document\.documentElement|<html|\.observe\s*\(\s*document\s*\./,
+    exclude: /node_modules|phase|\.spec\.|\.test\./,
+  },
 ];
 
-const EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs']);
+const JS_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs']);
+const CSS_EXTENSIONS = new Set(['.css', '.scss', '.module.css']);
+const EXTENSIONS = new Set([...JS_EXTENSIONS, ...CSS_EXTENSIONS]);
 
 function walk(dir) {
   const results = [];
@@ -172,8 +226,16 @@ for (const filePath of files) {
 
   const lines = content.split('\n');
 
+  const ext = filePath.slice(filePath.lastIndexOf('.'));
+  const isCSS = CSS_EXTENSIONS.has(ext);
+  const isJS = JS_EXTENSIONS.has(ext);
+
   for (const signal of SIGNALS) {
     if (signal.exclude && signal.exclude.test(rel)) continue;
+
+    // File-type filtering: 'css' signals only match CSS files, all others match JS
+    if (signal.fileTypes === 'css' && !isCSS) continue;
+    if (!signal.fileTypes && !isJS) continue;
 
     // File-level negative pattern: skip if the file also contains the mitigation
     if (signal.negativePattern && signal.negativePattern.test(content))
