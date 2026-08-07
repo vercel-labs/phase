@@ -4,7 +4,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.12'
+  version: '0.0.13'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend CSS-only, minimal JS, phase, or an external library.'
 ---
 
@@ -209,7 +209,3 @@ grep -ri "starting:opacity\|data-\[phase=exiting\]" skills/phase/references/  # 
 | [audit.md](references/audit.md)                             | Auditing existing animations for optimization opportunities                     |
 | [abort-signals.md](references/abort-signals.md)             | Tearing down core primitives with an `AbortSignal` (`signal` option)            |
 | [timed-sequences.md](references/timed-sequences.md)         | Building multi-step timed animation sequences with `useLoop`                    |
-
-## Full compiled document
-
-For all references expanded inline: `AGENTS.md`

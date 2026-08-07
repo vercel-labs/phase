@@ -34,22 +34,20 @@ node <skill-dir>/scripts/scan.mjs <target-dir>
 
 ## What's inside
 
-| File                         | Purpose                                                    |
-| ---------------------------- | ---------------------------------------------------------- |
-| `SKILL.md`                   | Entry point — decision tables, invariants, reference index |
-| `AGENTS.md`                  | Full compiled document (all references inlined)            |
-| `references/*.md`            | One file per public export + cross-cutting guides          |
-| `scripts/build-agents.mjs`   | Regenerate `AGENTS.md`                                     |
-| `scripts/check-coverage.mjs` | Verify every export has a reference (and vice versa)       |
-| `scripts/scan.mjs`           | Deterministic anti-pattern scanner for audits              |
-| `scripts/package.mjs`        | Produce `dist/phase-skill.zip`                             |
+| File               | Purpose                                                    |
+| ------------------ | ---------------------------------------------------------- |
+| `SKILL.md`         | Entry point — decision tables, invariants, reference index |
+| `references/*.md`  | One file per public export + cross-cutting guides          |
+| `scripts/scan.mjs` | Deterministic anti-pattern scanner for audits              |
 
 ## Development
 
+Contributor tooling lives in the repository-level `scripts/skill/` directory. Start new references from `references/_template.md`.
+
 ```bash
-node skills/phase/scripts/check-coverage.mjs   # verify barrels ↔ references
-node skills/phase/scripts/build-agents.mjs      # regenerate AGENTS.md
-node skills/phase/scripts/package.mjs           # produce dist/phase-skill.zip
+node scripts/skill/check-coverage.mjs   # verify barrels ↔ references
+node scripts/skill/build-metadata.mjs   # regenerate metadata.json
+node scripts/skill/package.mjs          # produce dist/phase-skill.zip
 ```
 
 Or via package.json scripts (from repo root):

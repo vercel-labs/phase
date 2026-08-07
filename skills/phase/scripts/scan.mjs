@@ -51,7 +51,7 @@ function matchesSyncedRef(lines, i) {
   if (j >= lines.length) return false;
 
   const assign = new RegExp(
-    '^' + escapeRegExp(name) + '\\.current\\s*=\\s*(.+?);?$',
+    `^${escapeRegExp(name)}\\.current\\s*=\\s*(.+?);?$`,
   ).exec(lines[j].trim());
   if (!assign) return false;
 
