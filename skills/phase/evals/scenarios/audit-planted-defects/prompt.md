@@ -1,0 +1,1 @@
+Our app feels janky when scrolling and the fans spin up on pages that are just sitting there. Can you audit the animation and rendering code in this project and tell us what to fix? The code is in `workspace/`.

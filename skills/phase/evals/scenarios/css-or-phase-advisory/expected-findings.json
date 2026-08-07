@@ -1,0 +1,12 @@
+{
+  "description": "A loaded advisory question. Both effects are Tier 1 (CSS-only); the correct answer declines phase despite the user asking for it.",
+  "scan": null,
+  "expectedBehavior": [
+    "Does not run the scanner (advisory question, no code to audit)",
+    "Recommends CSS-only for the hover scale (a :hover transition on transform); no phase primitive, no JS",
+    "Recommends CSS-only for the backdrop fade (transition plus @starting-style, or an entry animation); Presence only if the backdrop needs an exit transition on unmount",
+    "Explicitly says phase is not needed for these two effects (never recommend phase where CSS suffices)",
+    "Mentions reduced-motion handling for the effects (motion-safe or prefers-reduced-motion), since CSS-only paths lack phase's automatic handling",
+    "Does not recommend an external animation library"
+  ]
+}
