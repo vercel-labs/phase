@@ -1,0 +1,21 @@
+body:has(.modal-open) {
+  overflow: hidden;
+}
+
+.drawer {
+  transition: all 0.3s ease;
+  will-change: transform;
+}
+
+@keyframes float {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-8px);
+  }
+}
+
+.badge {
+  animation: float 2s ease-in-out infinite alternate;
+}

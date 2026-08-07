@@ -5,7 +5,7 @@
  * Scans source files for animation, rendering, and architecture
  * anti-pattern candidates and reports them grouped by severity.
  *
- * Usage: node scan.mjs <target-dir-or-file> [...more targets]
+ * Usage: node scan.mjs [--json] [--fail-on <severity>] <target> [...targets]
  *
  * Findings are candidates, not verdicts: classify each against
  * references/audit.md before recommending a change. Zero dependencies.
@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
  */
 export function scanTargets(paths) {
   const findings = [];
+  const diag = { suppressed: 0, warnings: [] };
   let filesScanned = 0;
 
   for (const target of paths) {
@@ -39,19 +40,26 @@ export function scanTargets(paths) {
         continue;
       }
       filesScanned++;
-      findings.push(...scanFile(relative(base, filePath), content));
+      findings.push(...scanFile(relative(base, filePath), content, diag));
     }
   }
 
-  return { targets: paths, filesScanned, findings };
+  return {
+    targets: paths,
+    filesScanned,
+    findings,
+    suppressed: diag.suppressed,
+    warnings: diag.warnings,
+  };
 }
 
 /**
  * Scans a single file's content. The relative path determines file-type
  * filtering and path-based exclusions. Returns findings for every signal
- * that fires.
+ * that fires. Pass a diag object ({ suppressed, warnings }) to collect
+ * suppression counts and directive warnings.
  */
-export function scanFile(relPath, content) {
+export function scanFile(relPath, content, diag = null) {
   if (EXCLUDED_PATHS.test(relPath)) return [];
 
   const ext = extOf(relPath);
@@ -60,6 +68,7 @@ export function scanFile(relPath, content) {
 
   const findings = [];
   const lines = content.split(/\r?\n/);
+  const suppressions = collectSuppressions(relPath, lines, diag);
 
   for (const signal of SIGNALS) {
     if (!signalAppliesTo(signal, type, ext)) continue;
@@ -75,16 +84,19 @@ export function scanFile(relPath, content) {
       // Custom matchers get the full line array and index (multi-line shapes).
       if (signal.matcher) {
         if (!signal.matcher(lines, i)) continue;
-        findings.push(makeFinding(signal, relPath, i + 1, line));
-        continue;
+      } else {
+        if (!signal.pattern.test(line)) continue;
+
+        // Context pattern: only match if nearby lines contain the context.
+        if (signal.contextPattern) {
+          const context = lines.slice(Math.max(0, i - 5), i + 6).join('\n');
+          if (!signal.contextPattern.test(context)) continue;
+        }
       }
 
-      if (!signal.pattern.test(line)) continue;
-
-      // Context pattern: only match if nearby lines contain the context.
-      if (signal.contextPattern) {
-        const context = lines.slice(Math.max(0, i - 5), i + 6).join('\n');
-        if (!signal.contextPattern.test(context)) continue;
+      if (suppressions.get(i)?.has(signal.id)) {
+        if (diag) diag.suppressed++;
+        continue;
       }
 
       findings.push(makeFinding(signal, relPath, i + 1, line));
@@ -103,6 +115,33 @@ export function scanFile(relPath, content) {
   return findings.filter(
     (f) => !(f.signal === 'manual-raf' && setstateLines.has(f.line)),
   );
+}
+
+/**
+ * Renders a scan result as a stable machine-readable object
+ * (schemaVersion 1). skillVersion records which signal catalog produced
+ * the findings.
+ */
+export function formatJson(result) {
+  const counts = countBySeverity(result.findings);
+  return {
+    schemaVersion: 1,
+    skillVersion: skillVersion(),
+    targets: result.targets,
+    summary: {
+      filesScanned: result.filesScanned,
+      total: result.findings.length,
+      actionable: counts.critical + counts.high + counts.medium,
+      dedup: counts.dedup,
+      suppressed: result.suppressed ?? 0,
+      bySeverity: {
+        critical: counts.critical,
+        high: counts.high,
+        medium: counts.medium,
+      },
+    },
+    findings: result.findings,
+  };
 }
 
 /** Renders a scan result as human-readable text grouped by severity. */
@@ -135,14 +174,16 @@ export function formatText(result) {
 
   const counts = countBySeverity(result.findings);
   const actionable = counts.critical + counts.high + counts.medium;
+  const suppressed = result.suppressed ?? 0;
 
-  if (result.findings.length === 0) {
+  if (result.findings.length === 0 && suppressed === 0) {
     out.push('', '✓ No animation anti-pattern candidates found.');
   } else {
+    const suppressedNote = suppressed > 0 ? `, ${suppressed} suppressed` : '';
     out.push(
       '',
       '─────────────────────────────────────────',
-      `Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup`,
+      `Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup${suppressedNote}`,
       'Next: classify each candidate against references/audit.md Step 2 (the decision ladder).',
       'Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.',
     );
@@ -398,10 +439,11 @@ export const SIGNALS = [
     why: 'Layout reads in MO callbacks force a reflow on every mutation.',
     fix: 'references/performance.md#never-drive-layout-from-a-mutationobserver',
     pattern: /new\s+MutationObserver/,
-    // Only flag when the observer watches attributes/style or reads layout
-    // nearby. Structural (childList) observation is legitimate and skipped.
+    // Only flag when the observer watches inline style mutations or reads
+    // layout nearby. Structural (childList) and plain attribute observation
+    // (e.g. a class watcher) are legitimate and skipped.
     contextPattern:
-      /attributeFilter|attributes\s*:\s*true|getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight|getComputedStyle/,
+      /attributeFilter:\s*\[[^\]]*['"]style['"]|getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight|getComputedStyle/,
     examples: {
       match: [
         {
@@ -409,12 +451,24 @@ export const SIGNALS = [
           content:
             'const mo = new MutationObserver(() => {\n  const h = el.scrollHeight;\n  sync(h);\n});\nmo.observe(el, { subtree: true, attributes: true });\n',
         },
+        {
+          file: 'src/tracker.ts',
+          content:
+            "const mo = new MutationObserver(onStyle);\nmo.observe(el, { subtree: true, attributeFilter: ['style'] });\n",
+        },
       ],
       noMatch: [
         {
           file: 'src/list.ts',
           content:
             'const mo = new MutationObserver(onChildren);\nmo.observe(list, { childList: true });\n',
+        },
+        {
+          // A class watcher neither observes styles nor reads layout; it may
+          // still be a redundant-mutation-observers candidate, not this one.
+          file: 'src/theme.ts',
+          content:
+            "const mo = new MutationObserver(onTheme);\nmo.observe(document.documentElement, { attributeFilter: ['class'] });\n",
         },
       ],
     },
@@ -874,6 +928,43 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Suppression directive: `phase-scan-ignore <signal-id> -- <reason>` in a
+// comment suppresses that signal on the same line and the next line. The
+// reason is mandatory; a directive without one is ignored with a warning.
+const IGNORE_DIRECTIVE = /phase-scan-ignore\s+([a-z-]+)(?:\s+--\s*(\S.*))?/;
+
+function collectSuppressions(relPath, lines, diag) {
+  const suppressions = new Map();
+  for (let i = 0; i < lines.length; i++) {
+    const directive = IGNORE_DIRECTIVE.exec(lines[i]);
+    if (!directive) continue;
+    if (!directive[2]) {
+      if (diag) {
+        diag.warnings.push(
+          `${relPath}:${i + 1}  phase-scan-ignore is missing a reason (use: phase-scan-ignore <signal-id> -- <reason>); directive ignored`,
+        );
+      }
+      continue;
+    }
+    for (const target of [i, i + 1]) {
+      if (!suppressions.has(target)) suppressions.set(target, new Set());
+      suppressions.get(target).add(directive[1]);
+    }
+  }
+  return suppressions;
+}
+
+function skillVersion() {
+  try {
+    const metadataPath = fileURLToPath(
+      new URL('../metadata.json', import.meta.url),
+    );
+    return JSON.parse(readFileSync(metadataPath, 'utf8')).version;
+  } catch {
+    return 'unknown';
+  }
+}
+
 function extOf(path) {
   const dot = path.lastIndexOf('.');
   if (dot <= path.lastIndexOf('/')) return null;
@@ -915,7 +1006,9 @@ function makeFinding(signal, file, line, text) {
 function walk(dir) {
   const results = [];
   try {
-    const entries = readdirSync(dir);
+    // Sorted so output (and committed goldens) are deterministic across
+    // filesystems.
+    const entries = readdirSync(dir).toSorted();
     for (const entry of entries) {
       if (SKIP_DIRS.has(entry)) continue;
       const full = join(dir, entry);
@@ -963,11 +1056,97 @@ function countBySeverity(findings) {
 
 // --- CLI --------------------------------------------------------------------
 
+const USAGE = `Usage: node scan.mjs [options] <target> [...targets]
+
+Scans directories or files for animation anti-pattern candidates.
+Findings are candidates, not verdicts: classify each against
+references/audit.md before recommending a change.
+
+Targets   directories or individual files (default: current directory)
+
+Options
+  --json               emit machine-readable JSON (schemaVersion 1)
+  --fail-on <severity> exit 1 if any finding is at or above the given
+                       severity (critical | high | medium); default is
+                       exit 0 regardless of findings (advisory)
+  -h, --help           show this help
+
+Suppression
+  A comment \`phase-scan-ignore <signal-id> -- <reason>\` suppresses that
+  signal on the same and the next line. The reason is mandatory.
+
+Exit codes: 0 = scan completed, 1 = --fail-on threshold hit, 2 = usage error.`;
+
+function parseArgs(argv) {
+  const opts = { json: false, help: false, failOn: null, targets: [] };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--json') {
+      opts.json = true;
+    } else if (arg === '--help' || arg === '-h') {
+      opts.help = true;
+    } else if (arg === '--fail-on') {
+      const value = argv[++i];
+      if (value !== 'critical' && value !== 'high' && value !== 'medium') {
+        throw new Error(
+          `--fail-on expects critical, high, or medium (got: ${value ?? 'nothing'})`,
+        );
+      }
+      opts.failOn = value;
+    } else if (arg.startsWith('-')) {
+      throw new Error(`unknown option: ${arg}`);
+    } else {
+      opts.targets.push(arg);
+    }
+  }
+  return opts;
+}
+
 function main() {
-  const targets = process.argv.slice(2);
-  if (targets.length === 0) targets.push('.');
-  const result = scanTargets(targets);
-  console.log(formatText(result));
+  let opts;
+  try {
+    opts = parseArgs(process.argv.slice(2));
+  } catch (error) {
+    console.error(`${error.message}\n\n${USAGE}`);
+    process.exit(2);
+  }
+
+  if (opts.help) {
+    console.log(USAGE);
+    return;
+  }
+
+  if (opts.targets.length === 0) opts.targets.push('.');
+  for (const target of opts.targets) {
+    try {
+      lstatSync(target);
+    } catch {
+      console.error(`target does not exist: ${target}\n\n${USAGE}`);
+      process.exit(2);
+    }
+  }
+
+  const result = scanTargets(opts.targets);
+
+  for (const warning of result.warnings) {
+    console.error(`warning: ${warning}`);
+  }
+
+  if (opts.json) {
+    console.log(JSON.stringify(formatJson(result), null, 2));
+  } else {
+    console.log(formatText(result));
+  }
+
+  if (opts.failOn) {
+    const threshold = SEVERITY_ORDER.indexOf(opts.failOn);
+    const hit = result.findings.some(
+      (f) =>
+        f.severity !== 'dedup' &&
+        SEVERITY_ORDER.indexOf(f.severity) <= threshold,
+    );
+    if (hit) process.exit(1);
+  }
 }
 
 if (

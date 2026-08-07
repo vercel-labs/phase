@@ -1,0 +1,70 @@
+
+## critical
+
+setstate-in-raf — setState/dispatch inside rAF callback (2) · noise: normal
+  fix: references/performance.md#never-setstate-inside-ontick--draw
+  src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
+  src/hero-animation.tsx:13  frame = requestAnimationFrame(loop);
+
+forced-reflow — Forced reflow (getBoundingClientRect, offsetWidth, etc.) (2) · noise: noisy
+  fix: references/performance.md#no-forced-reflows-in-animation-paths
+  src/suppressed-banner.ts:6  const width = el.offsetWidth;
+  src/ticker.ts:3  const width = el.getBoundingClientRect().width;
+
+missing-reduced-motion — Animation without reduced-motion check (5) · noise: noisy
+  fix: references/performance.md#reduced-motion-by-default
+  src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
+  src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
+  src/suppressed-banner.ts:3  requestAnimationFrame(() => el.classList.add('banner-in'));
+  src/ticker.ts:5  requestAnimationFrame(tick);
+  styles/globals.css:10  @keyframes float {
+
+## high
+
+manual-raf — Manual requestAnimationFrame loop (4) · noise: noisy
+  fix: references/audit.md#common-replacements
+  src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
+  src/phases/progress-meter.ts:9  requestAnimationFrame(frame);
+  src/ticker.ts:5  requestAnimationFrame(tick);
+  src/ticker.ts:7  requestAnimationFrame(tick);
+
+global-has-selector — Global :has() selector (broad style invalidation) (1) · noise: precise
+  fix: references/performance-recipes.md#recipe-delete-a-global-has-rule
+  styles/globals.css:1  body:has(.modal-open) {
+
+non-compositor-animation — Animating a non-compositor property (layout/paint, not transform/opacity) (1) · noise: normal
+  fix: references/audit.md#step-15-css-loading-and-architecture-pass
+  styles/globals.css:6  transition: all 0.3s ease;
+
+tailwind-transition-all — Tailwind transition-all class (animates layout properties) (1) · noise: noisy
+  fix: references/audit.md#step-15-css-loading-and-architecture-pass
+  src/card.tsx:5  <div className="rounded-lg border transition-all duration-300 hover:shadow-lg">
+
+## medium
+
+raw-io — Raw IntersectionObserver (not pooled) (1) · noise: normal
+  fix: references/performance.md#observer-pooling
+  src/lazy-image.tsx:7  const io = new IntersectionObserver(([entry]) => {
+
+js-opacity-transform — JS-driven opacity/transform (may be CSS-only candidate) (1) · noise: noisy
+  fix: references/decision-guide.md#tier-1-css-only-no-js
+  src/ticker.ts:4  el.style.transform = 'translateX(' + width / 10 + 'px)';
+
+permanent-will-change — Permanent will-change (wastes GPU memory when idle) (1) · noise: normal
+  fix: references/performance.md#will-change-only-while-animating
+  styles/globals.css:7  will-change: transform;
+
+redundant-mutation-observers — MutationObserver on html/documentElement (coalesce into one useMutation) (1) · noise: normal
+  fix: references/performance-recipes.md#recipe-collapse-an-observer-storm-on-html
+  src/theme-watcher.ts:2  const observer = new MutationObserver(() => {
+
+## dedup (correct code, optional cleanup)
+
+manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand) (1) · noise: precise
+  fix: references/use-synced-ref.md
+  src/use-latest.ts:4  const valueRef = useRef(value);
+
+─────────────────────────────────────────
+Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup, 1 suppressed
+Next: classify each candidate against references/audit.md Step 2 (the decision ladder).
+Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.

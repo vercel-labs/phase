@@ -6,6 +6,7 @@
   "endOfLine": "lf",
   "ignorePatterns": [
     "**/pnpm-lock.yaml",
+    "**/skills/phase/evals/**",
     "**/.cache/**",
     "**/.claude/**",
     "**/.git/**",

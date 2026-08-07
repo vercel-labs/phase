@@ -1,3 +1,8 @@
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import type { ScanDiag } from '../../skills/phase/scripts/scan.d.mts';
 import {
   scanFile,
   SEVERITY_ORDER,
@@ -9,9 +14,32 @@ import {
  * catalog carries inline examples; this suite verifies each `match`
  * example produces a finding for that signal and each `noMatch` example
  * does not. A signal without both kinds of examples fails structurally.
+ * CLI smoke tests and committed goldens cover the output contract.
  */
 
 const NOISE_TIERS = new Set(['precise', 'normal', 'noisy']);
+
+// Vitest runs with the repo root as cwd.
+const SCRIPT = join(process.cwd(), 'skills/phase/scripts/scan.mjs');
+const SCENARIO_DIR = join(
+  process.cwd(),
+  'skills/phase/evals/scenarios/audit-planted-defects',
+);
+const METADATA = join(process.cwd(), 'skills/phase/metadata.json');
+
+interface CliRun {
+  status: number;
+  stdout: string;
+  stderr: string;
+}
+
+function runCli(args: string[], cwd: string = SCENARIO_DIR): CliRun {
+  const run = spawnSync(process.execPath, [SCRIPT, ...args], {
+    cwd,
+    encoding: 'utf8',
+  });
+  return { status: run.status ?? -1, stdout: run.stdout, stderr: run.stderr };
+}
 
 describe('scan signal catalog', () => {
   it('has unique ids', () => {
@@ -50,4 +78,89 @@ describe('scan signal catalog', () => {
       }
     });
   }
+});
+
+describe('suppression directive', () => {
+  const RAF_WITH_DIRECTIVE =
+    '// phase-scan-ignore manual-raf -- accepted: replaced next sprint\n' +
+    'requestAnimationFrame(step);\n';
+
+  it('suppresses the named signal on the next line and counts it', () => {
+    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    const findings = scanFile('src/anim.ts', RAF_WITH_DIRECTIVE, diag);
+    expect(findings.filter((f) => f.signal === 'manual-raf')).toEqual([]);
+    expect(diag.suppressed).toBe(1);
+    expect(diag.warnings).toEqual([]);
+  });
+
+  it('does not suppress other signals on the same line', () => {
+    const findings = scanFile('src/anim.ts', RAF_WITH_DIRECTIVE);
+    const others = findings.filter(
+      (f) => f.signal === 'missing-reduced-motion',
+    );
+    expect(others.length).toBe(1);
+  });
+
+  it('ignores a directive without a reason and warns', () => {
+    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    const findings = scanFile(
+      'src/anim.ts',
+      '// phase-scan-ignore manual-raf\nrequestAnimationFrame(step);\n',
+      diag,
+    );
+    expect(findings.some((f) => f.signal === 'manual-raf')).toBe(true);
+    expect(diag.suppressed).toBe(0);
+    expect(diag.warnings.length).toBe(1);
+    expect(diag.warnings[0]).toContain('missing a reason');
+  });
+});
+
+describe('scan CLI', () => {
+  it('text output matches the committed golden', () => {
+    const golden = readFileSync(`${SCENARIO_DIR}/expected-scan.txt`, 'utf8');
+    const run = runCli(['workspace']);
+    expect(run.status).toBe(0);
+    expect(run.stdout).toBe(golden);
+  });
+
+  it('--json output matches the committed golden and the skill version', () => {
+    const golden = JSON.parse(
+      readFileSync(`${SCENARIO_DIR}/expected-scan.json`, 'utf8'),
+    );
+    const run = runCli(['--json', 'workspace']);
+    expect(run.status).toBe(0);
+    const actual = JSON.parse(run.stdout);
+    expect(actual).toEqual(golden);
+    const metadata = JSON.parse(readFileSync(METADATA, 'utf8'));
+    expect(actual.skillVersion).toBe(metadata.version);
+  });
+
+  it('reports reason-less directives as warnings on stderr', () => {
+    const run = runCli(['workspace']);
+    expect(run.stderr).toContain('phase-scan-ignore is missing a reason');
+  });
+
+  it('--fail-on exits 1 when the threshold is hit', () => {
+    expect(runCli(['--fail-on', 'critical', 'workspace']).status).toBe(1);
+    expect(runCli(['workspace']).status).toBe(0);
+  });
+
+  it('accepts individual files as targets', () => {
+    const run = runCli(['--json', 'workspace/src/ticker.ts']);
+    expect(run.status).toBe(0);
+    const actual = JSON.parse(run.stdout);
+    expect(actual.summary.filesScanned).toBe(1);
+    expect(
+      actual.findings.every((f: { file: string }) => f.file === 'ticker.ts'),
+    ).toBe(true);
+  });
+
+  it('exits 2 with usage on an unknown option or missing target', () => {
+    const unknown = runCli(['--nope']);
+    expect(unknown.status).toBe(2);
+    expect(unknown.stderr).toContain('Usage:');
+    const missing = runCli(['no-such-dir']);
+    expect(missing.status).toBe(2);
+    expect(missing.stderr).toContain('does not exist');
+  });
 });

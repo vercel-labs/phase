@@ -39,6 +39,28 @@ export interface ScanResult {
   targets: string[];
   filesScanned: number;
   findings: ScanFinding[];
+  suppressed: number;
+  warnings: string[];
+}
+
+export interface ScanDiag {
+  suppressed: number;
+  warnings: string[];
+}
+
+export interface ScanJson {
+  schemaVersion: number;
+  skillVersion: string;
+  targets: string[];
+  summary: {
+    filesScanned: number;
+    total: number;
+    actionable: number;
+    dedup: number;
+    suppressed: number;
+    bySeverity: { critical: number; high: number; medium: number };
+  };
+  findings: ScanFinding[];
 }
 
 export declare const SIGNALS: ScanSignal[];
@@ -48,5 +70,7 @@ export declare function scanTargets(paths: string[]): ScanResult;
 export declare function scanFile(
   relPath: string,
   content: string,
+  diag?: ScanDiag | null,
 ): ScanFinding[];
 export declare function formatText(result: ScanResult): string;
+export declare function formatJson(result: ScanResult): ScanJson;
