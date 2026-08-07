@@ -88,6 +88,10 @@ export function scanFile(relPath, content) {
       }
 
       findings.push(makeFinding(signal, relPath, i + 1, line));
+
+      // Per-file signals flag a file-level property (e.g. "this file has no
+      // reduced-motion handling"); one finding per file says it all.
+      if (signal.perFile) break;
     }
   }
 
@@ -456,6 +460,8 @@ export const SIGNALS = [
     // import, not the bare substring "phase" (which caused false negatives).
     negativePattern: /prefers-reduced-motion|reducedMotion|from ['"]phase/,
     fileTypes: ['js', 'css'],
+    // The gap is a property of the whole file, not of each animating line.
+    perFile: true,
     examples: {
       match: [
         {
