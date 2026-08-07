@@ -241,6 +241,54 @@ function matchesPermanentWillChangeClass(lines, i) {
   return !/\?|&&/.test(line);
 }
 
+// Flags a layout-triggering property declaration inside a @keyframes block.
+// Walks up from the declaration looking for the unmatched opening braces that
+// enclose it; layout properties in ordinary rules do not match.
+function matchesKeyframesLayoutProp(lines, i) {
+  if (
+    !/^\s*(?:width|height|top|left|right|bottom|margin|padding|inset)[a-z-]*\s*:/.test(
+      lines[i],
+    )
+  ) {
+    return false;
+  }
+  let balance = 0;
+  for (let j = i - 1; j >= 0; j--) {
+    const line = lines[j];
+    for (let k = line.length - 1; k >= 0; k--) {
+      const ch = line[k];
+      if (ch === '}') {
+        balance++;
+      } else if (ch === '{') {
+        if (balance === 0) {
+          // An enclosing block opener. Either it is the @keyframes block, or
+          // a frame selector (from/to/%): keep walking up through the latter.
+          if (/@keyframes/.test(line)) return true;
+        } else {
+          balance--;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Flags a WhenVisible/WhenIdle opening tag with no fallback prop. Without a
+// sized fallback the mount shifts layout (CLS). Reads the whole opening tag
+// across lines, up to a bounded window.
+function matchesUngatedLazyMount(lines, i) {
+  const open = /<When(?:Visible|Idle)\b/.exec(lines[i]);
+  if (!open) return false;
+  let tag = '';
+  for (let j = i; j < Math.min(lines.length, i + 15); j++) {
+    const line = j === i ? lines[j].slice(open.index) : lines[j];
+    tag += line + '\n';
+    // The first `>` that is not part of an arrow function ends the tag.
+    if (/(?<!=)>/.test(line)) break;
+  }
+  return !/\bfallback\s*=/.test(tag);
+}
+
 // A state-update call inside the rAF context window. Excludes DOM/timer/
 // canvas setters that are legitimate (and often recommended) inside a frame
 // callback: setTimeout, setAttribute, setProperty, setTransform, etc.
@@ -352,6 +400,43 @@ export const SIGNALS = [
     },
   },
   {
+    id: 'setstate-in-ontick',
+    label: 'setState/dispatch inside a phase onTick/onDraw/draw callback',
+    severity: 'critical',
+    noise: 'normal',
+    why: '60 re-renders/sec; write to refs or the DOM inside frame callbacks.',
+    fix: 'references/performance.md#never-setstate-inside-ontick--draw',
+    pattern: /\bonTick\s*[:=(]|\bonDraw\s*[:=(]|\bdraw\s*:/,
+    contextPattern: STATE_UPDATE_CONTEXT,
+    examples: {
+      match: [
+        {
+          file: 'src/progress-loop.tsx',
+          content:
+            'useLoop({\n  ref,\n  onTick: (frame) => {\n    setValue(frame.elapsed / 1000);\n  },\n});\n',
+        },
+        {
+          file: 'src/visualizer.tsx',
+          content:
+            "useCanvas({\n  draw: ({ ctx, frame }) => {\n    dispatch({ type: 'frame', at: frame.elapsed });\n  },\n});\n",
+        },
+      ],
+      noMatch: [
+        {
+          // Ref and DOM writes are the recommended pattern inside onTick.
+          file: 'src/progress-loop.tsx',
+          content:
+            "useLoop({\n  ref,\n  onTick: (frame) => {\n    ref.current.style.setProperty('--p', String(frame.elapsed));\n  },\n});\n",
+        },
+        {
+          file: 'src/meter.tsx',
+          content:
+            "useLoop({\n  ref,\n  onTick: (frame) => {\n    ref.current.setAttribute('aria-valuenow', String(frame.elapsed));\n  },\n});\n",
+        },
+      ],
+    },
+  },
+  {
     id: 'forced-reflow',
     label: 'Forced reflow (getBoundingClientRect, offsetWidth, etc.)',
     severity: 'critical',
@@ -426,6 +511,36 @@ export const SIGNALS = [
         {
           file: 'src/panel.ts',
           content: "import { useSize } from 'phase/react';\n",
+        },
+      ],
+    },
+  },
+  {
+    id: 'raw-matchmedia',
+    label: 'Raw matchMedia (not pooled)',
+    severity: 'medium',
+    noise: 'normal',
+    why: 'Unpooled MediaQueryList subscriptions; phase pools them by query.',
+    fix: 'references/use-media-query.md',
+    pattern: /\bmatchMedia\s*\(/,
+    examples: {
+      match: [
+        {
+          file: 'src/breakpoint.ts',
+          content:
+            "const mql = window.matchMedia('(min-width: 768px)');\nmql.addEventListener('change', onChange);\n",
+        },
+        {
+          file: 'src/motion.ts',
+          content:
+            "const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;\n",
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/breakpoint.ts',
+          content:
+            "import { useMediaQuery } from 'phase/react';\nconst isWide = useMediaQuery('(min-width: 768px)');\n",
         },
       ],
     },
@@ -718,6 +833,42 @@ export const SIGNALS = [
       ],
     },
   },
+  {
+    id: 'keyframes-layout-animation',
+    label: 'Layout property animated inside @keyframes',
+    severity: 'high',
+    noise: 'normal',
+    why: 'Layout + paint every frame, off the compositor.',
+    fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
+    matcher: matchesKeyframesLayoutProp,
+    fileTypes: 'css',
+    examples: {
+      match: [
+        {
+          file: 'src/slide.css',
+          content:
+            '@keyframes slide-in {\n  from {\n    left: -200px;\n  }\n  to {\n    left: 0;\n  }\n}\n',
+        },
+        {
+          file: 'src/grow.css',
+          content:
+            '@keyframes grow {\n  0% {\n    height: 0;\n  }\n  100% {\n    height: 300px;\n  }\n}\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/slide.css',
+          content:
+            '@keyframes slide-in {\n  from {\n    transform: translateX(-200px);\n    opacity: 0;\n  }\n}\n',
+        },
+        {
+          // Layout properties in ordinary rules are not animations.
+          file: 'src/layout.css',
+          content: '.sidebar {\n  width: 240px;\n  top: 0;\n}\n',
+        },
+      ],
+    },
+  },
   // --- Loading/architecture signals ---
   {
     id: 'bare-window-listener',
@@ -747,6 +898,39 @@ export const SIGNALS = [
           file: 'src/button.ts',
           content:
             "el.addEventListener('click', () => {\n  const w = el.offsetWidth;\n  log(w);\n});\n",
+        },
+      ],
+    },
+  },
+  {
+    id: 'pointer-listener-layout-read',
+    label: 'Pointer/mouse/touch move listener with layout read',
+    severity: 'critical',
+    noise: 'normal',
+    why: 'A synchronous reflow per event; move events fire far above 60/sec.',
+    fix: 'references/use-pointer.md',
+    pattern:
+      /addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove)['"]/,
+    contextPattern:
+      /getBoundingClientRect|offsetWidth|offsetHeight|offsetTop|offsetLeft|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight/,
+    examples: {
+      match: [
+        {
+          file: 'src/spotlight.ts',
+          content:
+            "el.addEventListener('pointermove', (e) => {\n  const rect = el.getBoundingClientRect();\n  move(e.clientX - rect.left, e.clientY - rect.top);\n});\n",
+        },
+      ],
+      noMatch: [
+        {
+          // No layout read in the handler: cheap, not a reflow storm.
+          file: 'src/spotlight.ts',
+          content:
+            "el.addEventListener('pointermove', (e) => {\n  last.x = e.clientX;\n  last.y = e.clientY;\n});\n",
+        },
+        {
+          file: 'src/spotlight.tsx',
+          content: "import { usePointer } from 'phase/react';\n",
         },
       ],
     },
@@ -884,6 +1068,42 @@ export const SIGNALS = [
           file: 'src/use-spinner.ts',
           content:
             'const loop = createLoop({ element, onTick });\nreturn () => loop.stop();\n',
+        },
+      ],
+    },
+  },
+  {
+    id: 'when-visible-no-fallback',
+    label: 'WhenVisible/WhenIdle without a sized fallback (layout shift)',
+    severity: 'high',
+    noise: 'noisy',
+    why: 'Children are absent until triggered; an unsized mount causes CLS.',
+    fix: 'references/rendering-recipes.md',
+    matcher: matchesUngatedLazyMount,
+    fileTypes: 'jsx',
+    examples: {
+      match: [
+        {
+          file: 'src/comments.tsx',
+          content:
+            '<WhenVisible>\n  <Comments postId={id} />\n</WhenVisible>\n',
+        },
+        {
+          file: 'src/chat.tsx',
+          content:
+            '<WhenIdle rootMargin="200px">\n  <ChatWidget />\n</WhenIdle>\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/comments.tsx',
+          content:
+            '<WhenVisible fallback={<div style={{ height: 480 }} />}>\n  <Comments postId={id} />\n</WhenVisible>\n',
+        },
+        {
+          file: 'src/chat.tsx',
+          content:
+            '<WhenIdle\n  rootMargin="200px"\n  fallback={<Skeleton height={320} />}\n>\n  <ChatWidget />\n</WhenIdle>\n',
         },
       ],
     },
