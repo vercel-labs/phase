@@ -16,6 +16,7 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+
 import { SIGNALS } from '../../skills/phase/scripts/scan.mjs';
 
 const root = resolve(import.meta.dirname, '..', '..');
@@ -154,7 +155,8 @@ for (const fileName of referenceFiles) {
       if (/^[a-z]+:/.test(target)) continue; // absolute URL
 
       const [pathPart, anchor] = target.split('#');
-      const targetPath = pathPart === '' ? filePath : resolve(refsDir, pathPart);
+      const targetPath =
+        pathPart === '' ? filePath : resolve(refsDir, pathPart);
       if (!existsSync(targetPath)) {
         fail(`${fileName} links to missing file: ${target}`);
         continue;
