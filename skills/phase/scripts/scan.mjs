@@ -73,7 +73,6 @@ export function scanFile(relPath, content, diag = null) {
   for (const signal of SIGNALS) {
     if (!signalAppliesTo(signal, type, ext)) continue;
 
-    // File-level negative pattern: skip if the file contains the mitigation.
     if (signal.negativePattern && signal.negativePattern.test(content)) {
       continue;
     }
@@ -81,13 +80,11 @@ export function scanFile(relPath, content, diag = null) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
 
-      // Custom matchers get the full line array and index (multi-line shapes).
       if (signal.matcher) {
         if (!signal.matcher(lines, i)) continue;
       } else {
         if (!signal.pattern.test(line)) continue;
 
-        // Context pattern: only match if nearby lines contain the context.
         if (signal.contextPattern) {
           const context = lines.slice(Math.max(0, i - 5), i + 6).join('\n');
           if (!signal.contextPattern.test(context)) continue;
@@ -101,20 +98,11 @@ export function scanFile(relPath, content, diag = null) {
 
       findings.push(makeFinding(signal, relPath, i + 1, line));
 
-      // Per-file signals flag a file-level property (e.g. "this file has no
-      // reduced-motion handling"); one finding per file says it all.
       if (signal.perFile) break;
     }
   }
 
-  // A rAF line that already matched setstate-in-raf (more specific, higher
-  // severity) is not additionally reported as a manual rAF loop.
-  const setstateLines = new Set(
-    findings.filter((f) => f.signal === 'setstate-in-raf').map((f) => f.line),
-  );
-  return findings.filter(
-    (f) => !(f.signal === 'manual-raf' && setstateLines.has(f.line)),
-  );
+  return dedup(findings);
 }
 
 /**
@@ -192,124 +180,29 @@ export function formatText(result) {
   return out.join('\n');
 }
 
-// --- Signals ----------------------------------------------------------------
+// --- Signal catalog ---------------------------------------------------------
+//
+// Each signal carries detection logic (pattern/context/matcher, file types),
+// triage metadata (severity, noise, why, fix), and executable examples that
+// the test suite verifies: every `match` example must produce a finding for
+// this signal, every `noMatch` example must not.
+//
+// severity: critical | high | medium | dedup (audit.md's weighting).
+// noise: precise (trust it) | normal (verify quickly) | noisy (verify first).
+// fileTypes: js (default) | css | jsx, or an array to combine.
+// supersedes: another signal's id; when both fire on the same line, the
+//   superseded signal is dropped (the more specific one is kept).
+// perFile: true means one finding per file (the condition is file-level).
 
-// Flags the manual synced-ref idiom that useSyncedRef shortens:
-//   const xRef = useRef(v);
-//   xRef.current = v;   // next non-blank line, same initializer
-// Matching the same initializer keeps false positives near zero: useRef(null),
-// a different value, or a conditional write (`if (c) xRef.current = v`) all miss.
-// Dedup only, not a defect: the raw pattern is correct React.
-function matchesSyncedRef(lines, i) {
-  const decl =
-    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*useRef\s*(?:<[^>]*>)?\s*\(([^)]*)\)/.exec(
-      lines[i],
-    );
-  if (!decl) return false;
-
-  const name = decl[1];
-  const initial = decl[2].trim();
-  if (initial === '') return false;
-
-  let j = i + 1;
-  while (j < lines.length) {
-    const t = lines[j].trim();
-    if (
-      t === '' ||
-      t.startsWith('//') ||
-      t.startsWith('*') ||
-      t.startsWith('/*')
-    )
-      j++;
-    else break;
-  }
-  if (j >= lines.length) return false;
-
-  const assign = new RegExp(
-    `^${escapeRegExp(name)}\\.current\\s*=\\s*(.+?);?$`,
-  ).exec(lines[j].trim());
-  if (!assign) return false;
-
-  return assign[1].trim() === initial;
-}
-
-// Flags an always-on will-change-transform utility class. A class toggled by
-// a ternary or logical guard on the same line is treated as lifecycle-aware.
-function matchesPermanentWillChangeClass(lines, i) {
-  const line = lines[i];
-  if (!/\bwill-change-transform\b/.test(line)) return false;
-  return !/\?|&&/.test(line);
-}
-
-// Flags a layout-triggering property declaration inside a @keyframes block.
-// Walks up from the declaration looking for the unmatched opening braces that
-// enclose it; layout properties in ordinary rules do not match.
-function matchesKeyframesLayoutProp(lines, i) {
-  if (
-    !/^\s*(?:width|height|top|left|right|bottom|margin|padding|inset)[a-z-]*\s*:/.test(
-      lines[i],
-    )
-  ) {
-    return false;
-  }
-  let balance = 0;
-  for (let j = i - 1; j >= 0; j--) {
-    const line = lines[j];
-    for (let k = line.length - 1; k >= 0; k--) {
-      const ch = line[k];
-      if (ch === '}') {
-        balance++;
-      } else if (ch === '{') {
-        if (balance === 0) {
-          // An enclosing block opener. Either it is the @keyframes block, or
-          // a frame selector (from/to/%): keep walking up through the latter.
-          if (/@keyframes/.test(line)) return true;
-        } else {
-          balance--;
-        }
-      }
-    }
-  }
-  return false;
-}
-
-// Flags a WhenVisible/WhenIdle opening tag with no fallback prop. Without a
-// sized fallback the mount shifts layout (CLS). Reads the whole opening tag
-// across lines, up to a bounded window.
-function matchesUngatedLazyMount(lines, i) {
-  const open = /<When(?:Visible|Idle)\b/.exec(lines[i]);
-  if (!open) return false;
-  let tag = '';
-  for (let j = i; j < Math.min(lines.length, i + 15); j++) {
-    const line = j === i ? lines[j].slice(open.index) : lines[j];
-    tag += line + '\n';
-    // The first `>` that is not part of an arrow function ends the tag.
-    if (/(?<!=)>/.test(line)) break;
-  }
-  return !/\bfallback\s*=/.test(tag);
-}
-
-// A state-update call inside the rAF context window. Excludes DOM/timer/
-// canvas setters that are legitimate (and often recommended) inside a frame
-// callback: setTimeout, setAttribute, setProperty, setTransform, etc.
+// Context pattern for state updates. Excludes DOM/timer/canvas setters that
+// are legitimate inside frame callbacks.
 const STATE_UPDATE_CONTEXT =
   /\bsetState\s*\(|\bdispatch\s*\(|\bset(?!Timeout\b|Interval\b|Immediate\b|Attribute|Property\b|PointerCapture\b|Item\b|Selection|RangeText\b|CustomValidity\b|Transform\b|LineDash\b|SinkId\b|RequestHeader\b)[A-Z]\w*\s*\(/;
 
-// A transition shorthand whose value is only durations/timing functions names
-// no property, so it animates `all` by default.
+// Bare-duration transition shorthand (no property named, so it animates all).
 const BARE_DURATION_TRANSITION =
   /transition:\s*[\d.]+m?s(?:\s*,?\s*(?:[\d.]+m?s|ease[\w-]*|linear|step[\w-]*|steps\([^)]*\)|cubic-bezier\([^)]*\)))*\s*(?:;|!|$)/;
 
-/**
- * The signal catalog. Each signal carries detection (pattern/context/matcher,
- * file types), triage metadata (severity, noise, why, fix), and executable
- * examples that the test suite verifies: every `match` example must produce a
- * finding for this signal, every `noMatch` example must not.
- *
- * severity: critical | high | medium | dedup (audit.md's weighting).
- * noise: precise (trust it) | normal (verify quickly) | noisy (verify first).
- * fileTypes: js (default) | css | jsx, or an array to combine.
- */
 export const SIGNALS = [
   {
     id: 'manual-raf',
@@ -327,8 +220,6 @@ export const SIGNALS = [
             'function tick() {\n  requestAnimationFrame(tick);\n  draw();\n}\nrequestAnimationFrame(tick);\n',
         },
         {
-          // Regression: a consumer path containing the substring "phase" must
-          // still be scanned (the old exclude silently skipped it).
           file: 'src/phases/timeline.ts',
           content: 'requestAnimationFrame(step);\n',
         },
@@ -344,8 +235,6 @@ export const SIGNALS = [
             "import { useLoop } from 'phase/react';\nuseLoop({ onTick: draw });\n",
         },
         {
-          // A rAF line already reported as setstate-in-raf is not
-          // double-counted as a manual loop.
           file: 'src/counter.tsx',
           content: 'requestAnimationFrame(() => setCount((c) => c + 1));\n',
         },
@@ -359,8 +248,7 @@ export const SIGNALS = [
     noise: 'normal',
     why: '60 re-renders/sec: React reconciles on every frame.',
     fix: 'references/performance.md#never-setstate-inside-ontick--draw',
-    // The setState call is usually on a different line than the rAF, so match
-    // rAF per line and require the state update within the surrounding window.
+    supersedes: 'manual-raf',
     pattern: /requestAnimationFrame/,
     contextPattern: STATE_UPDATE_CONTEXT,
     examples: {
@@ -377,21 +265,16 @@ export const SIGNALS = [
       ],
       noMatch: [
         {
-          // Regression: setAttribute is a recommended pattern inside rAF,
-          // not a state update.
           file: 'src/meter.ts',
           content:
             "function loop() {\n  el.setAttribute('aria-valuenow', String(v));\n  requestAnimationFrame(loop);\n}\n",
         },
         {
-          // Regression: style.setProperty is the recommended CSS-variable
-          // write inside rAF.
           file: 'src/cursor.ts',
           content:
             "function loop() {\n  el.style.setProperty('--x', String(x));\n  requestAnimationFrame(loop);\n}\n",
         },
         {
-          // Regression: setTimeout near a rAF is not a state update.
           file: 'src/fallback.ts',
           content:
             'requestAnimationFrame(start);\nsetTimeout(fallbackStart, 100);\n',
@@ -423,7 +306,6 @@ export const SIGNALS = [
       ],
       noMatch: [
         {
-          // Ref and DOM writes are the recommended pattern inside onTick.
           file: 'src/progress-loop.tsx',
           content:
             "useLoop({\n  ref,\n  onTick: (frame) => {\n    ref.current.style.setProperty('--p', String(frame.elapsed));\n  },\n});\n",
@@ -479,7 +361,6 @@ export const SIGNALS = [
           content: 'const io = new IntersectionObserver(onEnter);\n',
         },
         {
-          // Regression: "phase" substring in a consumer path must be scanned.
           file: 'src/game-phase.ts',
           content: 'const io = new IntersectionObserver(onEnter);\n',
         },
@@ -554,9 +435,6 @@ export const SIGNALS = [
     why: 'Layout reads in MO callbacks force a reflow on every mutation.',
     fix: 'references/performance.md#never-drive-layout-from-a-mutationobserver',
     pattern: /new\s+MutationObserver/,
-    // Only flag when the observer watches inline style mutations or reads
-    // layout nearby. Structural (childList) and plain attribute observation
-    // (e.g. a class watcher) are legitimate and skipped.
     contextPattern:
       /attributeFilter:\s*\[[^\]]*['"]style['"]|getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight|getComputedStyle/,
     examples: {
@@ -579,8 +457,6 @@ export const SIGNALS = [
             'const mo = new MutationObserver(onChildren);\nmo.observe(list, { childList: true });\n',
         },
         {
-          // A class watcher neither observes styles nor reads layout; it may
-          // still be a redundant-mutation-observers candidate, not this one.
           file: 'src/theme.ts',
           content:
             "const mo = new MutationObserver(onTheme);\nmo.observe(document.documentElement, { attributeFilter: ['class'] });\n",
@@ -622,14 +498,9 @@ export const SIGNALS = [
     noise: 'noisy',
     why: 'Accessibility gap: motion plays for users who asked for none.',
     fix: 'references/performance.md#reduced-motion-by-default',
-    // `animation:(?!\s*none)` keeps `animation: none` (motion disabled) out.
     pattern: /requestAnimationFrame|@keyframes|animation:(?!\s*none\b)/,
-    // Suppress when the file already handles reduced motion, or genuinely
-    // imports phase (its hooks handle it automatically). Match a real phase
-    // import, not the bare substring "phase" (which caused false negatives).
     negativePattern: /prefers-reduced-motion|reducedMotion|from ['"]phase/,
     fileTypes: ['js', 'css'],
-    // The gap is a property of the whole file, not of each animating line.
     perFile: true,
     examples: {
       match: [
@@ -638,8 +509,6 @@ export const SIGNALS = [
           content: 'requestAnimationFrame(spin);\n',
         },
         {
-          // Regression: CSS animations without reduced-motion handling were
-          // never scanned (the signal only ran on JS files).
           file: 'src/styles.css',
           content:
             '@keyframes spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n.spinner {\n  animation: spin 1s linear infinite;\n}\n',
@@ -657,7 +526,6 @@ export const SIGNALS = [
             '.spinner {\n  animation: spin 1s linear infinite;\n}\n@media (prefers-reduced-motion: reduce) {\n  .spinner {\n    animation: none;\n  }\n}\n',
         },
         {
-          // animation: none disables motion; it is not an animation.
           file: 'src/reset.css',
           content: '.static {\n  animation: none;\n}\n',
         },
@@ -683,8 +551,6 @@ export const SIGNALS = [
       ],
       noMatch: [
         {
-          // Regression: "position" as a plain variable near a timer is not
-          // animation work (the old context pattern matched the bare word).
           file: 'src/queue.ts',
           content:
             'setTimeout(() => {\n  const position = queue.indexOf(job);\n  report(position);\n}, 1000);\n',
@@ -738,7 +604,6 @@ export const SIGNALS = [
           content: '.card:has(img) {\n  padding: 0;\n}\n',
         },
         {
-          // CSS signals must not fire on JS files.
           file: 'src/globals.ts',
           content:
             "const css = 'body:has(.modal-open) { overflow: hidden; }';\n",
@@ -763,8 +628,6 @@ export const SIGNALS = [
           content: '.card {\n  will-change: transform;\n}\n',
         },
         {
-          // will-change on layout properties is worse than transform, and the
-          // old pattern missed it entirely.
           file: 'src/panel.css',
           content: '.panel {\n  will-change: left, top;\n}\n',
         },
@@ -790,9 +653,6 @@ export const SIGNALS = [
     noise: 'normal',
     why: 'Layout + paint every frame, off the compositor.',
     fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
-    // `transition: all`, a transition naming a layout property, or a
-    // bare-duration shorthand (names no property, so it animates `all`).
-    // transform/opacity-only transitions do not match.
     pattern: new RegExp(
       /transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/
         .source +
@@ -811,8 +671,6 @@ export const SIGNALS = [
           content: '.drawer {\n  transition: width 0.2s;\n}\n',
         },
         {
-          // A bare-duration shorthand names no property, so it animates
-          // `all` by default. The old pattern missed it.
           file: 'src/tab.css',
           content: '.tab {\n  transition: 0.3s;\n}\n',
         },
@@ -862,7 +720,6 @@ export const SIGNALS = [
             '@keyframes slide-in {\n  from {\n    transform: translateX(-200px);\n    opacity: 0;\n  }\n}\n',
         },
         {
-          // Layout properties in ordinary rules are not animations.
           file: 'src/layout.css',
           content: '.sidebar {\n  width: 240px;\n  top: 0;\n}\n',
         },
@@ -923,7 +780,6 @@ export const SIGNALS = [
       ],
       noMatch: [
         {
-          // No layout read in the handler: cheap, not a reflow storm.
           file: 'src/spotlight.ts',
           content:
             "el.addEventListener('pointermove', (e) => {\n  last.x = e.clientX;\n  last.y = e.clientY;\n});\n",
@@ -986,7 +842,6 @@ export const SIGNALS = [
           content: '<div className="transition-colors duration-300" />;\n',
         },
         {
-          // JSX signals only run on .tsx/.jsx files.
           file: 'src/card.ts',
           content: "const cls = 'transition-all duration-300';\n",
         },
@@ -1063,8 +918,6 @@ export const SIGNALS = [
       ],
       noMatch: [
         {
-          // Custom hook modules (.ts) composing core primitives are the
-          // documented escape hatch.
           file: 'src/use-spinner.ts',
           content:
             'const loop = createLoop({ element, onTick });\nreturn () => loop.stop();\n',
@@ -1113,6 +966,108 @@ export const SIGNALS = [
 /** Severity display and ranking order, most severe first. */
 export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'dedup'];
 
+// --- Detection helpers ------------------------------------------------------
+//
+// Custom matchers: `(lines: string[], i: number) => boolean`.
+// Called once per line per signal. Return true if line i should be reported.
+// Must be pure (no side effects, no mutation of lines). Declared before
+// SIGNALS because the catalog references them; grouped here with other
+// detection-support constants for locality.
+
+/**
+ * Flags the manual synced-ref idiom that useSyncedRef shortens:
+ *   const xRef = useRef(v);   // line i
+ *   xRef.current = v;         // next non-blank line, same initializer
+ *
+ * Matching the same initializer keeps false positives near zero: useRef(null),
+ * a different value, or a conditional write all miss.
+ */
+function matchesSyncedRef(lines, i) {
+  const decl =
+    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*useRef\s*(?:<[^>]*>)?\s*\(([^)]*)\)/.exec(
+      lines[i],
+    );
+  if (!decl) return false;
+
+  const name = decl[1];
+  const initial = decl[2].trim();
+  if (initial === '') return false;
+
+  let j = i + 1;
+  while (j < lines.length) {
+    const t = lines[j].trim();
+    if (
+      t === '' ||
+      t.startsWith('//') ||
+      t.startsWith('*') ||
+      t.startsWith('/*')
+    )
+      j++;
+    else break;
+  }
+  if (j >= lines.length) return false;
+
+  const assign = new RegExp(
+    `^${escapeRegExp(name)}\\.current\\s*=\\s*(.+?);?$`,
+  ).exec(lines[j].trim());
+  if (!assign) return false;
+
+  return assign[1].trim() === initial;
+}
+
+/** Always-on will-change-transform class; a ternary or && guard means toggled. */
+function matchesPermanentWillChangeClass(lines, i) {
+  if (!/\bwill-change-transform\b/.test(lines[i])) return false;
+  return !/\?|&&/.test(lines[i]);
+}
+
+/**
+ * Layout property inside a @keyframes block. Walks up through brace pairs
+ * to distinguish keyframe declarations from ordinary rule declarations.
+ */
+function matchesKeyframesLayoutProp(lines, i) {
+  if (
+    !/^\s*(?:width|height|top|left|right|bottom|margin|padding|inset)[a-z-]*\s*:/.test(
+      lines[i],
+    )
+  ) {
+    return false;
+  }
+  let balance = 0;
+  for (let j = i - 1; j >= 0; j--) {
+    const line = lines[j];
+    for (let k = line.length - 1; k >= 0; k--) {
+      const ch = line[k];
+      if (ch === '}') {
+        balance++;
+      } else if (ch === '{') {
+        if (balance === 0) {
+          if (/@keyframes/.test(line)) return true;
+        } else {
+          balance--;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * WhenVisible/WhenIdle opening tag without a fallback prop. Reads up to 15
+ * lines forward to capture multi-line JSX tags.
+ */
+function matchesUngatedLazyMount(lines, i) {
+  const open = /<When(?:Visible|Idle)\b/.exec(lines[i]);
+  if (!open) return false;
+  let tag = '';
+  for (let j = i; j < Math.min(lines.length, i + 15); j++) {
+    const line = j === i ? lines[j].slice(open.index) : lines[j];
+    tag += line + '\n';
+    if (/(?<!=)>/.test(line)) break;
+  }
+  return !/\bfallback\s*=/.test(tag);
+}
+
 // --- Internal ---------------------------------------------------------------
 
 const FILE_TYPE_EXTENSIONS = {
@@ -1122,13 +1077,9 @@ const FILE_TYPE_EXTENSIONS = {
 
 const JSX_EXTENSIONS = new Set(['.tsx', '.jsx']);
 
-// Tests, stories, and mocks describe anti-patterns as often as they commit
-// them; scanning them buries real findings.
 const EXCLUDED_PATHS =
   /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__/;
 
-// Build output, caches, and vendored artifacts. Scanning them storms the
-// report with code nobody will edit.
 const SKIP_DIRS = new Set([
   'node_modules',
   '.git',
@@ -1148,9 +1099,6 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Suppression directive: `phase-scan-ignore <signal-id> -- <reason>` in a
-// comment suppresses that signal on the same line and the next line. The
-// reason is mandatory; a directive without one is ignored with a warning.
 const IGNORE_DIRECTIVE = /phase-scan-ignore\s+([a-z-]+)(?:\s+--\s*(\S.*))?/;
 
 function collectSuppressions(relPath, lines, diag) {
@@ -1223,17 +1171,35 @@ function makeFinding(signal, file, line, text) {
   };
 }
 
+/** Drops a finding when a more specific signal fired on the same line. */
+function dedup(findings) {
+  const supersededLines = new Map();
+  for (const signal of SIGNALS) {
+    if (!signal.supersedes) continue;
+    for (const f of findings) {
+      if (f.signal === signal.id) {
+        if (!supersededLines.has(signal.supersedes)) {
+          supersededLines.set(signal.supersedes, new Set());
+        }
+        supersededLines.get(signal.supersedes).add(f.line);
+      }
+    }
+  }
+  if (supersededLines.size === 0) return findings;
+  return findings.filter((f) => {
+    const lines = supersededLines.get(f.signal);
+    return !lines || !lines.has(f.line);
+  });
+}
+
 function walk(dir) {
   const results = [];
   try {
-    // Sorted so output (and committed goldens) are deterministic across
-    // filesystems.
     const entries = readdirSync(dir).toSorted();
     for (const entry of entries) {
       if (SKIP_DIRS.has(entry)) continue;
       const full = join(dir, entry);
       const stat = lstatSync(full);
-      // Skipping symlinks entirely guards against cycles and vendored trees.
       if (stat.isSymbolicLink()) continue;
       if (stat.isDirectory()) {
         results.push(...walk(full));
@@ -1246,12 +1212,11 @@ function walk(dir) {
       }
     }
   } catch {
-    // skip inaccessible directories
+    /* skip inaccessible directories */
   }
   return results;
 }
 
-/** Groups findings as severity -> signal id -> findings, in catalog order. */
 function groupBySeverity(findings) {
   const bySeverity = new Map();
   for (const severity of SEVERITY_ORDER) {

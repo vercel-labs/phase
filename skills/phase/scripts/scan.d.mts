@@ -1,6 +1,10 @@
 /**
- * Hand-written declarations for scan.mjs (contributor tooling only; not
- * shipped in the skill zip). Keep in sync with the exports in scan.mjs.
+ * Type declarations for scan.mjs. Contributor tooling only (not shipped
+ * in the skill zip). The spec imports through this shim, so a drift
+ * between this file and scan.mjs causes type errors at authoring time.
+ *
+ * Update this file whenever you change the shape of SIGNALS, ScanResult,
+ * or any public function signature in scan.mjs.
  */
 
 export type ScanSeverity = 'critical' | 'high' | 'medium' | 'dedup';
@@ -18,7 +22,9 @@ export interface ScanSignal {
   noise: ScanNoise;
   why: string;
   fix: string;
+  supersedes?: string;
   fileTypes?: string | string[];
+  perFile?: boolean;
   examples: {
     match: ScanExample[];
     noMatch: ScanExample[];
