@@ -1,11 +1,11 @@
 name: Release
 
-# Validates and publishes to npm on every push to main.
+# Validates every push to main and publishes versions not yet present on npm.
 # Uses npm Trusted Publishing (OIDC) -- no NPM_TOKEN secret needed.
 # Requires the package to be configured as a Trusted Publisher on npmjs.com
 # linked to this repo and workflow.
-# If the version in package.json is already on the registry, npm publish
-# will fail, signalling that a version bump is needed.
+# Existing versions are successful no-ops; PR CI requires package-affecting
+# changes to include a version bump.
 
 on:
   push:
@@ -93,8 +93,27 @@ jobs:
           node-version: "24"
           cache: "pnpm"
 
+      - name: Check npm version
+        id: release
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          PUBLISHED_VERSIONS=$(npm view "$NAME" versions --json)
+
+          if VERSION="$VERSION" node -e \
+            "const v = JSON.parse(require('node:fs').readFileSync(0, 'utf8')); process.exit((Array.isArray(v) ? v : [v]).includes(process.env.VERSION) ? 0 : 1)" \
+            <<< "$PUBLISHED_VERSIONS"; then
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping npm publish: $NAME@$VERSION already exists."
+          else
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            echo "Publishing $NAME@$VERSION."
+          fi
+
       - name: Install dependencies
+        if: steps.release.outputs.should_publish == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Publish to npm
+        if: steps.release.outputs.should_publish == 'true'
         run: npm publish

@@ -233,6 +233,13 @@ Run `pnpm validate` before opening or updating a PR, not on every commit.
 
 ## Versioning and changelog
 
+Package and skill versions are independent release signals:
+
+- Bump the package version for changes to shipped source, build output, or consumer-facing package metadata.
+- Do not bump the package for skill-only, test-only, workflow-only, or README-only changes. The npm README updates with the next package release; use an intentional patch release only when an npm-facing documentation correction must ship immediately.
+- Bump the skill version when the skill itself changes.
+- The release workflow validates every merge to `main`, but publishes only package versions that are not already on npm. An existing version is a successful no-op.
+
 When asked to bump the version (patch, minor, or major):
 
 1. Bump `version` in `package.json`.
