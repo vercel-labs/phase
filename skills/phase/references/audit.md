@@ -1,6 +1,21 @@
 # Animation audit procedure
 
-A repeatable procedure for auditing existing animation code. Surfaces anti-pattern candidates deterministically, then classifies each against the [decision guide](./decision-guide.md) ladder.
+A repeatable procedure for auditing existing animation and rendering code. A deterministic scanner surfaces anti-pattern candidates; you classify each against the [decision guide](./decision-guide.md) ladder and emit recommendations.
+
+## Contents
+
+- [When to run](#when-to-run)
+- [Step 1: Scan for candidates](#step-1-scan-for-candidates)
+- [Step 1.5: CSS, loading, and architecture pass](#step-15-css-loading-and-architecture-pass)
+- [Step 2: Classify each candidate](#step-2-classify-each-candidate)
+- [Step 3: Emit recommendations](#step-3-emit-recommendations)
+- [Step 4: Verify](#step-4-verify)
+- [Rules](#rules)
+- [When NOT to run the audit](#when-not-to-run-the-audit)
+- [Severity weighting](#severity-weighting)
+- [Common replacements](#common-replacements)
+- [Reviewing phase code](#reviewing-phase-code)
+- [Output format](#output-format)
 
 ## When to run
 
@@ -11,42 +26,147 @@ A repeatable procedure for auditing existing animation code. Surfaces anti-patte
 
 ## Step 1: Scan for candidates
 
-Run the deterministic scanner bundled with this skill on the target directory. The script lives at `scripts/scan.mjs` relative to this skill's directory. Resolve it from wherever the skill is installed (e.g. `skills/phase/scripts/scan.mjs` in the phase repo, or `.agents/skills/phase/scripts/scan.mjs` in a consuming project):
+Run exactly this command. The script lives at `scripts/scan.mjs` relative to this skill's directory; resolve it from wherever the skill is installed (e.g. `skills/phase/scripts/scan.mjs` in the phase repo, or `.agents/skills/phase/scripts/scan.mjs` in a consuming project). Do not modify the command beyond the paths:
 
 ```bash
 node <skill-dir>/scripts/scan.mjs <target-dir>
 ```
 
-The scanner greps for these anti-pattern signals. Signals marked **(CSS)** run only on `.css`/`.scss` files; the rest run on `.ts`/`.tsx`/`.js`/`.jsx`.
+Targets can be directories or individual files, so a scan can cover only changed files:
 
-| Signal                             | Pattern                                                                                                             | Why it's a problem                                               |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Manual rAF loop                    | `requestAnimationFrame`                                                                                             | No visibility pausing, no shared clock, no cleanup               |
-| `setState` in rAF                  | `requestAnimationFrame` with a nearby `setState`/`dispatch`/`setX(`                                                 | 60 re-renders/sec                                                |
-| Forced reflow                      | `getBoundingClientRect`, `offsetWidth/Height`, `getComputedStyle`, `scroll*`, `client*`                             | Synchronous layout thrashing                                     |
-| Raw IntersectionObserver           | `new IntersectionObserver`                                                                                          | Missing pooling, manual cleanup                                  |
-| Raw ResizeObserver                 | `new ResizeObserver`                                                                                                | Missing pooling, manual cleanup                                  |
-| MutationObserver → layout          | `new MutationObserver` watching `attributes`/`style` or reading layout nearby                                       | Forces synchronous reflow on every mutation                      |
-| Redundant MutationObserver         | `new MutationObserver` on `document.documentElement`/`<html>`                                                       | Coalesce N observers on one target into one `useMutation`        |
-| JS-driven opacity/transform        | `style.opacity =` or `style.transform =`                                                                            | Could be CSS, or needs phase for lifecycle                       |
-| Missing reduced motion             | JS animation (`requestAnimationFrame`/`@keyframes`/`animation:`) without `prefers-reduced-motion` or a phase import | Accessibility gap                                                |
-| Background animation               | `setInterval`/`setTimeout` near `transform`/`opacity`/`translate`/`animate`                                         | Wastes CPU off-screen                                            |
-| Bare window listener               | `addEventListener('resize'`\|`'scroll')` with a layout read in the handler                                          | N unpooled listeners, a synchronous reflow per event             |
-| Global `:has()` **(CSS)**          | `body:has(`, `html:has(`, `:root:has(`, `*:has(`                                                                    | Broad style invalidation; cost scales with the argument selector |
-| Non-compositor animation **(CSS)** | `transition: all`, or a transition of `width`/`height`/`top`/`left`/`margin`                                        | Layout + paint every frame, off the compositor                   |
-| Permanent `will-change` **(CSS)**  | `will-change: transform` not toggled with animation state                                                           | Wastes GPU memory when idle                                      |
+```bash
+git diff --name-only | xargs node <skill-dir>/scripts/scan.mjs
+```
 
-> The `will-change` signal matches CSS syntax only. The Tailwind `will-change-transform` utility class (in `.tsx`) is a **manual** check. `getBoundingClientRect()` used only for an initial in-view check, and hand-wired "IO + visibilitychange + reduced motion → boolean" gates, are also manual heuristics; see [Common replacements](#common-replacements).
+| Option                 | Effect                                                                                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--json`               | Machine-readable output (schemaVersion 1): summary counts plus a flat findings array (`{signal, severity, noise, file, line, text, fix}`), stamped with the skill version that produced it |
+| `--fail-on <severity>` | Exit 1 if any finding is at or above `critical`, `high`, or `medium`. For CI gating                                                                                                        |
+| `-h`, `--help`         | Usage                                                                                                                                                                                     |
 
-The scanner also emits one **dedup** signal, reported separately from the anti-patterns above because it flags correct code, not a defect:
+Exit codes: `0` scan completed (the default even when findings exist; the audit is advisory), `1` a `--fail-on` threshold was hit, `2` usage error.
 
-| Signal (dedup)    | Pattern                                                                                                     | Note                                                                                                                       |
-| ----------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Manual synced ref | `const xRef = useRef(v)` immediately followed by an unconditional `xRef.current = v` mirroring the same `v` | This is the correct React latest-ref idiom; `useSyncedRef` is just a one-line shorthand. Optional cleanup, never a defect. |
+If `scan.mjs` is not available (e.g. the skill is loaded without scripts), perform the scan manually by searching for the signal patterns below in the target codebase.
 
-Output is a list of candidate sites: `file:line` with the matched pattern. Dedup findings are listed after the anti-patterns and excluded from the actionable count.
+### Reading the output
 
-If `scan.mjs` is not available (e.g. the skill is loaded without scripts), perform the scan manually by searching for the patterns above in the target codebase.
+Text output groups findings by severity, most severe first. Each block names the signal id, its noise tier, and the fix reference to read before recommending. This sample is this skill's eval-fixture scan; a test asserts it stays identical to the committed golden.
+
+<!-- scan-golden:begin -->
+
+```
+
+## critical
+
+setstate-in-raf — setState/dispatch inside rAF callback (2) · noise: normal
+  fix: references/performance.md#never-setstate-inside-ontick--draw
+  src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
+  src/hero-animation.tsx:13  frame = requestAnimationFrame(loop);
+
+forced-reflow — Forced reflow (getBoundingClientRect, offsetWidth, etc.) (2) · noise: noisy
+  fix: references/performance.md#no-forced-reflows-in-animation-paths
+  src/suppressed-banner.ts:6  const width = el.offsetWidth;
+  src/ticker.ts:3  const width = el.getBoundingClientRect().width;
+
+missing-reduced-motion — Animation without reduced-motion check (5) · noise: noisy
+  fix: references/performance.md#reduced-motion-by-default
+  src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
+  src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
+  src/suppressed-banner.ts:3  requestAnimationFrame(() => el.classList.add('banner-in'));
+  src/ticker.ts:5  requestAnimationFrame(tick);
+  styles/globals.css:10  @keyframes float {
+
+## high
+
+manual-raf — Manual requestAnimationFrame loop (4) · noise: noisy
+  fix: references/audit.md#common-replacements
+  src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
+  src/phases/progress-meter.ts:9  requestAnimationFrame(frame);
+  src/ticker.ts:5  requestAnimationFrame(tick);
+  src/ticker.ts:7  requestAnimationFrame(tick);
+
+global-has-selector — Global :has() selector (broad style invalidation) (1) · noise: precise
+  fix: references/performance-recipes.md#recipe-delete-a-global-has-rule
+  styles/globals.css:1  body:has(.modal-open) {
+
+non-compositor-animation — Animating a non-compositor property (layout/paint, not transform/opacity) (1) · noise: normal
+  fix: references/audit.md#step-15-css-loading-and-architecture-pass
+  styles/globals.css:6  transition: all 0.3s ease;
+
+tailwind-transition-all — Tailwind transition-all class (animates layout properties) (1) · noise: noisy
+  fix: references/audit.md#step-15-css-loading-and-architecture-pass
+  src/card.tsx:5  <div className="rounded-lg border transition-all duration-300 hover:shadow-lg">
+
+## medium
+
+raw-io — Raw IntersectionObserver (not pooled) (1) · noise: normal
+  fix: references/performance.md#observer-pooling
+  src/lazy-image.tsx:7  const io = new IntersectionObserver(([entry]) => {
+
+js-opacity-transform — JS-driven opacity/transform (may be CSS-only candidate) (1) · noise: noisy
+  fix: references/decision-guide.md#tier-1-css-only-no-js
+  src/ticker.ts:4  el.style.transform = 'translateX(' + width / 10 + 'px)';
+
+permanent-will-change — Permanent will-change (wastes GPU memory when idle) (1) · noise: normal
+  fix: references/performance.md#will-change-only-while-animating
+  styles/globals.css:7  will-change: transform;
+
+redundant-mutation-observers — MutationObserver on html/documentElement (coalesce into one useMutation) (1) · noise: normal
+  fix: references/performance-recipes.md#recipe-collapse-an-observer-storm-on-html
+  src/theme-watcher.ts:2  const observer = new MutationObserver(() => {
+
+## dedup (correct code, optional cleanup)
+
+manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand) (1) · noise: precise
+  fix: references/use-synced-ref.md
+  src/use-latest.ts:4  const valueRef = useRef(value);
+
+─────────────────────────────────────────
+Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup, 1 suppressed
+Next: classify each candidate against references/audit.md Step 2 (the decision ladder).
+Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
+```
+
+<!-- scan-golden:end -->
+
+Two orthogonal ratings guide how to act on each block:
+
+- **Severity** ranks how bad the issue is when real: `critical` (jank or accessibility failures), `high` (always-on CPU/GPU waste), `medium` (leaks, redundancy, cheaper-tier candidates). `dedup` findings are correct code with a phase shorthand, reported separately and excluded from the actionable count.
+- **Noise** ranks how much to trust the detection itself: `precise` means the match is the issue, `normal` means verify quickly, `noisy` means inspect the site before recommending anything.
+
+### Suppressions
+
+A comment `phase-scan-ignore <signal-id> -- <reason>` suppresses that signal on the same line and the next line. The reason is mandatory; the scanner warns about and ignores reason-less directives.
+
+**Policy: suppressions record human decisions.** Never add a suppression yourself unless the user has explicitly accepted the finding. If the scanner warns about a reason-less directive, report it; do not silently add a reason or delete the directive.
+
+### Signals
+
+Severity and noise mirror the scanner's catalog; a repo check fails CI when this table drifts from `scan.mjs`. Signals marked **(CSS)** run only on stylesheet files (`.css`/`.scss`/`.sass`/`.less`); **(JSX)** only on `.tsx`/`.jsx`; the rest on all JS/TS files. `missing-reduced-motion` reports once per file.
+
+| Signal                           | Severity | Noise   | Detects                                                                          | Fix reference                                                                                                        |
+| -------------------------------- | -------- | ------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `setstate-in-raf`                | critical | normal  | State update inside a rAF callback (60 re-renders/sec)                            | [performance.md](./performance.md#never-setstate-inside-ontick--draw)                                                 |
+| `forced-reflow`                  | critical | noisy   | Layout read: `getBoundingClientRect`, `offset*`, `scroll*`, `client*`             | [performance.md](./performance.md#no-forced-reflows-in-animation-paths)                                               |
+| `mutationobserver-layout`        | critical | normal  | MutationObserver watching inline styles or reading layout in its callback         | [performance.md](./performance.md#never-drive-layout-from-a-mutationobserver)                                         |
+| `missing-reduced-motion`         | critical | noisy   | Animation (rAF, `@keyframes`, `animation:`) with no reduced-motion handling       | [performance.md](./performance.md#reduced-motion-by-default)                                                          |
+| `bare-window-listener`           | critical | normal  | resize/scroll listener with a layout read in the handler                          | [performance-recipes.md](./performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer) |
+| `manual-raf`                     | high     | noisy   | Raw rAF loop: no visibility pause, no shared clock, no cleanup                    | [audit.md](#common-replacements)                                                                                       |
+| `background-animation`           | high     | noisy   | `setInterval`/`setTimeout` driving transform/opacity work                         | [timed-sequences.md](./timed-sequences.md)                                                                             |
+| `global-has-selector`            | high     | precise | `body:has`/`html:has`/`:root:has`/`*:has` in a stylesheet **(CSS)**               | [performance-recipes.md](./performance-recipes.md#recipe-delete-a-global-has-rule)                                     |
+| `non-compositor-animation`       | high     | normal  | `transition: all`, layout properties, or bare-duration shorthand **(CSS)**        | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                 |
+| `tailwind-transition-all`        | high     | noisy   | `transition-all` utility class **(JSX)**                                          | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                 |
+| `raw-io`                         | medium   | normal  | `new IntersectionObserver` outside the pool                                       | [performance.md](./performance.md#observer-pooling)                                                                    |
+| `raw-ro`                         | medium   | normal  | `new ResizeObserver` outside the pool                                             | [performance.md](./performance.md#observer-pooling)                                                                    |
+| `js-opacity-transform`           | medium   | noisy   | `style.opacity`/`style.transform` writes (CSS-only candidate)                     | [decision-guide.md](./decision-guide.md#tier-1-css-only-no-js)                                                         |
+| `permanent-will-change`          | medium   | normal  | `will-change` never toggled with animation state **(CSS)**                        | [performance.md](./performance.md#will-change-only-while-animating)                                                   |
+| `redundant-mutation-observers`   | medium   | normal  | MutationObserver on `<html>`/`documentElement`                                    | [performance-recipes.md](./performance-recipes.md#recipe-collapse-an-observer-storm-on-html)                           |
+| `tailwind-permanent-will-change` | medium   | noisy   | `will-change-transform` class not toggled with state **(JSX)**                    | [performance.md](./performance.md#will-change-only-while-animating)                                                   |
+| `reduced-motion-ignored`         | medium   | precise | `reducedMotion: 'ignore'` (bypasses the user preference)                          | [performance.md](./performance.md#reduced-motion-by-default)                                                          |
+| `core-primitive-in-component`    | medium   | noisy   | `createLoop`/`createTicker`/`createLifecycle`/`createSight` in a component **(JSX)** | [decision-guide.md](./decision-guide.md#common-mistakes)                                                               |
+| `manual-synced-ref`              | dedup    | precise | `useRef(v)` + unconditional `ref.current = v` (shorthand exists)                  | [use-synced-ref.md](./use-synced-ref.md)                                                                               |
+
+> Manual heuristics the scanner cannot see: CSS-in-JS (styled-components, vanilla-extract) and non-Tailwind class systems; `getBoundingClientRect()` used only for an initial in-view check; and hand-wired "IO + visibilitychange + reduced motion → boolean" gates. See [Common replacements](#common-replacements).
 
 ## Step 1.5: CSS, loading, and architecture pass
 
@@ -54,10 +174,10 @@ Run this alongside the JS scan, before classifying. The scanner automates the CS
 
 ### CSS/DOM-scale checks
 
-- **Non-compositor animation** (scanner: `non-compositor-animation`, CSS). `transition: all` or transitioning layout properties (`width`/`height`/`top`/`left`/`margin`) animates off the compositor: layout and paint every frame. The Tailwind `transition-all` class in JSX is a manual check. Prefer `transform`/`opacity`.
+- **Non-compositor animation** (scanner: `non-compositor-animation` for CSS, `tailwind-transition-all` for JSX). `transition: all`, a bare-duration shorthand (`transition: 0.3s`), or transitioning layout properties (`width`/`height`/`top`/`left`/`margin`) animates off the compositor: layout and paint every frame. Prefer `transform`/`opacity`.
 - **Global `:has()` selectors** (scanner: `global-has-selector`). `body:has(...)`, `html:has(...)`, `:root:has(...)`, or `*:has(...)` in a global stylesheet can trigger broad style invalidation; cost scales with the argument selector and subtree size. Scope the rule to a subtree or replace with a data attribute.
 - **Missing `content-visibility`** (manual). Large repeated lists (`.map()` returning many items) without `content-visibility: auto` or `Defer` pay full off-screen style/layout cost.
-- **Permanent `will-change`** (scanner: `permanent-will-change`, CSS only). CSS `will-change: transform` that is never toggled wastes GPU memory when idle. The Tailwind `will-change-transform` class in JSX is a manual check.
+- **Permanent `will-change`** (scanner: `permanent-will-change` for CSS, `tailwind-permanent-will-change` for JSX). `will-change` that is never toggled wastes GPU memory when idle.
 
 ### Loading checks (manual)
 
@@ -123,15 +243,24 @@ For each finding, emit a structured recommendation:
 **Why this tier:** <one sentence justifying the choice>
 
 Before:
-​```tsx
+```tsx
 // existing code (minimal, just the relevant part)
-​```
+```
 
 After:
-​```tsx
+```tsx
 // recommended replacement
-​```
+```
 ````
+
+## Step 4: Verify
+
+After applying fixes, re-run the same scan command. The audit is done when one of these holds for every finding:
+
+- The scan reports zero candidates, or
+- every remaining finding is explicitly classified "no change" in your report, or suppressed by a directive the user approved.
+
+If new signals appear (a fix can introduce a different anti-pattern), classify and fix those too. When the work is performance-motivated, measure frame time before and after; an audit without measurement is speculation.
 
 ## Rules
 
@@ -153,19 +282,17 @@ Skip the scan when the codebase:
 
 ## Severity weighting
 
-When the scan returns many candidates, prioritize by impact:
+The scanner encodes this ranking; text output is already grouped by it. When the scan returns many candidates, work top-down:
 
-1. **Forced reflows in hot paths** (observer callbacks, event handlers, rAF) cause visible jank. Fix first.
-2. **Always-on background work** (rAF without visibility pausing, MO subtree storms) wastes CPU and battery. Fix second.
-3. **Redundant observers** and **missing pooling** leak resources over time. Fix third.
-4. **Dedup opportunities** (manual synced refs) are correct code with a phase shorthand. Fix last or never.
-
-When in doubt, measure frame time before and after. An audit without measurement is speculation.
+1. **Critical.** Forced reflows in hot paths (observer callbacks, event handlers, rAF), per-frame `setState`, and missing reduced-motion handling cause visible jank or accessibility failures. Fix first.
+2. **High.** Always-on background work (rAF without visibility pausing, timers animating off-screen, global `:has()` invalidation) wastes CPU and battery. Fix second.
+3. **Medium.** Redundant observers, missing pooling, and cheaper-tier candidates leak resources or carry avoidable cost. Fix third.
+4. **Dedup.** Correct code with a phase shorthand (manual synced refs). Fix last or never.
 
 ## Common replacements
 
 | Current pattern                                                      | Replace with                                                                                                                                                                                          |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Manual `requestAnimationFrame` loop + `cancelAnimationFrame` cleanup | `useLoop` (if DOM) or `useCanvas` (if canvas)                                                                                                                                                         |
 | `requestAnimationFrame` without `cancelAnimationFrame`               | Same, plus the cleanup is now automatic                                                                                                                                                               |
 | `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                                                                                                                                                          |
@@ -185,6 +312,7 @@ When in doubt, measure frame time before and after. An audit without measurement
 | Hand-wired IO + visibilitychange + reduced motion → boolean          | `useLifecycle` (single hook, same signals, pooled IO)                                                                                                                                                 |
 | `getBoundingClientRect()` for initial in-view check                  | Trust IO (one-frame delay is invisible) or `rootMargin`                                                                                                                                               |
 | Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops                                                                                                                                          |
+| Tailwind `transition-all`                                            | Name the transitioned properties: `transition-colors`, `transition-transform`, `transition-[color,box-shadow]`                                                                                        |
 | `setTimeout`/`setInterval` for timed animation sequences             | `useLoop` with `fps: 1–2` and `frame.elapsed`-based steps (see [timed-sequences.md](./timed-sequences.md)); or CSS `@keyframes` + `useLifecycle` toggling `animation-play-state` if purely CSS-driven |
 | `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)                                                                                                                                   |
 | Heavy panel always mounted with `display:none`                       | Conditional rendering + `Presence` + `useWhenIdle` prefetch                                                                                                                                           |
@@ -201,6 +329,8 @@ After implementing, migrating, or reviewing animation code that uses phase, ask:
 2. **Right primitive?** Within the phase tier, is each primitive the best fit for what it's doing? Read the relevant reference file's "When to use" / "When not to use" tables.
 3. **Right options?** Is `fps` set appropriately (e.g., `fps: 1–2` for state-machine transitions, not 60)? Should a hook use transient mode (`onProgress` / `onResize` / `onVisibilityChange`) instead of re-rendering? Is `observe: 'once'` appropriate for one-shot triggers?
 4. **Missing phase?** Is there animation or rendering code with no lifecycle management — animations running off-screen, raw observers, missing reduced-motion handling, long pages without `Defer`?
+
+The scanner's `reduced-motion-ignored` and `core-primitive-in-component` signals surface candidates for questions 2 and 3 automatically.
 
 The specific failure modes and correct patterns live in the reference files: [timed-sequences.md](./timed-sequences.md) for the timer anti-pattern and initial-state flash, [performance.md](./performance.md) for hot-path rules, [decision-guide.md](./decision-guide.md) for tier selection and migration mappings.
 
