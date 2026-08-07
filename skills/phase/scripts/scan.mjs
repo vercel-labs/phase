@@ -2,22 +2,146 @@
 
 /**
  * Deterministic anti-pattern scanner for the phase animation audit.
- * Greps source files for common animation anti-patterns and prints
- * candidate sites (file:line) grouped by signal type.
+ * Scans source files for animation, rendering, and architecture
+ * anti-pattern candidates and reports them grouped by severity.
  *
- * Usage: node skills/phase/scripts/scan.mjs <target-dir>
+ * Usage: node scan.mjs <target-dir-or-file> [...more targets]
  *
- * Zero dependencies; uses only Node built-ins.
+ * Findings are candidates, not verdicts: classify each against
+ * references/audit.md before recommending a change. Zero dependencies.
  */
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const targetDir = resolve(process.argv[2] || '.');
+// --- Public API -------------------------------------------------------------
 
-function escapeRegExp(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * Scans one or more directories or files. Returns all findings plus scan
+ * metadata. Paths inside a target are reported relative to that target.
+ */
+export function scanTargets(paths) {
+  const findings = [];
+  let filesScanned = 0;
+
+  for (const target of paths) {
+    const root = resolve(target);
+    const stat = lstatSync(root);
+    const files = stat.isDirectory() ? walk(root) : [root];
+    const base = stat.isDirectory() ? root : dirname(root);
+
+    for (const filePath of files) {
+      let content;
+      try {
+        content = readFileSync(filePath, 'utf8');
+      } catch {
+        continue;
+      }
+      filesScanned++;
+      findings.push(...scanFile(relative(base, filePath), content));
+    }
+  }
+
+  return { targets: paths, filesScanned, findings };
 }
+
+/**
+ * Scans a single file's content. The relative path determines file-type
+ * filtering and path-based exclusions. Returns findings for every signal
+ * that fires.
+ */
+export function scanFile(relPath, content) {
+  const findings = [];
+  const type = fileTypeOf(relPath);
+  if (type === null) return findings;
+
+  const lines = content.split('\n');
+
+  for (const signal of SIGNALS) {
+    if (signal.exclude && signal.exclude.test(relPath)) continue;
+
+    // File-type filtering: 'css' signals only match CSS files, all others JS.
+    if (signal.fileTypes === 'css' && type !== 'css') continue;
+    if (!signal.fileTypes && type !== 'js') continue;
+
+    // File-level negative pattern: skip if the file contains the mitigation.
+    if (signal.negativePattern && signal.negativePattern.test(content)) {
+      continue;
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Custom matchers get the full line array and index (multi-line shapes).
+      if (signal.matcher) {
+        if (!signal.matcher(lines, i)) continue;
+        findings.push(makeFinding(signal, relPath, i + 1, line));
+        continue;
+      }
+
+      if (!signal.pattern.test(line)) continue;
+
+      // Context pattern: only match if nearby lines contain the context.
+      if (signal.contextPattern) {
+        const context = lines.slice(Math.max(0, i - 5), i + 6).join('\n');
+        if (!signal.contextPattern.test(context)) continue;
+      }
+
+      findings.push(makeFinding(signal, relPath, i + 1, line));
+    }
+  }
+
+  return findings;
+}
+
+/** Renders a scan result as human-readable text grouped by severity. */
+export function formatText(result) {
+  const out = [];
+  const bySeverity = groupBySeverity(result.findings);
+
+  for (const severity of SEVERITY_ORDER) {
+    const group = bySeverity.get(severity);
+    if (!group || group.size === 0) continue;
+
+    const heading =
+      severity === 'dedup'
+        ? '## dedup (correct code, optional cleanup)'
+        : `## ${severity}`;
+    out.push('', heading);
+
+    for (const [id, items] of group) {
+      const signal = SIGNALS.find((s) => s.id === id);
+      out.push(
+        '',
+        `${id} — ${signal.label} (${items.length}) · noise: ${signal.noise}`,
+        `  fix: ${signal.fix}`,
+      );
+      for (const item of items) {
+        out.push(`  ${item.file}:${item.line}  ${item.text.slice(0, 100)}`);
+      }
+    }
+  }
+
+  const counts = countBySeverity(result.findings);
+  const actionable = counts.critical + counts.high + counts.medium;
+
+  if (result.findings.length === 0) {
+    out.push('', '✓ No animation anti-pattern candidates found.');
+  } else {
+    out.push(
+      '',
+      '─────────────────────────────────────────',
+      `Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup`,
+      'Next: classify each candidate against references/audit.md Step 2 (the decision ladder).',
+      'Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.',
+    );
+  }
+
+  return out.join('\n');
+}
+
+// --- Signals ----------------------------------------------------------------
 
 // Flags the manual synced-ref idiom that useSyncedRef shortens:
 //   const xRef = useRef(v);
@@ -58,103 +182,414 @@ function matchesSyncedRef(lines, i) {
   return assign[1].trim() === initial;
 }
 
-const SIGNALS = [
+/**
+ * The signal catalog. Each signal carries detection (pattern/context/matcher,
+ * file types), triage metadata (severity, noise, why, fix), and executable
+ * examples that the test suite verifies: every `match` example must produce a
+ * finding for this signal, every `noMatch` example must not.
+ *
+ * severity: critical | high | medium | dedup (audit.md's weighting).
+ * noise: precise (trust it) | normal (verify quickly) | noisy (verify first).
+ */
+export const SIGNALS = [
   {
     id: 'manual-raf',
     label: 'Manual requestAnimationFrame loop',
+    severity: 'high',
+    noise: 'noisy',
+    why: 'No visibility pausing, no shared clock, no cleanup.',
+    fix: 'references/audit.md#common-replacements',
     pattern: /requestAnimationFrame/,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/anim.ts',
+          content:
+            'function tick() {\n  requestAnimationFrame(tick);\n  draw();\n}\nrequestAnimationFrame(tick);\n',
+        },
+        {
+          // Regression: a consumer path containing the substring "phase" must
+          // still be scanned (the old exclude silently skipped it).
+          file: 'src/phases/timeline.ts',
+          content: 'requestAnimationFrame(step);\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/anim.spec.ts',
+          content: 'requestAnimationFrame(tick);\n',
+        },
+        {
+          file: 'src/use-anim.ts',
+          content:
+            "import { useLoop } from 'phase/react';\nuseLoop({ onTick: draw });\n",
+        },
+      ],
+    },
   },
   {
     id: 'setstate-in-raf',
     label: 'setState/dispatch inside rAF callback',
+    severity: 'critical',
+    noise: 'normal',
+    why: '60 re-renders/sec: React reconciles on every frame.',
+    fix: 'references/performance.md#never-setstate-inside-ontick--draw',
     // The setState call is usually on a different line than the rAF, so match
     // rAF per line and require the state update within the surrounding window.
     pattern: /requestAnimationFrame/,
     contextPattern: /setState|dispatch|set[A-Z]\w*\(/,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/progress.tsx',
+          content:
+            'function loop() {\n  setProgress((p) => p + 1);\n  requestAnimationFrame(loop);\n}\n',
+        },
+        {
+          file: 'src/store.ts',
+          content: "requestAnimationFrame(() => dispatch({ type: 'tick' }));\n",
+        },
+      ],
+      noMatch: [
+        {
+          // Regression: setAttribute is a recommended pattern inside rAF,
+          // not a state update.
+          file: 'src/meter.ts',
+          content:
+            "function loop() {\n  el.setAttribute('aria-valuenow', String(v));\n  requestAnimationFrame(loop);\n}\n",
+        },
+        {
+          // Regression: style.setProperty is the recommended CSS-variable
+          // write inside rAF.
+          file: 'src/cursor.ts',
+          content:
+            "function loop() {\n  el.style.setProperty('--x', String(x));\n  requestAnimationFrame(loop);\n}\n",
+        },
+        {
+          // Regression: setTimeout near a rAF is not a state update.
+          file: 'src/fallback.ts',
+          content:
+            'requestAnimationFrame(start);\nsetTimeout(fallbackStart, 100);\n',
+        },
+      ],
+    },
   },
   {
     id: 'forced-reflow',
     label: 'Forced reflow (getBoundingClientRect, offsetWidth, etc.)',
+    severity: 'critical',
+    noise: 'noisy',
+    why: 'Synchronous layout; in a hot path it thrashes every frame.',
+    fix: 'references/performance.md#no-forced-reflows-in-animation-paths',
     pattern:
       /getBoundingClientRect|offsetWidth|offsetHeight|offsetTop|offsetLeft|getComputedStyle|scrollWidth|scrollHeight|clientWidth|clientHeight/,
     exclude: /node_modules|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/reveal.ts',
+          content: 'const rect = el.getBoundingClientRect();\n',
+        },
+        {
+          file: 'src/sizer.ts',
+          content: 'const w = el.offsetWidth;\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/reveal.ts',
+          content: "import { useSize } from 'phase/react';\n",
+        },
+      ],
+    },
   },
   {
     id: 'raw-io',
     label: 'Raw IntersectionObserver (not pooled)',
+    severity: 'medium',
+    noise: 'normal',
+    why: 'Unpooled observer instances and manual cleanup leak over time.',
+    fix: 'references/performance.md#observer-pooling',
     pattern: /new\s+IntersectionObserver/,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/lazy.ts',
+          content: 'const io = new IntersectionObserver(onEnter);\n',
+        },
+        {
+          // Regression: "phase" substring in a consumer path must be scanned.
+          file: 'src/game-phase.ts',
+          content: 'const io = new IntersectionObserver(onEnter);\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/lazy.ts',
+          content: "import { useSight } from 'phase/react';\n",
+        },
+      ],
+    },
   },
   {
     id: 'raw-ro',
     label: 'Raw ResizeObserver (not pooled)',
+    severity: 'medium',
+    noise: 'normal',
+    why: 'Unpooled observer instances and manual cleanup leak over time.',
+    fix: 'references/performance.md#observer-pooling',
     pattern: /new\s+ResizeObserver/,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/panel.ts',
+          content: 'const ro = new ResizeObserver(onResize);\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/panel.ts',
+          content: "import { useSize } from 'phase/react';\n",
+        },
+      ],
+    },
   },
   {
     id: 'mutationobserver-layout',
     label:
       'MutationObserver driving layout (reflow / style+subtree observation)',
+    severity: 'critical',
+    noise: 'normal',
+    why: 'Layout reads in MO callbacks force a reflow on every mutation.',
+    fix: 'references/performance.md#never-drive-layout-from-a-mutationobserver',
     pattern: /new\s+MutationObserver/,
     // Only flag when the observer watches attributes/style or reads layout
     // nearby. Structural (childList) observation is legitimate and skipped.
     contextPattern:
       /attributeFilter|attributes\s*:\s*true|getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight|getComputedStyle/,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/scrollbar.ts',
+          content:
+            'const mo = new MutationObserver(() => {\n  const h = el.scrollHeight;\n  sync(h);\n});\nmo.observe(el, { subtree: true, attributes: true });\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/list.ts',
+          content:
+            'const mo = new MutationObserver(onChildren);\nmo.observe(list, { childList: true });\n',
+        },
+      ],
+    },
   },
   {
     id: 'js-opacity-transform',
     label: 'JS-driven opacity/transform (may be CSS-only candidate)',
+    severity: 'medium',
+    noise: 'noisy',
+    why: 'Often replaceable by a CSS transition, or needs phase for lifecycle.',
+    fix: 'references/decision-guide.md#tier-1-css-only-no-js',
     pattern: /\.style\.(opacity|transform)\s*=/,
     exclude: /node_modules|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/fade.ts',
+          content: "el.style.opacity = '0.5';\n",
+        },
+        {
+          file: 'src/slide.ts',
+          content: "el.style.transform = 'translateX(10px)';\n",
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/fade.ts',
+          content: "el.classList.add('faded');\n",
+        },
+      ],
+    },
   },
   {
     id: 'missing-reduced-motion',
     label: 'Animation without reduced-motion check',
+    severity: 'critical',
+    noise: 'noisy',
+    why: 'Accessibility gap: motion plays for users who asked for none.',
+    fix: 'references/performance.md#reduced-motion-by-default',
     pattern: /requestAnimationFrame|@keyframes|animation:/,
     // Suppress when the file already handles reduced motion, or genuinely
     // imports phase (its hooks handle it automatically). Match a real phase
     // import, not the bare substring "phase" (which caused false negatives).
     negativePattern: /prefers-reduced-motion|reducedMotion|from ['"]phase/,
     exclude: /node_modules|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/spin.ts',
+          content: 'requestAnimationFrame(spin);\n',
+        },
+        {
+          // Regression: CSS animations without reduced-motion handling were
+          // never scanned (the signal only ran on JS files).
+          file: 'src/styles.css',
+          content:
+            '@keyframes spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n.spinner {\n  animation: spin 1s linear infinite;\n}\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/spin.ts',
+          content:
+            "import { useLoop } from 'phase/react';\nrequestAnimationFrame(spin);\n",
+        },
+        {
+          file: 'src/styles.css',
+          content:
+            '.spinner {\n  animation: spin 1s linear infinite;\n}\n@media (prefers-reduced-motion: reduce) {\n  .spinner {\n    animation: none;\n  }\n}\n',
+        },
+        {
+          // animation: none disables motion; it is not an animation.
+          file: 'src/reset.css',
+          content: '.static {\n  animation: none;\n}\n',
+        },
+      ],
+    },
   },
   {
     id: 'background-animation',
     label: 'setInterval/setTimeout for animation (no visibility check)',
+    severity: 'high',
+    noise: 'noisy',
+    why: 'Timers keep firing off-screen and in background tabs.',
+    fix: 'references/timed-sequences.md',
     pattern: /setInterval|setTimeout/,
     contextPattern: /transform|opacity|animate|position|translate/,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/carousel.ts',
+          content:
+            "setInterval(() => {\n  track.style.transform = 'translateX(' + offset + 'px)';\n}, 3000);\n",
+        },
+      ],
+      noMatch: [
+        {
+          // Regression: "position" as a plain variable near a timer is not
+          // animation work (the old context pattern matched the bare word).
+          file: 'src/queue.ts',
+          content:
+            'setTimeout(() => {\n  const position = queue.indexOf(job);\n  report(position);\n}, 1000);\n',
+        },
+      ],
+    },
   },
   {
     id: 'manual-synced-ref',
     label: 'Manual synced ref (dedup: useSyncedRef offers a shorthand)',
     severity: 'dedup',
+    noise: 'precise',
+    why: 'Correct React idiom; useSyncedRef is a one-line shorthand.',
+    fix: 'references/use-synced-ref.md',
     matcher: matchesSyncedRef,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/use-latest.ts',
+          content: 'const cbRef = useRef(cb);\ncbRef.current = cb;\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/use-latest.ts',
+          content: 'const cbRef = useRef(null);\ncbRef.current = cb;\n',
+        },
+      ],
+    },
   },
   // --- CSS/DOM-scale signals ---
   {
     id: 'global-has-selector',
     label: 'Global :has() selector (broad style invalidation)',
+    severity: 'high',
+    noise: 'precise',
+    why: 'Re-checked on any mutation that could affect the argument.',
+    fix: 'references/performance-recipes.md#recipe-delete-a-global-has-rule',
     pattern: /body:has\(|html:has\(|:root:has\(|\*:has\(/,
     exclude: /node_modules|\.spec\.|\.test\./,
     fileTypes: 'css',
+    examples: {
+      match: [
+        {
+          file: 'src/globals.css',
+          content: 'body:has(.modal-open) {\n  overflow: hidden;\n}\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/card.css',
+          content: '.card:has(img) {\n  padding: 0;\n}\n',
+        },
+        {
+          // CSS signals must not fire on JS files.
+          file: 'src/globals.ts',
+          content:
+            "const css = 'body:has(.modal-open) { overflow: hidden; }';\n",
+        },
+      ],
+    },
   },
   {
     id: 'permanent-will-change',
     label: 'Permanent will-change (wastes GPU memory when idle)',
+    severity: 'medium',
+    noise: 'normal',
+    why: 'A GPU layer is held even while nothing animates.',
+    fix: 'references/performance.md#will-change-only-while-animating',
     pattern: /will-change:\s*transform/,
     negativePattern:
       /animation-play-state|data-active|isActive|\?.*will-change/,
     exclude: /node_modules|\.spec\.|\.test\./,
     fileTypes: 'css',
+    examples: {
+      match: [
+        {
+          file: 'src/card.css',
+          content: '.card {\n  will-change: transform;\n}\n',
+        },
+        {
+          // will-change on layout properties is worse than transform, and the
+          // old pattern missed it entirely.
+          file: 'src/panel.css',
+          content: '.panel {\n  will-change: left, top;\n}\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/card.css',
+          content:
+            ".card[data-active='true'] {\n  will-change: transform;\n}\n",
+        },
+      ],
+    },
   },
   {
     id: 'non-compositor-animation',
     label:
       'Animating a non-compositor property (layout/paint, not transform/opacity)',
+    severity: 'high',
+    noise: 'normal',
+    why: 'Layout + paint every frame, off the compositor.',
+    fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
     // `transition: all` (animates whatever changes) or a transition whose
     // value names a layout-triggering property. transform/opacity-only
     // transitions do not match.
@@ -162,43 +597,148 @@ const SIGNALS = [
       /transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/,
     exclude: /node_modules|\.spec\.|\.test\./,
     fileTypes: 'css',
+    examples: {
+      match: [
+        {
+          file: 'src/menu.css',
+          content: '.menu {\n  transition: all 0.3s ease;\n}\n',
+        },
+        {
+          file: 'src/drawer.css',
+          content: '.drawer {\n  transition: width 0.2s;\n}\n',
+        },
+        {
+          // A bare-duration shorthand names no property, so it animates
+          // `all` by default. The old pattern missed it.
+          file: 'src/tab.css',
+          content: '.tab {\n  transition: 0.3s;\n}\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/menu.css',
+          content: '.menu {\n  transition: opacity 0.3s, transform 0.3s;\n}\n',
+        },
+        {
+          file: 'src/menu.css',
+          content: '.menu {\n  transition-property: opacity;\n}\n',
+        },
+      ],
+    },
   },
   // --- Loading/architecture signals ---
   {
     id: 'bare-window-listener',
-    label: 'Bare window resize/scroll listener with layout read',
+    label: 'Bare resize/scroll listener with layout read',
+    severity: 'critical',
+    noise: 'normal',
+    why: 'A synchronous reflow per event, once per listening component.',
+    fix: 'references/performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer',
     pattern: /addEventListener\s*\(\s*['"](?:resize|scroll)['"]/,
     contextPattern:
       /getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight/,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/sidebar.ts',
+          content:
+            "window.addEventListener('resize', () => {\n  const w = el.getBoundingClientRect().width;\n  setCollapsed(w < 240);\n});\n",
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/sidebar.ts',
+          content:
+            "window.addEventListener('resize', () => {\n  schedule();\n});\n",
+        },
+        {
+          file: 'src/button.ts',
+          content:
+            "el.addEventListener('click', () => {\n  const w = el.offsetWidth;\n  log(w);\n});\n",
+        },
+      ],
+    },
   },
   {
     id: 'redundant-mutation-observers',
     label:
       'MutationObserver on html/documentElement (coalesce into one useMutation)',
+    severity: 'medium',
+    noise: 'normal',
+    why: 'N observers on one target each fire per mutation; one suffices.',
+    fix: 'references/performance-recipes.md#recipe-collapse-an-observer-storm-on-html',
     pattern: /new\s+MutationObserver/,
     contextPattern:
       /document\.documentElement|<html|\.observe\s*\(\s*document\s*\./,
     exclude: /node_modules|phase|\.spec\.|\.test\./,
+    examples: {
+      match: [
+        {
+          file: 'src/theme.ts',
+          content:
+            'const mo = new MutationObserver(onTheme);\nmo.observe(document.documentElement, { attributes: true });\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/widget.ts',
+          content:
+            'const mo = new MutationObserver(onChange);\nmo.observe(ref.current, { childList: true });\n',
+        },
+      ],
+    },
   },
 ];
 
-const JS_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs']);
-const CSS_EXTENSIONS = new Set(['.css', '.scss', '.module.css']);
-const EXTENSIONS = new Set([...JS_EXTENSIONS, ...CSS_EXTENSIONS]);
+/** Severity display and ranking order, most severe first. */
+export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'dedup'];
+
+// --- Internal ---------------------------------------------------------------
+
+const FILE_TYPE_EXTENSIONS = {
+  js: new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']),
+  css: new Set(['.css', '.scss', '.sass', '.less']),
+};
+
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist']);
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function fileTypeOf(path) {
+  const dot = path.lastIndexOf('.');
+  if (dot <= path.lastIndexOf('/')) return null;
+  const ext = path.slice(dot);
+  if (FILE_TYPE_EXTENSIONS.js.has(ext)) return 'js';
+  if (FILE_TYPE_EXTENSIONS.css.has(ext)) return 'css';
+  return null;
+}
+
+function makeFinding(signal, file, line, text) {
+  return {
+    signal: signal.id,
+    severity: signal.severity,
+    noise: signal.noise,
+    file,
+    line,
+    text: text.trim(),
+    fix: signal.fix,
+  };
+}
 
 function walk(dir) {
   const results = [];
   try {
     const entries = readdirSync(dir);
     for (const entry of entries) {
-      if (entry === 'node_modules' || entry === '.git' || entry === 'dist')
-        continue;
+      if (SKIP_DIRS.has(entry)) continue;
       const full = join(dir, entry);
-      const stat = statSync(full);
+      const stat = lstatSync(full);
       if (stat.isDirectory()) {
         results.push(...walk(full));
-      } else if (EXTENSIONS.has(entry.slice(entry.lastIndexOf('.')))) {
+      } else if (stat.isFile() && fileTypeOf(entry) !== null) {
         results.push(full);
       }
     }
@@ -208,108 +748,41 @@ function walk(dir) {
   return results;
 }
 
-const files = walk(targetDir);
-const findings = new Map();
-
-for (const signal of SIGNALS) {
-  findings.set(signal.id, []);
-}
-
-for (const filePath of files) {
-  const rel = relative(targetDir, filePath);
-  let content;
-  try {
-    content = readFileSync(filePath, 'utf8');
-  } catch {
-    continue;
+/** Groups findings as severity -> signal id -> findings, in catalog order. */
+function groupBySeverity(findings) {
+  const bySeverity = new Map();
+  for (const severity of SEVERITY_ORDER) {
+    bySeverity.set(severity, new Map());
   }
-
-  const lines = content.split('\n');
-
-  const ext = filePath.slice(filePath.lastIndexOf('.'));
-  const isCSS = CSS_EXTENSIONS.has(ext);
-  const isJS = JS_EXTENSIONS.has(ext);
-
   for (const signal of SIGNALS) {
-    if (signal.exclude && signal.exclude.test(rel)) continue;
-
-    // File-type filtering: 'css' signals only match CSS files, all others match JS
-    if (signal.fileTypes === 'css' && !isCSS) continue;
-    if (!signal.fileTypes && !isJS) continue;
-
-    // File-level negative pattern: skip if the file also contains the mitigation
-    if (signal.negativePattern && signal.negativePattern.test(content))
-      continue;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-
-      // Custom matchers get the full line array and index (multi-line shapes)
-      if (signal.matcher) {
-        if (!signal.matcher(lines, i)) continue;
-        findings
-          .get(signal.id)
-          .push({ file: rel, line: i + 1, text: line.trim() });
-        continue;
-      }
-
-      if (!signal.pattern.test(line)) continue;
-
-      // Context pattern: only match if nearby lines contain the context
-      if (signal.contextPattern) {
-        const context = lines.slice(Math.max(0, i - 5), i + 6).join('\n');
-        if (!signal.contextPattern.test(context)) continue;
-      }
-
-      findings
-        .get(signal.id)
-        .push({ file: rel, line: i + 1, text: line.trim() });
+    const items = findings.filter((f) => f.signal === signal.id);
+    if (items.length > 0) {
+      bySeverity.get(signal.severity).set(signal.id, items);
     }
   }
+  return bySeverity;
 }
 
-// --- Output ---
-
-let totalFindings = 0;
-let dedupFindings = 0;
-
-// Actionable anti-patterns first.
-for (const signal of SIGNALS) {
-  if (signal.severity === 'dedup') continue;
-  const items = findings.get(signal.id);
-  if (items.length === 0) continue;
-
-  console.log(`\n## ${signal.label} (${items.length})`);
-  for (const item of items) {
-    console.log(`  ${item.file}:${item.line}  ${item.text.slice(0, 100)}`);
-    totalFindings++;
+function countBySeverity(findings) {
+  const counts = { critical: 0, high: 0, medium: 0, dedup: 0 };
+  for (const finding of findings) {
+    counts[finding.severity]++;
   }
+  return counts;
 }
 
-// Dedup signals last: correct code with a phase shorthand.
-for (const signal of SIGNALS) {
-  if (signal.severity !== 'dedup') continue;
-  const items = findings.get(signal.id);
-  if (items.length === 0) continue;
+// --- CLI --------------------------------------------------------------------
 
-  console.log(`\n## ${signal.label} (${items.length})  [dedup, not a defect]`);
-  for (const item of items) {
-    console.log(`  ${item.file}:${item.line}  ${item.text.slice(0, 100)}`);
-    dedupFindings++;
-  }
+function main() {
+  const targets = process.argv.slice(2);
+  if (targets.length === 0) targets.push('.');
+  const result = scanTargets(targets);
+  console.log(formatText(result));
 }
 
-if (totalFindings === 0 && dedupFindings === 0) {
-  console.log('\n✓ No animation anti-pattern candidates found.');
-} else {
-  console.log(`\n─────────────────────────────────────────`);
-  console.log(`Total candidates: ${totalFindings}`);
-  if (dedupFindings > 0) {
-    console.log(
-      `Dedup opportunities: ${dedupFindings} (correct code, optional cleanup)`,
-    );
-  }
-  console.log(
-    `Classify each against the decision ladder (CSS → useTween → phase → library → no change).`,
-  );
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main();
 }
