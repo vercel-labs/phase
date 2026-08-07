@@ -52,18 +52,17 @@ export function scanTargets(paths) {
  * that fires.
  */
 export function scanFile(relPath, content) {
-  const findings = [];
-  const type = fileTypeOf(relPath);
-  if (type === null) return findings;
+  if (EXCLUDED_PATHS.test(relPath)) return [];
 
-  const lines = content.split('\n');
+  const ext = extOf(relPath);
+  const type = typeOf(ext);
+  if (type === null) return [];
+
+  const findings = [];
+  const lines = content.split(/\r?\n/);
 
   for (const signal of SIGNALS) {
-    if (signal.exclude && signal.exclude.test(relPath)) continue;
-
-    // File-type filtering: 'css' signals only match CSS files, all others JS.
-    if (signal.fileTypes === 'css' && type !== 'css') continue;
-    if (!signal.fileTypes && type !== 'js') continue;
+    if (!signalAppliesTo(signal, type, ext)) continue;
 
     // File-level negative pattern: skip if the file contains the mitigation.
     if (signal.negativePattern && signal.negativePattern.test(content)) {
@@ -92,7 +91,14 @@ export function scanFile(relPath, content) {
     }
   }
 
-  return findings;
+  // A rAF line that already matched setstate-in-raf (more specific, higher
+  // severity) is not additionally reported as a manual rAF loop.
+  const setstateLines = new Set(
+    findings.filter((f) => f.signal === 'setstate-in-raf').map((f) => f.line),
+  );
+  return findings.filter(
+    (f) => !(f.signal === 'manual-raf' && setstateLines.has(f.line)),
+  );
 }
 
 /** Renders a scan result as human-readable text grouped by severity. */
@@ -182,6 +188,25 @@ function matchesSyncedRef(lines, i) {
   return assign[1].trim() === initial;
 }
 
+// Flags an always-on will-change-transform utility class. A class toggled by
+// a ternary or logical guard on the same line is treated as lifecycle-aware.
+function matchesPermanentWillChangeClass(lines, i) {
+  const line = lines[i];
+  if (!/\bwill-change-transform\b/.test(line)) return false;
+  return !/\?|&&/.test(line);
+}
+
+// A state-update call inside the rAF context window. Excludes DOM/timer/
+// canvas setters that are legitimate (and often recommended) inside a frame
+// callback: setTimeout, setAttribute, setProperty, setTransform, etc.
+const STATE_UPDATE_CONTEXT =
+  /\bsetState\s*\(|\bdispatch\s*\(|\bset(?!Timeout\b|Interval\b|Immediate\b|Attribute|Property\b|PointerCapture\b|Item\b|Selection|RangeText\b|CustomValidity\b|Transform\b|LineDash\b|SinkId\b|RequestHeader\b)[A-Z]\w*\s*\(/;
+
+// A transition shorthand whose value is only durations/timing functions names
+// no property, so it animates `all` by default.
+const BARE_DURATION_TRANSITION =
+  /transition:\s*[\d.]+m?s(?:\s*,?\s*(?:[\d.]+m?s|ease[\w-]*|linear|step[\w-]*|steps\([^)]*\)|cubic-bezier\([^)]*\)))*\s*(?:;|!|$)/;
+
 /**
  * The signal catalog. Each signal carries detection (pattern/context/matcher,
  * file types), triage metadata (severity, noise, why, fix), and executable
@@ -190,6 +215,7 @@ function matchesSyncedRef(lines, i) {
  *
  * severity: critical | high | medium | dedup (audit.md's weighting).
  * noise: precise (trust it) | normal (verify quickly) | noisy (verify first).
+ * fileTypes: js (default) | css | jsx, or an array to combine.
  */
 export const SIGNALS = [
   {
@@ -200,7 +226,6 @@ export const SIGNALS = [
     why: 'No visibility pausing, no shared clock, no cleanup.',
     fix: 'references/audit.md#common-replacements',
     pattern: /requestAnimationFrame/,
-    exclude: /node_modules|phase|\.spec\.|\.test\./,
     examples: {
       match: [
         {
@@ -225,6 +250,12 @@ export const SIGNALS = [
           content:
             "import { useLoop } from 'phase/react';\nuseLoop({ onTick: draw });\n",
         },
+        {
+          // A rAF line already reported as setstate-in-raf is not
+          // double-counted as a manual loop.
+          file: 'src/counter.tsx',
+          content: 'requestAnimationFrame(() => setCount((c) => c + 1));\n',
+        },
       ],
     },
   },
@@ -238,8 +269,7 @@ export const SIGNALS = [
     // The setState call is usually on a different line than the rAF, so match
     // rAF per line and require the state update within the surrounding window.
     pattern: /requestAnimationFrame/,
-    contextPattern: /setState|dispatch|set[A-Z]\w*\(/,
-    exclude: /node_modules|phase|\.spec\.|\.test\./,
+    contextPattern: STATE_UPDATE_CONTEXT,
     examples: {
       match: [
         {
@@ -285,7 +315,6 @@ export const SIGNALS = [
     fix: 'references/performance.md#no-forced-reflows-in-animation-paths',
     pattern:
       /getBoundingClientRect|offsetWidth|offsetHeight|offsetTop|offsetLeft|getComputedStyle|scrollWidth|scrollHeight|clientWidth|clientHeight/,
-    exclude: /node_modules|\.spec\.|\.test\./,
     examples: {
       match: [
         {
@@ -313,7 +342,6 @@ export const SIGNALS = [
     why: 'Unpooled observer instances and manual cleanup leak over time.',
     fix: 'references/performance.md#observer-pooling',
     pattern: /new\s+IntersectionObserver/,
-    exclude: /node_modules|phase|\.spec\.|\.test\./,
     examples: {
       match: [
         {
@@ -342,7 +370,6 @@ export const SIGNALS = [
     why: 'Unpooled observer instances and manual cleanup leak over time.',
     fix: 'references/performance.md#observer-pooling',
     pattern: /new\s+ResizeObserver/,
-    exclude: /node_modules|phase|\.spec\.|\.test\./,
     examples: {
       match: [
         {
@@ -371,7 +398,6 @@ export const SIGNALS = [
     // nearby. Structural (childList) observation is legitimate and skipped.
     contextPattern:
       /attributeFilter|attributes\s*:\s*true|getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight|getComputedStyle/,
-    exclude: /node_modules|phase|\.spec\.|\.test\./,
     examples: {
       match: [
         {
@@ -397,7 +423,6 @@ export const SIGNALS = [
     why: 'Often replaceable by a CSS transition, or needs phase for lifecycle.',
     fix: 'references/decision-guide.md#tier-1-css-only-no-js',
     pattern: /\.style\.(opacity|transform)\s*=/,
-    exclude: /node_modules|\.spec\.|\.test\./,
     examples: {
       match: [
         {
@@ -424,12 +449,13 @@ export const SIGNALS = [
     noise: 'noisy',
     why: 'Accessibility gap: motion plays for users who asked for none.',
     fix: 'references/performance.md#reduced-motion-by-default',
-    pattern: /requestAnimationFrame|@keyframes|animation:/,
+    // `animation:(?!\s*none)` keeps `animation: none` (motion disabled) out.
+    pattern: /requestAnimationFrame|@keyframes|animation:(?!\s*none\b)/,
     // Suppress when the file already handles reduced motion, or genuinely
     // imports phase (its hooks handle it automatically). Match a real phase
     // import, not the bare substring "phase" (which caused false negatives).
     negativePattern: /prefers-reduced-motion|reducedMotion|from ['"]phase/,
-    exclude: /node_modules|\.spec\.|\.test\./,
+    fileTypes: ['js', 'css'],
     examples: {
       match: [
         {
@@ -471,8 +497,7 @@ export const SIGNALS = [
     why: 'Timers keep firing off-screen and in background tabs.',
     fix: 'references/timed-sequences.md',
     pattern: /setInterval|setTimeout/,
-    contextPattern: /transform|opacity|animate|position|translate/,
-    exclude: /node_modules|phase|\.spec\.|\.test\./,
+    contextPattern: /transform|opacity|translate|\banimate\b/,
     examples: {
       match: [
         {
@@ -500,7 +525,6 @@ export const SIGNALS = [
     why: 'Correct React idiom; useSyncedRef is a one-line shorthand.',
     fix: 'references/use-synced-ref.md',
     matcher: matchesSyncedRef,
-    exclude: /node_modules|phase|\.spec\.|\.test\./,
     examples: {
       match: [
         {
@@ -525,7 +549,6 @@ export const SIGNALS = [
     why: 'Re-checked on any mutation that could affect the argument.',
     fix: 'references/performance-recipes.md#recipe-delete-a-global-has-rule',
     pattern: /body:has\(|html:has\(|:root:has\(|\*:has\(/,
-    exclude: /node_modules|\.spec\.|\.test\./,
     fileTypes: 'css',
     examples: {
       match: [
@@ -555,10 +578,8 @@ export const SIGNALS = [
     noise: 'normal',
     why: 'A GPU layer is held even while nothing animates.',
     fix: 'references/performance.md#will-change-only-while-animating',
-    pattern: /will-change:\s*transform/,
-    negativePattern:
-      /animation-play-state|data-active|isActive|\?.*will-change/,
-    exclude: /node_modules|\.spec\.|\.test\./,
+    pattern: /will-change:(?!\s*auto\b)/,
+    negativePattern: /animation-play-state|\[data-|:hover|:focus/,
     fileTypes: 'css',
     examples: {
       match: [
@@ -579,6 +600,10 @@ export const SIGNALS = [
           content:
             ".card[data-active='true'] {\n  will-change: transform;\n}\n",
         },
+        {
+          file: 'src/reset.css',
+          content: '.static {\n  will-change: auto;\n}\n',
+        },
       ],
     },
   },
@@ -590,12 +615,15 @@ export const SIGNALS = [
     noise: 'normal',
     why: 'Layout + paint every frame, off the compositor.',
     fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
-    // `transition: all` (animates whatever changes) or a transition whose
-    // value names a layout-triggering property. transform/opacity-only
-    // transitions do not match.
-    pattern:
-      /transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/,
-    exclude: /node_modules|\.spec\.|\.test\./,
+    // `transition: all`, a transition naming a layout property, or a
+    // bare-duration shorthand (names no property, so it animates `all`).
+    // transform/opacity-only transitions do not match.
+    pattern: new RegExp(
+      /transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/
+        .source +
+        '|' +
+        BARE_DURATION_TRANSITION.source,
+    ),
     fileTypes: 'css',
     examples: {
       match: [
@@ -623,6 +651,10 @@ export const SIGNALS = [
           file: 'src/menu.css',
           content: '.menu {\n  transition-property: opacity;\n}\n',
         },
+        {
+          file: 'src/menu.css',
+          content: '.menu {\n  transition: 0.3s opacity;\n}\n',
+        },
       ],
     },
   },
@@ -637,7 +669,6 @@ export const SIGNALS = [
     pattern: /addEventListener\s*\(\s*['"](?:resize|scroll)['"]/,
     contextPattern:
       /getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight/,
-    exclude: /node_modules|phase|\.spec\.|\.test\./,
     examples: {
       match: [
         {
@@ -671,7 +702,6 @@ export const SIGNALS = [
     pattern: /new\s+MutationObserver/,
     contextPattern:
       /document\.documentElement|<html|\.observe\s*\(\s*document\s*\./,
-    exclude: /node_modules|phase|\.spec\.|\.test\./,
     examples: {
       match: [
         {
@@ -689,6 +719,115 @@ export const SIGNALS = [
       ],
     },
   },
+  {
+    id: 'tailwind-transition-all',
+    label: 'Tailwind transition-all class (animates layout properties)',
+    severity: 'high',
+    noise: 'noisy',
+    why: 'Transitions whatever changes, including layout, off the compositor.',
+    fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
+    pattern: /\btransition-all\b/,
+    fileTypes: 'jsx',
+    examples: {
+      match: [
+        {
+          file: 'src/card.tsx',
+          content:
+            '<div className="transition-all duration-300 hover:scale-105" />;\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/card.tsx',
+          content: '<div className="transition-colors duration-300" />;\n',
+        },
+        {
+          // JSX signals only run on .tsx/.jsx files.
+          file: 'src/card.ts',
+          content: "const cls = 'transition-all duration-300';\n",
+        },
+      ],
+    },
+  },
+  {
+    id: 'tailwind-permanent-will-change',
+    label: 'Tailwind will-change-transform class not toggled with state',
+    severity: 'medium',
+    noise: 'noisy',
+    why: 'A GPU layer is held even while nothing animates.',
+    fix: 'references/performance.md#will-change-only-while-animating',
+    matcher: matchesPermanentWillChangeClass,
+    fileTypes: 'jsx',
+    examples: {
+      match: [
+        {
+          file: 'src/logo.tsx',
+          content: '<div className="will-change-transform animate-spin" />;\n',
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/logo.tsx',
+          content:
+            "<div className={active ? 'will-change-transform' : ''} />;\n",
+        },
+      ],
+    },
+  },
+  // --- Phase-usage signals ---
+  {
+    id: 'reduced-motion-ignored',
+    label: "reducedMotion: 'ignore' (bypasses the user preference)",
+    severity: 'medium',
+    noise: 'precise',
+    why: 'Only justified for non-decorative motion (data viz, games).',
+    fix: 'references/performance.md#reduced-motion-by-default',
+    pattern: /reducedMotion:\s*['"]ignore['"]/,
+    examples: {
+      match: [
+        {
+          file: 'src/hero.ts',
+          content:
+            "createLoop({ element: el, onTick: draw, reducedMotion: 'ignore' });\n",
+        },
+      ],
+      noMatch: [
+        {
+          file: 'src/hero.ts',
+          content:
+            "createLoop({ element: el, onTick: draw, reducedMotion: 'respect' });\n",
+        },
+      ],
+    },
+  },
+  {
+    id: 'core-primitive-in-component',
+    label: 'Core phase primitive in a component (hook likely fits better)',
+    severity: 'medium',
+    noise: 'noisy',
+    why: 'Hooks manage refs, teardown, and enabled automatically.',
+    fix: 'references/decision-guide.md#common-mistakes',
+    pattern: /\bcreate(?:Loop|Ticker|Lifecycle|Sight)\s*\(/,
+    fileTypes: 'jsx',
+    examples: {
+      match: [
+        {
+          file: 'src/spinner.tsx',
+          content:
+            'useEffect(() => {\n  const loop = createLoop({ element: ref.current, onTick });\n  return () => loop.stop();\n}, []);\n',
+        },
+      ],
+      noMatch: [
+        {
+          // Custom hook modules (.ts) composing core primitives are the
+          // documented escape hatch.
+          file: 'src/use-spinner.ts',
+          content:
+            'const loop = createLoop({ element, onTick });\nreturn () => loop.stop();\n',
+        },
+      ],
+    },
+  },
 ];
 
 /** Severity display and ranking order, most severe first. */
@@ -701,19 +840,58 @@ const FILE_TYPE_EXTENSIONS = {
   css: new Set(['.css', '.scss', '.sass', '.less']),
 };
 
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist']);
+const JSX_EXTENSIONS = new Set(['.tsx', '.jsx']);
+
+// Tests, stories, and mocks describe anti-patterns as often as they commit
+// them; scanning them buries real findings.
+const EXCLUDED_PATHS =
+  /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__/;
+
+// Build output, caches, and vendored artifacts. Scanning them storms the
+// report with code nobody will edit.
+const SKIP_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  '.next',
+  'build',
+  'out',
+  'coverage',
+  '.turbo',
+  '.vercel',
+  'storybook-static',
+]);
+
+const SKIP_FILES = /\.min\.|\.d\.ts$|\.d\.mts$/;
 
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function fileTypeOf(path) {
+function extOf(path) {
   const dot = path.lastIndexOf('.');
   if (dot <= path.lastIndexOf('/')) return null;
-  const ext = path.slice(dot);
+  return path.slice(dot);
+}
+
+function typeOf(ext) {
+  if (ext === null) return null;
   if (FILE_TYPE_EXTENSIONS.js.has(ext)) return 'js';
   if (FILE_TYPE_EXTENSIONS.css.has(ext)) return 'css';
   return null;
+}
+
+function signalAppliesTo(signal, type, ext) {
+  const declared = signal.fileTypes ?? 'js';
+  const types = Array.isArray(declared) ? declared : [declared];
+  for (const t of types) {
+    if (t === 'jsx') {
+      if (JSX_EXTENSIONS.has(ext)) return true;
+    } else if (t === type) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function makeFinding(signal, file, line, text) {
@@ -736,9 +914,15 @@ function walk(dir) {
       if (SKIP_DIRS.has(entry)) continue;
       const full = join(dir, entry);
       const stat = lstatSync(full);
+      // Skipping symlinks entirely guards against cycles and vendored trees.
+      if (stat.isSymbolicLink()) continue;
       if (stat.isDirectory()) {
         results.push(...walk(full));
-      } else if (stat.isFile() && fileTypeOf(entry) !== null) {
+      } else if (
+        stat.isFile() &&
+        !SKIP_FILES.test(entry) &&
+        typeOf(extOf(entry)) !== null
+      ) {
         results.push(full);
       }
     }
