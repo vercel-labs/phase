@@ -40,7 +40,12 @@ export function scanTargets(paths) {
         continue;
       }
       filesScanned++;
-      findings.push(...scanFile(relative(base, filePath), content, diag));
+      // File targets keep the path as the caller gave it, so directory-based
+      // exclusions (__tests__, node_modules) still apply in diff-scoped scans.
+      const rel = stat.isDirectory()
+        ? toPosix(relative(base, filePath))
+        : toPosix(target).replace(/^\.\//, '');
+      findings.push(...scanFile(rel, content, diag));
     }
   }
 
@@ -77,29 +82,15 @@ export function scanFile(relPath, content, diag = null) {
       continue;
     }
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-
-      if (signal.matcher) {
-        if (!signal.matcher(lines, i)) continue;
-      } else {
-        if (!signal.pattern.test(line)) continue;
-
-        if (signal.contextPattern) {
-          const context = lines.slice(Math.max(0, i - 5), i + 6).join('\n');
-          if (!signal.contextPattern.test(context)) continue;
-        }
-      }
-
-      if (suppressions.get(i)?.has(signal.id)) {
-        if (diag) diag.suppressed++;
-        continue;
-      }
-
-      findings.push(makeFinding(signal, relPath, i + 1, line));
-
-      if (signal.perFile) break;
+    // A per-file finding needs a file-level suppression: a directive naming
+    // the signal anywhere in the file suppresses its single finding
+    // (otherwise the finding would just move to the next matching line).
+    if (signal.perFile && suppressedAnywhere(suppressions, signal.id)) {
+      if (diag) diag.suppressed++;
+      continue;
     }
+
+    findings.push(...scanSignal(signal, lines, relPath, suppressions, diag));
   }
 
   return dedup(findings);
@@ -195,7 +186,9 @@ export function formatText(result) {
 // perFile: true means one finding per file (the condition is file-level).
 
 // Context pattern for state updates. Excludes DOM/timer/canvas setters that
-// are legitimate inside frame callbacks.
+// are legitimate inside frame callbacks. The exclusions accept rare false
+// negatives when a React setter shares a DOM setter name (e.g. setSelection,
+// setTransform): missing one candidate beats flagging the recommended pattern.
 const STATE_UPDATE_CONTEXT =
   /\bsetState\s*\(|\bdispatch\s*\(|\bset(?!Timeout\b|Interval\b|Immediate\b|Attribute|Property\b|PointerCapture\b|Item\b|Selection|RangeText\b|CustomValidity\b|Transform\b|LineDash\b|SinkId\b|RequestHeader\b)[A-Z]\w*\s*\(/;
 
@@ -712,6 +705,12 @@ export const SIGNALS = [
           content:
             '@keyframes grow {\n  0% {\n    height: 0;\n  }\n  100% {\n    height: 300px;\n  }\n}\n',
         },
+        {
+          // Compact single-line frames are the common hand-written form.
+          file: 'src/drop.css',
+          content:
+            '@keyframes drop {\n  from { top: -10px; }\n  to { top: 0; }\n}\n',
+        },
       ],
       noMatch: [
         {
@@ -722,6 +721,12 @@ export const SIGNALS = [
         {
           file: 'src/layout.css',
           content: '.sidebar {\n  width: 240px;\n  top: 0;\n}\n',
+        },
+        {
+          // Single-line ordinary rules are not keyframes, even nested.
+          file: 'src/media.css',
+          content:
+            '@media (min-width: 600px) {\n  .sidebar { width: 240px; }\n}\n',
         },
       ],
     },
@@ -1024,10 +1029,13 @@ function matchesPermanentWillChangeClass(lines, i) {
 /**
  * Layout property inside a @keyframes block. Walks up through brace pairs
  * to distinguish keyframe declarations from ordinary rule declarations.
+ * Handles single-line frames (`from { left: 0; }`): the property may follow
+ * `{` or `;`, and the enclosing-block walk starts on the previous line, so
+ * the frame's own brace never counts against the balance.
  */
 function matchesKeyframesLayoutProp(lines, i) {
   if (
-    !/^\s*(?:width|height|top|left|right|bottom|margin|padding|inset)[a-z-]*\s*:/.test(
+    !/(?:^|[{;])\s*(?:width|height|top|left|right|bottom|margin|padding|inset)[a-z-]*\s*:/.test(
       lines[i],
     )
   ) {
@@ -1114,12 +1122,60 @@ function collectSuppressions(relPath, lines, diag) {
       }
       continue;
     }
+    if (!SIGNALS.some((s) => s.id === directive[1])) {
+      if (diag) {
+        diag.warnings.push(
+          `${relPath}:${i + 1}  phase-scan-ignore names unknown signal '${directive[1]}'; directive ignored`,
+        );
+      }
+      continue;
+    }
     for (const target of [i, i + 1]) {
       if (!suppressions.has(target)) suppressions.set(target, new Set());
       suppressions.get(target).add(directive[1]);
     }
   }
   return suppressions;
+}
+
+function suppressedAnywhere(suppressions, signalId) {
+  for (const ids of suppressions.values()) {
+    if (ids.has(signalId)) return true;
+  }
+  return false;
+}
+
+/** Runs one signal over a file's lines, honoring suppressions and perFile. */
+function scanSignal(signal, lines, relPath, suppressions, diag) {
+  const findings = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (signal.matcher) {
+      if (!signal.matcher(lines, i)) continue;
+    } else {
+      if (!signal.pattern.test(line)) continue;
+
+      if (signal.contextPattern) {
+        const context = lines.slice(Math.max(0, i - 5), i + 6).join('\n');
+        if (!signal.contextPattern.test(context)) continue;
+      }
+    }
+
+    if (suppressions.get(i)?.has(signal.id)) {
+      if (diag) diag.suppressed++;
+      continue;
+    }
+
+    findings.push(makeFinding(signal, relPath, i + 1, line));
+
+    if (signal.perFile) break;
+  }
+  return findings;
+}
+
+function toPosix(path) {
+  return path.split('\\').join('/');
 }
 
 function skillVersion() {

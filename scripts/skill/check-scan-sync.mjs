@@ -43,17 +43,22 @@ function slugify(heading) {
 }
 
 // Headings and non-code lines of a markdown file (code fences excluded).
+// A fence only closes on a marker of at least its own backtick count, so
+// ``` blocks nested inside ```` blocks (audit.md's recommendation template)
+// do not flip the parser back into prose mid-fence.
 function parseMarkdown(path) {
   const lines = readFileSync(path, 'utf8').split('\n');
   const anchors = new Set();
   const proseLines = [];
-  let inFence = false;
+  let fence = null;
   for (const line of lines) {
-    if (/^\s*(````|```)/.test(line)) {
-      inFence = !inFence;
+    const marker = /^\s*(`{3,})/.exec(line);
+    if (marker) {
+      if (fence === null) fence = marker[1].length;
+      else if (marker[1].length >= fence) fence = null;
       continue;
     }
-    if (inFence) continue;
+    if (fence !== null) continue;
     proseLines.push(line);
     const heading = /^#{1,6}\s+(.+?)\s*$/.exec(line);
     if (heading) anchors.add(slugify(heading[1]));

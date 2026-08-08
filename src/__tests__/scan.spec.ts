@@ -54,6 +54,9 @@ describe('scan signal catalog', () => {
         expect(NOISE_TIERS.has(signal.noise)).toBe(true);
         expect(signal.why.length).toBeGreaterThan(0);
         expect(signal.fix.startsWith('references/')).toBe(true);
+        if (signal.supersedes) {
+          expect(SIGNALS.some((s) => s.id === signal.supersedes)).toBe(true);
+        }
       });
 
       it('declares at least one match and one noMatch example', () => {
@@ -113,6 +116,32 @@ describe('suppression directive', () => {
     expect(diag.warnings.length).toBe(1);
     expect(diag.warnings[0]).toContain('missing a reason');
   });
+
+  it('warns on an unknown signal id instead of silently ignoring the typo', () => {
+    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    const findings = scanFile(
+      'src/anim.ts',
+      '// phase-scan-ignore manual-raff -- typo\nrequestAnimationFrame(step);\n',
+      diag,
+    );
+    expect(findings.some((f) => f.signal === 'manual-raf')).toBe(true);
+    expect(diag.suppressed).toBe(0);
+    expect(diag.warnings.length).toBe(1);
+    expect(diag.warnings[0]).toContain('unknown signal');
+  });
+
+  it('suppresses a per-file signal for the whole file, not just one line', () => {
+    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    const findings = scanFile(
+      'src/anim.ts',
+      '// phase-scan-ignore missing-reduced-motion -- decorative, owner approved\nrequestAnimationFrame(a);\nrequestAnimationFrame(b);\n',
+      diag,
+    );
+    expect(
+      findings.filter((f) => f.signal === 'missing-reduced-motion'),
+    ).toEqual([]);
+    expect(diag.suppressed).toBe(1);
+  });
 });
 
 describe('scan CLI', () => {
@@ -145,14 +174,30 @@ describe('scan CLI', () => {
     expect(runCli(['workspace']).status).toBe(0);
   });
 
-  it('accepts individual files as targets', () => {
+  it('accepts individual files as targets, keeping the path as given', () => {
     const run = runCli(['--json', 'workspace/src/ticker.ts']);
     expect(run.status).toBe(0);
     const actual = JSON.parse(run.stdout);
     expect(actual.summary.filesScanned).toBe(1);
     expect(
-      actual.findings.every((f: { file: string }) => f.file === 'ticker.ts'),
+      actual.findings.every(
+        (f: { file: string }) => f.file === 'workspace/src/ticker.ts',
+      ),
     ).toBe(true);
+  });
+
+  it('applies path exclusions to file targets (diff-scoped scans)', () => {
+    // Excluded-directory context must survive when the file is passed
+    // directly, as in `git diff --name-only | xargs node scan.mjs`.
+    const run = runCli(['--json', '../../../../../src/__tests__/scan.spec.ts']);
+    expect(run.status).toBe(0);
+    expect(JSON.parse(run.stdout).findings).toEqual([]);
+  });
+
+  it('prints usage on --help', () => {
+    const run = runCli(['--help']);
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain('Usage:');
   });
 
   it('exits 2 with usage on an unknown option or missing target', () => {
