@@ -1,0 +1,23 @@
+{
+  "description": "Regression guard for a confirmed failure: the auditor once recommended client-gated lazy mounts that would have removed server-rendered content, breaking Next.js PPR and SEO. The page is a Server Component with experimental_ppr; the correct fix keeps content in the SSR HTML.",
+  "scan": {
+    "command": "node <skill-dir>/scripts/scan.mjs --json workspace",
+    "assertions": {
+      "required": [],
+      "requiredAbsent": [
+        {
+          "signal": "when-visible-no-fallback",
+          "reason": "nothing is lazy-mounted yet; the page is fully server-rendered"
+        }
+      ]
+    }
+  },
+  "expectedBehavior": [
+    "Reads app/page.tsx before recommending and notices experimental_ppr and that everything is a Server Component in the initial SSR HTML (Step 2.5 blast radius)",
+    "Recommends Defer (or CSS content-visibility with contain-intrinsic-size) for the testimonials wall: content stays server-rendered and in the PPR static shell, only paint is deferred",
+    "Does not recommend WhenVisible, WhenIdle, or next/dynamic with ssr: false for this server-rendered content unless explicitly labeled semantics-changing, with the SSR/SEO/PPR impact stated and user confirmation requested",
+    "If a lazy mount is offered as a labeled alternative, it includes a fallback sized to the final content height",
+    "Marks each recommendation with the Semantics row (preserving vs changing) from the audit.md template",
+    "Classifies the rest of the page as no change; invents no defects"
+  ]
+}

@@ -8,8 +8,10 @@ A repeatable procedure for auditing existing animation and rendering code. A det
 - [Step 1: Scan for candidates](#step-1-scan-for-candidates)
 - [Step 1.5: CSS, loading, and architecture pass](#step-15-css-loading-and-architecture-pass)
 - [Step 2: Classify each candidate](#step-2-classify-each-candidate)
+- [Step 2.5: Verify the blast radius](#step-25-verify-the-blast-radius)
 - [Step 3: Emit recommendations](#step-3-emit-recommendations)
 - [Step 4: Verify](#step-4-verify)
+- [Scope and handoffs](#scope-and-handoffs)
 - [Rules](#rules)
 - [When NOT to run the audit](#when-not-to-run-the-audit)
 - [Severity weighting](#severity-weighting)
@@ -238,6 +240,22 @@ CSS-only  →  Minimal JS (useTween)  →  phase primitives  →  External libra
 5. **Is the current implementation already optimal?**
    → Recommend no change. Document why.
 
+## Step 2.5: Verify the blast radius
+
+A recommendation made from a matched line alone is a guess. Perf recommendations have broken SSR, SEO, and Next.js PPR when the auditor did not see the surrounding code. Complete this checklist for every candidate before emitting:
+
+- [ ] **Read the whole file**, not just the finding's line. If the change alters behavior beyond the file, find the component's usage sites (grep the import).
+- [ ] **Determine the rendering environment.** In Next.js App Router: is this a Server Component (no `'use client'`)? Is PPR active (`experimental_ppr` in the route, `ppr`/`cacheComponents` in `next.config`)? Is the subtree inside a Suspense boundary or streamed? Is this content in the initial SSR HTML today?
+- [ ] **Classify the recommendation's semantics:**
+  - **Preserving.** Rendered output and rendering guarantees unchanged: swapping transitioned properties, pooling an observer, moving per-frame `setState` to ref writes, adding reduced-motion handling, `Defer` (children stay server-rendered; only paint is deferred).
+  - **Changing.** SSR HTML, hydration timing, mount timing, or visible behavior changes: `WhenVisible`/`WhenIdle` remove children from server HTML; `next/dynamic` with `ssr: false` does too; conditional unmount drops DOM; `useTween` changes when a value arrives.
+- [ ] **Semantics-changing recommendations say so and get consent.** State exactly what changes ("this section leaves the server HTML: SEO, LCP, and the PPR static shell are affected") and require the user's explicit go-ahead before applying. Prefer the semantics-preserving alternative when one exists.
+
+Hard rules:
+
+- **Never replace server-rendered content with a client-gated mount** (`WhenVisible`, `WhenIdle`, `next/dynamic` + `ssr: false`) in a Server Component subtree or a PPR static shell without flagging the change and getting confirmation. `Defer` is the SSR-safe default.
+- **Framework guarantees trump micro-optimizations.** If a perf recommendation conflicts with framework behavior (streaming, caching, hydration order), the framework wins: find the preserving alternative or recommend no change.
+
 ## Step 3: Emit recommendations
 
 For each finding, emit a structured recommendation:
@@ -249,6 +267,7 @@ For each finding, emit a structured recommendation:
 **Problem:** <what's wrong and why it matters>
 **Recommendation:** <CSS-only | useTween | useLoop | useCanvas | useLifecycle | Presence | Swap | WhenVisible | external library | no change>
 **Why this tier:** <one sentence justifying the choice>
+**Semantics:** <preserving | changing: what changes (SSR HTML, hydration, timing) and that it needs the user's confirmation>
 
 Before:
 ```tsx
@@ -270,6 +289,17 @@ After applying fixes, re-run the same scan command. The audit is done when one o
 
 If new signals appear (a fix can introduce a different anti-pattern), classify and fix those too. When the work is performance-motivated, measure frame time before and after; an audit without measurement is speculation.
 
+## Scope and handoffs
+
+phase audits what its references can defend: animation lifecycle, rendering gating, observer/listener hygiene, and CSS animation cost. It does **not** audit React data flow, Next.js data fetching (request waterfalls), bundle architecture, caching strategy, or server-component boundaries. A recommendation this skill cannot back with one of its reference files is not a phase recommendation.
+
+While reading context (Step 2.5) you will see adjacent issues. The protocol:
+
+- **Do not fix them under this skill, and do not silently drop them.**
+- Append an **Out of scope** section to the report listing each one (one line: file, issue, domain).
+- Point to the right skill for the domain: React and Next.js performance (waterfalls, bundle size, server-side performance, re-render architecture) belongs to `react-best-practices` from [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) (`npx skills add vercel-labs/agent-skills`). If that skill is already installed in the project, offer to run it on the flagged files.
+- The same boundary applies in reverse: when another skill's guidance conflicts with a phase micro-optimization, defer to the more framework-aware guidance and say so.
+
 ## Rules
 
 - **Never recommend a higher tier than needed.** CSS-only is always preferred when it works.
@@ -279,6 +309,8 @@ If new signals appear (a fix can introduce a different anti-pattern), classify a
 - **Always address reduced motion.** If the candidate has no reduced-motion handling, the recommendation must include it.
 - **Always address cleanup.** If the candidate leaks listeners/observers/rAF handles, the recommendation must include proper teardown.
 - **Show before/after code.** Keep snippets minimal, only the relevant change, not the entire file.
+- **Never trade rendering semantics for performance silently.** Changes to SSR HTML presence, hydration, or streaming are semantics-changing (Step 2.5): label them and get explicit consent.
+- **Out-of-domain findings are handed off, not improvised.** See [Scope and handoffs](#scope-and-handoffs).
 
 ## When NOT to run the audit
 
@@ -353,5 +385,6 @@ Present findings as a numbered list, grouped by impact:
 2. **High.** Wastes significant CPU or leaks resources
 3. **Medium.** Suboptimal but functional
 4. **No change.** Already well-implemented (list briefly for completeness)
+5. **Out of scope.** Adjacent issues for other skills (one line each, naming the skill to use)
 
 End with a summary: "Found N candidates, M actionable, K already optimal."

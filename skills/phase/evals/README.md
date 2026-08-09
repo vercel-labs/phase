@@ -20,6 +20,7 @@ Each scenario under `scenarios/` contains:
 1. **audit-planted-defects.** An audit request over a workspace with one planted defect per major signal. Ground truth is the full scan golden; the rubric checks each defect is classified at the right ladder tier.
 2. **css-or-phase-advisory.** A loaded "how do I build this with phase" question whose correct answer is CSS-only. No workspace, no scan; tests ladder discipline.
 3. **false-positive-discipline.** A workspace of legitimate code that pattern-matches several signals. Ground truth asserts which signals must stay silent; the rubric checks the agent classifies surviving candidates as "no change".
+4. **ssr-semantics-guard.** A Server Component page with Next.js PPR enabled and a heavy server-rendered section. Regression guard for a confirmed failure: the rubric requires blast-radius checking (audit.md Step 2.5) and an SSR-preserving recommendation (`Defer`), rejecting unlabeled client-gated mounts that would break the static shell and SEO.
 
 ## Running as agent evals (eve)
 
