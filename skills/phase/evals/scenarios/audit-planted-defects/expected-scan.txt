@@ -65,6 +65,7 @@ manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand)
   src/use-latest.ts:4  const valueRef = useRef(value);
 
 ─────────────────────────────────────────
+Scanned 9 files.
 Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup, 1 suppressed
 Next: classify each candidate against references/audit.md Step 2 (the decision ladder).
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.

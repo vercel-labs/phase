@@ -122,6 +122,7 @@ manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand)
   src/use-latest.ts:4  const valueRef = useRef(value);
 
 ─────────────────────────────────────────
+Scanned 9 files.
 Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup, 1 suppressed
 Next: classify each candidate against references/audit.md Step 2 (the decision ladder).
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
@@ -136,7 +137,7 @@ Two orthogonal ratings guide how to act on each block:
 
 ### Suppressions
 
-A comment `phase-scan-ignore <signal-id> -- <reason>` suppresses that signal on the same line and the next line. The reason is mandatory; the scanner warns about and ignores reason-less directives and directives naming unknown signal ids. For per-file signals (`missing-reduced-motion`), a directive anywhere in the file suppresses its single finding.
+A comment `phase-scan-ignore <signal-id> -- <reason>` (colon after `ignore` also accepted) suppresses that signal on the same line and the next line. The reason is mandatory; the scanner warns about and ignores reason-less directives and directives naming unknown signal ids. For per-file signals (`missing-reduced-motion`), a directive anywhere in the file suppresses its single finding. Suppressing a superseding signal (`setstate-in-raf`) re-exposes the general one (`manual-raf`) on that line; name both to silence both. Also note: the scanner cannot tell a dangling directive (nothing left to suppress) from an active one, so remove directives when the code they covered is gone.
 
 **Policy: suppressions record human decisions.** Never add a suppression yourself unless the user has explicitly accepted the finding. If the scanner warns about a reason-less directive, report it; do not silently add a reason or delete the directive.
 

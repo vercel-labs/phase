@@ -142,6 +142,27 @@ describe('suppression directive', () => {
     ).toEqual([]);
     expect(diag.suppressed).toBe(1);
   });
+
+  it('does not count a dangling directive with nothing to suppress', () => {
+    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    scanFile(
+      'src/anim.ts',
+      '// phase-scan-ignore missing-reduced-motion -- leftover\nconst x = 1;\n',
+      diag,
+    );
+    expect(diag.suppressed).toBe(0);
+  });
+
+  it('accepts the colon form of the directive', () => {
+    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    const findings = scanFile(
+      'src/anim.ts',
+      '// phase-scan-ignore: manual-raf -- accepted one-shot\nrequestAnimationFrame(step);\n',
+      diag,
+    );
+    expect(findings.filter((f) => f.signal === 'manual-raf')).toEqual([]);
+    expect(diag.suppressed).toBe(1);
+  });
 });
 
 describe('scan CLI', () => {
@@ -167,6 +188,21 @@ describe('scan CLI', () => {
   it('reports reason-less directives as warnings on stderr', () => {
     const run = runCli(['workspace']);
     expect(run.stderr).toContain('phase-scan-ignore is missing a reason');
+  });
+
+  it('includes warnings in --json output for machine consumers', () => {
+    const run = runCli(['--json', 'workspace']);
+    const actual = JSON.parse(run.stdout);
+    expect(actual.warnings.length).toBe(1);
+    expect(actual.warnings[0]).toContain('missing a reason');
+  });
+
+  it('distinguishes a clean scan from scanning nothing', () => {
+    // skills/phase/dist contains only the zip: zero scannable files.
+    const empty = runCli(['../../../dist']);
+    expect(empty.status).toBe(0);
+    expect(empty.stdout).toContain('No scannable files found');
+    expect(empty.stdout).not.toContain('✓');
   });
 
   it('--fail-on exits 1 when the threshold is hit', () => {

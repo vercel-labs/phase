@@ -16,6 +16,9 @@
       "medium": 4
     }
   },
+  "warnings": [
+    "src/suppressed-banner.ts:5  phase-scan-ignore is missing a reason (use: phase-scan-ignore <signal-id> -- <reason>); directive ignored"
+  ],
   "findings": [
     {
       "signal": "tailwind-transition-all",

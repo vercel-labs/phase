@@ -82,15 +82,29 @@ export function scanFile(relPath, content, diag = null) {
       continue;
     }
 
+    const signalFindings = scanSignal(
+      signal,
+      lines,
+      relPath,
+      suppressions,
+      diag,
+    );
+
     // A per-file finding needs a file-level suppression: a directive naming
     // the signal anywhere in the file suppresses its single finding
     // (otherwise the finding would just move to the next matching line).
-    if (signal.perFile && suppressedAnywhere(suppressions, signal.id)) {
+    // Counted only when there was actually a finding to suppress, so a
+    // dangling directive does not inflate the suppressed count.
+    if (
+      signal.perFile &&
+      signalFindings.length > 0 &&
+      suppressedAnywhere(suppressions, signal.id)
+    ) {
       if (diag) diag.suppressed++;
       continue;
     }
 
-    findings.push(...scanSignal(signal, lines, relPath, suppressions, diag));
+    findings.push(...signalFindings);
   }
 
   return dedup(findings);
@@ -119,6 +133,7 @@ export function formatJson(result) {
         medium: counts.medium,
       },
     },
+    warnings: result.warnings ?? [],
     findings: result.findings,
   };
 }
@@ -155,13 +170,21 @@ export function formatText(result) {
   const actionable = counts.critical + counts.high + counts.medium;
   const suppressed = result.suppressed ?? 0;
 
-  if (result.findings.length === 0 && suppressed === 0) {
-    out.push('', '✓ No animation anti-pattern candidates found.');
+  // A clean result must be distinguishable from scanning nothing: an empty
+  // or mistyped target reading as "no findings" would be false confidence.
+  if (result.filesScanned === 0) {
+    out.push('', '⚠ No scannable files found. Check the target path.');
+  } else if (result.findings.length === 0 && suppressed === 0) {
+    out.push(
+      '',
+      `✓ No animation anti-pattern candidates found (${result.filesScanned} files scanned).`,
+    );
   } else {
     const suppressedNote = suppressed > 0 ? `, ${suppressed} suppressed` : '';
     out.push(
       '',
       '─────────────────────────────────────────',
+      `Scanned ${result.filesScanned} files.`,
       `Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup${suppressedNote}`,
       'Next: classify each candidate against references/audit.md Step 2 (the decision ladder).',
       'Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.',
@@ -1107,7 +1130,8 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const IGNORE_DIRECTIVE = /phase-scan-ignore\s+([a-z-]+)(?:\s+--\s*(\S.*))?/;
+// Accepts both `phase-scan-ignore id` and `phase-scan-ignore: id`.
+const IGNORE_DIRECTIVE = /phase-scan-ignore:?\s+([a-z-]+)(?:\s+--\s*(\S.*))?/;
 
 function collectSuppressions(relPath, lines, diag) {
   const suppressions = new Map();
@@ -1162,7 +1186,10 @@ function scanSignal(signal, lines, relPath, suppressions, diag) {
       }
     }
 
-    if (suppressions.get(i)?.has(signal.id)) {
+    // Per-file signals are suppressed at the file level (see scanFile), not
+    // per line, so a directive on the first matching line cannot merely
+    // shift the finding to the next one.
+    if (!signal.perFile && suppressions.get(i)?.has(signal.id)) {
       if (diag) diag.suppressed++;
       continue;
     }

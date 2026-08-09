@@ -66,6 +66,7 @@ export interface ScanJson {
     suppressed: number;
     bySeverity: { critical: number; high: number; medium: number };
   };
+  warnings: string[];
   findings: ScanFinding[];
 }
 
