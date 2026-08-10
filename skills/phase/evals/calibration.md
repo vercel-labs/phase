@@ -4,6 +4,30 @@ Running record of scanner calibration against real-world repositories. Noise tie
 
 Each entry records: date, skill version and signal count, repos with commit SHAs, per-signal finding counts, sample classification verdicts, and actions taken. Counts are from `scan.mjs --json` over a fresh shallow clone in `/tmp` (never clone into this repo).
 
+## 2026-08-10 — 10-repo campaign, skill 0.0.14, 24 signals
+
+Broader pre-ship validation across diverse production profiles plus deliberate blind-spot probes. Repos: calcom/cal.com `176037d`, dubinc/dub `cc8f021`, outline/outline `6061964`, twentyhq/twenty `f9a0a202`, payloadcms/payload `dc3e666`, makeplane/plane `1c8a60f`, bluesky-social/social-app `51401e4`, openstatusHQ/openstatus `57517b6`, elk-zone/elk `8aa2b46`, documenso/documenso `962cffc`.
+
+Post-fix totals (files scanned / findings / context): calcom 5034/167 next, dub 4122/266 next, outline 2418/150 none, twenty 23011/493 next, payload 7525/240 next+ppr, plane 3325/315 next, bluesky 1800/101 none, openstatus 2240/39 next, elk 133/4 none, documenso 2090/104 next.
+
+Verdicts and first real observations:
+
+- **Vendored/bundled noise was the campaign's biggest FP source, now fixed.** calcom and twenty's entire `background-animation` counts (6 and 20) were `.yarn/releases/*.cjs` binaries and committed seed bundles (minified React in `seed-project/*/index.mjs`); two of calcom's `setstate-in-raf` hits were also in the yarn bundle. Fixes: `.yarn` added to skip lists, and a content-level minified-file heuristic (average line length > 500 skips the file, whatever it is named).
+- `background-animation` (payload, 5, first genuine observations): tooltip `setTimeout(() => setIsMounted(false), 200)` is the textbook `Presence` replacement (true), drag-handle fade timers are genuine candidates, an autosave debounce is a false positive (context word collision). Mixed picture; `noisy` tier validated.
+- `global-has-selector` (payload, 2): `body:has(.drawer--is-open)` and `body:has(.drag-overlay) *`, textbook true positives. `precise` validated in the wild.
+- `permanent-will-change` (payload 1, plane 2): permanent `will-change` in global stylesheets including layout properties (`will-change: width, opacity`). True positives.
+- `keyframes-layout-animation` (calcom 15, twenty 8, openstatus 4): calcom's are real `height: 0% -> 100%` reveal keyframes. True positives.
+- `tailwind-permanent-will-change` (calcom 6, dub 1): always-on `will-change-transform` in dialog/sheet component class strings. Genuine review candidates.
+- **Finding storms**: dub 179 and plane 204 `tailwind-transition-all` hits. Text output now caps listings at 20 per signal with a remainder count (`--json` for the full list) so a storm cannot bury the rest of the report or an agent's context window.
+
+Blind spots confirmed as documented (audit.md already marks these manual):
+
+- Vue/Nuxt (elk): 133 scannable files in an entire Mastodon client; `.vue` SFCs are invisible to the scanner.
+- styled-components (outline) and emotion (twenty): JS signals fire normally, CSS signals near-silent because styles live in template literals.
+- React Native (bluesky): `.tsx` scans fine; `missing-reduced-motion` findings there need judgment (RN has no CSS media queries; the fix is `useReducedMotion` from the platform, not `prefers-reduced-motion`).
+
+Still zero genuine observations: `setstate-in-ontick`, `pointer-listener-layout-read`, and the remaining phase-usage signals (no scanned repo uses phase). Their tiers remain example-guarded predictions.
+
 ## 2026-08-10 — skill 0.0.14, 24 signals
 
 Repos: shadcn-ui/ui `deda4df`, excalidraw/excalidraw `c5a50d2`, vercel/ai-chatbot `c2f8235`.

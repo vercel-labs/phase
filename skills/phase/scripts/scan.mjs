@@ -85,6 +85,12 @@ export function scanFile(relPath, content, diag = null) {
 
   const findings = [];
   const lines = content.split(/\r?\n/);
+
+  // Minified/bundled content not named .min.* (vendored tooling, committed
+  // build artifacts) produces garbage findings. Real code averages well
+  // under 100 chars per line; bundles average thousands.
+  if (content.length / lines.length > 500) return [];
+
   const suppressions = collectSuppressions(relPath, lines, diag);
 
   for (const signal of SIGNALS) {
@@ -173,8 +179,15 @@ export function formatText(result) {
         `${id} — ${signal.label} (${items.length}) · noise: ${signal.noise}`,
         `  fix: ${signal.fix}`,
       );
-      for (const item of items) {
+      // A finding storm (Tailwind apps can have 200+ transition-all hits)
+      // buries the rest of the report; cap the listing, keep the count.
+      for (const item of items.slice(0, MAX_LISTED_PER_SIGNAL)) {
         out.push(`  ${item.file}:${item.line}  ${item.text.slice(0, 100)}`);
+      }
+      if (items.length > MAX_LISTED_PER_SIGNAL) {
+        out.push(
+          `  … and ${items.length - MAX_LISTED_PER_SIGNAL} more (use --json for the full list)`,
+        );
       }
     }
   }
@@ -628,10 +641,11 @@ const FILE_TYPE_EXTENSIONS = {
 
 const JSX_EXTENSIONS = new Set(['.tsx', '.jsx']);
 
-// Agent-config directories and this skill's own eval fixtures contain
-// deliberately bad example code; scanning them buries real findings.
+// Agent-config directories, vendored tooling, and this skill's own eval
+// fixtures contain code nobody will edit or deliberately bad example code;
+// scanning them buries real findings.
 const EXCLUDED_PATHS =
-  /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__|\.agents\/|\.claude\/|\.cursor\/|skills\/phase\/evals\//;
+  /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__|\.agents\/|\.claude\/|\.cursor\/|\.yarn\/|skills\/phase\/evals\//;
 
 const SKIP_DIRS = new Set([
   'node_modules',
@@ -648,9 +662,12 @@ const SKIP_DIRS = new Set([
   '.claude',
   '.cursor',
   '.github',
+  '.yarn',
 ]);
 
 const SKIP_FILES = /\.min\.|\.d\.ts$|\.d\.mts$/;
+
+const MAX_LISTED_PER_SIGNAL = 20;
 
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

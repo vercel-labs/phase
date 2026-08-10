@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { SIGNAL_EXAMPLES } from '../../skills/phase/scripts/scan-examples.mjs';
 import type { ScanDiag } from '../../skills/phase/scripts/scan.d.mts';
 import {
+  formatText,
   scanFile,
   scanTargets,
   SEVERITY_ORDER,
@@ -104,13 +105,49 @@ describe('file selection', () => {
     );
   });
 
-  it('excludes agent-config dirs and the skill eval fixtures', () => {
+  it('excludes agent-config dirs, vendored tooling, and eval fixtures', () => {
     const raf = 'requestAnimationFrame(t);\n';
     expect(scanFile('.agents/skills/phase/tool.ts', raf)).toEqual([]);
     expect(scanFile('.cursor/rules/example.ts', raf)).toEqual([]);
+    expect(scanFile('.yarn/releases/yarn-4.13.0.cjs', raf)).toEqual([]);
     expect(
       scanFile('skills/phase/evals/scenarios/x/workspace/src/t.ts', raf),
     ).toEqual([]);
+  });
+
+  it('skips minified content regardless of filename', () => {
+    // Committed build artifacts (seed bundles, vendored binaries) are one
+    // giant line; scanning them produces garbage findings.
+    const minified =
+      'var a=1;'.repeat(200) +
+      "setInterval(()=>{el.style.transform='translateX(1px)'},16);";
+    expect(scanFile('src/seed-bundle.mjs', minified)).toEqual([]);
+  });
+});
+
+describe('output', () => {
+  it('caps per-signal listings and reports the remainder', () => {
+    const content = Array.from(
+      { length: 25 },
+      () => 'requestAnimationFrame(step);',
+    ).join('\n');
+    const findings = scanFile('src/storm.ts', content);
+    const text = formatText({
+      targets: ['.'],
+      filesScanned: 1,
+      findings,
+      suppressed: 0,
+      warnings: [],
+      context: {
+        framework: null,
+        appRouter: false,
+        ppr: false,
+        clientComponents: 0,
+      },
+    });
+    expect(text).toContain('src/storm.ts:20');
+    expect(text).not.toContain('src/storm.ts:21');
+    expect(text).toContain('… and 5 more (use --json for the full list)');
   });
 });
 
