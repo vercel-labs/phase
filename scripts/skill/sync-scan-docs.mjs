@@ -29,7 +29,12 @@ if (!blockRe.test(audit)) {
   process.exit(1);
 }
 
-const updated = audit.replace(blockRe, `$1${golden}$2`);
+// A function replacement, so `$&`, `$1`, or a backtick-dollar sequence in the
+// quoted source lines is spliced literally instead of being interpreted as a
+// replacement pattern.
+const updated = audit.replace(blockRe, (_match, open, close) => {
+  return `${open}${golden}${close}`;
+});
 if (updated === audit) {
   console.log('✓ audit.md scan sample already in sync.');
 } else {
