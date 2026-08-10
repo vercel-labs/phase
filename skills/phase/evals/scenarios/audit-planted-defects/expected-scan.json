@@ -15,9 +15,11 @@
     },
     "linesSkipped": 0,
     "total": 21,
+    "sites": 18,
     "returned": 21,
     "actionable": 20,
     "dedup": 1,
+    "perFrame": 15,
     "suppressed": 1,
     "bySeverity": {
       "critical": 9,
@@ -25,11 +27,34 @@
       "medium": 4
     }
   },
+  "hotspots": [
+    {
+      "file": "src/ticker.ts",
+      "count": 5
+    },
+    {
+      "file": "styles/globals.css",
+      "count": 4
+    },
+    {
+      "file": "src/hero-animation.tsx",
+      "count": 3
+    },
+    {
+      "file": "src/phases/progress-meter.ts",
+      "count": 3
+    },
+    {
+      "file": "src/suppressed-banner.ts",
+      "count": 2
+    }
+  ],
   "context": {
     "framework": null,
     "appRouter": false,
     "ppr": false,
-    "clientComponents": 0
+    "clientComponents": 0,
+    "evidence": []
   },
   "warnings": [
     "src/suppressed-banner.ts:5  phase-scan-ignore is missing a reason (use: phase-scan-ignore <signal-id> -- <reason>); directive ignored"
@@ -39,6 +64,7 @@
       "signal": "tailwind-transition-all",
       "severity": "high",
       "noise": "noisy",
+      "execution": "incidental",
       "file": "src/card.tsx",
       "line": 5,
       "text": "<div className=\"rounded-lg border transition-all duration-300 hover:shadow-lg\">",
@@ -48,6 +74,7 @@
       "signal": "setstate-in-raf",
       "severity": "critical",
       "noise": "normal",
+      "execution": "per-frame",
       "file": "src/hero-animation.tsx",
       "line": 11,
       "text": "frame = requestAnimationFrame(loop);",
@@ -57,6 +84,7 @@
       "signal": "setstate-in-raf",
       "severity": "critical",
       "noise": "normal",
+      "execution": "per-frame",
       "file": "src/hero-animation.tsx",
       "line": 13,
       "text": "frame = requestAnimationFrame(loop);",
@@ -66,6 +94,7 @@
       "signal": "missing-reduced-motion",
       "severity": "critical",
       "noise": "noisy",
+      "execution": "per-frame",
       "file": "src/hero-animation.tsx",
       "line": 11,
       "text": "frame = requestAnimationFrame(loop);",
@@ -75,6 +104,7 @@
       "signal": "raw-io",
       "severity": "medium",
       "noise": "normal",
+      "execution": "per-frame",
       "file": "src/lazy-image.tsx",
       "line": 7,
       "text": "const io = new IntersectionObserver(([entry]) => {",
@@ -84,6 +114,7 @@
       "signal": "manual-raf",
       "severity": "high",
       "noise": "noisy",
+      "execution": "per-frame",
       "file": "src/phases/progress-meter.ts",
       "line": 7,
       "text": "requestAnimationFrame(frame);",
@@ -93,6 +124,7 @@
       "signal": "manual-raf",
       "severity": "high",
       "noise": "noisy",
+      "execution": "per-frame",
       "file": "src/phases/progress-meter.ts",
       "line": 9,
       "text": "requestAnimationFrame(frame);",
@@ -102,6 +134,7 @@
       "signal": "missing-reduced-motion",
       "severity": "critical",
       "noise": "noisy",
+      "execution": "per-frame",
       "file": "src/phases/progress-meter.ts",
       "line": 7,
       "text": "requestAnimationFrame(frame);",
@@ -111,6 +144,7 @@
       "signal": "forced-reflow",
       "severity": "critical",
       "noise": "noisy",
+      "execution": "per-frame",
       "file": "src/suppressed-banner.ts",
       "line": 6,
       "text": "const width = el.offsetWidth;",
@@ -120,6 +154,7 @@
       "signal": "missing-reduced-motion",
       "severity": "critical",
       "noise": "noisy",
+      "execution": "per-frame",
       "file": "src/suppressed-banner.ts",
       "line": 3,
       "text": "requestAnimationFrame(() => el.classList.add('banner-in'));",
@@ -129,6 +164,7 @@
       "signal": "redundant-mutation-observers",
       "severity": "medium",
       "noise": "normal",
+      "execution": "per-frame",
       "file": "src/theme-watcher.ts",
       "line": 2,
       "text": "const observer = new MutationObserver(() => {",
@@ -138,6 +174,7 @@
       "signal": "manual-raf",
       "severity": "high",
       "noise": "noisy",
+      "execution": "per-frame",
       "file": "src/ticker.ts",
       "line": 5,
       "text": "requestAnimationFrame(tick);",
@@ -147,6 +184,7 @@
       "signal": "manual-raf",
       "severity": "high",
       "noise": "noisy",
+      "execution": "per-frame",
       "file": "src/ticker.ts",
       "line": 7,
       "text": "requestAnimationFrame(tick);",
@@ -156,6 +194,7 @@
       "signal": "forced-reflow",
       "severity": "critical",
       "noise": "noisy",
+      "execution": "per-frame",
       "file": "src/ticker.ts",
       "line": 3,
       "text": "const width = el.getBoundingClientRect().width;",
@@ -165,6 +204,7 @@
       "signal": "js-opacity-transform",
       "severity": "medium",
       "noise": "noisy",
+      "execution": "per-frame",
       "file": "src/ticker.ts",
       "line": 4,
       "text": "el.style.transform = 'translateX(' + width / 10 + 'px)';",
@@ -174,6 +214,7 @@
       "signal": "missing-reduced-motion",
       "severity": "critical",
       "noise": "noisy",
+      "execution": "per-frame",
       "file": "src/ticker.ts",
       "line": 5,
       "text": "requestAnimationFrame(tick);",
@@ -183,6 +224,7 @@
       "signal": "manual-synced-ref",
       "severity": "dedup",
       "noise": "precise",
+      "execution": "incidental",
       "file": "src/use-latest.ts",
       "line": 4,
       "text": "const valueRef = useRef(value);",
@@ -192,6 +234,7 @@
       "signal": "missing-reduced-motion",
       "severity": "critical",
       "noise": "noisy",
+      "execution": null,
       "file": "styles/globals.css",
       "line": 16,
       "text": "@keyframes float {",
@@ -201,6 +244,7 @@
       "signal": "global-has-selector",
       "severity": "high",
       "noise": "precise",
+      "execution": null,
       "file": "styles/globals.css",
       "line": 1,
       "text": "body:has(.modal-open) {",
@@ -210,6 +254,7 @@
       "signal": "permanent-will-change",
       "severity": "medium",
       "noise": "normal",
+      "execution": null,
       "file": "styles/globals.css",
       "line": 7,
       "text": "will-change: transform;",
@@ -219,6 +264,7 @@
       "signal": "non-compositor-animation",
       "severity": "high",
       "noise": "normal",
+      "execution": null,
       "file": "styles/globals.css",
       "line": 6,
       "text": "transition: all 0.3s ease;",

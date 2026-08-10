@@ -57,6 +57,9 @@ git diff --name-only | xargs node <skill-dir>/scripts/scan.mjs
 | `--json`               | Machine-readable output (schemaVersion 1): summary counts plus a flat findings array (`{signal, severity, noise, file, line, text, fix}`), stamped with the skill version that produced it |
 | `--fail-on <severity>` | Exit 1 if any finding is at or above `critical`, `high`, or `medium`. For CI gating                                                                                                        |
 | `--signal <id>`        | Report only this signal. Repeatable                                                                                                                                                        |
+| `--severity <level>`   | Report only this severity. Repeatable                                                                                                                                                      |
+| `--noise <tier>`       | Report only this noise tier. Repeatable, so `--noise precise --noise normal` drops the noisy ones                                                                                          |
+| `--exclude <path>`     | Skip paths containing this text, or matching it as a glob when it has a wildcard. Repeatable                                                                                               |
 | `--limit <n>`          | Cap the `findings` array in `--json` output (`summary.total` still reports the true count)                                                                                                 |
 | `-h`, `--help`         | Usage                                                                                                                                                                                      |
 
@@ -68,94 +71,138 @@ If `scan.mjs` is not available (e.g. the skill is loaded without scripts), perfo
 
 ### Reading the output
 
-Text output groups findings by severity, most severe first. Each block names the signal id, its noise tier, and the fix reference to read before recommending. This sample is this skill's eval-fixture scan; a test asserts it stays identical to the committed golden.
+The report opens with **hotspots**: the files carrying the most candidates. Work is done per file, so a file with seven candidates across four signals is usually one rewrite, and it is where to start. Findings then group by severity, most severe first. Each block names the signal, why it matters, the replacement to reach for, and the reference to read before recommending. This sample is this skill's eval-fixture scan; a test asserts it stays identical to the committed golden.
 
 <!-- scan-golden:begin -->
 
 ```
 
+## hotspots (most candidates per file)
+    5  src/ticker.ts
+       manual-raf ×2, forced-reflow, js-opacity-transform, missing-reduced-motion
+    4  styles/globals.css
+       global-has-selector, missing-reduced-motion, non-compositor-animation, permanent-will-change
+    3  src/hero-animation.tsx
+       setstate-in-raf ×2, missing-reduced-motion
+    3  src/phases/progress-meter.ts
+       manual-raf ×2, missing-reduced-motion
+    2  src/suppressed-banner.ts
+       forced-reflow, missing-reduced-motion
+
 ## critical
 
-setstate-in-raf — setState/dispatch inside rAF callback (2) · noise: normal
-  fix: references/performance.md#never-setstate-inside-ontick--draw
+setstate-in-raf — setState/dispatch inside rAF callback (2, all per-frame) · noise: normal
+  why: 60 re-renders/sec: React reconciles on every frame.
+  use: useLoop writing to a ref or the DOM; useTween for one value into render
+  read: references/performance.md#never-setstate-inside-ontick--draw
   src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
   src/hero-animation.tsx:13  frame = requestAnimationFrame(loop);
 
-forced-reflow — Forced reflow (getBoundingClientRect, offsetWidth, etc.) (2) · noise: noisy
-  fix: references/performance.md#no-forced-reflows-in-animation-paths
-  src/suppressed-banner.ts:6  const width = el.offsetWidth;
+forced-reflow — Forced reflow (getBoundingClientRect, offsetWidth, etc.) (2, all per-frame) · noise: noisy
+  why: Synchronous layout; in a hot path it thrashes every frame.
+  use: useSize (ResizeObserver, async) or cache the geometry and re-read on resize
+  read: references/performance.md#no-forced-reflows-in-animation-paths
   src/ticker.ts:3  const width = el.getBoundingClientRect().width;
+  src/suppressed-banner.ts:6  const width = el.offsetWidth;
 
 missing-reduced-motion — Animation without reduced-motion check (5) · noise: noisy
-  fix: references/performance.md#reduced-motion-by-default
+  why: Accessibility gap: motion plays for users who asked for none.
+  use: a prefers-reduced-motion media query, or a phase hook (handles it automatically)
+  read: references/performance.md#reduced-motion-by-default
+  ↑ in a per-frame path:
+  src/ticker.ts:5  requestAnimationFrame(tick);
   src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
   src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
   src/suppressed-banner.ts:3  requestAnimationFrame(() => el.classList.add('banner-in'));
-  src/ticker.ts:5  requestAnimationFrame(tick);
+  · in a stylesheet:
   styles/globals.css:16  @keyframes float {
 
 ## high
 
-manual-raf — Manual requestAnimationFrame loop (4) · noise: noisy
-  fix: references/audit.md#common-replacements
-  src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
-  src/phases/progress-meter.ts:9  requestAnimationFrame(frame);
+manual-raf — Manual requestAnimationFrame loop (4, all per-frame) · noise: noisy
+  why: No visibility pausing, no shared clock, no cleanup.
+  use: useLoop (or useCanvas): shared clock, visibility pausing, auto cleanup
+  read: references/audit.md#common-replacements
   src/ticker.ts:5  requestAnimationFrame(tick);
   src/ticker.ts:7  requestAnimationFrame(tick);
+  src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
+  src/phases/progress-meter.ts:9  requestAnimationFrame(frame);
 
 global-has-selector — Global :has() selector (broad style invalidation) (1) · noise: precise
-  fix: references/performance-recipes.md#recipe-delete-a-global-has-rule
+  why: Re-checked on any mutation that could affect the argument.
+  use: scope the rule to a subtree, or drive it from a data attribute
+  read: references/performance-recipes.md#recipe-delete-a-global-has-rule
   styles/globals.css:1  body:has(.modal-open) {
 
 non-compositor-animation — Animating a non-compositor property (layout/paint, not transform/opacity) (1) · noise: normal
-  fix: references/audit.md#step-15-css-loading-and-architecture-pass
+  why: Layout + paint every frame, off the compositor.
+  use: name the properties and transition transform/opacity
+  read: references/audit.md#step-15-css-loading-and-architecture-pass
   styles/globals.css:6  transition: all 0.3s ease;
 
 tailwind-transition-all — Tailwind transition-all class (animates layout properties) (1) · noise: noisy
-  fix: references/audit.md#step-15-css-loading-and-architecture-pass
+  why: Transitions whatever changes, including layout, off the compositor.
+  use: name the properties: transition-colors, transition-transform
+  read: references/audit.md#step-15-css-loading-and-architecture-pass
   src/card.tsx:5  <div className="rounded-lg border transition-all duration-300 hover:shadow-lg">
 
 ## medium
 
-raw-io — Raw IntersectionObserver (not pooled) (1) · noise: normal
-  fix: references/performance.md#observer-pooling
+raw-io — Raw IntersectionObserver (not pooled) (1, all per-frame) · noise: normal
+  why: Unpooled observer instances and manual cleanup leak over time.
+  use: useSight or useLifecycle (pooled IntersectionObserver)
+  read: references/performance.md#observer-pooling
   src/lazy-image.tsx:7  const io = new IntersectionObserver(([entry]) => {
 
-js-opacity-transform — JS-driven opacity/transform (may be CSS-only candidate) (1) · noise: noisy
-  fix: references/decision-guide.md#tier-1-css-only-no-js
+js-opacity-transform — JS-driven opacity/transform (may be CSS-only candidate) (1, all per-frame) · noise: noisy
+  why: Often replaceable by a CSS transition, or needs phase for lifecycle.
+  use: a CSS transition, or useLoop if it needs per-frame JS
+  read: references/decision-guide.md#tier-1-css-only-no-js
   src/ticker.ts:4  el.style.transform = 'translateX(' + width / 10 + 'px)';
 
 permanent-will-change — Permanent will-change (wastes GPU memory when idle) (1) · noise: normal
-  fix: references/performance.md#will-change-only-while-animating
+  why: A GPU layer is held even while nothing animates.
+  use: toggle will-change with animation state, or drop it
+  read: references/performance.md#will-change-only-while-animating
   styles/globals.css:7  will-change: transform;
 
-redundant-mutation-observers — MutationObserver on html/documentElement (coalesce into one useMutation) (1) · noise: normal
-  fix: references/performance-recipes.md#recipe-collapse-an-observer-storm-on-html
+redundant-mutation-observers — MutationObserver on html/documentElement (coalesce into one useMutation) (1, all per-frame) · noise: normal
+  why: N observers on one target each fire per mutation; one suffices.
+  use: one useMutation with a coalesced callback
+  read: references/performance-recipes.md#recipe-collapse-an-observer-storm-on-html
   src/theme-watcher.ts:2  const observer = new MutationObserver(() => {
 
 ## dedup (correct code, optional cleanup)
 
 manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand) (1) · noise: precise
-  fix: references/use-synced-ref.md
+  why: Correct React idiom; useSyncedRef is a one-line shorthand.
+  use: useSyncedRef(value)
+  read: references/use-synced-ref.md
   src/use-latest.ts:4  const valueRef = useRef(value);
 
 ─────────────────────────────────────────
 Scanned 9 files.
-Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup, 1 suppressed
-Next: classify each candidate against references/audit.md Step 2 (the decision ladder).
+Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup, 1 suppressed.
+21 findings on 18 distinct lines; 15 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
+Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
 ```
 
 <!-- scan-golden:end -->
 
+Findings are not problems: one rAF loop reports twice (the call and the recursive call), and one line can carry two signals, so the summary states findings and distinct lines separately. Count distinct lines when you report progress.
+
 `Scanned N files` counts files the scanner actually analyzed, never files it merely opened, so a clean result cannot cover code that was skipped. When something could not be read — an unreadable directory, a file the process lacks permission for, a generated line past the length limit — the report ends with an `⚠ Incomplete coverage:` line. Treat that as a hole in the audit and say so in your report; `--json` carries the same information in `summary.filesSkipped` and `summary.linesSkipped`.
 
-The scanner also stamps detected **environment context** into the output (a `Context:` line in text, a `context` object in JSON: `framework`, `appRouter`, `ppr`, `clientComponents`). When it reports Next.js, App Router, or PPR, treat that as detected fact and apply [Step 2.5](#step-25-verify-the-blast-radius) before any rendering recommendation. Detection is best-effort, so its absence proves nothing: Step 2.5 applies regardless. In a monorepo, scan the package you are auditing rather than the repo root; a Next.js example app elsewhere in the repo would otherwise stamp the whole scan.
+The scanner also stamps detected **environment context** into the output (a `Context:` line in text, a `context` object in JSON: `framework`, `appRouter`, `ppr`, `clientComponents`, `evidence`). The stamp names the files it was inferred from; check them before trusting it, because in a monorepo an example app can produce a Next.js marker for a repo that is not one. When it reports Next.js, App Router, or PPR, treat that as detected fact and apply [Step 2.5](#step-25-verify-the-blast-radius) before any rendering recommendation. Detection is best-effort, so its absence proves nothing: Step 2.5 applies regardless. In a monorepo, scan the package you are auditing rather than the repo root; a Next.js example app elsewhere in the repo would otherwise stamp the whole scan.
 
-Two orthogonal ratings guide how to act on each block:
+Three orthogonal ratings guide how to act on each block:
 
 - **Severity** ranks how bad the issue is when real: `critical` (jank or accessibility failures), `high` (always-on CPU/GPU waste), `medium` (leaks, redundancy, cheaper-tier candidates). `dedup` findings are correct code with a phase shorthand, reported separately and excluded from the actionable count.
 - **Noise** ranks how much to trust the detection itself: `precise` means the match is the issue, `normal` means verify quickly, `noisy` means inspect the site before recommending anything.
+- **Execution** ranks what it costs right now. Listings put `↑ in a per-frame path` first: a frame loop, observer callback, or move handler runs those lines, so the same layout read that is free in a click handler stalls every frame there. Severity cannot see this — on one canvas app, 181 of 182 `forced-reflow` candidates were incidental and every one of them ranked critical. Detection is a nearby-code heuristic, so it only orders the list: a line called indirectly from a loop reads as incidental and is still reported, below the ones that are visibly per-frame.
+
+A triage pass on a large report is usually `--noise precise --noise normal` (drop the tier that needs a site visit) plus `--exclude` for demo or vendored directories. Narrow, then read.
 
 ### Suppressions
 

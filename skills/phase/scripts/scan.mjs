@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
  * Scans one or more directories or files. Returns all findings plus scan
  * metadata. Paths inside a target are reported relative to that target.
  */
-export function scanTargets(paths) {
+export function scanTargets(paths, options = {}) {
   const findings = [];
   const diag = newDiag();
   const context = {
@@ -29,7 +29,9 @@ export function scanTargets(paths) {
     appRouter: false,
     ppr: false,
     clientComponents: 0,
+    evidence: [],
   };
+  const excluded = (options.exclude ?? []).map(toPathMatcher);
   // Overlapping targets (`scan.mjs src src/components`) would otherwise
   // report the same file twice and double every count.
   const seen = new Set();
@@ -64,6 +66,11 @@ export function scanTargets(paths) {
       // generated .d.ts or .min.js in a diff should be skipped either way.
       if (SKIP_FILES.test(rel)) {
         diag.skipped.generated++;
+        continue;
+      }
+
+      if (excluded.some((matches) => matches(rel))) {
+        diag.skipped.excluded++;
         continue;
       }
 
@@ -163,6 +170,7 @@ export function scanFile(relPath, content, diag = null) {
       relPath,
       suppressions,
       overlong,
+      type,
       diag,
     );
 
@@ -204,9 +212,12 @@ export function formatJson(result, limit = null) {
       filesSkipped: result.filesSkipped ?? null,
       linesSkipped: result.linesSkipped ?? 0,
       total: result.findings.length,
+      sites: countSites(result.findings),
       returned: findings.length,
       actionable: counts.critical + counts.high + counts.medium,
       dedup: counts.dedup,
+      perFrame: result.findings.filter((f) => f.execution === 'per-frame')
+        .length,
       suppressed: result.suppressed ?? 0,
       bySeverity: {
         critical: counts.critical,
@@ -214,6 +225,9 @@ export function formatJson(result, limit = null) {
         medium: counts.medium,
       },
     },
+    hotspots: rankHotspots(result.findings, fileWeights(result.findings)).map(
+      ({ file, items }) => ({ file, count: items.length }),
+    ),
     context: result.context ?? null,
     warnings: result.warnings ?? [],
     findings,
@@ -222,42 +236,113 @@ export function formatJson(result, limit = null) {
 
 /** Renders a scan result as human-readable text grouped by severity. */
 export function formatText(result) {
-  const out = [];
-  const bySeverity = groupBySeverity(result.findings);
+  const weight = fileWeights(result.findings);
+  const out = [...renderHotspots(result.findings, weight)];
 
+  const bySeverity = groupBySeverity(result.findings);
   for (const severity of SEVERITY_ORDER) {
     const group = bySeverity.get(severity);
     if (!group || group.size === 0) continue;
 
-    const heading =
+    out.push(
+      '',
       severity === 'dedup'
         ? '## dedup (correct code, optional cleanup)'
-        : `## ${severity}`;
-    out.push('', heading);
-
+        : `## ${severity}`,
+    );
     for (const [id, items] of group) {
-      const signal = SIGNALS.find((s) => s.id === id);
-      out.push(
-        '',
-        `${id} — ${signal.label} (${items.length}) · noise: ${signal.noise}`,
-        `  fix: ${signal.fix}`,
-      );
-      // A finding storm (Tailwind apps can have 200+ transition-all hits)
-      // buries the rest of the report; cap the listing, keep the count.
-      for (const item of items.slice(0, MAX_LISTED_PER_SIGNAL)) {
-        out.push(`  ${item.file}:${item.line}  ${item.text.slice(0, 100)}`);
-      }
-      if (items.length > MAX_LISTED_PER_SIGNAL) {
-        // Point at the scoped drill-down, not at bare --json: a storm's full
-        // JSON is tens of thousands of tokens, which is the problem this cap
-        // exists to avoid.
-        out.push(
-          `  … and ${items.length - MAX_LISTED_PER_SIGNAL} more (--json --signal ${id} for the full list)`,
-        );
-      }
+      out.push(...renderSignal(id, items, weight));
     }
   }
 
+  out.push(...renderSummary(result));
+
+  // Coverage the scan did not have. Stating it is the difference between
+  // "clean" and "clean over the part I could read".
+  const gaps = coverageGaps(result);
+  if (gaps) out.push('', `⚠ Incomplete coverage: ${gaps}`);
+
+  out.push(...renderContext(result.context));
+
+  return out.join('\n');
+}
+
+/**
+ * Findings are per line, but the work is per file: on a real app the top
+ * three files held 38% of everything, and one of them was a single hook
+ * whose seven candidates across four signals were one rewrite. Nothing in
+ * a severity-grouped list says so.
+ */
+function renderHotspots(findings, weight) {
+  const hotspots = rankHotspots(findings, weight);
+  if (hotspots.length === 0 || findings.length < MIN_FINDINGS_FOR_ROLLUP) {
+    return [];
+  }
+  const out = ['', '## hotspots (most candidates per file)'];
+  for (const { file, items } of hotspots) {
+    out.push(
+      `  ${String(items.length).padStart(3)}  ${file}`,
+      `       ${summarizeSignals(items)}`,
+    );
+  }
+  return out;
+}
+
+function renderSignal(id, items, weight) {
+  const signal = SIGNALS.find((s) => s.id === id);
+  const allPerFrame = items.every((f) => f.execution === 'per-frame');
+  const out = [
+    '',
+    `${id} — ${signal.label} (${items.length}${allPerFrame ? ', all per-frame' : ''}) · noise: ${signal.noise}`,
+    `  why: ${signal.why}`,
+    `  use: ${signal.replacement}`,
+    `  read: ${signal.fix}`,
+  ];
+
+  const ordered = rankFindings(items, weight);
+  const shown = selectListed(ordered);
+
+  // Sub-headings only earn their line when the listing actually mixes
+  // groups; a lone heading over one bucket is noise.
+  const mixed = new Set(shown.map((f) => f.execution)).size > 1;
+  let lastExecution;
+  for (const item of shown) {
+    if (mixed && item.execution !== lastExecution) {
+      out.push(`  ${EXECUTION_HEADINGS[item.execution ?? 'none']}`);
+      lastExecution = item.execution;
+    }
+    out.push(`  ${item.file}:${item.line}  ${item.text}`);
+  }
+  if (ordered.length > shown.length) {
+    // Point at the scoped drill-down, not at bare --json: a storm's full
+    // JSON is tens of thousands of tokens, which is the problem this cap
+    // exists to avoid.
+    out.push(
+      `  … and ${ordered.length - shown.length} more (--json --signal ${id} for the full list)`,
+    );
+  }
+  return out;
+}
+
+/**
+ * The lines to list for one signal. Capped overall, and capped again per
+ * file: the rollup already says one file carries 51 of these, so spending
+ * every slot on it would hide everywhere else they occur.
+ */
+function selectListed(ordered) {
+  const shown = [];
+  const perFile = new Map();
+  for (const item of ordered) {
+    if (shown.length >= MAX_LISTED_PER_SIGNAL) break;
+    const seenHere = perFile.get(item.file) ?? 0;
+    if (seenHere >= MAX_LISTED_PER_FILE) continue;
+    perFile.set(item.file, seenHere + 1);
+    shown.push(item);
+  }
+  return shown;
+}
+
+function renderSummary(result) {
   const counts = countBySeverity(result.findings);
   const actionable = counts.critical + counts.high + counts.medium;
   const suppressed = result.suppressed ?? 0;
@@ -266,43 +351,51 @@ export function formatText(result) {
   // or mistyped target reading as "no findings" would be false confidence.
   // filesScanned counts files actually analyzed, never files merely opened.
   if (result.filesScanned === 0) {
-    out.push('', '⚠ No scannable files found. Check the target path.');
-  } else if (result.findings.length === 0 && suppressed === 0) {
-    out.push(
+    return ['', '⚠ No scannable files found. Check the target path.'];
+  }
+  if (result.findings.length === 0 && suppressed === 0) {
+    return [
       '',
       `✓ No animation anti-pattern candidates found (${result.filesScanned} files scanned).`,
-    );
-  } else {
-    const suppressedNote = suppressed > 0 ? `, ${suppressed} suppressed` : '';
-    out.push(
-      '',
-      '─────────────────────────────────────────',
-      `Scanned ${result.filesScanned} files.`,
-      `Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup${suppressedNote}`,
-      'Next: classify each candidate against references/audit.md Step 2 (the decision ladder).',
-      'Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.',
-    );
+    ];
   }
 
-  // Coverage the scan did not have. Stating it is the difference between
-  // "clean" and "clean over the part I could read".
-  const gaps = coverageGaps(result);
-  if (gaps) out.push('', `⚠ Incomplete coverage: ${gaps}`);
+  const suppressedNote = suppressed > 0 ? `, ${suppressed} suppressed` : '';
+  // Findings are not problems: one rAF loop reports twice (the call and the
+  // recursive call), and a line can carry two signals.
+  const sites = countSites(result.findings);
+  const perFrame = result.findings.filter(
+    (f) => f.execution === 'per-frame',
+  ).length;
+  return [
+    '',
+    '─────────────────────────────────────────',
+    `Scanned ${result.filesScanned} files.`,
+    `Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup${suppressedNote}.`,
+    `${result.findings.length} findings on ${sites} distinct lines; ${perFrame} sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.`,
+    'Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.',
+    'Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.',
+  ];
+}
 
-  // Environment facts change what a safe recommendation looks like; hand
-  // them to the reader instead of relying on it to go looking.
-  const context = result.context;
-  if (context?.framework === 'next') {
-    const bits = ['Next.js'];
-    if (context.appRouter) bits.push('App Router');
-    if (context.ppr) bits.push('PPR');
-    out.push(
-      '',
-      `Context: ${bits.join(' + ')} detected. Rendering recommendations must pass the blast-radius check (references/audit.md Step 2.5) before changing SSR content or mount timing.`,
-    );
-  }
-
-  return out.join('\n');
+/**
+ * Environment facts change what a safe recommendation looks like; hand them
+ * to the reader instead of relying on it to go looking.
+ */
+function renderContext(context) {
+  if (context?.framework !== 'next') return [];
+  const bits = ['Next.js'];
+  if (context.appRouter) bits.push('App Router');
+  if (context.ppr) bits.push('PPR');
+  // Name the evidence: in a monorepo the marker can come from an example
+  // app, and a bare assertion gives the reader no way to notice.
+  const evidence = context.evidence?.length
+    ? ` (from ${context.evidence.join(', ')})`
+    : '';
+  return [
+    '',
+    `Context: ${bits.join(' + ')} detected${evidence}. Rendering recommendations must pass the blast-radius check (references/audit.md Step 2.5) before changing SSR content or mount timing.`,
+  ];
 }
 
 // --- Signal catalog ---------------------------------------------------------
@@ -314,6 +407,8 @@ export function formatText(result) {
 //
 // severity: critical | high | medium | dedup (audit.md's weighting).
 // noise: precise (trust it) | normal (verify quickly) | noisy (verify first).
+// replacement: the concrete answer, so a block is actionable without
+//   opening the reference first.
 // fileTypes: js (default) | css | jsx, or an array to combine.
 // supersedes: another signal's id; when both fire on the same line, the
 //   superseded signal is dropped (the more specific one is kept).
@@ -342,6 +437,8 @@ const BARE_DURATION_TRANSITION =
 export const SIGNALS = [
   {
     id: 'manual-raf',
+    replacement:
+      'useLoop (or useCanvas): shared clock, visibility pausing, auto cleanup',
     label: 'Manual requestAnimationFrame loop',
     severity: 'high',
     noise: 'noisy',
@@ -351,6 +448,8 @@ export const SIGNALS = [
   },
   {
     id: 'setstate-in-raf',
+    replacement:
+      'useLoop writing to a ref or the DOM; useTween for one value into render',
     label: 'setState/dispatch inside rAF callback',
     severity: 'critical',
     noise: 'normal',
@@ -362,6 +461,8 @@ export const SIGNALS = [
   },
   {
     id: 'setstate-in-ontick',
+    replacement:
+      'write to a ref or the DOM in the callback; lift state changes out of the frame',
     label: 'setState/dispatch inside a phase onTick/onDraw/draw callback',
     severity: 'critical',
     noise: 'normal',
@@ -372,6 +473,8 @@ export const SIGNALS = [
   },
   {
     id: 'forced-reflow',
+    replacement:
+      'useSize (ResizeObserver, async) or cache the geometry and re-read on resize',
     label: 'Forced reflow (getBoundingClientRect, offsetWidth, etc.)',
     severity: 'critical',
     noise: 'noisy',
@@ -382,6 +485,7 @@ export const SIGNALS = [
   },
   {
     id: 'raw-io',
+    replacement: 'useSight or useLifecycle (pooled IntersectionObserver)',
     label: 'Raw IntersectionObserver (not pooled)',
     severity: 'medium',
     noise: 'normal',
@@ -391,6 +495,7 @@ export const SIGNALS = [
   },
   {
     id: 'raw-ro',
+    replacement: 'useSize (pooled ResizeObserver)',
     label: 'Raw ResizeObserver (not pooled)',
     severity: 'medium',
     noise: 'normal',
@@ -400,6 +505,8 @@ export const SIGNALS = [
   },
   {
     id: 'raw-matchmedia',
+    replacement:
+      'useMediaQuery, or usePrefersReducedMotion for the motion query',
     label: 'Raw matchMedia (not pooled)',
     severity: 'medium',
     noise: 'normal',
@@ -409,6 +516,7 @@ export const SIGNALS = [
   },
   {
     id: 'mutationobserver-layout',
+    replacement: 'useMutation (rAF-batched); useSize/useSight for geometry',
     label:
       'MutationObserver driving layout (reflow / style+subtree observation)',
     severity: 'critical',
@@ -424,6 +532,7 @@ export const SIGNALS = [
   },
   {
     id: 'js-opacity-transform',
+    replacement: 'a CSS transition, or useLoop if it needs per-frame JS',
     label: 'JS-driven opacity/transform (may be CSS-only candidate)',
     severity: 'medium',
     noise: 'noisy',
@@ -433,6 +542,8 @@ export const SIGNALS = [
   },
   {
     id: 'missing-reduced-motion',
+    replacement:
+      'a prefers-reduced-motion media query, or a phase hook (handles it automatically)',
     label: 'Animation without reduced-motion check',
     severity: 'critical',
     noise: 'noisy',
@@ -449,6 +560,7 @@ export const SIGNALS = [
   },
   {
     id: 'background-animation',
+    replacement: 'useLoop with fps: 1-2 and frame.elapsed steps',
     label: 'setInterval/setTimeout for animation (no visibility check)',
     severity: 'high',
     noise: 'noisy',
@@ -459,6 +571,7 @@ export const SIGNALS = [
   },
   {
     id: 'manual-synced-ref',
+    replacement: 'useSyncedRef(value)',
     label: 'Manual synced ref (dedup: useSyncedRef offers a shorthand)',
     severity: 'dedup',
     noise: 'precise',
@@ -469,6 +582,8 @@ export const SIGNALS = [
   // --- CSS/DOM-scale signals ---
   {
     id: 'global-has-selector',
+    replacement:
+      'scope the rule to a subtree, or drive it from a data attribute',
     label: 'Global :has() selector (broad style invalidation)',
     severity: 'high',
     noise: 'precise',
@@ -479,6 +594,7 @@ export const SIGNALS = [
   },
   {
     id: 'permanent-will-change',
+    replacement: 'toggle will-change with animation state, or drop it',
     label: 'Permanent will-change (wastes GPU memory when idle)',
     severity: 'medium',
     noise: 'normal',
@@ -489,6 +605,7 @@ export const SIGNALS = [
   },
   {
     id: 'non-compositor-animation',
+    replacement: 'name the properties and transition transform/opacity',
     label:
       'Animating a non-compositor property (layout/paint, not transform/opacity)',
     severity: 'high',
@@ -509,6 +626,8 @@ export const SIGNALS = [
   },
   {
     id: 'keyframes-layout-animation',
+    replacement:
+      'keyframe transform/opacity; grid-template-rows for expand/collapse',
     label: 'Layout property animated inside @keyframes',
     severity: 'high',
     noise: 'normal',
@@ -520,6 +639,8 @@ export const SIGNALS = [
   // --- Loading/architecture signals ---
   {
     id: 'bare-window-listener',
+    replacement:
+      'useSize or useMediaQuery for size, useScroll for scroll position',
     label: 'Bare resize/scroll listener with layout read',
     severity: 'critical',
     noise: 'normal',
@@ -531,6 +652,7 @@ export const SIGNALS = [
   },
   {
     id: 'pointer-listener-layout-read',
+    replacement: 'usePointer (one rAF-batched read per frame, not per event)',
     label: 'Pointer/mouse/touch move listener with layout read',
     severity: 'critical',
     noise: 'normal',
@@ -543,6 +665,7 @@ export const SIGNALS = [
   },
   {
     id: 'redundant-mutation-observers',
+    replacement: 'one useMutation with a coalesced callback',
     label:
       'MutationObserver on html/documentElement (coalesce into one useMutation)',
     severity: 'medium',
@@ -555,6 +678,7 @@ export const SIGNALS = [
   },
   {
     id: 'tailwind-transition-all',
+    replacement: 'name the properties: transition-colors, transition-transform',
     label: 'Tailwind transition-all class (animates layout properties)',
     severity: 'high',
     noise: 'noisy',
@@ -566,6 +690,7 @@ export const SIGNALS = [
   },
   {
     id: 'tailwind-permanent-will-change',
+    replacement: 'toggle the class with animation state, or drop it',
     label: 'Tailwind will-change-transform class not toggled with state',
     severity: 'medium',
     noise: 'noisy',
@@ -576,6 +701,7 @@ export const SIGNALS = [
   // --- Phase-usage signals ---
   {
     id: 'reduced-motion-ignored',
+    replacement: "reducedMotion: 'respect' unless the motion is non-decorative",
     label: "reducedMotion: 'ignore' (bypasses the user preference)",
     severity: 'medium',
     noise: 'precise',
@@ -585,6 +711,7 @@ export const SIGNALS = [
   },
   {
     id: 'core-primitive-in-component',
+    replacement: 'the matching hook (useLoop, useSight, useLifecycle)',
     label: 'Core phase primitive in a component (hook likely fits better)',
     severity: 'medium',
     noise: 'noisy',
@@ -595,6 +722,7 @@ export const SIGNALS = [
   },
   {
     id: 'when-visible-no-fallback',
+    replacement: 'a fallback sized to the final content height',
     label: 'WhenVisible/WhenIdle without a sized fallback (layout shift)',
     severity: 'high',
     noise: 'noisy',
@@ -612,6 +740,20 @@ export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'dedup'];
 //
 // How far a matcher looks for the bounds of the enclosing CSS rule.
 const BLOCK_SCAN_LINES = 20;
+
+// What makes a candidate expensive is how often it runs. The same layout
+// read is a per-frame stall inside a move handler and a non-event in a
+// click handler, and severity alone cannot tell them apart: on a canvas
+// app, 181 of 182 `forced-reflow` candidates had no frame driver anywhere
+// near them, yet all of them ranked critical.
+//
+// This only ranks. A read called indirectly from a frame loop looks
+// incidental here and is still reported, just below the ones that are
+// visibly per-frame — a heuristic may reorder findings, never hide them.
+const FRAME_DRIVER =
+  /requestAnimationFrame|\bonTick\b|\bonDraw\b|\bdraw\s*:|use(?:Loop|Canvas|Tween|Pointer|Scroll)\s*\(|create(?:Loop|Ticker|Pointer|Scroll)\s*\(|addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove|scroll|resize|wheel|drag)|new\s+(?:Intersection|Resize|Mutation)Observer|setInterval\s*\(/;
+
+const FRAME_DRIVER_WINDOW = 6;
 //
 // Custom matchers: `(lines: string[], i: number) => boolean`.
 // Called once per line per signal. Return true if line i should be reported.
@@ -820,7 +962,27 @@ const MAX_LINE_LENGTH = 1000;
 
 // Findings quote a source line; an unbounded quote turns one generated line
 // into megabytes of JSON in an agent's context window.
-const MAX_FINDING_TEXT = 200;
+const MAX_FINDING_TEXT = 120;
+
+// Files listed in the hotspot rollup.
+const MAX_HOTSPOTS = 5;
+
+// Lines one file may contribute to one signal's listing.
+const MAX_LISTED_PER_FILE = 4;
+
+// Below this a reader can see the whole report at once; a rollup of it
+// would be restating the list.
+const MIN_FINDINGS_FOR_ROLLUP = 5;
+
+const EXECUTION_HEADINGS = {
+  'per-frame': '↑ in a per-frame path:',
+  incidental: '· elsewhere:',
+  none: '· in a stylesheet:',
+};
+
+// Per-frame first, then incidental, then stylesheets (where the question
+// does not apply).
+const EXECUTION_RANK = { 'per-frame': 0, incidental: 1 };
 
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -866,16 +1028,27 @@ function suppressedAnywhere(suppressions, signalId) {
 }
 
 /** Runs one signal over a file's lines, honoring suppressions and perFile. */
-function scanSignal(signal, lines, relPath, suppressions, overlong, diag) {
+function scanSignal(
+  signal,
+  lines,
+  relPath,
+  suppressions,
+  overlong,
+  type,
+  diag,
+) {
   const findings = [];
   for (let i = 0; i < lines.length; i++) {
     if (overlong.has(i)) continue;
     const line = lines[i];
+    let matchIndex = 0;
 
     if (signal.matcher) {
       if (!signal.matcher(lines, i)) continue;
     } else {
-      if (!signal.pattern.test(line)) continue;
+      const match = signal.pattern.exec(line);
+      if (!match) continue;
+      matchIndex = match.index;
 
       if (signal.contextPattern) {
         const context = lines.slice(Math.max(0, i - 5), i + 6).join('\n');
@@ -891,7 +1064,16 @@ function scanSignal(signal, lines, relPath, suppressions, overlong, diag) {
       continue;
     }
 
-    findings.push(makeFinding(signal, relPath, i + 1, line));
+    findings.push(
+      makeFinding(
+        signal,
+        relPath,
+        i + 1,
+        line,
+        matchIndex,
+        executionOf(lines, i, type),
+      ),
+    );
 
     if (signal.perFile) break;
   }
@@ -921,6 +1103,10 @@ function detectNextConfig(root, context) {
     );
     if (config) {
       context.framework = 'next';
+      noteEvidence(
+        context,
+        toPosix(relative(process.cwd(), join(dir, config))),
+      );
       try {
         const content = readFileSync(join(dir, config), 'utf8');
         if (/\b(?:ppr|experimental_ppr|cacheComponents)\s*[:=]/.test(content)) {
@@ -944,16 +1130,44 @@ function updateContext(rel, content, context) {
   if (/(^|\/)app\/.*(page|layout|template)\.[jt]sx?$/.test(rel)) {
     context.appRouter = true;
     context.framework ??= 'next';
+    noteEvidence(context, rel);
   }
   // The route-segment config shape, not the bare token: prose or tooling
   // that merely mentions experimental_ppr must not count as detection.
   if (/\bexport\s+const\s+experimental_ppr\s*=\s*true\b/.test(content)) {
     context.ppr = true;
     context.framework ??= 'next';
+    noteEvidence(context, rel);
   }
   if (/^\s*['"]use client['"]/m.test(content)) {
     context.clientComponents++;
   }
+}
+
+// Enough to judge the stamp, not a second report.
+const MAX_EVIDENCE = 3;
+
+function noteEvidence(context, path) {
+  if (context.evidence.length >= MAX_EVIDENCE) return;
+  if (!context.evidence.includes(path)) context.evidence.push(path);
+}
+
+/**
+ * A --exclude value. Patterns with a wildcard are globs (`*` within a path
+ * segment, `**` across); anything else is a plain path prefix or substring,
+ * so `--exclude examples/` does what it looks like.
+ */
+function toPathMatcher(pattern) {
+  if (!pattern.includes('*') && !pattern.includes('?')) {
+    return (path) => path.includes(pattern);
+  }
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  const body = escaped
+    .split('**')
+    .map((part) => part.split('*').join('[^/]*').split('?').join('[^/]'))
+    .join('.*');
+  const re = new RegExp(`^${body}$`);
+  return (path) => re.test(path);
 }
 
 function skillVersion() {
@@ -994,16 +1208,51 @@ function signalAppliesTo(signal, type, ext) {
   return false;
 }
 
-function makeFinding(signal, file, line, text) {
+function makeFinding(signal, file, line, text, matchIndex, execution) {
   return {
     signal: signal.id,
     severity: signal.severity,
     noise: signal.noise,
+    execution,
     file,
     line,
-    text: text.trim().slice(0, MAX_FINDING_TEXT),
+    text: excerpt(text, matchIndex),
     fix: signal.fix,
   };
+}
+
+/**
+ * Whether a frame driver runs this line. Meaningless for stylesheets, which
+ * report null.
+ */
+function executionOf(lines, i, type) {
+  if (type !== 'js') return null;
+  const from = Math.max(0, i - FRAME_DRIVER_WINDOW);
+  const window = lines.slice(from, i + FRAME_DRIVER_WINDOW + 1).join('\n');
+  return FRAME_DRIVER.test(window) ? 'per-frame' : 'incidental';
+}
+
+/**
+ * The quoted source line, windowed around the match. Truncating from column
+ * zero hid the matched token in 8 of 12 Tailwind findings on a real app:
+ * the reader got a wall of class names with no indication of why.
+ */
+function excerpt(line, matchIndex) {
+  const text = line.trim();
+  if (text.length <= MAX_FINDING_TEXT) return text;
+
+  const offset = matchIndex - (line.length - line.trimStart().length);
+  if (offset < 0 || offset >= text.length) {
+    return `${text.slice(0, MAX_FINDING_TEXT)}…`;
+  }
+
+  const lead = Math.floor(MAX_FINDING_TEXT / 4);
+  const start = Math.max(
+    0,
+    Math.min(offset - lead, text.length - MAX_FINDING_TEXT),
+  );
+  const end = start + MAX_FINDING_TEXT;
+  return `${start > 0 ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}`;
 }
 
 /** Drops a finding when a more specific signal fired on the same line. */
@@ -1061,6 +1310,63 @@ function walk(dir, diag, results = []) {
     }
   }
   return results;
+}
+
+/** Findings per file, the proxy for "this file is the problem". */
+function fileWeights(findings) {
+  const weight = new Map();
+  for (const finding of findings) {
+    weight.set(finding.file, (weight.get(finding.file) ?? 0) + 1);
+  }
+  return weight;
+}
+
+/** Files carrying the most candidates, worst first. */
+function rankHotspots(findings, weight) {
+  const byFile = new Map();
+  for (const finding of findings) {
+    if (!byFile.has(finding.file)) byFile.set(finding.file, []);
+    byFile.get(finding.file).push(finding);
+  }
+  return [...byFile.entries()]
+    .map(([file, items]) => ({ file, items }))
+    .filter(({ items }) => items.length > 1)
+    .sort(
+      (a, b) =>
+        b.items.length - a.items.length ||
+        (weight.get(a.file) === weight.get(b.file) && a.file < b.file ? -1 : 1),
+    )
+    .slice(0, MAX_HOTSPOTS);
+}
+
+function summarizeSignals(items) {
+  const counts = new Map();
+  for (const item of items) {
+    counts.set(item.signal, (counts.get(item.signal) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    .map(([id, n]) => (n > 1 ? `${id} ×${n}` : id))
+    .join(', ');
+}
+
+/** Per-frame first, then the most concentrated files, then source order. */
+function rankFindings(items, weight) {
+  return [...items].sort((a, b) => {
+    const aHot = EXECUTION_RANK[a.execution] ?? 2;
+    const bHot = EXECUTION_RANK[b.execution] ?? 2;
+    if (aHot !== bHot) return aHot - bHot;
+    const byWeight = (weight.get(b.file) ?? 0) - (weight.get(a.file) ?? 0);
+    if (byWeight !== 0) return byWeight;
+    if (a.file !== b.file) return a.file < b.file ? -1 : 1;
+    return a.line - b.line;
+  });
+}
+
+function countSites(findings) {
+  const sites = new Set();
+  for (const finding of findings) sites.add(`${finding.file}:${finding.line}`);
+  return sites.size;
 }
 
 function groupBySeverity(findings) {
@@ -1121,6 +1427,11 @@ Options
                        severity (critical | high | medium); default is
                        exit 0 regardless of findings (advisory)
   --signal <id>        report only this signal (repeatable)
+  --severity <level>   report only this severity (repeatable)
+  --noise <tier>       report only this noise tier, e.g. --noise precise
+                       --noise normal to drop the noisy ones (repeatable)
+  --exclude <path>     skip paths containing this substring, or matching it
+                       as a glob when it has a wildcard (repeatable)
   --limit <n>          cap the findings array in --json output
   -h, --help           show this help
 
@@ -1135,45 +1446,74 @@ Reading a large report
 
 Exit codes: 0 = scan completed, 1 = --fail-on threshold hit, 2 = usage error.`;
 
+const NOISE_TIERS = ['precise', 'normal', 'noisy'];
+
+/** Boolean switches, by the argument that sets them. */
+const FLAGS = { '--json': 'json', '--help': 'help', '-h': 'help' };
+
+/**
+ * Options taking a value. `allowed` restricts it to an enum, `list` collects
+ * repeats, `map` converts. Table-driven so adding one is a row, not another
+ * branch in a parser.
+ */
+const VALUE_OPTIONS = {
+  '--fail-on': {
+    key: 'failOn',
+    allowed: ['critical', 'high', 'medium'],
+    expects: 'critical, high, or medium',
+  },
+  '--signal': {
+    key: 'signals',
+    list: true,
+    allowed: () => SIGNALS.map((signal) => signal.id),
+    expects: 'a known signal id',
+  },
+  '--severity': { key: 'severities', list: true, allowed: SEVERITY_ORDER },
+  '--noise': { key: 'noiseTiers', list: true, allowed: NOISE_TIERS },
+  '--exclude': { key: 'exclude', list: true, map: toPosix },
+  '--limit': { key: 'limit', map: toPositiveInt },
+};
+
+function toPositiveInt(raw, name) {
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`${name} expects a positive integer (got: ${raw})`);
+  }
+  return value;
+}
+
+function applyOption(opts, name, spec, raw) {
+  if (raw === undefined) throw new Error(`${name} expects a value`);
+  const allowed =
+    typeof spec.allowed === 'function' ? spec.allowed() : spec.allowed;
+  if (allowed && !allowed.includes(raw)) {
+    throw new Error(
+      `${name} expects ${spec.expects ?? allowed.join(', ')} (got: ${raw})`,
+    );
+  }
+  const value = spec.map ? spec.map(raw, name) : raw;
+  if (spec.list) opts[spec.key].push(value);
+  else opts[spec.key] = value;
+}
+
 function parseArgs(argv) {
   const opts = {
     json: false,
     help: false,
     failOn: null,
     signals: [],
+    severities: [],
+    noiseTiers: [],
+    exclude: [],
     limit: null,
     targets: [],
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === '--json') {
-      opts.json = true;
-    } else if (arg === '--help' || arg === '-h') {
-      opts.help = true;
-    } else if (arg === '--fail-on') {
-      const value = argv[++i];
-      if (value !== 'critical' && value !== 'high' && value !== 'medium') {
-        throw new Error(
-          `--fail-on expects critical, high, or medium (got: ${value ?? 'nothing'})`,
-        );
-      }
-      opts.failOn = value;
-    } else if (arg === '--signal') {
-      const value = argv[++i];
-      if (!SIGNALS.some((s) => s.id === value)) {
-        throw new Error(
-          `--signal expects a known signal id (got: ${value ?? 'nothing'})`,
-        );
-      }
-      opts.signals.push(value);
-    } else if (arg === '--limit') {
-      const value = Number(argv[++i]);
-      if (!Number.isInteger(value) || value < 1) {
-        throw new Error(
-          `--limit expects a positive integer (got: ${argv[i] ?? 'nothing'})`,
-        );
-      }
-      opts.limit = value;
+    if (FLAGS[arg]) {
+      opts[FLAGS[arg]] = true;
+    } else if (VALUE_OPTIONS[arg]) {
+      applyOption(opts, arg, VALUE_OPTIONS[arg], argv[++i]);
     } else if (arg.startsWith('-')) {
       throw new Error(`unknown option: ${arg}`);
     } else {
@@ -1207,12 +1547,15 @@ function main() {
     }
   }
 
-  const result = scanTargets(opts.targets);
+  const result = scanTargets(opts.targets, { exclude: opts.exclude });
 
-  if (opts.signals.length > 0) {
-    result.findings = result.findings.filter((f) =>
-      opts.signals.includes(f.signal),
-    );
+  const keep = [
+    opts.signals.length > 0 && ((f) => opts.signals.includes(f.signal)),
+    opts.severities.length > 0 && ((f) => opts.severities.includes(f.severity)),
+    opts.noiseTiers.length > 0 && ((f) => opts.noiseTiers.includes(f.noise)),
+  ].filter(Boolean);
+  if (keep.length > 0) {
+    result.findings = result.findings.filter((f) => keep.every((p) => p(f)));
   }
 
   for (const warning of result.warnings) {

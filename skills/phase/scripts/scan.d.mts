@@ -9,6 +9,8 @@
 
 export type ScanSeverity = 'critical' | 'high' | 'medium' | 'dedup';
 export type ScanNoise = 'precise' | 'normal' | 'noisy';
+/** Whether a frame driver runs the line. null for stylesheets. */
+export type ScanExecution = 'per-frame' | 'incidental';
 
 export interface ScanExample {
   file: string;
@@ -21,6 +23,7 @@ export interface ScanSignal {
   severity: ScanSeverity;
   noise: ScanNoise;
   why: string;
+  replacement: string;
   fix: string;
   supersedes?: string;
   fileTypes?: string | string[];
@@ -31,6 +34,7 @@ export interface ScanFinding {
   signal: string;
   severity: ScanSeverity;
   noise: ScanNoise;
+  execution: ScanExecution | null;
   file: string;
   line: number;
   text: string;
@@ -42,6 +46,8 @@ export interface ScanContext {
   appRouter: boolean;
   ppr: boolean;
   clientComponents: number;
+  /** Paths that produced the detection, so the stamp can be judged. */
+  evidence: string[];
 }
 
 export interface ScanSkipped {
@@ -81,12 +87,15 @@ export interface ScanJson {
     filesSkipped: ScanSkipped | null;
     linesSkipped: number;
     total: number;
+    sites: number;
     returned: number;
     actionable: number;
     dedup: number;
+    perFrame: number;
     suppressed: number;
     bySeverity: { critical: number; high: number; medium: number };
   };
+  hotspots: { file: string; count: number }[];
   context: ScanContext | null;
   warnings: string[];
   findings: ScanFinding[];
@@ -95,7 +104,15 @@ export interface ScanJson {
 export declare const SIGNALS: ScanSignal[];
 export declare const SEVERITY_ORDER: ScanSeverity[];
 
-export declare function scanTargets(paths: string[]): ScanResult;
+export interface ScanOptions {
+  /** Paths to skip: substring, or glob when it contains a wildcard. */
+  exclude?: string[];
+}
+
+export declare function scanTargets(
+  paths: string[],
+  options?: ScanOptions,
+): ScanResult;
 export declare function scanFile(
   relPath: string,
   content: string,

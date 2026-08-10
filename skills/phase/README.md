@@ -52,12 +52,23 @@ git diff --name-only | xargs node <skill-dir>/scripts/scan.mjs   # changed files
 | `--json`               | Machine-readable output: summary, environment context, warnings, flat findings |
 | `--fail-on <severity>` | Exit 1 at or above `critical`/`high`/`medium` (for CI); default always exits 0 |
 | `--signal <id>`        | Report only this signal (repeatable)                                           |
+| `--severity <level>`   | Report only this severity (repeatable)                                         |
+| `--noise <tier>`       | Report only this noise tier (repeatable)                                       |
+| `--exclude <path>`     | Skip paths containing this text, or matching it as a glob (repeatable)         |
 | `--limit <n>`          | Cap the findings array in `--json` output                                      |
 | `-h`, `--help`         | Usage                                                                          |
 
 Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit, `2` usage error. A clean scan reports how many files it scanned; zero scannable files prints a warning instead of a green result. Requires Node 20 or newer.
 
-Text output caps each signal's listing so one noisy pattern cannot bury the report or an agent's context window. `--json` is uncapped by design; scope it (`--json --signal <id>`) rather than dumping a whole large codebase.
+The report opens with the files carrying the most candidates, and within each signal it lists the lines a frame loop, observer, or move handler actually runs before the incidental ones — the same layout read costs nothing in a click handler and stalls every frame inside a `pointermove`. Every block names why it matters and what to use instead, so you can act without opening the reference.
+
+Text output caps each signal's listing, and caps again per file, so one noisy pattern or one busy file cannot bury the rest. On a big report, narrow before reading:
+
+```bash
+node <skill-dir>/scripts/scan.mjs --noise precise --noise normal --exclude examples/ src
+```
+
+`--json` is uncapped by design; scope it (`--json --signal <id>`) rather than dumping a whole large codebase.
 
 To permanently accept a finding, add a comment on or above the line (the reason is mandatory):
 

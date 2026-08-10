@@ -65,6 +65,9 @@ describe('scan signal catalog', () => {
         expect(SEVERITY_ORDER).toContain(signal.severity);
         expect(NOISE_TIERS.has(signal.noise)).toBe(true);
         expect(signal.why.length).toBeGreaterThan(0);
+        // Printed in every block, so a reader never has to open the
+        // reference to learn what to do instead.
+        expect(signal.replacement.length).toBeGreaterThan(0);
         expect(signal.fix.startsWith('references/')).toBe(true);
         if (signal.supersedes) {
           expect(SIGNALS.some((s) => s.id === signal.supersedes)).toBe(true);
@@ -152,6 +155,7 @@ describe('output', () => {
         appRouter: false,
         ppr: false,
         clientComponents: 0,
+        evidence: [],
       },
       ...overrides,
     });
@@ -163,11 +167,62 @@ describe('output', () => {
       () => 'requestAnimationFrame(step);',
     ).join('\n');
     const text = render(scanFile('src/storm.ts', content));
-    expect(text).toContain('src/storm.ts:20');
-    expect(text).not.toContain('src/storm.ts:21');
+    // One file may fill only part of a signal's listing.
+    expect(text).toContain('src/storm.ts:1');
+    expect(text).not.toContain('src/storm.ts:20');
     // Bare --json on a storm is tens of thousands of tokens; the hint must
     // send the reader to the scoped form instead.
-    expect(text).toContain('… and 5 more (--json --signal manual-raf');
+    expect(text).toContain('more (--json --signal manual-raf');
+  });
+
+  it('names the concrete replacement and why it matters', () => {
+    const text = render(scanFile('src/a.ts', 'const w = el.offsetWidth;\n'));
+    expect(text).toContain('why: Synchronous layout');
+    expect(text).toContain('use: useSize');
+  });
+
+  it('leads with the files carrying the most candidates', () => {
+    const findings = [
+      ...scanFile(
+        'src/busy.ts',
+        'const a = el.offsetWidth;\nconst b = el.offsetHeight;\nconst c = el.offsetTop;\nconst d = el.scrollWidth;\n',
+      ),
+      ...scanFile('src/quiet.ts', 'const e = el.offsetLeft;\n'),
+    ];
+    const text = render(findings);
+    expect(text).toContain('## hotspots (most candidates per file)');
+    expect(text.indexOf('src/busy.ts')).toBeLessThan(
+      text.indexOf('## critical'),
+    );
+  });
+
+  it('lists per-frame candidates before incidental ones', () => {
+    const findings = [
+      ...scanFile('src/cold.ts', 'const a = el.offsetWidth;\n'),
+      ...scanFile(
+        'src/hot.ts',
+        'function loop() {\n  const b = el.offsetWidth;\n  requestAnimationFrame(loop);\n}\n',
+      ),
+    ];
+    const text = render(findings);
+    expect(text).toContain('↑ in a per-frame path:');
+    expect(text.indexOf('src/hot.ts')).toBeLessThan(
+      text.indexOf('src/cold.ts'),
+    );
+  });
+
+  it('spends only part of a signal listing on one file', () => {
+    const busy = Array.from(
+      { length: 12 },
+      () => 'const w = el.offsetWidth;',
+    ).join('\n');
+    const text = render([
+      ...scanFile('src/busy.ts', busy),
+      ...scanFile('src/other.ts', 'const h = el.offsetHeight;\n'),
+    ]);
+    // The rollup already says busy.ts dominates; the listing shows breadth.
+    expect(text).toContain('src/other.ts:1');
+    expect((text.match(/src\/busy\.ts:/g) ?? []).length).toBe(4);
   });
 
   it('reports coverage it did not have instead of a bare clean result', () => {
@@ -197,8 +252,43 @@ describe('output', () => {
     );
     expect(findings.length).toBeGreaterThan(0);
     for (const finding of findings) {
-      expect(finding.text.length).toBeLessThanOrEqual(200);
+      expect(finding.text.length).toBeLessThanOrEqual(130);
     }
+  });
+
+  it('windows the excerpt around the match, not around column zero', () => {
+    // Truncating from the left hid the matched utility in 8 of 12 Tailwind
+    // findings on a real app: a wall of class names and no reason given.
+    const className = `${'px-2 rounded-lg border '.repeat(8)}transition-all duration-300`;
+    const [finding] = scanFile(
+      'src/button.tsx',
+      `<div className="${className}" />;\n`,
+    );
+    expect(finding?.text).toContain('transition-all');
+    expect(finding?.text.startsWith('…')).toBe(true);
+  });
+});
+
+describe('execution context', () => {
+  it('marks a layout read driven by a frame loop', () => {
+    const finding = scanFile(
+      'src/a.ts',
+      'function loop() {\n  const w = el.offsetWidth;\n  requestAnimationFrame(loop);\n}\n',
+    ).find((f) => f.signal === 'forced-reflow');
+    expect(finding?.execution).toBe('per-frame');
+  });
+
+  it('marks a one-shot layout read as incidental', () => {
+    const finding = scanFile(
+      'src/a.ts',
+      'function onClick() {\n  const rect = el.getBoundingClientRect();\n}\n',
+    ).find((f) => f.signal === 'forced-reflow');
+    expect(finding?.execution).toBe('incidental');
+  });
+
+  it('leaves stylesheet findings unclassified', () => {
+    const [finding] = scanFile('src/a.css', '.x { transition: all 0.3s; }\n');
+    expect(finding?.execution).toBe(null);
   });
 });
 
@@ -286,6 +376,14 @@ describe('environment context', () => {
     expect(run.status).toBe(0);
     expect(run.stdout).toContain('Context: Next.js + App Router + PPR');
     expect(run.stdout).toContain('Step 2.5');
+  });
+
+  it('names the files the stamp was inferred from', () => {
+    // In a monorepo the marker can come from an example app; a bare
+    // assertion gives the reader no way to notice.
+    const run = runCli(['../ssr-semantics-guard/workspace']);
+    expect(run.stdout).toContain('(from ');
+    expect(run.stdout).toContain('next.config.ts');
   });
 });
 
@@ -467,6 +565,51 @@ describe('scan CLI', () => {
     const run = runCli(['--signal', 'no-such-signal', 'workspace']);
     expect(run.status).toBe(2);
     expect(run.stderr).toContain('known signal id');
+  });
+
+  it('--noise drops the tiers a triage pass does not want', () => {
+    const run = runCli(['--json', '--noise', 'precise', 'workspace']);
+    const actual = JSON.parse(run.stdout);
+    expect(actual.findings.length).toBeGreaterThan(0);
+    expect(
+      actual.findings.every((f: { noise: string }) => f.noise === 'precise'),
+    ).toBe(true);
+  });
+
+  it('--severity narrows to one bucket', () => {
+    const run = runCli(['--json', '--severity', 'medium', 'workspace']);
+    const actual = JSON.parse(run.stdout);
+    expect(actual.findings.length).toBeGreaterThan(0);
+    expect(
+      actual.findings.every(
+        (f: { severity: string }) => f.severity === 'medium',
+      ),
+    ).toBe(true);
+  });
+
+  it('--exclude takes a plain path fragment or a glob', () => {
+    const plain = JSON.parse(
+      runCli(['--json', '--exclude', 'styles/', 'workspace']).stdout,
+    );
+    expect(
+      plain.findings.some((f: { file: string }) =>
+        f.file.startsWith('styles/'),
+      ),
+    ).toBe(false);
+
+    const glob = JSON.parse(
+      runCli(['--json', '--exclude', '**/*.css', 'workspace']).stdout,
+    );
+    expect(
+      glob.findings.some((f: { file: string }) => f.file.endsWith('.css')),
+    ).toBe(false);
+  });
+
+  it('reports hotspots and distinct sites for triage', () => {
+    const actual = JSON.parse(runCli(['--json', 'workspace']).stdout);
+    expect(actual.hotspots[0].count).toBeGreaterThan(1);
+    expect(actual.summary.sites).toBeLessThan(actual.summary.total);
+    expect(actual.summary.perFrame).toBeGreaterThan(0);
   });
 
   it('prints usage on --help', () => {
