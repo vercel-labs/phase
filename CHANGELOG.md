@@ -1,5 +1,11 @@
 # phase
 
+## 0.0.9
+
+### Patch Changes
+
+- Preserve `createLoop` frame timing when adaptive quality rebuilds its internal ticker.
+
 ## 0.0.8
 
 ### Patch Changes

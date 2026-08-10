@@ -139,6 +139,11 @@ export function createLoop(options: LoopOptions): Loop {
   let overBudgetCount = 0;
   let ticker: Ticker | null = null;
 
+  // The adaptive-quality ticker can be replaced while the loop is running.
+  // Keep the consumer-facing frame owned by the loop so its timeline and
+  // object identity remain continuous across those internal replacements.
+  const frame: FrameState = { time: 0, delta: 0, elapsed: 0, frame: 0 };
+
   // Quality signal flags
   let focusDegraded = false;
 
@@ -220,12 +225,17 @@ export function createLoop(options: LoopOptions): Loop {
   function buildTicker(): void {
     const targetFps: number | undefined = getEffectiveFps();
     const budget: number = 1000 / (targetFps ?? 60);
+    const elapsedOffset: number = frame.elapsed;
 
     destroyTicker();
 
     ticker = createTicker({
       fps: targetFps,
-      onTick: (frame) => {
+      onTick: (tickerFrame) => {
+        frame.time = tickerFrame.time;
+        frame.delta = tickerFrame.delta;
+        frame.elapsed = elapsedOffset + tickerFrame.elapsed;
+        frame.frame++;
         checkFrameBudget(frame.delta, budget);
         onTick(frame);
       },

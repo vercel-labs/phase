@@ -456,6 +456,91 @@ describe('quality signal - frame budget', () => {
     loop.stop();
   });
 
+  it('throttle preserves frame continuity after a frame-budget rebuild', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    let lastState: unknown;
+    let lastDelta = 0;
+    let lastElapsed = 0;
+    let lastFrame = 0;
+    const loop = createLoop({
+      element: el,
+      onTick: (frame) => {
+        lastState = frame;
+        lastDelta = frame.delta;
+        lastElapsed = frame.elapsed;
+        lastFrame = frame.frame;
+      },
+    });
+    makeSightVisible(el);
+
+    degradeViaBudget(clock);
+    const stateBeforeRebuild = lastState;
+    const elapsedBeforeRebuild = lastElapsed;
+    const frameBeforeRebuild = lastFrame;
+
+    await Promise.resolve();
+    clock.advance(OVER_BUDGET_DELTA);
+
+    expect(lastState).toBe(stateBeforeRebuild);
+    expect(lastDelta).toBeCloseTo(16.67);
+    expect(lastElapsed).toBeGreaterThan(elapsedBeforeRebuild);
+    expect(lastFrame).toBe(frameBeforeRebuild + 1);
+    clock.restore();
+    loop.stop();
+  });
+
+  it('throttle preserves frame continuity across focus changes', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    let lastState: unknown;
+    let lastDelta = 0;
+    let lastElapsed = 0;
+    let lastFrame = 0;
+    const loop = createLoop({
+      element: el,
+      onTick: (frame) => {
+        lastState = frame;
+        lastDelta = frame.delta;
+        lastElapsed = frame.elapsed;
+        lastFrame = frame.frame;
+      },
+    });
+    makeSightVisible(el);
+    clock.advance(16);
+
+    const initialState = lastState;
+    const initialElapsed = lastElapsed;
+    const initialFrame = lastFrame;
+    const hasFocusSpy = vi.spyOn(document, 'hasFocus');
+    hasFocusSpy.mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+
+    await Promise.resolve();
+    clock.advance(OVER_BUDGET_DELTA);
+
+    expect(lastState).toBe(initialState);
+    expect(lastDelta).toBeCloseTo(16.67);
+    expect(lastElapsed).toBeGreaterThan(initialElapsed);
+    expect(lastFrame).toBe(initialFrame + 1);
+
+    const degradedElapsed = lastElapsed;
+    const degradedFrame = lastFrame;
+    hasFocusSpy.mockReturnValue(true);
+    window.dispatchEvent(new Event('focus'));
+
+    await Promise.resolve();
+    clock.advance(16);
+
+    expect(lastState).toBe(initialState);
+    expect(lastElapsed).toBeGreaterThan(degradedElapsed);
+    expect(lastFrame).toBe(degradedFrame + 1);
+    clock.restore();
+    loop.stop();
+  });
+
   it('pause: degrades then recovers via timer (not permanent)', async () => {
     const { createLoop } = await getModule();
     const clock = setupManualClock();
