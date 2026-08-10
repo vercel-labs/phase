@@ -1,0 +1,27 @@
+{
+  "description": "Legitimate code that pattern-matches several signals. The scan gate asserts which signals must stay silent; the rubric checks surviving candidates get classified honestly.",
+  "scan": {
+    "command": "node <skill-dir>/scripts/scan.mjs --json workspace",
+    "assertions": {
+      "required": [
+        { "signal": "manual-raf", "file": "src/meter.ts", "count": 2 },
+        { "signal": "missing-reduced-motion", "file": "src/meter.ts", "count": 1 }
+      ],
+      "requiredAbsent": [
+        { "signal": "setstate-in-raf", "reason": "setAttribute/setProperty in rAF are recommended patterns, not state updates" },
+        { "signal": "background-animation", "reason": "the setTimeout queue in src/phases.ts is game logic; 'position' is a variable, not CSS" },
+        { "signal": "tailwind-permanent-will-change", "reason": "will-change-transform is toggled by a ternary in src/gallery.tsx" },
+        { "signal": "tailwind-transition-all", "reason": "transition-colors names its property" },
+        { "signal": "permanent-will-change", "reason": "will-change is scoped to [data-active='true'] in styles/toggle.css" },
+        { "signal": "non-compositor-animation", "reason": "the transition names only opacity and transform" },
+        { "signal": "raw-io", "reason": "src/phases.ts must be scanned despite the 'phase' substring, and contains no observers" }
+      ]
+    }
+  },
+  "expectedBehavior": [
+    "Runs the bundled scanner on the workspace",
+    "Classifies src/meter.ts honestly: the raw rAF loop is a real useLoop candidate (no visibility pausing, no reduced-motion handling), but the setAttribute/setProperty writes are correct and stay in the recommendation",
+    "Does not invent defects in src/phases.ts, src/gallery.tsx, or styles/toggle.css; classifies them as no change",
+    "The final report marks the already-optimal files as 'no change' rather than omitting them"
+  ]
+}

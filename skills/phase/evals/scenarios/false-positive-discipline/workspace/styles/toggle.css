@@ -1,0 +1,17 @@
+.card {
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.card[data-active='true'] {
+  will-change: transform;
+}
+
+.static {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}

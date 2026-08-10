@@ -1,0 +1,274 @@
+{
+  "schemaVersion": 1,
+  "skillVersion": "0.0.14",
+  "targets": [
+    "workspace"
+  ],
+  "summary": {
+    "filesScanned": 9,
+    "filesSkipped": {
+      "excluded": 0,
+      "unsupported": 0,
+      "generated": 0,
+      "unreadable": 0,
+      "unreadableDirs": 0
+    },
+    "linesSkipped": 0,
+    "total": 21,
+    "sites": 18,
+    "returned": 21,
+    "actionable": 20,
+    "dedup": 1,
+    "perFrame": 15,
+    "suppressed": 1,
+    "bySeverity": {
+      "critical": 9,
+      "high": 7,
+      "medium": 4
+    }
+  },
+  "hotspots": [
+    {
+      "file": "src/ticker.ts",
+      "count": 5
+    },
+    {
+      "file": "styles/globals.css",
+      "count": 4
+    },
+    {
+      "file": "src/hero-animation.tsx",
+      "count": 3
+    },
+    {
+      "file": "src/phases/progress-meter.ts",
+      "count": 3
+    },
+    {
+      "file": "src/suppressed-banner.ts",
+      "count": 2
+    }
+  ],
+  "context": {
+    "framework": null,
+    "appRouter": false,
+    "ppr": false,
+    "clientComponents": 0,
+    "evidence": []
+  },
+  "warnings": [
+    "src/suppressed-banner.ts:5  phase-scan-ignore is missing a reason (use: phase-scan-ignore <signal-id> -- <reason>); directive ignored"
+  ],
+  "findings": [
+    {
+      "signal": "tailwind-transition-all",
+      "severity": "high",
+      "noise": "noisy",
+      "execution": "incidental",
+      "file": "src/card.tsx",
+      "line": 5,
+      "text": "<div className=\"rounded-lg border transition-all duration-300 hover:shadow-lg\">",
+      "fix": "references/audit.md#step-15-css-loading-and-architecture-pass"
+    },
+    {
+      "signal": "setstate-in-raf",
+      "severity": "critical",
+      "noise": "normal",
+      "execution": "per-frame",
+      "file": "src/hero-animation.tsx",
+      "line": 11,
+      "text": "frame = requestAnimationFrame(loop);",
+      "fix": "references/performance.md#never-setstate-inside-ontick--draw"
+    },
+    {
+      "signal": "setstate-in-raf",
+      "severity": "critical",
+      "noise": "normal",
+      "execution": "per-frame",
+      "file": "src/hero-animation.tsx",
+      "line": 13,
+      "text": "frame = requestAnimationFrame(loop);",
+      "fix": "references/performance.md#never-setstate-inside-ontick--draw"
+    },
+    {
+      "signal": "missing-reduced-motion",
+      "severity": "critical",
+      "noise": "noisy",
+      "execution": "per-frame",
+      "file": "src/hero-animation.tsx",
+      "line": 11,
+      "text": "frame = requestAnimationFrame(loop);",
+      "fix": "references/performance.md#reduced-motion-by-default"
+    },
+    {
+      "signal": "raw-io",
+      "severity": "medium",
+      "noise": "normal",
+      "execution": "per-frame",
+      "file": "src/lazy-image.tsx",
+      "line": 7,
+      "text": "const io = new IntersectionObserver(([entry]) => {",
+      "fix": "references/performance.md#observer-pooling"
+    },
+    {
+      "signal": "manual-raf",
+      "severity": "high",
+      "noise": "noisy",
+      "execution": "per-frame",
+      "file": "src/phases/progress-meter.ts",
+      "line": 7,
+      "text": "requestAnimationFrame(frame);",
+      "fix": "references/audit.md#common-replacements"
+    },
+    {
+      "signal": "manual-raf",
+      "severity": "high",
+      "noise": "noisy",
+      "execution": "per-frame",
+      "file": "src/phases/progress-meter.ts",
+      "line": 9,
+      "text": "requestAnimationFrame(frame);",
+      "fix": "references/audit.md#common-replacements"
+    },
+    {
+      "signal": "missing-reduced-motion",
+      "severity": "critical",
+      "noise": "noisy",
+      "execution": "per-frame",
+      "file": "src/phases/progress-meter.ts",
+      "line": 7,
+      "text": "requestAnimationFrame(frame);",
+      "fix": "references/performance.md#reduced-motion-by-default"
+    },
+    {
+      "signal": "forced-reflow",
+      "severity": "critical",
+      "noise": "noisy",
+      "execution": "per-frame",
+      "file": "src/suppressed-banner.ts",
+      "line": 6,
+      "text": "const width = el.offsetWidth;",
+      "fix": "references/performance.md#no-forced-reflows-in-animation-paths"
+    },
+    {
+      "signal": "missing-reduced-motion",
+      "severity": "critical",
+      "noise": "noisy",
+      "execution": "per-frame",
+      "file": "src/suppressed-banner.ts",
+      "line": 3,
+      "text": "requestAnimationFrame(() => el.classList.add('banner-in'));",
+      "fix": "references/performance.md#reduced-motion-by-default"
+    },
+    {
+      "signal": "redundant-mutation-observers",
+      "severity": "medium",
+      "noise": "normal",
+      "execution": "per-frame",
+      "file": "src/theme-watcher.ts",
+      "line": 2,
+      "text": "const observer = new MutationObserver(() => {",
+      "fix": "references/performance-recipes.md#recipe-collapse-an-observer-storm-on-html"
+    },
+    {
+      "signal": "manual-raf",
+      "severity": "high",
+      "noise": "noisy",
+      "execution": "per-frame",
+      "file": "src/ticker.ts",
+      "line": 5,
+      "text": "requestAnimationFrame(tick);",
+      "fix": "references/audit.md#common-replacements"
+    },
+    {
+      "signal": "manual-raf",
+      "severity": "high",
+      "noise": "noisy",
+      "execution": "per-frame",
+      "file": "src/ticker.ts",
+      "line": 7,
+      "text": "requestAnimationFrame(tick);",
+      "fix": "references/audit.md#common-replacements"
+    },
+    {
+      "signal": "forced-reflow",
+      "severity": "critical",
+      "noise": "noisy",
+      "execution": "per-frame",
+      "file": "src/ticker.ts",
+      "line": 3,
+      "text": "const width = el.getBoundingClientRect().width;",
+      "fix": "references/performance.md#no-forced-reflows-in-animation-paths"
+    },
+    {
+      "signal": "js-opacity-transform",
+      "severity": "medium",
+      "noise": "noisy",
+      "execution": "per-frame",
+      "file": "src/ticker.ts",
+      "line": 4,
+      "text": "el.style.transform = 'translateX(' + width / 10 + 'px)';",
+      "fix": "references/decision-guide.md#tier-1-css-only-no-js"
+    },
+    {
+      "signal": "missing-reduced-motion",
+      "severity": "critical",
+      "noise": "noisy",
+      "execution": "per-frame",
+      "file": "src/ticker.ts",
+      "line": 5,
+      "text": "requestAnimationFrame(tick);",
+      "fix": "references/performance.md#reduced-motion-by-default"
+    },
+    {
+      "signal": "manual-synced-ref",
+      "severity": "dedup",
+      "noise": "precise",
+      "execution": "incidental",
+      "file": "src/use-latest.ts",
+      "line": 4,
+      "text": "const valueRef = useRef(value);",
+      "fix": "references/use-synced-ref.md"
+    },
+    {
+      "signal": "missing-reduced-motion",
+      "severity": "critical",
+      "noise": "noisy",
+      "execution": null,
+      "file": "styles/globals.css",
+      "line": 16,
+      "text": "@keyframes float {",
+      "fix": "references/performance.md#reduced-motion-by-default"
+    },
+    {
+      "signal": "global-has-selector",
+      "severity": "high",
+      "noise": "precise",
+      "execution": null,
+      "file": "styles/globals.css",
+      "line": 1,
+      "text": "body:has(.modal-open) {",
+      "fix": "references/performance-recipes.md#recipe-delete-a-global-has-rule"
+    },
+    {
+      "signal": "permanent-will-change",
+      "severity": "medium",
+      "noise": "normal",
+      "execution": null,
+      "file": "styles/globals.css",
+      "line": 7,
+      "text": "will-change: transform;",
+      "fix": "references/performance.md#will-change-only-while-animating"
+    },
+    {
+      "signal": "non-compositor-animation",
+      "severity": "high",
+      "noise": "normal",
+      "execution": null,
+      "file": "styles/globals.css",
+      "line": 6,
+      "text": "transition: all 0.3s ease;",
+      "fix": "references/audit.md#step-15-css-loading-and-architecture-pass"
+    }
+  ]
+}

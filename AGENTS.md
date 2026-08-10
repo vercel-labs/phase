@@ -38,12 +38,12 @@ Two-layer design: core primitives (framework-agnostic) and React bindings.
 
 ### Top-level folders
 
-| Folder   | Purpose                                                                                                                                                                                |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ease/`  | Pure math (easing functions, clamping, interpolation). No browser APIs, no React. Safe anywhere.                                                                                       |
-| `core/`  | Framework-agnostic primitives (ticker, sight, loop). Browser APIs live here. `_internal/` holds shared infrastructure (error factory, observer pools) that is never exported publicly. |
-| `react/` | React hooks and components. Each hook or component gets its own folder. Depends on `core/` for the underlying primitives. `_internal/` holds shared hooks not exported publicly.       |
-| `tests/` | Shared test infrastructure (mock factories for IO/RO/MQL, performance regression tests).                                                                                               |
+| Folder       | Purpose                                                                                                                                                                                |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ease/`      | Pure math (easing functions, clamping, interpolation). No browser APIs, no React. Safe anywhere.                                                                                       |
+| `core/`      | Framework-agnostic primitives (ticker, sight, loop). Browser APIs live here. `_internal/` holds shared infrastructure (error factory, observer pools) that is never exported publicly. |
+| `react/`     | React hooks and components. Each hook or component gets its own folder. Depends on `core/` for the underlying primitives. `_internal/` holds shared hooks not exported publicly.       |
+| `__tests__/` | Cross-cutting suites that belong to no single module (performance budgets, the audit scanner). Shared mock factories for IO/RO/MQL live in `__mocks__/`.                               |
 
 ### File organization conventions
 
@@ -93,7 +93,7 @@ Every module must satisfy these performance contracts without exception.
 
 ## Performance testing
 
-`src/tests/perf.spec.ts` contains structural and budget assertions that gate regressions:
+`src/__tests__/perf.spec.ts` contains structural and budget assertions that gate regressions:
 
 1. **Zero-allocation.** `FrameState` is the exact same object reference across 10,000 frames.
 2. **Frame budget.** Per-frame math overhead stays under 0.1ms.
@@ -215,6 +215,35 @@ Every export falls into one category. New exports must fit an existing category 
 5. Update `skills/phase/references/ease.md` with the new function
 6. Run `pnpm format:fix && pnpm validate && pnpm skill:check`
 
+### New scanner signal (audit skill)
+
+The audit scanner (`skills/phase/scripts/scan.mjs`) detects anti-pattern candidates; every signal ships with executable examples and calibrated triage metadata. Check the signal against the skill's scope first (animation lifecycle, rendering gating, observer/listener hygiene, CSS animation cost — see audit.md "Scope and handoffs"); adjacent React/Next.js perf concerns belong to other skills, not new signals.
+
+1. Add the catalog entry to `SIGNALS` in `scan.mjs`: kebab-case `id`, `label`, `severity` (`critical`/`high`/`medium`/`dedup`, per audit.md's weighting), `noise` (`precise`/`normal`/`noisy`), a one-line `why`, a one-line `replacement` naming what to use instead (both are printed in every report block), and a `fix` pointer to a real `references/<file>#anchor`. Detection is a `pattern` plus optional `contextPattern` (±5-line window), or a custom `matcher` (`(lines, i) => boolean`, pure). Optional: `fileTypes` (`css`/`jsx`/array), `supersedes`, `perFile`.
+   - **`negativePattern` is whole-file.** It suppresses the signal for every line in a file that matches it anywhere, so it only suits `perFile` signals. For a condition that belongs to one declaration or one enclosing rule, write a `matcher` — a file-wide negative silenced `permanent-will-change` on every stylesheet containing a `:hover` rule, which is to say all of them.
+   - **Watch the regex for ambiguity.** A group that can match empty inside a quantifier (`(?:\s*,?\s*…)*`) makes a failing match exponential. Signals run over unknown third-party code; a pattern that can hang is a pattern that will.
+2. Add examples to `scan-examples.mjs` under the same id: at least one `match` and one `noMatch`, including a regression example for every false positive the signal must avoid. The suite fails structurally without them.
+3. Write the examples to encode intended behavior before tuning the detection (red first): `pnpm vitest run src/__tests__/scan.spec.ts`.
+   - **Severity is what it costs when real; execution is what it costs now.** The scanner classifies each JS finding as per-frame or incidental from the surrounding code and ranks accordingly, so a signal does not need a severity bump to be noticed in a hot path. Set severity for the worst case and let the ranking sort the rest.
+4. Probe, don't just read: run the scanner against a real repo (`node skills/phase/scripts/scan.mjs <path>`), hand-classify a sample of findings, and set the noise tier from what you observe. Record the provenance in the PR description.
+5. Add the row to audit.md's signal table. `pnpm skill:check` fails CI when the table, fix pointers, examples, or eval ground truth drift from the catalog.
+6. If the signal fires on the planted-defect fixture (`skills/phase/evals/scenarios/audit-planted-defects/workspace`), regenerate the goldens (`scan.mjs workspace > expected-scan.txt`, `--json` likewise) and run `pnpm skill:build` (regenerates audit.md's sample block).
+7. Run `pnpm format:fix && pnpm validate`.
+
+When a real-world audit failure surfaces (wrong recommendation, missed context), encode it as an eval scenario under `skills/phase/evals/scenarios/` (see `ssr-semantics-guard` for the pattern) so it can never regress silently. Put everything machine-checkable in the scenario's `scan.assertions` block (`required`, `requiredAbsent`, `context`): `src/__tests__/scan.spec.ts` executes those assertions against the fixture workspace on every run, so a claim recorded there is a gate, not a note. If a fixture workspace needs a `package.json`, keep it free of `scripts` and `dependencies`: pnpm's recursive runs discover nested projects, so a fixture script named `test` or `lint` would execute during `pnpm validate`.
+
+### Recalibrating the scanner
+
+Noise tiers are evidence-backed: they come from hand-classifying findings on real code. The durable outcomes are encoded where they are enforceable — every confirmed false-positive class becomes a `noMatch` example in `scan-examples.mjs` (with the test suite executing it forever) and, where a cheap tightening kills the whole class, a detection fix. Recalibrate when a signal's detection changes (mandatory, at least for the changed signals), when a field report claims a false positive or negative, or before a release that touches the scanner.
+
+1. Shallow-clone 2-3 real, actively maintained open-source repos into `/tmp`, never into this repo. Pick by profile so the mix approximates consumers: a Tailwind-heavy component library, a canvas/whiteboard-style app (rAF and pointer heavy), and a production Next.js App Router app (ideally with PPR enabled, to exercise context detection). Add a repo likely to exercise the signal under calibration; repos resembling the actual consumer's codebase beat popular OSS. Pick apps, not animation/rendering engines (engines legitimately own raw rAF and observers internally, so their findings teach nothing about consumer code), and beware SDK-weighted monorepos: library internals skew the sample, and third-party state-machine APIs with their own `onTick` name-collide with `setstate-in-ontick`.
+2. Run `node skills/phase/scripts/scan.mjs --json /tmp/<repo>` per repo. Compare per-signal counts before and after your change; a count that moved without a corresponding scanner change is itself a finding.
+3. Sample up to ~10 findings per changed or `noisy` signal. Open each `file:line` and classify true/false positive against the signal's `why`.
+4. Act on evidence only: a confirmed FP class becomes a `noMatch` example plus a regex tightening when a cheap fix kills the whole class, or a noise-tier bump when it does not. Never loosen a tier or a pattern without sampled evidence.
+5. **Log actions, not scorecards, and never name the repos.** Raw per-repo counts and verdicts stay local; do not commit or publish repository names or tables attributing findings to them, in docs, commit messages, or PR descriptions (this is a Vercel-branded repo, and other people's finding counts are not ours to publish). What lands in the PR description: which signals were calibrated, the profiles scanned, the FP classes found, and the fixes/tier changes they drove — each backed by its committed `noMatch` example.
+
+This is bounded judgment work, not an autonomous loop: fixed repo set, fixed sample size, done when the fixes and examples are committed. When asking for a recalibration, the highest-value inputs are field reports with `file:line` and why the finding was wrong, plus repos representative of the code being audited.
+
 ## Before committing
 
 Run this sequence before every commit. Lefthook covers some of it on pre-commit, but `--amend` and non-skill changes can skip hooks. Do it yourself every time.
@@ -255,7 +284,7 @@ The `skills/phase/` directory contains an agent skill that documents the public 
 ### Source of truth and generated files
 
 - **Hand-edit:** `SKILL.md` and `references/*.md`. Start new references from `skills/phase/references/_template.md`. `SKILL.md` frontmatter is the single source of truth for the skill's `name`, `description`, `license`, `version`, `author`, and `abstract`.
-- **Never hand-edit (generated by `skill:build` / `skill:package`):** `metadata.json` and `dist/phase-skill.zip`. To change the version, edit `SKILL.md` frontmatter and rebuild. `metadata.json` is derived from it, so there's only ever one place to update.
+- **Never hand-edit (generated by `skill:build` / `skill:package`):** `metadata.json`, `dist/phase-skill.zip`, and the scan-golden sample block inside `references/audit.md` (spliced from `evals/scenarios/audit-planted-defects/expected-scan.txt` by `scripts/skill/sync-scan-docs.mjs`). To change the version, edit `SKILL.md` frontmatter and rebuild.
 - The skill `version` is intentionally independent of the package `version`. They evolve on different cadences. Don't sync them.
 
 ### When to update skill references
