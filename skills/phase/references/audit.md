@@ -56,9 +56,13 @@ git diff --name-only | xargs node <skill-dir>/scripts/scan.mjs
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `--json`               | Machine-readable output (schemaVersion 1): summary counts plus a flat findings array (`{signal, severity, noise, file, line, text, fix}`), stamped with the skill version that produced it |
 | `--fail-on <severity>` | Exit 1 if any finding is at or above `critical`, `high`, or `medium`. For CI gating                                                                                                        |
+| `--signal <id>`        | Report only this signal. Repeatable                                                                                                                                                        |
+| `--limit <n>`          | Cap the `findings` array in `--json` output (`summary.total` still reports the true count)                                                                                                 |
 | `-h`, `--help`         | Usage                                                                                                                                                                                      |
 
-Exit codes: `0` scan completed (the default even when findings exist; the audit is advisory), `1` a `--fail-on` threshold was hit, `2` usage error.
+Exit codes: `0` scan completed (the default even when findings exist; the audit is advisory), `1` a `--fail-on` threshold was hit, `2` usage error. Requires Node 20 or newer.
+
+**Read the text output, not `--json`.** Text caps each signal's listing at 20 entries; `--json` does not, and on a large Tailwind codebase the full findings array runs to tens of thousands of tokens. When you need the entries a cap hid, scope the request: `--json --signal tailwind-transition-all`, optionally with `--limit`.
 
 If `scan.mjs` is not available (e.g. the skill is loaded without scripts), perform the scan manually by searching for the signal patterns below in the target codebase.
 
@@ -88,7 +92,7 @@ missing-reduced-motion — Animation without reduced-motion check (5) · noise: 
   src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
   src/suppressed-banner.ts:3  requestAnimationFrame(() => el.classList.add('banner-in'));
   src/ticker.ts:5  requestAnimationFrame(tick);
-  styles/globals.css:10  @keyframes float {
+  styles/globals.css:16  @keyframes float {
 
 ## high
 
@@ -144,6 +148,8 @@ Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before 
 
 <!-- scan-golden:end -->
 
+`Scanned N files` counts files the scanner actually analyzed, never files it merely opened, so a clean result cannot cover code that was skipped. When something could not be read — an unreadable directory, a file the process lacks permission for, a generated line past the length limit — the report ends with an `⚠ Incomplete coverage:` line. Treat that as a hole in the audit and say so in your report; `--json` carries the same information in `summary.filesSkipped` and `summary.linesSkipped`.
+
 The scanner also stamps detected **environment context** into the output (a `Context:` line in text, a `context` object in JSON: `framework`, `appRouter`, `ppr`, `clientComponents`). When it reports Next.js, App Router, or PPR, treat that as detected fact and apply [Step 2.5](#step-25-verify-the-blast-radius) before any rendering recommendation. Detection is best-effort, so its absence proves nothing: Step 2.5 applies regardless. In a monorepo, scan the package you are auditing rather than the repo root; a Next.js example app elsewhere in the repo would otherwise stamp the whole scan.
 
 Two orthogonal ratings guide how to act on each block:
@@ -156,6 +162,12 @@ Two orthogonal ratings guide how to act on each block:
 A comment `phase-scan-ignore <signal-id> -- <reason>` (colon after `ignore` also accepted) suppresses that signal on the same line and the next line. The reason is mandatory; the scanner warns about and ignores reason-less directives and directives naming unknown signal ids. For per-file signals (`missing-reduced-motion`), a directive anywhere in the file suppresses its single finding. Suppressing a superseding signal (`setstate-in-raf`) re-exposes the general one (`manual-raf`) on that line; name both to silence both. Also note: the scanner cannot tell a dangling directive (nothing left to suppress) from an active one, so remove directives when the code they covered is gone.
 
 **Policy: suppressions record human decisions.** Never add a suppression yourself unless the user has explicitly accepted the finding. If the scanner warns about a reason-less directive, report it; do not silently add a reason or delete the directive.
+
+The directive is the only sanctioned way to silence a finding, but it is not the only way a finding can disappear. These are detection limits, not approved exits — reaching for one to clear a report is falsifying the audit:
+
+- `missing-reduced-motion` goes quiet for a whole file that mentions `prefers-reduced-motion`, `reducedMotion`, or imports `phase` anywhere, including in a comment.
+- Renaming a file into an excluded path (`__tests__`, `__mocks__`, `.stories.`, `.spec.`, `.test.`) removes it from the scan.
+- Lines longer than 1,000 characters are treated as generated and are not scanned.
 
 ### Signals
 
@@ -174,7 +186,7 @@ Severity and noise mirror the scanner's catalog; a repo check fails CI when this
 | `background-animation`           | high     | noisy   | `setInterval`/`setTimeout` driving transform/opacity work                            | [timed-sequences.md](./timed-sequences.md)                                                                                 |
 | `global-has-selector`            | high     | precise | `body:has`/`html:has`/`:root:has`/`*:has` in a stylesheet **(CSS)**                  | [performance-recipes.md](./performance-recipes.md#recipe-delete-a-global-has-rule)                                         |
 | `non-compositor-animation`       | high     | normal  | `transition: all`, layout properties, or bare-duration shorthand **(CSS)**           | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                     |
-| `tailwind-transition-all`        | high     | noisy   | `transition-all` utility class **(JSX)**                                             | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                     |
+| `tailwind-transition-all`        | high     | noisy   | `transition-all` utility class, in JSX or a variant module                           | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                     |
 | `keyframes-layout-animation`     | high     | normal  | Layout property (`width`/`height`/`top`/`left`) inside `@keyframes` **(CSS)**        | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                     |
 | `when-visible-no-fallback`       | high     | noisy   | `WhenVisible`/`WhenIdle` without a sized `fallback` (layout shift) **(JSX)**         | [rendering-recipes.md](./rendering-recipes.md)                                                                             |
 | `raw-io`                         | medium   | normal  | `new IntersectionObserver` outside the pool                                          | [performance.md](./performance.md#observer-pooling)                                                                        |
@@ -183,12 +195,14 @@ Severity and noise mirror the scanner's catalog; a repo check fails CI when this
 | `js-opacity-transform`           | medium   | noisy   | `style.opacity`/`style.transform` writes (CSS-only candidate)                        | [decision-guide.md](./decision-guide.md#tier-1-css-only-no-js)                                                             |
 | `permanent-will-change`          | medium   | normal  | `will-change` never toggled with animation state **(CSS)**                           | [performance.md](./performance.md#will-change-only-while-animating)                                                        |
 | `redundant-mutation-observers`   | medium   | normal  | MutationObserver on `<html>`/`documentElement`                                       | [performance-recipes.md](./performance-recipes.md#recipe-collapse-an-observer-storm-on-html)                               |
-| `tailwind-permanent-will-change` | medium   | noisy   | `will-change-transform` class not toggled with state **(JSX)**                       | [performance.md](./performance.md#will-change-only-while-animating)                                                        |
+| `tailwind-permanent-will-change` | medium   | noisy   | `will-change-transform` class not toggled with state                                 | [performance.md](./performance.md#will-change-only-while-animating)                                                        |
 | `reduced-motion-ignored`         | medium   | precise | `reducedMotion: 'ignore'` (bypasses the user preference)                             | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
 | `core-primitive-in-component`    | medium   | noisy   | `createLoop`/`createTicker`/`createLifecycle`/`createSight` in a component **(JSX)** | [decision-guide.md](./decision-guide.md#common-mistakes)                                                                   |
 | `manual-synced-ref`              | dedup    | precise | `useRef(v)` + unconditional `ref.current = v` (shorthand exists)                     | [use-synced-ref.md](./use-synced-ref.md)                                                                                   |
 
 > Manual heuristics the scanner cannot see: CSS-in-JS (styled-components, emotion, vanilla-extract) hides the CSS signals entirely (JS signals still fire); Vue/Svelte/Astro single-file components are not scanned at all; in React Native code, `missing-reduced-motion` findings need judgment (the fix is the platform's reduced-motion API, not a CSS media query); `getBoundingClientRect()` used only for an initial in-view check; and hand-wired "IO + visibilitychange + reduced motion → boolean" gates. See [Common replacements](#common-replacements).
+
+> Known blind spots in the CSS signals: a vendor-prefixed declaration with no unprefixed sibling (`-webkit-transition: all` alone) is skipped, because prefix-aware matching is what stops one logical declaration being counted five times. Lines over 1,000 characters are treated as generated and skipped, so a stylesheet compacted onto one line reports nothing.
 
 ## Step 1.5: CSS, loading, and architecture pass
 
@@ -308,10 +322,21 @@ After:
 
 ## Step 4: Verify
 
-After applying fixes, re-run the same scan command. The audit is done when one of these holds for every finding:
+After applying fixes, re-run the same scan command and **compare the finding sets, not the counts**. A count that fell proves nothing on its own: a finding also disappears when a file is renamed into an excluded path, when a comment happens to mention `prefers-reduced-motion`, or when a line grows past the scanner's length limit. Capture both runs and diff them:
 
-- The scan reports zero candidates, or
-- every remaining finding is explicitly classified "no change" in your report, or suppressed by a directive the user approved.
+```bash
+node <skill-dir>/scripts/scan.mjs --json <target> > /tmp/scan-before.json
+# ...apply fixes...
+node <skill-dir>/scripts/scan.mjs --json <target> > /tmp/scan-after.json
+```
+
+Every finding present in `before` and absent from `after` must map to one of:
+
+- a fix you applied and can point at in the diff,
+- a finding explicitly classified "no change" in your report, or
+- a suppression directive the user approved.
+
+A finding that vanished for none of those reasons is a regression in the audit, not a success. Note also that `filesScanned` must not drop between runs: fewer files analyzed means less coverage, not fewer problems.
 
 If new signals appear (a fix can introduce a different anti-pattern), classify and fix those too. When the work is performance-motivated, measure frame time before and after; an audit without measurement is speculation.
 

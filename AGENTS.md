@@ -38,12 +38,12 @@ Two-layer design: core primitives (framework-agnostic) and React bindings.
 
 ### Top-level folders
 
-| Folder   | Purpose                                                                                                                                                                                |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ease/`  | Pure math (easing functions, clamping, interpolation). No browser APIs, no React. Safe anywhere.                                                                                       |
-| `core/`  | Framework-agnostic primitives (ticker, sight, loop). Browser APIs live here. `_internal/` holds shared infrastructure (error factory, observer pools) that is never exported publicly. |
-| `react/` | React hooks and components. Each hook or component gets its own folder. Depends on `core/` for the underlying primitives. `_internal/` holds shared hooks not exported publicly.       |
-| `tests/` | Shared test infrastructure (mock factories for IO/RO/MQL, performance regression tests).                                                                                               |
+| Folder       | Purpose                                                                                                                                                                                |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ease/`      | Pure math (easing functions, clamping, interpolation). No browser APIs, no React. Safe anywhere.                                                                                       |
+| `core/`      | Framework-agnostic primitives (ticker, sight, loop). Browser APIs live here. `_internal/` holds shared infrastructure (error factory, observer pools) that is never exported publicly. |
+| `react/`     | React hooks and components. Each hook or component gets its own folder. Depends on `core/` for the underlying primitives. `_internal/` holds shared hooks not exported publicly.       |
+| `__tests__/` | Cross-cutting suites that belong to no single module (performance budgets, the audit scanner). Shared mock factories for IO/RO/MQL live in `__mocks__/`.                               |
 
 ### File organization conventions
 
@@ -93,7 +93,7 @@ Every module must satisfy these performance contracts without exception.
 
 ## Performance testing
 
-`src/tests/perf.spec.ts` contains structural and budget assertions that gate regressions:
+`src/__tests__/perf.spec.ts` contains structural and budget assertions that gate regressions:
 
 1. **Zero-allocation.** `FrameState` is the exact same object reference across 10,000 frames.
 2. **Frame budget.** Per-frame math overhead stays under 0.1ms.
@@ -220,6 +220,8 @@ Every export falls into one category. New exports must fit an existing category 
 The audit scanner (`skills/phase/scripts/scan.mjs`) detects anti-pattern candidates; every signal ships with executable examples and calibrated triage metadata. Check the signal against the skill's scope first (animation lifecycle, rendering gating, observer/listener hygiene, CSS animation cost — see audit.md "Scope and handoffs"); adjacent React/Next.js perf concerns belong to other skills, not new signals.
 
 1. Add the catalog entry to `SIGNALS` in `scan.mjs`: kebab-case `id`, `label`, `severity` (`critical`/`high`/`medium`/`dedup`, per audit.md's weighting), `noise` (`precise`/`normal`/`noisy`), a one-line `why`, and a `fix` pointer to a real `references/<file>#anchor`. Detection is a `pattern` plus optional `contextPattern` (±5-line window), or a custom `matcher` (`(lines, i) => boolean`, pure). Optional: `fileTypes` (`css`/`jsx`/array), `supersedes`, `perFile`.
+   - **`negativePattern` is whole-file.** It suppresses the signal for every line in a file that matches it anywhere, so it only suits `perFile` signals. For a condition that belongs to one declaration or one enclosing rule, write a `matcher` — a file-wide negative silenced `permanent-will-change` on every stylesheet containing a `:hover` rule, which is to say all of them.
+   - **Watch the regex for ambiguity.** A group that can match empty inside a quantifier (`(?:\s*,?\s*…)*`) makes a failing match exponential. Signals run over unknown third-party code; a pattern that can hang is a pattern that will.
 2. Add examples to `scan-examples.mjs` under the same id: at least one `match` and one `noMatch`, including a regression example for every false positive the signal must avoid. The suite fails structurally without them.
 3. Write the examples to encode intended behavior before tuning the detection (red first): `pnpm vitest run src/__tests__/scan.spec.ts`.
 4. Probe, don't just read: run the scanner against a real repo (`node skills/phase/scripts/scan.mjs <path>`), hand-classify a sample of findings, and set the noise tier from what you observe. Record the provenance in the PR description.
@@ -227,7 +229,7 @@ The audit scanner (`skills/phase/scripts/scan.mjs`) detects anti-pattern candida
 6. If the signal fires on the planted-defect fixture (`skills/phase/evals/scenarios/audit-planted-defects/workspace`), regenerate the goldens (`scan.mjs workspace > expected-scan.txt`, `--json` likewise) and run `pnpm skill:build` (regenerates audit.md's sample block).
 7. Run `pnpm format:fix && pnpm validate`.
 
-When a real-world audit failure surfaces (wrong recommendation, missed context), encode it as an eval scenario under `skills/phase/evals/scenarios/` (see `ssr-semantics-guard` for the pattern) so it can never regress silently. If a fixture workspace needs a `package.json`, keep it free of `scripts` and `dependencies`: pnpm's recursive runs discover nested projects, so a fixture script named `test` or `lint` would execute during `pnpm validate`.
+When a real-world audit failure surfaces (wrong recommendation, missed context), encode it as an eval scenario under `skills/phase/evals/scenarios/` (see `ssr-semantics-guard` for the pattern) so it can never regress silently. Put everything machine-checkable in the scenario's `scan.assertions` block (`required`, `requiredAbsent`, `context`): `src/__tests__/scan.spec.ts` executes those assertions against the fixture workspace on every run, so a claim recorded there is a gate, not a note. If a fixture workspace needs a `package.json`, keep it free of `scripts` and `dependencies`: pnpm's recursive runs discover nested projects, so a fixture script named `test` or `lint` would execute during `pnpm validate`.
 
 ### Recalibrating the scanner
 

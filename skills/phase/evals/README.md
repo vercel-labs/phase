@@ -13,14 +13,14 @@ Each scenario under `scenarios/` contains:
 | `workspace/`             | Seeded project files (only for scenarios that scan code)                       |
 | `expected-scan.txt/json` | Committed scanner goldens (only for scenarios with a full-scan gate)           |
 
-`src/__tests__/scan.spec.ts` already asserts the scanner side: the `audit-planted-defects` goldens are snapshot-tested on every `pnpm test`, so the deterministic layer of these evals cannot drift silently.
+`src/__tests__/scan.spec.ts` executes the scanner side of every scenario on each `pnpm test`: the `audit-planted-defects` goldens are snapshot-tested, and each scenario's `scan.assertions` block (`required`, `requiredAbsent`, `context`) runs against its fixture workspace. The deterministic layer of these evals is a gate today; the `expectedBehavior` rubrics are not — those need an agent runner and are checked by hand until one lands.
 
 ## Scenarios
 
 1. **audit-planted-defects.** An audit request over a workspace with one planted defect per major signal. Ground truth is the full scan golden; the rubric checks each defect is classified at the right ladder tier.
 2. **css-or-phase-advisory.** A loaded "how do I build this with phase" question whose correct answer is CSS-only. No workspace, no scan; tests ladder discipline.
 3. **false-positive-discipline.** A workspace of legitimate code that pattern-matches several signals. Ground truth asserts which signals must stay silent; the rubric checks the agent classifies surviving candidates as "no change".
-4. **ssr-semantics-guard.** A Server Component page with Next.js PPR enabled and a heavy server-rendered section. Regression guard for a confirmed failure: the rubric requires blast-radius checking (audit.md Step 2.5) and an SSR-preserving recommendation (`Defer`), rejecting unlabeled client-gated mounts that would break the static shell and SEO.
+4. **ssr-semantics-guard.** A Server Component page with Next.js PPR enabled and a heavy server-rendered section. Encodes a confirmed failure. Its scan gate (PPR and App Router detected, nothing lazy-mounted yet) runs in CI; the behavioral half — blast-radius checking per audit.md Step 2.5 and an SSR-preserving recommendation (`Defer`) instead of an unlabeled client-gated mount — is a rubric awaiting the agent runner.
 
 First manual behavioral run (2026-08-10, strong model, neutral prompt): passed the full rubric. The agent established context before recommending (found PPR in both the config and the route segment), correctly treated a zero-candidate scan as "manual checks still apply" rather than "nothing to do", recommended `Defer` with a Semantics: preserving label, explicitly rejected `WhenVisible`/`WhenIdle`/`ssr: false` as semantics-changing with the SSR/SEO/PPR impact stated, emitted the Out of scope handoff unprompted, and closed with the measurement rule. Single run with a strong model; the eve suite makes this repeatable.
 

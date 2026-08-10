@@ -36,7 +36,9 @@ The agent reads `SKILL.md` → `references/audit.md`, runs the scanner, then cla
 
 ### Why you can trust the recommendations
 
-Findings are candidates, not verdicts: each carries a severity (how bad if real) and a noise tier (how much to trust the detection), calibrated by hand-classifying findings across a dozen production open-source codebases; every observed false-positive class is encoded as an executable regression example in the test suite. Before recommending anything, the agent must verify the blast radius (framework, SSR, Next.js PPR; the scanner detects and stamps these) and label any recommendation that changes rendering semantics, which requires your explicit consent. Issues outside phase's domain (data fetching, bundling, server components) are reported and handed to the right skill, never improvised.
+Findings are candidates, not verdicts: each carries a severity (how bad if real) and a noise tier (how much to trust the detection), calibrated by hand-classifying findings across production open-source codebases spanning the consumer mix. False-positive classes cheap enough to detect are encoded as executable regression examples in the test suite; the ones that are not — a non-React `dispatch()` near a rAF, a third-party `onTick` API — are what the `noisy` tier is telling you about. Before recommending anything, the agent must verify the blast radius (framework, SSR, Next.js PPR; the scanner detects and stamps these) and label any recommendation that changes rendering semantics, which requires your explicit consent. Issues outside phase's domain (data fetching, bundling, server components) are reported and handed to the right skill, never improvised.
+
+The scanner also refuses to overstate its coverage: `Scanned N files` counts files it actually analyzed, and anything it could not read is reported as an explicit `⚠ Incomplete coverage` line rather than folded into a clean result.
 
 ### Scanner CLI
 
@@ -49,9 +51,13 @@ git diff --name-only | xargs node <skill-dir>/scripts/scan.mjs   # changed files
 | ---------------------- | ------------------------------------------------------------------------------ |
 | `--json`               | Machine-readable output: summary, environment context, warnings, flat findings |
 | `--fail-on <severity>` | Exit 1 at or above `critical`/`high`/`medium` (for CI); default always exits 0 |
+| `--signal <id>`        | Report only this signal (repeatable)                                           |
+| `--limit <n>`          | Cap the findings array in `--json` output                                      |
 | `-h`, `--help`         | Usage                                                                          |
 
-Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit, `2` usage error. A clean scan reports how many files it scanned; zero scannable files prints a warning instead of a green result.
+Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit, `2` usage error. A clean scan reports how many files it scanned; zero scannable files prints a warning instead of a green result. Requires Node 20 or newer.
+
+Text output caps each signal's listing so one noisy pattern cannot bury the report or an agent's context window. `--json` is uncapped by design; scope it (`--json --signal <id>`) rather than dumping a whole large codebase.
 
 To permanently accept a finding, add a comment on or above the line (the reason is mandatory):
 
