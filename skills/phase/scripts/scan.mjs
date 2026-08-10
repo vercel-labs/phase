@@ -23,36 +23,58 @@ import { fileURLToPath } from 'node:url';
  */
 export function scanTargets(paths) {
   const findings = [];
-  const diag = { suppressed: 0, warnings: [] };
+  const diag = newDiag();
   const context = {
     framework: null,
     appRouter: false,
     ppr: false,
     clientComponents: 0,
   };
-  let filesScanned = 0;
+  // Overlapping targets (`scan.mjs src src/components`) would otherwise
+  // report the same file twice and double every count.
+  const seen = new Set();
+  const probedRoots = new Set();
 
   for (const target of paths) {
     const root = resolve(target);
     const stat = lstatSync(root);
-    const files = stat.isDirectory() ? walk(root) : [root];
     const base = stat.isDirectory() ? root : dirname(root);
+    const files = stat.isDirectory() ? walk(root, diag) : [root];
 
-    if (stat.isDirectory()) detectNextConfig(root, context);
+    // Also for file targets: `git diff --name-only | xargs scan.mjs` is the
+    // workflow most likely to run against a Next.js app, and it is exactly
+    // where a missing context stamp would hide the blast-radius warning.
+    const configRoot = stat.isDirectory() ? root : base;
+    if (!probedRoots.has(configRoot)) {
+      probedRoots.add(configRoot);
+      detectNextConfig(configRoot, context);
+    }
 
     for (const filePath of files) {
-      let content;
-      try {
-        content = readFileSync(filePath, 'utf8');
-      } catch {
-        continue;
-      }
-      filesScanned++;
+      if (seen.has(filePath)) continue;
+      seen.add(filePath);
+
       // File targets keep the path as the caller gave it, so directory-based
       // exclusions (__tests__, node_modules) still apply in diff-scoped scans.
       const rel = stat.isDirectory()
         ? toPosix(relative(base, filePath))
         : toPosix(target).replace(/^\.\//, '');
+
+      // The walker already applies these; a file target bypasses it, and a
+      // generated .d.ts or .min.js in a diff should be skipped either way.
+      if (SKIP_FILES.test(rel)) {
+        diag.skipped.generated++;
+        continue;
+      }
+
+      let content;
+      try {
+        content = readFileSync(filePath, 'utf8');
+      } catch {
+        diag.skipped.unreadable++;
+        continue;
+      }
+
       // Excluded paths (tests, fixtures, agent config) must not poison
       // environment detection either.
       if (!EXCLUDED_PATHS.test(rel)) updateContext(rel, content, context);
@@ -62,11 +84,33 @@ export function scanTargets(paths) {
 
   return {
     targets: paths,
-    filesScanned,
+    // Files actually analyzed. Anything opened but not analyzed is counted
+    // in `filesSkipped`: a clean verdict over unexamined code is the one
+    // failure this report must never produce.
+    filesScanned: diag.analyzed,
+    filesSkipped: diag.skipped,
+    linesSkipped: diag.linesSkipped,
     findings,
     suppressed: diag.suppressed,
     warnings: diag.warnings,
     context,
+  };
+}
+
+/** Diagnostics sink shared by scanTargets, walk, and scanFile. */
+export function newDiag() {
+  return {
+    suppressed: 0,
+    warnings: [],
+    analyzed: 0,
+    linesSkipped: 0,
+    skipped: {
+      excluded: 0,
+      unsupported: 0,
+      generated: 0,
+      unreadable: 0,
+      unreadableDirs: 0,
+    },
   };
 }
 
@@ -77,19 +121,32 @@ export function scanTargets(paths) {
  * suppression counts and directive warnings.
  */
 export function scanFile(relPath, content, diag = null) {
-  if (EXCLUDED_PATHS.test(relPath)) return [];
+  if (EXCLUDED_PATHS.test(relPath)) {
+    if (diag) diag.skipped.excluded++;
+    return [];
+  }
 
   const ext = extOf(relPath);
   const type = typeOf(ext);
-  if (type === null) return [];
+  if (type === null) {
+    if (diag) diag.skipped.unsupported++;
+    return [];
+  }
 
   const findings = [];
   const lines = content.split(/\r?\n/);
 
-  // Minified/bundled content not named .min.* (vendored tooling, committed
-  // build artifacts) produces garbage findings. Real code averages well
-  // under 100 chars per line; bundles average thousands.
-  if (content.length / lines.length > 500) return [];
+  if (diag) diag.analyzed++;
+
+  // Generated content — minified bundles, inlined data URIs, i18n blobs —
+  // lives on lines no human wrote and no report could usefully quote. Drop
+  // the line, not the file: an average-length heuristic discarded whole
+  // files of real source over a single embedded blob.
+  const overlong = new Set();
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].length > MAX_LINE_LENGTH) overlong.add(i);
+  }
+  if (diag) diag.linesSkipped += overlong.size;
 
   const suppressions = collectSuppressions(relPath, lines, diag);
 
@@ -105,6 +162,7 @@ export function scanFile(relPath, content, diag = null) {
       lines,
       relPath,
       suppressions,
+      overlong,
       diag,
     );
 
@@ -133,15 +191,20 @@ export function scanFile(relPath, content, diag = null) {
  * (schemaVersion 1). skillVersion records which signal catalog produced
  * the findings.
  */
-export function formatJson(result) {
+export function formatJson(result, limit = null) {
   const counts = countBySeverity(result.findings);
+  const findings =
+    limit === null ? result.findings : result.findings.slice(0, limit);
   return {
     schemaVersion: 1,
     skillVersion: skillVersion(),
     targets: result.targets,
     summary: {
       filesScanned: result.filesScanned,
+      filesSkipped: result.filesSkipped ?? null,
+      linesSkipped: result.linesSkipped ?? 0,
       total: result.findings.length,
+      returned: findings.length,
       actionable: counts.critical + counts.high + counts.medium,
       dedup: counts.dedup,
       suppressed: result.suppressed ?? 0,
@@ -153,7 +216,7 @@ export function formatJson(result) {
     },
     context: result.context ?? null,
     warnings: result.warnings ?? [],
-    findings: result.findings,
+    findings,
   };
 }
 
@@ -185,8 +248,11 @@ export function formatText(result) {
         out.push(`  ${item.file}:${item.line}  ${item.text.slice(0, 100)}`);
       }
       if (items.length > MAX_LISTED_PER_SIGNAL) {
+        // Point at the scoped drill-down, not at bare --json: a storm's full
+        // JSON is tens of thousands of tokens, which is the problem this cap
+        // exists to avoid.
         out.push(
-          `  … and ${items.length - MAX_LISTED_PER_SIGNAL} more (use --json for the full list)`,
+          `  … and ${items.length - MAX_LISTED_PER_SIGNAL} more (--json --signal ${id} for the full list)`,
         );
       }
     }
@@ -198,6 +264,7 @@ export function formatText(result) {
 
   // A clean result must be distinguishable from scanning nothing: an empty
   // or mistyped target reading as "no findings" would be false confidence.
+  // filesScanned counts files actually analyzed, never files merely opened.
   if (result.filesScanned === 0) {
     out.push('', '⚠ No scannable files found. Check the target path.');
   } else if (result.findings.length === 0 && suppressed === 0) {
@@ -216,6 +283,11 @@ export function formatText(result) {
       'Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.',
     );
   }
+
+  // Coverage the scan did not have. Stating it is the difference between
+  // "clean" and "clean over the part I could read".
+  const gaps = coverageGaps(result);
+  if (gaps) out.push('', `⚠ Incomplete coverage: ${gaps}`);
 
   // Environment facts change what a safe recommendation looks like; hand
   // them to the reader instead of relying on it to go looking.
@@ -742,6 +814,14 @@ const SKIP_FILES = /\.min\.|\.d\.ts$|\.d\.mts$/;
 
 const MAX_LISTED_PER_SIGNAL = 20;
 
+// Longest line a human plausibly wrote. Longer lines are generated content;
+// see scanFile.
+const MAX_LINE_LENGTH = 1000;
+
+// Findings quote a source line; an unbounded quote turns one generated line
+// into megabytes of JSON in an agent's context window.
+const MAX_FINDING_TEXT = 200;
+
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -786,9 +866,10 @@ function suppressedAnywhere(suppressions, signalId) {
 }
 
 /** Runs one signal over a file's lines, honoring suppressions and perFile. */
-function scanSignal(signal, lines, relPath, suppressions, diag) {
+function scanSignal(signal, lines, relPath, suppressions, overlong, diag) {
   const findings = [];
   for (let i = 0; i < lines.length; i++) {
+    if (overlong.has(i)) continue;
     const line = lines[i];
 
     if (signal.matcher) {
@@ -920,7 +1001,7 @@ function makeFinding(signal, file, line, text) {
     noise: signal.noise,
     file,
     line,
-    text: text.trim(),
+    text: text.trim().slice(0, MAX_FINDING_TEXT),
     fix: signal.fix,
   };
 }
@@ -946,30 +1027,38 @@ function dedup(findings) {
   });
 }
 
-function walk(dir) {
-  const results = [];
+function walk(dir, diag, results = []) {
+  let entries;
   try {
     // Sorted so output (and committed goldens) are deterministic across
-    // filesystems.
-    const entries = readdirSync(dir).toSorted();
-    for (const entry of entries) {
-      if (SKIP_DIRS.has(entry)) continue;
-      const full = join(dir, entry);
-      const stat = lstatSync(full);
-      // Skipping symlinks entirely guards against cycles and vendored trees.
-      if (stat.isSymbolicLink()) continue;
-      if (stat.isDirectory()) {
-        results.push(...walk(full));
-      } else if (
-        stat.isFile() &&
-        !SKIP_FILES.test(entry) &&
-        typeOf(extOf(entry)) !== null
-      ) {
-        results.push(full);
-      }
-    }
+    // filesystems. withFileTypes avoids an lstat syscall per entry.
+    entries = readdirSync(dir, { withFileTypes: true }).toSorted((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+    );
   } catch {
-    /* skip inaccessible directories */
+    // A directory that cannot be listed is a hole in the scan's coverage,
+    // not a non-event: say so rather than reporting a clean result over it.
+    diag.skipped.unreadableDirs++;
+    diag.warnings.push(`${toPosix(dir)}  directory could not be read; skipped`);
+    return results;
+  }
+
+  for (const entry of entries) {
+    if (SKIP_DIRS.has(entry.name)) continue;
+    const full = join(dir, entry.name);
+    // Skipping symlinks entirely guards against cycles and vendored trees.
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) {
+      // Recursion accumulates into one array: `push(...walk(f))` throws
+      // RangeError once a subtree exceeds ~100k files.
+      walk(full, diag, results);
+    } else if (
+      entry.isFile() &&
+      !SKIP_FILES.test(entry.name) &&
+      typeOf(extOf(entry.name)) !== null
+    ) {
+      results.push(full);
+    }
   }
   return results;
 }
@@ -986,6 +1075,26 @@ function groupBySeverity(findings) {
     }
   }
   return bySeverity;
+}
+
+/**
+ * One line naming what the scan could not read, or null when coverage was
+ * complete. Deliberately excludes the by-design exclusions (tests, mocks,
+ * agent config): those are policy, not gaps.
+ */
+function coverageGaps(result) {
+  const parts = [];
+  const unreadable = result.filesSkipped?.unreadable ?? 0;
+  const unreadableDirs = result.filesSkipped?.unreadableDirs ?? 0;
+  const linesSkipped = result.linesSkipped ?? 0;
+  if (unreadable > 0) parts.push(`${unreadable} file(s) unreadable`);
+  if (unreadableDirs > 0) {
+    parts.push(`${unreadableDirs} directory/directories unreadable`);
+  }
+  if (linesSkipped > 0) {
+    parts.push(`${linesSkipped} generated/overlong line(s) not scanned`);
+  }
+  return parts.length > 0 ? parts.join(', ') : null;
 }
 
 function countBySeverity(findings) {
@@ -1011,16 +1120,30 @@ Options
   --fail-on <severity> exit 1 if any finding is at or above the given
                        severity (critical | high | medium); default is
                        exit 0 regardless of findings (advisory)
+  --signal <id>        report only this signal (repeatable)
+  --limit <n>          cap the findings array in --json output
   -h, --help           show this help
 
 Suppression
   A comment \`phase-scan-ignore <signal-id> -- <reason>\` suppresses that
   signal on the same and the next line. The reason is mandatory.
 
+Reading a large report
+  Prefer the text output: it caps each signal's listing. Reach for --json
+  scoped to one signal (--json --signal <id>) rather than dumping every
+  finding, which on a large codebase runs to tens of thousands of tokens.
+
 Exit codes: 0 = scan completed, 1 = --fail-on threshold hit, 2 = usage error.`;
 
 function parseArgs(argv) {
-  const opts = { json: false, help: false, failOn: null, targets: [] };
+  const opts = {
+    json: false,
+    help: false,
+    failOn: null,
+    signals: [],
+    limit: null,
+    targets: [],
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--json') {
@@ -1035,6 +1158,22 @@ function parseArgs(argv) {
         );
       }
       opts.failOn = value;
+    } else if (arg === '--signal') {
+      const value = argv[++i];
+      if (!SIGNALS.some((s) => s.id === value)) {
+        throw new Error(
+          `--signal expects a known signal id (got: ${value ?? 'nothing'})`,
+        );
+      }
+      opts.signals.push(value);
+    } else if (arg === '--limit') {
+      const value = Number(argv[++i]);
+      if (!Number.isInteger(value) || value < 1) {
+        throw new Error(
+          `--limit expects a positive integer (got: ${argv[i] ?? 'nothing'})`,
+        );
+      }
+      opts.limit = value;
     } else if (arg.startsWith('-')) {
       throw new Error(`unknown option: ${arg}`);
     } else {
@@ -1070,12 +1209,18 @@ function main() {
 
   const result = scanTargets(opts.targets);
 
+  if (opts.signals.length > 0) {
+    result.findings = result.findings.filter((f) =>
+      opts.signals.includes(f.signal),
+    );
+  }
+
   for (const warning of result.warnings) {
     console.error(`warning: ${warning}`);
   }
 
   if (opts.json) {
-    console.log(JSON.stringify(formatJson(result), null, 2));
+    console.log(JSON.stringify(formatJson(result, opts.limit), null, 2));
   } else {
     console.log(formatText(result));
   }

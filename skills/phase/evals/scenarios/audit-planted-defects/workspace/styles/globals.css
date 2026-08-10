@@ -7,6 +7,12 @@ body:has(.modal-open) {
   will-change: transform;
 }
 
+/* An unrelated state rule: it must not silence the permanent will-change
+   above it, which is what a whole-file negative pattern did. */
+.drawer-handle:hover {
+  background: #eee;
+}
+
 @keyframes float {
   from {
     transform: translateY(0);

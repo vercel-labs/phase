@@ -17,7 +17,7 @@ missing-reduced-motion — Animation without reduced-motion check (5) · noise: 
   src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
   src/suppressed-banner.ts:3  requestAnimationFrame(() => el.classList.add('banner-in'));
   src/ticker.ts:5  requestAnimationFrame(tick);
-  styles/globals.css:10  @keyframes float {
+  styles/globals.css:16  @keyframes float {
 
 ## high
 

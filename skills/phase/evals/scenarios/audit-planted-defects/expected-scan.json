@@ -6,7 +6,16 @@
   ],
   "summary": {
     "filesScanned": 9,
+    "filesSkipped": {
+      "excluded": 0,
+      "unsupported": 0,
+      "generated": 0,
+      "unreadable": 0,
+      "unreadableDirs": 0
+    },
+    "linesSkipped": 0,
     "total": 21,
+    "returned": 21,
     "actionable": 20,
     "dedup": 1,
     "suppressed": 1,
@@ -184,7 +193,7 @@
       "severity": "critical",
       "noise": "noisy",
       "file": "styles/globals.css",
-      "line": 10,
+      "line": 16,
       "text": "@keyframes float {",
       "fix": "references/performance.md#reduced-motion-by-default"
     },

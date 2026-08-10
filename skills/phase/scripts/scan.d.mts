@@ -44,9 +44,20 @@ export interface ScanContext {
   clientComponents: number;
 }
 
+export interface ScanSkipped {
+  excluded: number;
+  unsupported: number;
+  generated: number;
+  unreadable: number;
+  unreadableDirs: number;
+}
+
 export interface ScanResult {
   targets: string[];
+  /** Files actually analyzed, never files merely opened. */
   filesScanned: number;
+  filesSkipped: ScanSkipped;
+  linesSkipped: number;
   findings: ScanFinding[];
   suppressed: number;
   warnings: string[];
@@ -56,6 +67,9 @@ export interface ScanResult {
 export interface ScanDiag {
   suppressed: number;
   warnings: string[];
+  analyzed: number;
+  linesSkipped: number;
+  skipped: ScanSkipped;
 }
 
 export interface ScanJson {
@@ -64,7 +78,10 @@ export interface ScanJson {
   targets: string[];
   summary: {
     filesScanned: number;
+    filesSkipped: ScanSkipped | null;
+    linesSkipped: number;
     total: number;
+    returned: number;
     actionable: number;
     dedup: number;
     suppressed: number;
@@ -84,5 +101,9 @@ export declare function scanFile(
   content: string,
   diag?: ScanDiag | null,
 ): ScanFinding[];
+export declare function newDiag(): ScanDiag;
 export declare function formatText(result: ScanResult): string;
-export declare function formatJson(result: ScanResult): ScanJson;
+export declare function formatJson(
+  result: ScanResult,
+  limit?: number | null,
+): ScanJson;
