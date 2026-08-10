@@ -229,6 +229,19 @@ The audit scanner (`skills/phase/scripts/scan.mjs`) detects anti-pattern candida
 
 When a real-world audit failure surfaces (wrong recommendation, missed context), encode it as an eval scenario under `skills/phase/evals/scenarios/` (see `ssr-semantics-guard` for the pattern) so it can never regress silently. If a fixture workspace needs a `package.json`, keep it free of `scripts` and `dependencies`: pnpm's recursive runs discover nested projects, so a fixture script named `test` or `lint` would execute during `pnpm validate`.
 
+### Recalibrating the scanner
+
+Noise tiers are evidence-backed: they come from hand-classifying findings on real code, and the evidence lives in `skills/phase/evals/calibration.md`. Recalibrate when a signal's detection changes (mandatory, at least for the changed signals), when a field report claims a false positive or negative, or before a release that touches the scanner.
+
+1. Shallow-clone 2-3 real repos into `/tmp`, never into this repo. The standing mix approximates consumers: a Tailwind-heavy component library (shadcn-ui/ui), a canvas/rAF-heavy app (excalidraw), and a production Next.js app (vercel/commerce). Add a repo likely to exercise the signal under calibration; repos resembling the actual consumer's codebase beat popular OSS.
+2. Run `node skills/phase/scripts/scan.mjs --json /tmp/<repo>` per repo and note per-signal counts.
+3. Diff against the latest entry in `calibration.md`. Any count that moved without a corresponding scanner change is itself a finding: investigate before proceeding.
+4. Sample up to ~10 findings per changed or `noisy` signal. Open each `file:line` and classify true/false positive against the signal's `why`.
+5. Act on evidence only: a confirmed FP class becomes a `noMatch` example plus a regex tightening when a cheap fix kills the whole class, or a noise-tier bump when it does not. Never loosen a tier or a pattern without sampled evidence.
+6. Prepend an entry to `calibration.md` (date, skill version, repo SHAs, counts, verdicts, actions) and cite it in the PR description.
+
+This is bounded judgment work, not an autonomous loop: fixed repo set, fixed sample size, done when the entry is written. When asking for a recalibration, the highest-value inputs are field reports with `file:line` and why the finding was wrong, plus repos representative of the code being audited.
+
 ## Before committing
 
 Run this sequence before every commit. Lefthook covers some of it on pre-commit, but `--amend` and non-skill changes can skip hooks. Do it yourself every time.
