@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "skillVersion": "0.0.14",
+  "skillVersion": "0.0.15",
   "targets": [
     "workspace"
   ],
