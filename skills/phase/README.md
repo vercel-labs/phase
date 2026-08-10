@@ -46,7 +46,7 @@ Full flag, suppression, and output documentation lives in `references/audit.md` 
 
 ## Development
 
-Contributor tooling lives in the repository-level `scripts/skill/` directory. Start new references from `references/_template.md`.
+Contributor tooling lives in the repository-level `scripts/skill/` directory. Start new references from `references/_template.md`. To add or change a scanner signal, follow "New scanner signal (audit skill)" in the repo's `AGENTS.md` (examples first, probe against real code, calibrate the noise tier).
 
 ```bash
 node scripts/skill/check-coverage.mjs   # verify barrels ↔ references

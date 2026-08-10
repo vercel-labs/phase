@@ -144,7 +144,7 @@ Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before 
 
 <!-- scan-golden:end -->
 
-The scanner also stamps detected **environment context** into the output (a `Context:` line in text, a `context` object in JSON: `framework`, `appRouter`, `ppr`, `clientComponents`). When it reports Next.js, App Router, or PPR, treat that as detected fact and apply [Step 2.5](#step-25-verify-the-blast-radius) before any rendering recommendation. Detection is best-effort (config files are only checked at the target root), so its absence proves nothing: Step 2.5 applies regardless.
+The scanner also stamps detected **environment context** into the output (a `Context:` line in text, a `context` object in JSON: `framework`, `appRouter`, `ppr`, `clientComponents`). When it reports Next.js, App Router, or PPR, treat that as detected fact and apply [Step 2.5](#step-25-verify-the-blast-radius) before any rendering recommendation. Detection is best-effort, so its absence proves nothing: Step 2.5 applies regardless. In a monorepo, scan the package you are auditing rather than the repo root; a Next.js example app elsewhere in the repo would otherwise stamp the whole scan.
 
 Two orthogonal ratings guide how to act on each block:
 

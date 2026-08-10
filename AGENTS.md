@@ -215,6 +215,20 @@ Every export falls into one category. New exports must fit an existing category 
 5. Update `skills/phase/references/ease.md` with the new function
 6. Run `pnpm format:fix && pnpm validate && pnpm skill:check`
 
+### New scanner signal (audit skill)
+
+The audit scanner (`skills/phase/scripts/scan.mjs`) detects anti-pattern candidates; every signal ships with executable examples and calibrated triage metadata. Check the signal against the skill's scope first (animation lifecycle, rendering gating, observer/listener hygiene, CSS animation cost — see audit.md "Scope and handoffs"); adjacent React/Next.js perf concerns belong to other skills, not new signals.
+
+1. Add the catalog entry to `SIGNALS` in `scan.mjs`: kebab-case `id`, `label`, `severity` (`critical`/`high`/`medium`/`dedup`, per audit.md's weighting), `noise` (`precise`/`normal`/`noisy`), a one-line `why`, and a `fix` pointer to a real `references/<file>#anchor`. Detection is a `pattern` plus optional `contextPattern` (±5-line window), or a custom `matcher` (`(lines, i) => boolean`, pure). Optional: `fileTypes` (`css`/`jsx`/array), `supersedes`, `perFile`.
+2. Add examples to `scan-examples.mjs` under the same id: at least one `match` and one `noMatch`, including a regression example for every false positive the signal must avoid. The suite fails structurally without them.
+3. Write the examples to encode intended behavior before tuning the detection (red first): `pnpm vitest run src/__tests__/scan.spec.ts`.
+4. Probe, don't just read: run the scanner against a real repo (`node skills/phase/scripts/scan.mjs <path>`), hand-classify a sample of findings, and set the noise tier from what you observe. Record the provenance in the PR description.
+5. Add the row to audit.md's signal table. `pnpm skill:check` fails CI when the table, fix pointers, examples, or eval ground truth drift from the catalog.
+6. If the signal fires on the planted-defect fixture (`skills/phase/evals/scenarios/audit-planted-defects/workspace`), regenerate the goldens (`scan.mjs workspace > expected-scan.txt`, `--json` likewise) and run `pnpm skill:build` (regenerates audit.md's sample block).
+7. Run `pnpm format:fix && pnpm validate`.
+
+When a real-world audit failure surfaces (wrong recommendation, missed context), encode it as an eval scenario under `skills/phase/evals/scenarios/` (see `ssr-semantics-guard` for the pattern) so it can never regress silently.
+
 ## Before committing
 
 Run this sequence before every commit. Lefthook covers some of it on pre-commit, but `--amend` and non-skill changes can skip hooks. Do it yourself every time.
