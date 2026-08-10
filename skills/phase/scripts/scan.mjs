@@ -261,8 +261,11 @@ const STATE_UPDATE_CONTEXT =
 // The lookbehind skips vendor-prefixed forms (-webkit-transition:): prefixed
 // declarations always ship alongside the unprefixed one, which would count
 // each logical declaration up to five times.
+// The separator must not be able to match empty (`\s*,?\s*` could split one
+// space several ways): inside a quantifier that ambiguity makes a failing
+// match exponential in the token count. A 124-char line took 27 seconds.
 const BARE_DURATION_TRANSITION =
-  /(?<![\w-])transition:\s*[\d.]+m?s(?:\s*,?\s*(?:[\d.]+m?s|ease[\w-]*|linear|step[\w-]*|steps\([^)]*\)|cubic-bezier\([^)]*\)))*\s*(?:;|!|$)/;
+  /(?<![\w-])transition:\s*[\d.]+m?s(?:(?:\s*,\s*|\s+)(?:[\d.]+m?s|ease[\w-]*|linear|step[\w-]*|steps\([^)]*\)|cubic-bezier\([^)]*\)))*\s*(?:;|!|$)/;
 
 export const SIGNALS = [
   {
@@ -409,8 +412,7 @@ export const SIGNALS = [
     noise: 'normal',
     why: 'A GPU layer is held even while nothing animates.',
     fix: 'references/performance.md#will-change-only-while-animating',
-    pattern: /will-change:(?!\s*auto\b)/,
-    negativePattern: /animation-play-state|\[data-|:hover|:focus/,
+    matcher: matchesPermanentWillChange,
     fileTypes: 'css',
   },
   {
@@ -487,7 +489,8 @@ export const SIGNALS = [
     why: 'Transitions whatever changes, including layout, off the compositor.',
     fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
     pattern: /\btransition-all\b/,
-    fileTypes: 'jsx',
+    // Not jsx-only: in a Tailwind codebase most class strings live in
+    // cva/tailwind-variants modules and clsx helpers, which are plain .ts.
   },
   {
     id: 'tailwind-permanent-will-change',
@@ -497,7 +500,6 @@ export const SIGNALS = [
     why: 'A GPU layer is held even while nothing animates.',
     fix: 'references/performance.md#will-change-only-while-animating',
     matcher: matchesPermanentWillChangeClass,
-    fileTypes: 'jsx',
   },
   // --- Phase-usage signals ---
   {
@@ -535,6 +537,9 @@ export const SIGNALS = [
 export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'dedup'];
 
 // --- Detection helpers ------------------------------------------------------
+//
+// How far a matcher looks for the bounds of the enclosing CSS rule.
+const BLOCK_SCAN_LINES = 20;
 //
 // Custom matchers: `(lines: string[], i: number) => boolean`.
 // Called once per line per signal. Return true if line i should be reported.
@@ -583,6 +588,29 @@ function matchesSyncedRef(lines, i) {
   return assign[1].trim() === initial;
 }
 
+/**
+ * `will-change` that no state gates. The gate lives in the enclosing rule,
+ * not the file: a `:hover` rule elsewhere in the stylesheet says nothing
+ * about this declaration, and a whole-file negative pattern silenced the
+ * signal on essentially every production stylesheet.
+ */
+function matchesPermanentWillChange(lines, i) {
+  if (!/will-change:(?!\s*auto\b)/.test(lines[i])) return false;
+  // A play-state toggle anywhere in the same block means it is managed.
+  for (let j = i + 1; j < lines.length && j - i < BLOCK_SCAN_LINES; j++) {
+    if (/animation-play-state/.test(lines[j])) return false;
+    if (lines[j].includes('}')) break;
+  }
+  for (let j = i; j >= 0 && i - j < BLOCK_SCAN_LINES; j--) {
+    if (/animation-play-state/.test(lines[j])) return false;
+    // The nearest opening brace carries this declaration's selector.
+    if (lines[j].includes('{')) {
+      return !/\[data-|\[aria-|:hover|:focus|:active/.test(lines[j]);
+    }
+  }
+  return true;
+}
+
 /** Always-on will-change-transform class; a ternary or && guard means toggled. */
 function matchesPermanentWillChangeClass(lines, i) {
   if (!/\bwill-change-transform\b/.test(lines[i])) return false;
@@ -590,11 +618,14 @@ function matchesPermanentWillChangeClass(lines, i) {
 }
 
 /**
- * Layout property inside a @keyframes block. Walks up through brace pairs
- * to distinguish keyframe declarations from ordinary rule declarations.
- * Handles single-line frames (`from { left: 0; }`): the property may follow
- * `{` or `;`, and the enclosing-block walk starts on the previous line, so
- * the frame's own brace never counts against the balance.
+ * Layout property inside a @keyframes block. Handles single-line frames
+ * (`from { left: 0; }`) and fully inlined blocks
+ * (`@keyframes k { from { left: 0; } }`), where the at-rule sits on the
+ * property's own line.
+ *
+ * The enclosing @keyframes ranges are computed once per file in a single
+ * forward pass (see keyframeRanges); walking braces backwards from every
+ * candidate line made this quadratic in file size — 1.4s on 4k lines.
  */
 function matchesKeyframesLayoutProp(lines, i) {
   if (
@@ -604,37 +635,71 @@ function matchesKeyframesLayoutProp(lines, i) {
   ) {
     return false;
   }
-  let balance = 0;
-  for (let j = i - 1; j >= 0; j--) {
-    const line = lines[j];
-    for (let k = line.length - 1; k >= 0; k--) {
-      const ch = line[k];
-      if (ch === '}') {
-        balance++;
-      } else if (ch === '{') {
-        if (balance === 0) {
-          if (/@(?:-\w+-)?keyframes/.test(line)) return true;
-        } else {
-          balance--;
+  return keyframeRanges(lines).has(i);
+}
+
+// Memoized per lines array: scanSignal calls the matcher once per line, and
+// every call would otherwise rebuild the same map.
+const keyframeRangeCache = new WeakMap();
+
+/** Line indices that sit inside (or open) a @keyframes block. */
+function keyframeRanges(lines) {
+  const cached = keyframeRangeCache.get(lines);
+  if (cached) return cached;
+
+  const inside = new Set();
+  let depth = 0;
+  let keyframesDepth = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const opensKeyframes =
+      keyframesDepth === -1 && /@(?:-\w+-)?keyframes/.test(line);
+    if (opensKeyframes) keyframesDepth = depth;
+    if (keyframesDepth !== -1) inside.add(i);
+
+    for (let k = 0; k < line.length; k++) {
+      if (line[k] === '{') {
+        depth++;
+      } else if (line[k] === '}') {
+        depth--;
+        if (keyframesDepth !== -1 && depth <= keyframesDepth) {
+          keyframesDepth = -1;
         }
       }
     }
   }
-  return false;
+
+  keyframeRangeCache.set(lines, inside);
+  return inside;
 }
 
 /**
  * WhenVisible/WhenIdle opening tag without a fallback prop. Reads up to 30
  * lines forward to capture multi-line JSX tags.
+ *
+ * The tag ends at the first `>` outside a prop expression: a comparison in
+ * a prop (`rootMargin={a > b ? x : y}`) used to end it early and hide a
+ * `fallback` declared further down.
  */
 function matchesUngatedLazyMount(lines, i) {
   const open = /<When(?:Visible|Idle)\b/.exec(lines[i]);
   if (!open) return false;
   let tag = '';
+  let depth = 0;
   for (let j = i; j < Math.min(lines.length, i + 30); j++) {
     const line = j === i ? lines[j].slice(open.index) : lines[j];
     tag += line + '\n';
-    if (/(?<!=)>/.test(line)) break;
+    let closed = false;
+    for (let k = 0; k < line.length; k++) {
+      const ch = line[k];
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      else if (ch === '>' && depth === 0 && line[k - 1] !== '=') {
+        closed = true;
+        break;
+      }
+    }
+    if (closed) break;
   }
   return !/\bfallback\s*=/.test(tag);
 }
@@ -649,10 +714,11 @@ const FILE_TYPE_EXTENSIONS = {
 const JSX_EXTENSIONS = new Set(['.tsx', '.jsx']);
 
 // Agent-config directories, vendored tooling, and this skill's own eval
-// fixtures contain code nobody will edit or deliberately bad example code;
-// scanning them buries real findings.
+// fixtures and signal catalog contain code nobody will edit or deliberately
+// bad example code; scanning them buries real findings. The skill directory
+// is matched as a substring so it is skipped wherever it was installed.
 const EXCLUDED_PATHS =
-  /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__|\.agents\/|\.claude\/|\.cursor\/|\.yarn\/|skills\/phase\/evals\//;
+  /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__|\.agents\/|\.claude\/|\.cursor\/|\.yarn\/|skills\/phase\/(?:evals|scripts)\//;
 
 const SKIP_DIRS = new Set([
   'node_modules',

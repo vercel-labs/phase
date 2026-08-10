@@ -314,6 +314,14 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/panel.css',
         content: '.panel {\n  will-change: left, top;\n}\n',
       },
+      {
+        // The gate is the enclosing rule, not the file: an unrelated :hover
+        // rule elsewhere used to silence the whole stylesheet, which is to
+        // say every real stylesheet.
+        file: 'src/card.css',
+        content:
+          '.card {\n  will-change: transform;\n}\n\n.button:hover {\n  color: red;\n}\n',
+      },
     ],
     noMatch: [
       {
@@ -323,6 +331,12 @@ export const SIGNAL_EXAMPLES = {
       {
         file: 'src/reset.css',
         content: '.static {\n  will-change: auto;\n}\n',
+      },
+      {
+        // Managed alongside a play-state toggle in the same rule.
+        file: 'src/marquee.css',
+        content:
+          '.marquee {\n  will-change: transform;\n  animation-play-state: paused;\n}\n',
       },
     ],
   },
@@ -341,6 +355,11 @@ export const SIGNAL_EXAMPLES = {
         // `all` by default.
         file: 'src/tab.css',
         content: '.tab {\n  transition: 0.3s;\n}\n',
+      },
+      {
+        // Duration, timing function, and delay, still naming no property.
+        file: 'src/sheet.css',
+        content: '.sheet {\n  transition: 0.3s ease-in-out 0.1s;\n}\n',
       },
     ],
     noMatch: [
@@ -388,6 +407,18 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/legacy.css',
         content:
           '@-webkit-keyframes rise {\n  from {\n    height: 0;\n  }\n}\n',
+      },
+      {
+        // A whole block on one line: the at-rule sits on the property's own
+        // line, so a backward-only walk never saw it.
+        file: 'src/compact.css',
+        content: '@keyframes drop { from { top: -10px; } to { top: 0; } }\n',
+      },
+      {
+        // Nested in an at-rule, which shifts the brace depth.
+        file: 'src/responsive.css',
+        content:
+          '@media (min-width: 600px) {\n  @keyframes grow {\n    from {\n      width: 0;\n    }\n  }\n}\n',
       },
     ],
     noMatch: [
@@ -473,6 +504,12 @@ export const SIGNAL_EXAMPLES = {
         content:
           '<div className="transition-all duration-300 hover:scale-105" />;\n',
       },
+      {
+        // Most Tailwind class strings in a real codebase live in variant
+        // modules, not in JSX; a jsx-only signal missed all of them.
+        file: 'src/button-variants.ts',
+        content: "export const button = cva('rounded transition-all');\n",
+      },
     ],
     noMatch: [
       {
@@ -480,9 +517,13 @@ export const SIGNAL_EXAMPLES = {
         content: '<div className="transition-colors duration-300" />;\n',
       },
       {
-        // JSX signals only run on .tsx/.jsx files.
         file: 'src/card.ts',
-        content: "const cls = 'transition-all duration-300';\n",
+        content: "const cls = 'transition-colors duration-300';\n",
+      },
+      {
+        // Stylesheets have their own signal (non-compositor-animation).
+        file: 'src/card.css',
+        content: '.card {\n  transition: all 0.3s;\n}\n',
       },
     ],
   },
@@ -492,11 +533,19 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/logo.tsx',
         content: '<div className="will-change-transform animate-spin" />;\n',
       },
+      {
+        file: 'src/logo-variants.ts',
+        content: "export const logo = cva('will-change-transform');\n",
+      },
     ],
     noMatch: [
       {
         file: 'src/logo.tsx',
         content: "<div className={active ? 'will-change-transform' : ''} />;\n",
+      },
+      {
+        file: 'src/logo.tsx',
+        content: "<div className={spinning && 'will-change-transform'} />;\n",
       },
     ],
   },
@@ -556,6 +605,13 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/chat.tsx',
         content:
           '<WhenIdle\n  rootMargin="200px"\n  fallback={<Skeleton height={320} />}\n>\n  <ChatWidget />\n</WhenIdle>\n',
+      },
+      {
+        // A comparison inside a prop expression is not the end of the tag;
+        // ending there hid the fallback declared below it.
+        file: 'src/gallery.tsx',
+        content:
+          "<WhenVisible\n  rootMargin={count > 3 ? '400px' : '100px'}\n  fallback={<Skeleton height={200} />}\n>\n  <Gallery />\n</WhenVisible>\n",
       },
     ],
   },
