@@ -49,6 +49,10 @@ Sample verdicts (hand-classified during the 2026-08 overhaul):
 - `pointer-listener-layout-read` (excalidraw): correctly silent; its pointermove handlers read no layout.
 - Phase-usage signals (`setstate-in-ontick`, `reduced-motion-ignored`, `core-primitive-in-component`, `when-visible-no-fallback`): zero everywhere, expected, since none of these repos use phase. Their behavior is covered by executable examples, not calibration.
 
+Alternates evaluated for the standing mix (not adopted, recorded for future swaps):
+
+- tldraw/tldraw `4b4ba64` (2836 files): 320 findings across 14 signals, the broadest coverage of any repo probed, including `global-has-selector` (3) and `setstate-in-ontick` (1). Two instructive observations: its `setstate-in-ontick` hit is a name-collision FP (tldraw's own `onTick` state-machine API with `editor.setCursor(...)` in context, a tldraw editor call, not React state), and the repo is SDK-weighted, so many raw-rAF findings are library internals rather than consumer-shaped code. Kept excalidraw for the canvas slot (more app-weighted, source of the `appState.offset*` FP class baseline); use tldraw as an extra repo when calibrating pointer/rAF or CSS-selector signals.
+
 Actions taken across the overhaul's calibration rounds:
 
 - `missing-reduced-motion` switched to per-file reporting (was 53 line findings across 16 ui files; now 17).
