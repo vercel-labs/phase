@@ -1,11 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { SIGNAL_EXAMPLES } from '../../skills/phase/scripts/scan-examples.mjs';
-import type { ScanDiag } from '../../skills/phase/scripts/scan.d.mts';
+import type { ScanFinding } from '../../skills/phase/scripts/scan.d.mts';
 import {
   formatText,
+  newDiag,
   scanFile,
   scanTargets,
   SEVERITY_ORDER,
@@ -105,7 +106,7 @@ describe('file selection', () => {
     );
   });
 
-  it('excludes agent-config dirs, vendored tooling, and eval fixtures', () => {
+  it('excludes agent-config dirs, vendored tooling, and the skill itself', () => {
     const raf = 'requestAnimationFrame(t);\n';
     expect(scanFile('.agents/skills/phase/tool.ts', raf)).toEqual([]);
     expect(scanFile('.cursor/rules/example.ts', raf)).toEqual([]);
@@ -113,28 +114,36 @@ describe('file selection', () => {
     expect(
       scanFile('skills/phase/evals/scenarios/x/workspace/src/t.ts', raf),
     ).toEqual([]);
+    // The signal catalog is full of deliberate anti-patterns; a repo that
+    // vendors the skill must not have them reported as its own.
+    expect(scanFile('skills/phase/scripts/scan-examples.mjs', raf)).toEqual([]);
   });
+});
 
-  it('skips minified content regardless of filename', () => {
-    // Committed build artifacts (seed bundles, vendored binaries) are one
-    // giant line; scanning them produces garbage findings.
-    const minified =
-      'var a=1;'.repeat(200) +
-      "setInterval(()=>{el.style.transform='translateX(1px)'},16);";
-    expect(scanFile('src/seed-bundle.mjs', minified)).toEqual([]);
+describe('pathological input', () => {
+  it('matches a long transition declaration in linear time', () => {
+    // An ambiguous separator inside a quantifier made a failing match
+    // exponential: a 124-character line took 27 seconds.
+    const line = `.x { transition: ${'1s '.repeat(40)}allow-discrete; }`;
+    const started = performance.now();
+    scanFile('src/a.css', `${line}\n`);
+    expect(performance.now() - started).toBeLessThan(250);
   });
 });
 
 describe('output', () => {
-  it('caps per-signal listings and reports the remainder', () => {
-    const content = Array.from(
-      { length: 25 },
-      () => 'requestAnimationFrame(step);',
-    ).join('\n');
-    const findings = scanFile('src/storm.ts', content);
-    const text = formatText({
+  function render(findings: ScanFinding[], overrides = {}) {
+    return formatText({
       targets: ['.'],
       filesScanned: 1,
+      filesSkipped: {
+        excluded: 0,
+        unsupported: 0,
+        generated: 0,
+        unreadable: 0,
+        unreadableDirs: 0,
+      },
+      linesSkipped: 0,
       findings,
       suppressed: 0,
       warnings: [],
@@ -144,10 +153,82 @@ describe('output', () => {
         ppr: false,
         clientComponents: 0,
       },
+      ...overrides,
     });
+  }
+
+  it('caps per-signal listings and points at the scoped drill-down', () => {
+    const content = Array.from(
+      { length: 25 },
+      () => 'requestAnimationFrame(step);',
+    ).join('\n');
+    const text = render(scanFile('src/storm.ts', content));
     expect(text).toContain('src/storm.ts:20');
     expect(text).not.toContain('src/storm.ts:21');
-    expect(text).toContain('… and 5 more (use --json for the full list)');
+    // Bare --json on a storm is tens of thousands of tokens; the hint must
+    // send the reader to the scoped form instead.
+    expect(text).toContain('… and 5 more (--json --signal manual-raf');
+  });
+
+  it('reports coverage it did not have instead of a bare clean result', () => {
+    const text = render([], {
+      filesSkipped: {
+        excluded: 0,
+        unsupported: 0,
+        generated: 0,
+        unreadable: 2,
+        unreadableDirs: 0,
+      },
+      linesSkipped: 3,
+    });
+    expect(text).toContain('⚠ Incomplete coverage');
+    expect(text).toContain('2 file(s) unreadable');
+    expect(text).toContain('3 generated/overlong line(s) not scanned');
+  });
+
+  it('stays silent about coverage when the scan read everything', () => {
+    expect(render([])).not.toContain('Incomplete coverage');
+  });
+
+  it('truncates the quoted source line', () => {
+    const findings = scanFile(
+      'src/wide.ts',
+      `const x = requestAnimationFrame(step); // ${'y'.repeat(900)}\n`,
+    );
+    expect(findings.length).toBeGreaterThan(0);
+    for (const finding of findings) {
+      expect(finding.text.length).toBeLessThanOrEqual(200);
+    }
+  });
+});
+
+describe('coverage accounting', () => {
+  it('does not count an excluded file as scanned', () => {
+    const diag = newDiag();
+    scanFile('src/anim.spec.ts', 'requestAnimationFrame(step);\n', diag);
+    expect(diag.analyzed).toBe(0);
+    expect(diag.skipped.excluded).toBe(1);
+  });
+
+  it('scans a file whose only long line is an embedded blob', () => {
+    // An average-line-length heuristic dropped the whole file — findings and
+    // all — over one inlined data URI.
+    const content = [
+      'requestAnimationFrame(step);',
+      `const LOGO = 'data:image/png;base64,${'A'.repeat(20000)}';`,
+    ].join('\n');
+    const diag = newDiag();
+    const findings = scanFile('src/hero.ts', content, diag);
+    expect(findings.some((f) => f.signal === 'manual-raf')).toBe(true);
+    expect(diag.analyzed).toBe(1);
+    expect(diag.linesSkipped).toBe(1);
+  });
+
+  it('still finds nothing scannable in a minified bundle', () => {
+    const minified =
+      'var a=1;'.repeat(200) +
+      "setInterval(()=>{el.style.transform='translateX(1px)'},16);";
+    expect(scanFile('src/seed-bundle.mjs', minified)).toEqual([]);
   });
 });
 
@@ -182,6 +263,17 @@ describe('environment context', () => {
     expect(result.context.ppr).toBe(true);
   });
 
+  it('stamps context for a single file target (diff-scoped scans)', () => {
+    // `git diff --name-only | xargs scan.mjs` is the mode most likely to run
+    // against a Next.js app, and the mode where a missing stamp would hide
+    // the blast-radius warning entirely.
+    const result = scanTargets([
+      'skills/phase/evals/scenarios/ssr-semantics-guard/workspace/app/testimonials.tsx',
+    ]);
+    expect(result.context.framework).toBe('next');
+    expect(result.context.ppr).toBe(true);
+  });
+
   it('reports no framework for the plain fixture workspace', () => {
     const result = scanTargets([
       'skills/phase/evals/scenarios/false-positive-discipline/workspace',
@@ -203,7 +295,7 @@ describe('suppression directive', () => {
     'requestAnimationFrame(step);\n';
 
   it('suppresses the named signal on the next line and counts it', () => {
-    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    const diag = newDiag();
     const findings = scanFile('src/anim.ts', RAF_WITH_DIRECTIVE, diag);
     expect(findings.filter((f) => f.signal === 'manual-raf')).toEqual([]);
     expect(diag.suppressed).toBe(1);
@@ -219,7 +311,7 @@ describe('suppression directive', () => {
   });
 
   it('ignores a directive without a reason and warns', () => {
-    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    const diag = newDiag();
     const findings = scanFile(
       'src/anim.ts',
       '// phase-scan-ignore manual-raf\nrequestAnimationFrame(step);\n',
@@ -232,7 +324,7 @@ describe('suppression directive', () => {
   });
 
   it('warns on an unknown signal id instead of silently ignoring the typo', () => {
-    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    const diag = newDiag();
     const findings = scanFile(
       'src/anim.ts',
       '// phase-scan-ignore manual-raff -- typo\nrequestAnimationFrame(step);\n',
@@ -245,7 +337,7 @@ describe('suppression directive', () => {
   });
 
   it('suppresses a per-file signal for the whole file, not just one line', () => {
-    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    const diag = newDiag();
     const findings = scanFile(
       'src/anim.ts',
       '// phase-scan-ignore missing-reduced-motion -- decorative, owner approved\nrequestAnimationFrame(a);\nrequestAnimationFrame(b);\n',
@@ -258,7 +350,7 @@ describe('suppression directive', () => {
   });
 
   it('does not count a dangling directive with nothing to suppress', () => {
-    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    const diag = newDiag();
     scanFile(
       'src/anim.ts',
       '// phase-scan-ignore missing-reduced-motion -- leftover\nconst x = 1;\n',
@@ -268,7 +360,7 @@ describe('suppression directive', () => {
   });
 
   it('accepts the colon form of the directive', () => {
-    const diag: ScanDiag = { suppressed: 0, warnings: [] };
+    const diag = newDiag();
     const findings = scanFile(
       'src/anim.ts',
       '// phase-scan-ignore: manual-raf -- accepted one-shot\nrequestAnimationFrame(step);\n',
@@ -344,6 +436,39 @@ describe('scan CLI', () => {
     expect(JSON.parse(run.stdout).findings).toEqual([]);
   });
 
+  it('counts an overlapping target once', () => {
+    const both = runCli(['--json', 'workspace', 'workspace/src']);
+    const only = runCli(['--json', 'workspace']);
+    expect(JSON.parse(both.stdout).summary.filesScanned).toBe(
+      JSON.parse(only.stdout).summary.filesScanned,
+    );
+  });
+
+  it('--signal narrows the report to one signal', () => {
+    const run = runCli(['--json', '--signal', 'manual-raf', 'workspace']);
+    const actual = JSON.parse(run.stdout);
+    expect(actual.findings.length).toBeGreaterThan(0);
+    expect(
+      actual.findings.every(
+        (f: { signal: string }) => f.signal === 'manual-raf',
+      ),
+    ).toBe(true);
+  });
+
+  it('--limit caps the findings array while keeping the true total', () => {
+    const run = runCli(['--json', '--limit', '2', 'workspace']);
+    const actual = JSON.parse(run.stdout);
+    expect(actual.findings.length).toBe(2);
+    expect(actual.summary.returned).toBe(2);
+    expect(actual.summary.total).toBeGreaterThan(2);
+  });
+
+  it('rejects an unknown --signal id', () => {
+    const run = runCli(['--signal', 'no-such-signal', 'workspace']);
+    expect(run.status).toBe(2);
+    expect(run.stderr).toContain('known signal id');
+  });
+
   it('prints usage on --help', () => {
     const run = runCli(['--help']);
     expect(run.status).toBe(0);
@@ -358,4 +483,61 @@ describe('scan CLI', () => {
     expect(missing.status).toBe(2);
     expect(missing.stderr).toContain('does not exist');
   });
+});
+
+/**
+ * The eval scenarios carry machine-checkable ground truth. Executing it here
+ * is what makes them regression guards rather than prose: a scenario that
+ * encodes a confirmed field failure has to fail the build when it regresses.
+ */
+describe('eval scenario ground truth', () => {
+  interface ScanAssertions {
+    required?: { signal: string; file?: string; count?: number }[];
+    requiredAbsent?: { signal: string; reason: string }[];
+    context?: Partial<Record<string, unknown>>;
+  }
+
+  const scenariosDir = join(process.cwd(), 'skills/phase/evals/scenarios');
+
+  for (const scenario of readdirSync(scenariosDir).toSorted()) {
+    const specPath = join(scenariosDir, scenario, 'expected-findings.json');
+    if (!existsSync(specPath)) continue;
+    const spec = JSON.parse(readFileSync(specPath, 'utf8'));
+    const assertions: ScanAssertions | undefined = spec.scan?.assertions;
+    if (!assertions) continue;
+
+    describe(scenario, () => {
+      const result = scanTargets([join(scenariosDir, scenario, 'workspace')]);
+
+      for (const expected of assertions.required ?? []) {
+        it(`reports ${expected.signal}${expected.file ? ` in ${expected.file}` : ''}`, () => {
+          const hits = result.findings.filter(
+            (f) =>
+              f.signal === expected.signal &&
+              (expected.file === undefined || f.file === expected.file),
+          );
+          if (expected.count === undefined) {
+            expect(hits.length).toBeGreaterThan(0);
+          } else {
+            expect(hits.length).toBe(expected.count);
+          }
+        });
+      }
+
+      for (const expected of assertions.requiredAbsent ?? []) {
+        it(`stays silent on ${expected.signal} (${expected.reason})`, () => {
+          expect(
+            result.findings.filter((f) => f.signal === expected.signal),
+          ).toEqual([]);
+        });
+      }
+
+      const expectedContext = assertions.context;
+      if (expectedContext) {
+        it('detects the declared environment context', () => {
+          expect(result.context).toMatchObject(expectedContext);
+        });
+      }
+    });
+  }
 });
