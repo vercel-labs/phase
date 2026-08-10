@@ -4,7 +4,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.13'
+  version: '0.0.14'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend CSS-only, minimal JS, phase, or an external library.'
 ---
 
@@ -66,6 +66,8 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 | Reactive reduced-motion check for non-phase code?    | `usePrefersReducedMotion`                                                                   |
 | Need reactive `devicePixelRatio` for buffer sizing?  | `useDevicePixelRatio`                                                                       |
 | Visibility-aware timed sequences (do X, wait, do Y)? | `useLoop` with `fps: 1–2` and `frame.elapsed`-based steps                                   |
+| Rate-limit event-driven work (sockets, workers)?     | `useThrottledCallback`                                                                      |
+| Run once after a burst settles (resize, typing)?     | `useDebouncedCallback`                                                                      |
 
 ## React first
 
@@ -92,7 +94,7 @@ Every export belongs to a category. The choosing table above picks the primitive
 
 | Category    | What it covers                               | Exports                                                                                                                                                                                                                                                                                                                                                         |
 | ----------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Timing      | Frame clocks and animation loops             | `createTicker`, `createLoop`, `useLoop`, `useCanvas`, `useTween`                                                                                                                                                                                                                                                                                                |
+| Timing      | Frame clocks, animation loops, rate limiting | `createTicker`, `createLoop`, `createThrottle`, `createDebounce`, `useLoop`, `useCanvas`, `useTween`, `useThrottledCallback`, `useDebouncedCallback`                                                                                                                                                                                                            |
 | Observation | Reactive wrappers around browser observers   | `createSight`, `createScrollProgress`, `createRenderState`, `createDevicePixelRatio`, `createMutation`, `createPointer`, `createScroll`, `useSight`, `useScrollProgress`, `useScroll`, `useSize`, `useContainerQuery`, `useMediaQuery`, `useRenderState`, `useDevicePixelRatio`, `usePrefersReducedMotion`, `useMutation`, `usePointer`, `prefersReducedMotion` |
 | Lifecycle   | Activation signals composed from IO+MQL+rIC  | `createLifecycle`, `useLifecycle`, `whenIdle`, `useIdle`, `useWhenIdle`                                                                                                                                                                                                                                                                                         |
 | Composition | Mount/unmount orchestration with transitions | `Presence`, `usePresence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer`                                                                                                                                                                                                                                                                                           |
@@ -146,6 +148,8 @@ Each export has its own reference file. Read the relevant file when implementing
 | `createMutation`              | Lifecycle-aware MutationObserver with rAF batching   | [create-mutation.md](references/create-mutation.md)                     |
 | `createPointer`               | rAF-batched pointer tracking with visibility pause   | [create-pointer.md](references/create-pointer.md)                       |
 | `createScroll`                | rAF-batched scroll offset/progress, reflow-safe      | [create-scroll.md](references/create-scroll.md)                         |
+| `createThrottle`              | Frame-aligned event throttle with visibility pause   | [create-throttle.md](references/create-throttle.md)                     |
+| `createDebounce`              | Fire after quiet, visibility-aware                   | [create-debounce.md](references/create-debounce.md)                     |
 | `PhaseError` / `isPhaseError` | Handling or classifying phase errors                 | [errors.md](references/errors.md)                                       |
 
 ### React (`phase/react`)
@@ -162,6 +166,8 @@ Each export has its own reference file. Read the relevant file when implementing
 | `useMutation`             | Lifecycle-aware MutationObserver with rAF batching       | [use-mutation.md](references/use-mutation.md)                             |
 | `usePointer`              | rAF-batched pointer tracking with visibility pause       | [use-pointer.md](references/use-pointer.md)                               |
 | `useScroll`               | rAF-batched scroll offset/progress, reflow-safe          | [use-scroll.md](references/use-scroll.md)                                 |
+| `useThrottledCallback`    | Rate-limit event-driven work (sockets, workers)          | [use-throttled-callback.md](references/use-throttled-callback.md)         |
+| `useDebouncedCallback`    | Run once after a burst settles (resize, typing)          | [use-debounced-callback.md](references/use-debounced-callback.md)         |
 | `useRenderState`          | Pausing raw work when a `Defer` subtree is skipped       | [use-render-state.md](references/use-render-state.md)                     |
 | `useIdle`                 | Boolean that flips true once the browser is idle         | [use-idle.md](references/use-idle.md)                                     |
 | `useWhenIdle`             | Run a side effect (prefetch, `import()`) once idle       | [use-when-idle.md](references/use-when-idle.md)                           |

@@ -60,6 +60,18 @@
     "limit": "1.6 kB"
   },
   {
+    "name": "createThrottle",
+    "path": "src/index.ts",
+    "import": "{ createThrottle }",
+    "limit": "725 B"
+  },
+  {
+    "name": "createDebounce",
+    "path": "src/index.ts",
+    "import": "{ createDebounce }",
+    "limit": "615 B"
+  },
+  {
     "name": "whenIdle",
     "path": "src/index.ts",
     "import": "{ whenIdle }",
@@ -126,6 +138,20 @@
     "limit": "1.9 kB"
   },
   {
+    "name": "useThrottledCallback",
+    "path": "src/react/index.ts",
+    "import": "{ useThrottledCallback }",
+    "ignore": ["react"],
+    "limit": "880 B"
+  },
+  {
+    "name": "useDebouncedCallback",
+    "path": "src/react/index.ts",
+    "import": "{ useDebouncedCallback }",
+    "ignore": ["react"],
+    "limit": "760 B"
+  },
+  {
     "name": "useTween",
     "path": "src/react/index.ts",
     "import": "{ useTween }",
@@ -158,7 +184,7 @@
     "path": "src/react/index.ts",
     "import": "{ useContainerQuery }",
     "ignore": ["react"],
-    "limit": "375 B"
+    "limit": "400 B"
   },
   {
     "name": "useMediaQuery",

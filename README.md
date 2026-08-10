@@ -35,6 +35,8 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every ex
   - [createLifecycle](#createlifecycle)
   - [createScrollProgress](#createscrollprogress)
   - [createScroll](#createscroll)
+  - [createThrottle](#createthrottle)
+  - [createDebounce](#createdebounce)
   - [prefersReducedMotion](#prefersreducedmotion)
 - [Easing and math](#easing-and-math)
 - [Choosing a primitive](#choosing-a-primitive)
@@ -46,6 +48,8 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every ex
   - [usePresence](#usepresence)
   - [useScrollProgress](#usescrollprogress)
   - [useScroll](#usescroll)
+  - [useThrottledCallback](#usethrottledcallback)
+  - [useDebouncedCallback](#usedebouncedcallback)
   - [Utility hooks](#utility-hooks)
 - [React components](#react-components)
   - [How animations work](#how-animations-work)
@@ -398,6 +402,69 @@ scroll.stop();
 
 The options type is `CreateScrollOptions` (`ScrollOptions` is a `lib.dom` global and must not be shadowed).
 
+### createThrottle
+
+Frame-aligned, visibility-aware throttle for event-driven work below frame rate (socket emits, worker messaging, expensive recompute). Leading calls fire synchronously; a pending trailing call fires with the latest value on the first animation frame at or past `interval`. Nothing is scheduled while the trigger is idle or the document is hidden.
+
+> **Event-driven, not a loop.** This fires on the trigger and idles otherwise. To cap a continuous render loop, use `fps` on [`createLoop`](#createloop). To think in rates, `interval: 1000 / 20` reads as "at most 20 per second".
+
+```ts
+import { createThrottle } from 'phase';
+
+const throttle = createThrottle({
+  callback: (state) => socket.emit('cursor', state.x, state.y),
+  interval: 50,
+});
+
+const pointer = createPointer({ element, onPointer: throttle.call });
+
+// throttle.flush()  fires a pending trailing call now
+// throttle.cancel() discards it and resets the window
+// cleanup:
+throttle.stop();
+```
+
+When the document hides, a pending call is flushed with the latest value (default) or dropped per `hidden`. Calls made while hidden are recorded but fire nothing until the document is visible again.
+
+#### Throttle options
+
+| Option     | Type                                | Default   | Description                                   |
+| ---------- | ----------------------------------- | --------- | --------------------------------------------- |
+| `callback` | `(value: T) => void`                | required  | Called with the latest value passed to `call` |
+| `interval` | `number`                            | required  | Minimum ms between invocations                |
+| `edge`     | `'leading' \| 'trailing' \| 'both'` | `'both'`  | Which edges fire                              |
+| `hidden`   | `'flush' \| 'drop'`                 | `'flush'` | Pending-call policy when the document hides   |
+| `signal`   | `AbortSignal`                       | —         | Stops the throttle when aborted               |
+
+### createDebounce
+
+Visibility-aware trailing debounce: fires the callback with the latest value once `wait` ms pass without a new call. No timer runs while the document is hidden; the quiet period restarts on return. Use it for work that should wait out a burst, like reallocating canvas buffers after a resize stream settles.
+
+```ts
+import { createDebounce } from 'phase';
+
+const debounce = createDebounce({
+  callback: (size) => reallocateBuffers(size),
+  wait: 250,
+});
+
+debounce.call({ width, height });
+
+// cleanup:
+debounce.stop();
+```
+
+Same surface as `createThrottle`: `flush()`, `cancel()`, a synchronous `pending` read, and terminal `stop()`.
+
+#### Debounce options
+
+| Option     | Type                 | Default   | Description                                   |
+| ---------- | -------------------- | --------- | --------------------------------------------- |
+| `callback` | `(value: T) => void` | required  | Called with the latest value passed to `call` |
+| `wait`     | `number`             | required  | Quiet period in ms; each call restarts it     |
+| `hidden`   | `'flush' \| 'drop'`  | `'flush'` | Pending-call policy when the document hides   |
+| `signal`   | `AbortSignal`        | —         | Stops the debounce when aborted               |
+
 ### prefersReducedMotion
 
 Returns `true` when reduced motion is enabled at the OS level. Use it to gate expensive setup or dynamic imports.
@@ -468,6 +535,8 @@ Easing, interpolation, and your value range are three separate concerns. `phase`
 | Pause non-`phase` work inside a `Defer` subtree          | `useRenderState`                                                                            |
 | Subscribe to scroll, size, or media values reactively    | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
 | Scroll/size/visibility without re-renders?               | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
+| Rate-limit event-driven work (sockets, workers)          | `useThrottledCallback`                                                                      |
+| Run once after a burst settles (resize, typing)          | `useDebouncedCallback`                                                                      |
 
 **`useSight` vs `useLifecycle`:** `useSight` reports pure visibility (for lazy-mounting, analytics, `WhenVisible`). `useLifecycle` folds in reduced motion and a manual pause, so you can't accidentally animate for users who asked not to. If you're gating an animation, use `useLifecycle`. If you're gating content, use `useSight`.
 
@@ -667,6 +736,42 @@ function Carousel({ children }) {
 ```
 
 Scrolling writes to the DOM directly with zero re-renders. Read the latest position on demand from `stateRef.current` (e.g. inside a `useLoop` tick), and call `measure()` after changing scrollable content.
+
+### useThrottledCallback
+
+Wraps `createThrottle` with React lifecycle management. Returns a stable-identity throttled function (with `flush()` and `cancel()` attached) that drops directly into any callback slot and always invokes the latest `callback`.
+
+```tsx
+import { usePointer, useThrottledCallback } from 'phase/react';
+
+function LiveCursor() {
+  const emit = useThrottledCallback(
+    (s: PointerState) => socket.emit('cursor', { x: s.x, y: s.y }),
+    { interval: 50 },
+  );
+  const { ref } = usePointer({ onPointer: emit });
+  return <div ref={ref} />;
+}
+```
+
+Unmount and option changes discard a pending trailing call. When the final value must land, flush in your own cleanup: `useEffect(() => () => emit.flush(), [emit])`.
+
+### useDebouncedCallback
+
+Wraps `createDebounce` with React lifecycle management. Same shape as `useThrottledCallback`, but fires once `wait` ms pass without a new call.
+
+```tsx
+import { useSize, useDebouncedCallback } from 'phase/react';
+
+function SimulationCanvas() {
+  const realloc = useDebouncedCallback(
+    (size: Size) => reallocateBuffers(size),
+    { wait: 250 },
+  );
+  const { ref } = useSize({ onResize: realloc });
+  return <canvas ref={ref} />;
+}
+```
 
 ### Utility hooks
 
@@ -983,36 +1088,40 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `createMutation`          |           1.17 kB |
 | `createPointer`           |           1.26 kB |
 | `createScroll`            |           1.45 kB |
+| `createThrottle`          |             657 B |
+| `createDebounce`          |             559 B |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           2.81 kB |
-| `useLifecycle`            |           1.69 kB |
-| `useSight`                |           1.18 kB |
+| `useLoop`                 |           2.82 kB |
+| `useLifecycle`            |           1.68 kB |
+| `useSight`                |           1.19 kB |
 | `useCanvas`               |           3.44 kB |
 | `useMutation`             |           1.36 kB |
 | `usePointer`              |           1.48 kB |
-| `useScroll`               |           1.71 kB |
-| `useTween`                |             617 B |
-| `usePresence`             |             593 B |
+| `useScroll`               |           1.72 kB |
+| `useThrottledCallback`    |             797 B |
+| `useDebouncedCallback`    |             688 B |
+| `useTween`                |             619 B |
+| `usePresence`             |             591 B |
 | `useScrollProgress`       |             993 B |
-| `useSize`                 |             384 B |
-| `useContainerQuery`       |             357 B |
-| `useMediaQuery`           |             245 B |
+| `useSize`                 |             378 B |
+| `useContainerQuery`       |             384 B |
+| `useMediaQuery`           |             246 B |
 | `usePrefersReducedMotion` |             272 B |
 | `useDevicePixelRatio`     |             231 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             739 B |
+| `Presence`                |             741 B |
 | `WhenVisible`             |           1.44 kB |
-| `WhenIdle`                |             592 B |
+| `WhenIdle`                |             593 B |
 | `Defer`                   |              86 B |
 | `useIdle`                 |             435 B |
-| `useWhenIdle`             |             449 B |
+| `useWhenIdle`             |             445 B |
 | `useRenderState`          |             527 B |
-| `Swap`                    |           1.12 kB |
+| `Swap`                    |           1.13 kB |
 
 <!-- SIZE-TABLE:END -->
 

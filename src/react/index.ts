@@ -21,6 +21,8 @@ export { useCanvas } from './use-canvas';
 export { useMutation } from './use-mutation';
 export { usePointer } from './use-pointer';
 export { useScroll } from './use-scroll';
+export { useThrottledCallback } from './use-throttled-callback';
+export { useDebouncedCallback } from './use-debounced-callback';
 export { useTween } from './use-tween';
 export { usePresence } from './use-presence';
 export { Presence } from './presence';
@@ -86,6 +88,14 @@ export type {
   UseScrollOptions,
   UseScrollResult,
 } from './use-scroll';
+export type {
+  ThrottledFunction,
+  UseThrottledCallbackOptions,
+} from './use-throttled-callback';
+export type {
+  DebouncedFunction,
+  UseDebouncedCallbackOptions,
+} from './use-debounced-callback';
 export type { UseTweenOptions } from './use-tween';
 export type {
   PresenceMode,

@@ -66,14 +66,20 @@ Phase transitions (observing ⇄ paused) fire only on visibility changes, so rea
   });
   return <ul ref={ref}>{items}</ul>;
   ```
-- To handle mutations below frame rate, buffer them and flush on your own cadence. Unlike `usePointer`/`useScroll` (which expose a sampleable `stateRef`), `onMutations` delivers discrete `MutationRecord[]`, so there is no current value to sample from a slower `useLoop`. Collect records in the callback and process the batch on a timer:
+- To handle mutations below frame rate, buffer them into a ref and throttle the drain. Unlike `usePointer`/`useScroll` (which expose a sampleable `stateRef`), `onMutations` delivers discrete `MutationRecord[]`, so collect records and process the batch with `useThrottledCallback`. The drain fires only when mutations occur; nothing runs while the DOM is quiet:
   ```tsx
   const pending = useRef<MutationRecord[]>([]);
+  const drain = useThrottledCallback(
+    () => processBatch(pending.current.splice(0)),
+    { interval: 250 },
+  );
   const { ref } = useMutation({
     mutation: { childList: true },
-    onMutations: (records) => pending.current.push(...records),
+    onMutations: (records) => {
+      pending.current.push(...records);
+      drain();
+    },
   });
-  useLoop({ ref, fps: 4, onTick: () => flush(pending.current.splice(0)) });
   ```
 - Render from `phase` directly; transitions are rare, so re-rendering on them is cheap:
   ```tsx
@@ -98,6 +104,7 @@ Not applicable. `useMutation` observes DOM changes, not animation.
 ## See also
 
 - [createMutation](./create-mutation.md). Framework-agnostic core
+- [useThrottledCallback](./use-throttled-callback.md). The throttle behind the buffered-drain recipe
 - [useSight](./use-sight.md). Visibility observation (different signal)
 - [useSize](./use-size.md). Dimension tracking via ResizeObserver
 - [performance](./performance.md). Forced-reflow rules for observer callbacks

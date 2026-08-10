@@ -107,10 +107,19 @@ Phase transitions (tracking ⇄ idle) fire only on pointer enter/leave, so react
     },
   });
   ```
-- Throttle below the display refresh rate by capping that loop's `fps`. On a 120 Hz screen, `onPointer` can fire ~120x/sec; if the work is expensive, sample `stateRef` from a slower loop instead. Because the loop reads the latest `stateRef` each tick, the final position is never dropped (trailing-edge throttling for free):
-  ```tsx
-  useLoop({ ref, fps: 10, onTick: () => process(stateRef.current) });
-  ```
+- Throttle below the display refresh rate. On a 120 Hz screen `onPointer` can fire ~120x/sec; two patterns cap the downstream work, chosen by how it is driven:
+  - **Event-driven sinks** (socket emits, worker messages): wrap the callback with `useThrottledCallback`. It fires only when the pointer moves and schedules nothing while idle:
+    ```tsx
+    const emit = useThrottledCallback(
+      (s: PointerState) => socket.emit('cursor', s.x, s.y),
+      { interval: 50 },
+    );
+    const { ref } = usePointer({ onPointer: emit });
+    ```
+  - **Frame-locked sampling** (you process every tick anyway): sample `stateRef` from a capped `useLoop`. It polls each tick while visible, and because each tick reads the latest `stateRef`, the final position is never dropped:
+    ```tsx
+    useLoop({ ref, fps: 10, onTick: () => process(stateRef.current) });
+    ```
 
 ## Don't
 
@@ -126,6 +135,7 @@ Not applicable. `usePointer` tracks pointer position, not animation.
 ## See also
 
 - [createPointer](./create-pointer.md). Framework-agnostic core
+- [useThrottledCallback](./use-throttled-callback.md). Event-driven rate limiting for `onPointer` sinks
 - [useScroll](./use-scroll.md). The same imperative-position, reactive-phase shape for scroll offset
 - [useLoop](./use-loop.md). Per-frame DOM animation (common pairing with pointer data)
 - [useCanvas](./use-canvas.md). Canvas animation with pointer interaction
