@@ -222,10 +222,10 @@ export function formatText(result) {
 
 // --- Signal catalog ---------------------------------------------------------
 //
-// Each signal carries detection logic (pattern/context/matcher, file types),
-// triage metadata (severity, noise, why, fix), and executable examples that
-// the test suite verifies: every `match` example must produce a finding for
-// this signal, every `noMatch` example must not.
+// Each signal carries detection logic (pattern/context/matcher, file types)
+// and triage metadata (severity, noise, why, fix). Executable examples live
+// in scan-examples.mjs keyed by signal id; the test suite verifies every
+// signal has examples and that each one behaves as declared.
 //
 // severity: critical | high | medium | dedup (audit.md's weighting).
 // noise: precise (trust it) | normal (verify quickly) | noisy (verify first).
@@ -254,34 +254,6 @@ export const SIGNALS = [
     why: 'No visibility pausing, no shared clock, no cleanup.',
     fix: 'references/audit.md#common-replacements',
     pattern: /requestAnimationFrame/,
-    examples: {
-      match: [
-        {
-          file: 'src/anim.ts',
-          content:
-            'function tick() {\n  requestAnimationFrame(tick);\n  draw();\n}\nrequestAnimationFrame(tick);\n',
-        },
-        {
-          file: 'src/phases/timeline.ts',
-          content: 'requestAnimationFrame(step);\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/anim.spec.ts',
-          content: 'requestAnimationFrame(tick);\n',
-        },
-        {
-          file: 'src/use-anim.ts',
-          content:
-            "import { useLoop } from 'phase/react';\nuseLoop({ onTick: draw });\n",
-        },
-        {
-          file: 'src/counter.tsx',
-          content: 'requestAnimationFrame(() => setCount((c) => c + 1));\n',
-        },
-      ],
-    },
   },
   {
     id: 'setstate-in-raf',
@@ -293,36 +265,6 @@ export const SIGNALS = [
     supersedes: 'manual-raf',
     pattern: /requestAnimationFrame/,
     contextPattern: STATE_UPDATE_CONTEXT,
-    examples: {
-      match: [
-        {
-          file: 'src/progress.tsx',
-          content:
-            'function loop() {\n  setProgress((p) => p + 1);\n  requestAnimationFrame(loop);\n}\n',
-        },
-        {
-          file: 'src/store.ts',
-          content: "requestAnimationFrame(() => dispatch({ type: 'tick' }));\n",
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/meter.ts',
-          content:
-            "function loop() {\n  el.setAttribute('aria-valuenow', String(v));\n  requestAnimationFrame(loop);\n}\n",
-        },
-        {
-          file: 'src/cursor.ts',
-          content:
-            "function loop() {\n  el.style.setProperty('--x', String(x));\n  requestAnimationFrame(loop);\n}\n",
-        },
-        {
-          file: 'src/fallback.ts',
-          content:
-            'requestAnimationFrame(start);\nsetTimeout(fallbackStart, 100);\n',
-        },
-      ],
-    },
   },
   {
     id: 'setstate-in-ontick',
@@ -333,32 +275,6 @@ export const SIGNALS = [
     fix: 'references/performance.md#never-setstate-inside-ontick--draw',
     pattern: /\bonTick\s*[:=(]|\bonDraw\s*[:=(]|\bdraw\s*:/,
     contextPattern: STATE_UPDATE_CONTEXT,
-    examples: {
-      match: [
-        {
-          file: 'src/progress-loop.tsx',
-          content:
-            'useLoop({\n  ref,\n  onTick: (frame) => {\n    setValue(frame.elapsed / 1000);\n  },\n});\n',
-        },
-        {
-          file: 'src/visualizer.tsx',
-          content:
-            "useCanvas({\n  draw: ({ ctx, frame }) => {\n    dispatch({ type: 'frame', at: frame.elapsed });\n  },\n});\n",
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/progress-loop.tsx',
-          content:
-            "useLoop({\n  ref,\n  onTick: (frame) => {\n    ref.current.style.setProperty('--p', String(frame.elapsed));\n  },\n});\n",
-        },
-        {
-          file: 'src/meter.tsx',
-          content:
-            "useLoop({\n  ref,\n  onTick: (frame) => {\n    ref.current.setAttribute('aria-valuenow', String(frame.elapsed));\n  },\n});\n",
-        },
-      ],
-    },
   },
   {
     id: 'forced-reflow',
@@ -369,24 +285,6 @@ export const SIGNALS = [
     fix: 'references/performance.md#no-forced-reflows-in-animation-paths',
     pattern:
       /getBoundingClientRect|offsetWidth|offsetHeight|offsetTop|offsetLeft|getComputedStyle|scrollWidth|scrollHeight|clientWidth|clientHeight/,
-    examples: {
-      match: [
-        {
-          file: 'src/reveal.ts',
-          content: 'const rect = el.getBoundingClientRect();\n',
-        },
-        {
-          file: 'src/sizer.ts',
-          content: 'const w = el.offsetWidth;\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/reveal.ts',
-          content: "import { useSize } from 'phase/react';\n",
-        },
-      ],
-    },
   },
   {
     id: 'raw-io',
@@ -396,24 +294,6 @@ export const SIGNALS = [
     why: 'Unpooled observer instances and manual cleanup leak over time.',
     fix: 'references/performance.md#observer-pooling',
     pattern: /new\s+IntersectionObserver/,
-    examples: {
-      match: [
-        {
-          file: 'src/lazy.ts',
-          content: 'const io = new IntersectionObserver(onEnter);\n',
-        },
-        {
-          file: 'src/game-phase.ts',
-          content: 'const io = new IntersectionObserver(onEnter);\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/lazy.ts',
-          content: "import { useSight } from 'phase/react';\n",
-        },
-      ],
-    },
   },
   {
     id: 'raw-ro',
@@ -423,20 +303,6 @@ export const SIGNALS = [
     why: 'Unpooled observer instances and manual cleanup leak over time.',
     fix: 'references/performance.md#observer-pooling',
     pattern: /new\s+ResizeObserver/,
-    examples: {
-      match: [
-        {
-          file: 'src/panel.ts',
-          content: 'const ro = new ResizeObserver(onResize);\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/panel.ts',
-          content: "import { useSize } from 'phase/react';\n",
-        },
-      ],
-    },
   },
   {
     id: 'raw-matchmedia',
@@ -446,27 +312,6 @@ export const SIGNALS = [
     why: 'Unpooled MediaQueryList subscriptions; phase pools them by query.',
     fix: 'references/use-media-query.md',
     pattern: /\bmatchMedia\s*\(/,
-    examples: {
-      match: [
-        {
-          file: 'src/breakpoint.ts',
-          content:
-            "const mql = window.matchMedia('(min-width: 768px)');\nmql.addEventListener('change', onChange);\n",
-        },
-        {
-          file: 'src/motion.ts',
-          content:
-            "const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;\n",
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/breakpoint.ts',
-          content:
-            "import { useMediaQuery } from 'phase/react';\nconst isWide = useMediaQuery('(min-width: 768px)');\n",
-        },
-      ],
-    },
   },
   {
     id: 'mutationobserver-layout',
@@ -477,34 +322,11 @@ export const SIGNALS = [
     why: 'Layout reads in MO callbacks force a reflow on every mutation.',
     fix: 'references/performance.md#never-drive-layout-from-a-mutationobserver',
     pattern: /new\s+MutationObserver/,
+    // Only flag when the observer watches inline style mutations or reads
+    // layout nearby. Structural (childList) and plain attribute observation
+    // (e.g. a class watcher) are legitimate and skipped.
     contextPattern:
       /attributeFilter:\s*\[[^\]]*['"]style['"]|getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight|getComputedStyle/,
-    examples: {
-      match: [
-        {
-          file: 'src/scrollbar.ts',
-          content:
-            'const mo = new MutationObserver(() => {\n  const h = el.scrollHeight;\n  sync(h);\n});\nmo.observe(el, { subtree: true, attributes: true });\n',
-        },
-        {
-          file: 'src/tracker.ts',
-          content:
-            "const mo = new MutationObserver(onStyle);\nmo.observe(el, { subtree: true, attributeFilter: ['style'] });\n",
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/list.ts',
-          content:
-            'const mo = new MutationObserver(onChildren);\nmo.observe(list, { childList: true });\n',
-        },
-        {
-          file: 'src/theme.ts',
-          content:
-            "const mo = new MutationObserver(onTheme);\nmo.observe(document.documentElement, { attributeFilter: ['class'] });\n",
-        },
-      ],
-    },
   },
   {
     id: 'js-opacity-transform',
@@ -514,24 +336,6 @@ export const SIGNALS = [
     why: 'Often replaceable by a CSS transition, or needs phase for lifecycle.',
     fix: 'references/decision-guide.md#tier-1-css-only-no-js',
     pattern: /\.style\.(opacity|transform)\s*=/,
-    examples: {
-      match: [
-        {
-          file: 'src/fade.ts',
-          content: "el.style.opacity = '0.5';\n",
-        },
-        {
-          file: 'src/slide.ts',
-          content: "el.style.transform = 'translateX(10px)';\n",
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/fade.ts',
-          content: "el.classList.add('faded');\n",
-        },
-      ],
-    },
   },
   {
     id: 'missing-reduced-motion',
@@ -540,39 +344,14 @@ export const SIGNALS = [
     noise: 'noisy',
     why: 'Accessibility gap: motion plays for users who asked for none.',
     fix: 'references/performance.md#reduced-motion-by-default',
+    // `animation:(?!\s*none)` keeps `animation: none` (motion disabled) out.
     pattern: /requestAnimationFrame|@keyframes|animation:(?!\s*none\b)/,
+    // Suppress when the file already handles reduced motion, or genuinely
+    // imports phase (its hooks handle it automatically).
     negativePattern: /prefers-reduced-motion|reducedMotion|from ['"]phase/,
     fileTypes: ['js', 'css'],
+    // The gap is a property of the whole file, not of each animating line.
     perFile: true,
-    examples: {
-      match: [
-        {
-          file: 'src/spin.ts',
-          content: 'requestAnimationFrame(spin);\n',
-        },
-        {
-          file: 'src/styles.css',
-          content:
-            '@keyframes spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n.spinner {\n  animation: spin 1s linear infinite;\n}\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/spin.ts',
-          content:
-            "import { useLoop } from 'phase/react';\nrequestAnimationFrame(spin);\n",
-        },
-        {
-          file: 'src/styles.css',
-          content:
-            '.spinner {\n  animation: spin 1s linear infinite;\n}\n@media (prefers-reduced-motion: reduce) {\n  .spinner {\n    animation: none;\n  }\n}\n',
-        },
-        {
-          file: 'src/reset.css',
-          content: '.static {\n  animation: none;\n}\n',
-        },
-      ],
-    },
   },
   {
     id: 'background-animation',
@@ -583,22 +362,6 @@ export const SIGNALS = [
     fix: 'references/timed-sequences.md',
     pattern: /setInterval|setTimeout/,
     contextPattern: /transform|opacity|translate|\banimate\b/,
-    examples: {
-      match: [
-        {
-          file: 'src/carousel.ts',
-          content:
-            "setInterval(() => {\n  track.style.transform = 'translateX(' + offset + 'px)';\n}, 3000);\n",
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/queue.ts',
-          content:
-            'setTimeout(() => {\n  const position = queue.indexOf(job);\n  report(position);\n}, 1000);\n',
-        },
-      ],
-    },
   },
   {
     id: 'manual-synced-ref',
@@ -608,20 +371,6 @@ export const SIGNALS = [
     why: 'Correct React idiom; useSyncedRef is a one-line shorthand.',
     fix: 'references/use-synced-ref.md',
     matcher: matchesSyncedRef,
-    examples: {
-      match: [
-        {
-          file: 'src/use-latest.ts',
-          content: 'const cbRef = useRef(cb);\ncbRef.current = cb;\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/use-latest.ts',
-          content: 'const cbRef = useRef(null);\ncbRef.current = cb;\n',
-        },
-      ],
-    },
   },
   // --- CSS/DOM-scale signals ---
   {
@@ -633,25 +382,6 @@ export const SIGNALS = [
     fix: 'references/performance-recipes.md#recipe-delete-a-global-has-rule',
     pattern: /body:has\(|html:has\(|:root:has\(|\*:has\(/,
     fileTypes: 'css',
-    examples: {
-      match: [
-        {
-          file: 'src/globals.css',
-          content: 'body:has(.modal-open) {\n  overflow: hidden;\n}\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/card.css',
-          content: '.card:has(img) {\n  padding: 0;\n}\n',
-        },
-        {
-          file: 'src/globals.ts',
-          content:
-            "const css = 'body:has(.modal-open) { overflow: hidden; }';\n",
-        },
-      ],
-    },
   },
   {
     id: 'permanent-will-change',
@@ -663,29 +393,6 @@ export const SIGNALS = [
     pattern: /will-change:(?!\s*auto\b)/,
     negativePattern: /animation-play-state|\[data-|:hover|:focus/,
     fileTypes: 'css',
-    examples: {
-      match: [
-        {
-          file: 'src/card.css',
-          content: '.card {\n  will-change: transform;\n}\n',
-        },
-        {
-          file: 'src/panel.css',
-          content: '.panel {\n  will-change: left, top;\n}\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/card.css',
-          content:
-            ".card[data-active='true'] {\n  will-change: transform;\n}\n",
-        },
-        {
-          file: 'src/reset.css',
-          content: '.static {\n  will-change: auto;\n}\n',
-        },
-      ],
-    },
   },
   {
     id: 'non-compositor-animation',
@@ -695,6 +402,9 @@ export const SIGNALS = [
     noise: 'normal',
     why: 'Layout + paint every frame, off the compositor.',
     fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
+    // `transition: all`, a transition naming a layout property, or a
+    // bare-duration shorthand (names no property, so it animates `all`).
+    // transform/opacity-only transitions do not match.
     pattern: new RegExp(
       /transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/
         .source +
@@ -702,36 +412,6 @@ export const SIGNALS = [
         BARE_DURATION_TRANSITION.source,
     ),
     fileTypes: 'css',
-    examples: {
-      match: [
-        {
-          file: 'src/menu.css',
-          content: '.menu {\n  transition: all 0.3s ease;\n}\n',
-        },
-        {
-          file: 'src/drawer.css',
-          content: '.drawer {\n  transition: width 0.2s;\n}\n',
-        },
-        {
-          file: 'src/tab.css',
-          content: '.tab {\n  transition: 0.3s;\n}\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/menu.css',
-          content: '.menu {\n  transition: opacity 0.3s, transform 0.3s;\n}\n',
-        },
-        {
-          file: 'src/menu.css',
-          content: '.menu {\n  transition-property: opacity;\n}\n',
-        },
-        {
-          file: 'src/menu.css',
-          content: '.menu {\n  transition: 0.3s opacity;\n}\n',
-        },
-      ],
-    },
   },
   {
     id: 'keyframes-layout-animation',
@@ -742,43 +422,6 @@ export const SIGNALS = [
     fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
     matcher: matchesKeyframesLayoutProp,
     fileTypes: 'css',
-    examples: {
-      match: [
-        {
-          file: 'src/slide.css',
-          content:
-            '@keyframes slide-in {\n  from {\n    left: -200px;\n  }\n  to {\n    left: 0;\n  }\n}\n',
-        },
-        {
-          file: 'src/grow.css',
-          content:
-            '@keyframes grow {\n  0% {\n    height: 0;\n  }\n  100% {\n    height: 300px;\n  }\n}\n',
-        },
-        {
-          // Compact single-line frames are the common hand-written form.
-          file: 'src/drop.css',
-          content:
-            '@keyframes drop {\n  from { top: -10px; }\n  to { top: 0; }\n}\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/slide.css',
-          content:
-            '@keyframes slide-in {\n  from {\n    transform: translateX(-200px);\n    opacity: 0;\n  }\n}\n',
-        },
-        {
-          file: 'src/layout.css',
-          content: '.sidebar {\n  width: 240px;\n  top: 0;\n}\n',
-        },
-        {
-          // Single-line ordinary rules are not keyframes, even nested.
-          file: 'src/media.css',
-          content:
-            '@media (min-width: 600px) {\n  .sidebar { width: 240px; }\n}\n',
-        },
-      ],
-    },
   },
   // --- Loading/architecture signals ---
   {
@@ -791,27 +434,6 @@ export const SIGNALS = [
     pattern: /addEventListener\s*\(\s*['"](?:resize|scroll)['"]/,
     contextPattern:
       /getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight/,
-    examples: {
-      match: [
-        {
-          file: 'src/sidebar.ts',
-          content:
-            "window.addEventListener('resize', () => {\n  const w = el.getBoundingClientRect().width;\n  setCollapsed(w < 240);\n});\n",
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/sidebar.ts',
-          content:
-            "window.addEventListener('resize', () => {\n  schedule();\n});\n",
-        },
-        {
-          file: 'src/button.ts',
-          content:
-            "el.addEventListener('click', () => {\n  const w = el.offsetWidth;\n  log(w);\n});\n",
-        },
-      ],
-    },
   },
   {
     id: 'pointer-listener-layout-read',
@@ -824,26 +446,6 @@ export const SIGNALS = [
       /addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove)['"]/,
     contextPattern:
       /getBoundingClientRect|offsetWidth|offsetHeight|offsetTop|offsetLeft|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight/,
-    examples: {
-      match: [
-        {
-          file: 'src/spotlight.ts',
-          content:
-            "el.addEventListener('pointermove', (e) => {\n  const rect = el.getBoundingClientRect();\n  move(e.clientX - rect.left, e.clientY - rect.top);\n});\n",
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/spotlight.ts',
-          content:
-            "el.addEventListener('pointermove', (e) => {\n  last.x = e.clientX;\n  last.y = e.clientY;\n});\n",
-        },
-        {
-          file: 'src/spotlight.tsx',
-          content: "import { usePointer } from 'phase/react';\n",
-        },
-      ],
-    },
   },
   {
     id: 'redundant-mutation-observers',
@@ -856,22 +458,6 @@ export const SIGNALS = [
     pattern: /new\s+MutationObserver/,
     contextPattern:
       /document\.documentElement|<html|\.observe\s*\(\s*document\s*\./,
-    examples: {
-      match: [
-        {
-          file: 'src/theme.ts',
-          content:
-            'const mo = new MutationObserver(onTheme);\nmo.observe(document.documentElement, { attributes: true });\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/widget.ts',
-          content:
-            'const mo = new MutationObserver(onChange);\nmo.observe(ref.current, { childList: true });\n',
-        },
-      ],
-    },
   },
   {
     id: 'tailwind-transition-all',
@@ -882,25 +468,6 @@ export const SIGNALS = [
     fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
     pattern: /\btransition-all\b/,
     fileTypes: 'jsx',
-    examples: {
-      match: [
-        {
-          file: 'src/card.tsx',
-          content:
-            '<div className="transition-all duration-300 hover:scale-105" />;\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/card.tsx',
-          content: '<div className="transition-colors duration-300" />;\n',
-        },
-        {
-          file: 'src/card.ts',
-          content: "const cls = 'transition-all duration-300';\n",
-        },
-      ],
-    },
   },
   {
     id: 'tailwind-permanent-will-change',
@@ -911,21 +478,6 @@ export const SIGNALS = [
     fix: 'references/performance.md#will-change-only-while-animating',
     matcher: matchesPermanentWillChangeClass,
     fileTypes: 'jsx',
-    examples: {
-      match: [
-        {
-          file: 'src/logo.tsx',
-          content: '<div className="will-change-transform animate-spin" />;\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/logo.tsx',
-          content:
-            "<div className={active ? 'will-change-transform' : ''} />;\n",
-        },
-      ],
-    },
   },
   // --- Phase-usage signals ---
   {
@@ -936,22 +488,6 @@ export const SIGNALS = [
     why: 'Only justified for non-decorative motion (data viz, games).',
     fix: 'references/performance.md#reduced-motion-by-default',
     pattern: /reducedMotion:\s*['"]ignore['"]/,
-    examples: {
-      match: [
-        {
-          file: 'src/hero.ts',
-          content:
-            "createLoop({ element: el, onTick: draw, reducedMotion: 'ignore' });\n",
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/hero.ts',
-          content:
-            "createLoop({ element: el, onTick: draw, reducedMotion: 'respect' });\n",
-        },
-      ],
-    },
   },
   {
     id: 'core-primitive-in-component',
@@ -962,22 +498,6 @@ export const SIGNALS = [
     fix: 'references/decision-guide.md#common-mistakes',
     pattern: /\bcreate(?:Loop|Ticker|Lifecycle|Sight)\s*\(/,
     fileTypes: 'jsx',
-    examples: {
-      match: [
-        {
-          file: 'src/spinner.tsx',
-          content:
-            'useEffect(() => {\n  const loop = createLoop({ element: ref.current, onTick });\n  return () => loop.stop();\n}, []);\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/use-spinner.ts',
-          content:
-            'const loop = createLoop({ element, onTick });\nreturn () => loop.stop();\n',
-        },
-      ],
-    },
   },
   {
     id: 'when-visible-no-fallback',
@@ -988,32 +508,6 @@ export const SIGNALS = [
     fix: 'references/rendering-recipes.md',
     matcher: matchesUngatedLazyMount,
     fileTypes: 'jsx',
-    examples: {
-      match: [
-        {
-          file: 'src/comments.tsx',
-          content:
-            '<WhenVisible>\n  <Comments postId={id} />\n</WhenVisible>\n',
-        },
-        {
-          file: 'src/chat.tsx',
-          content:
-            '<WhenIdle rootMargin="200px">\n  <ChatWidget />\n</WhenIdle>\n',
-        },
-      ],
-      noMatch: [
-        {
-          file: 'src/comments.tsx',
-          content:
-            '<WhenVisible fallback={<div style={{ height: 480 }} />}>\n  <Comments postId={id} />\n</WhenVisible>\n',
-        },
-        {
-          file: 'src/chat.tsx',
-          content:
-            '<WhenIdle\n  rootMargin="200px"\n  fallback={<Skeleton height={320} />}\n>\n  <ChatWidget />\n</WhenIdle>\n',
-        },
-      ],
-    },
   },
 ];
 
@@ -1238,22 +732,40 @@ function toPosix(path) {
 }
 
 // Best-effort environment detection so recommendations can account for
-// rendering semantics (see references/audit.md Step 2.5). Config detection
-// only sees the target root; file-content markers work at any depth.
+// rendering semantics (see references/audit.md Step 2.5). Walks up from the
+// target toward the project root (nearest package.json or .git), so scanning
+// a subdirectory of a Next.js app still finds its config. File-content
+// markers work at any depth regardless.
 function detectNextConfig(root, context) {
-  try {
-    const entries = readdirSync(root);
+  let dir = root;
+  for (let depth = 0; depth < 10; depth++) {
+    let entries;
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
     const config = entries.find((e) =>
       /^next\.config\.(js|mjs|ts|cjs)$/.test(e),
     );
-    if (!config) return;
-    context.framework = 'next';
-    const content = readFileSync(join(root, config), 'utf8');
-    if (/\b(?:ppr|experimental_ppr|cacheComponents)\s*[:=]/.test(content)) {
-      context.ppr = true;
+    if (config) {
+      context.framework = 'next';
+      try {
+        const content = readFileSync(join(dir, config), 'utf8');
+        if (/\b(?:ppr|experimental_ppr|cacheComponents)\s*[:=]/.test(content)) {
+          context.ppr = true;
+        }
+      } catch {
+        /* unreadable config */
+      }
+      return;
     }
-  } catch {
-    /* unreadable root */
+    // Project root without a Next config: stop rather than escape into an
+    // unrelated parent project.
+    if (entries.includes('package.json') || entries.includes('.git')) return;
+    const parent = dirname(dir);
+    if (parent === dir) return;
+    dir = parent;
   }
 }
 
@@ -1347,11 +859,14 @@ function dedup(findings) {
 function walk(dir) {
   const results = [];
   try {
+    // Sorted so output (and committed goldens) are deterministic across
+    // filesystems.
     const entries = readdirSync(dir).toSorted();
     for (const entry of entries) {
       if (SKIP_DIRS.has(entry)) continue;
       const full = join(dir, entry);
       const stat = lstatSync(full);
+      // Skipping symlinks entirely guards against cycles and vendored trees.
       if (stat.isSymbolicLink()) continue;
       if (stat.isDirectory()) {
         results.push(...walk(full));

@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { SIGNAL_EXAMPLES } from '../../skills/phase/scripts/scan-examples.mjs';
 import type { ScanDiag } from '../../skills/phase/scripts/scan.d.mts';
 import {
   scanFile,
@@ -48,7 +49,15 @@ describe('scan signal catalog', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it('has no orphan example keys', () => {
+    for (const key of Object.keys(SIGNAL_EXAMPLES)) {
+      expect(SIGNALS.some((s) => s.id === key)).toBe(true);
+    }
+  });
+
   for (const signal of SIGNALS) {
+    const examples = SIGNAL_EXAMPLES[signal.id] ?? { match: [], noMatch: [] };
+
     describe(signal.id, () => {
       it('declares complete triage metadata', () => {
         expect(SEVERITY_ORDER).toContain(signal.severity);
@@ -60,12 +69,12 @@ describe('scan signal catalog', () => {
         }
       });
 
-      it('declares at least one match and one noMatch example', () => {
-        expect(signal.examples.match.length).toBeGreaterThan(0);
-        expect(signal.examples.noMatch.length).toBeGreaterThan(0);
+      it('has at least one match and one noMatch example', () => {
+        expect(examples.match.length).toBeGreaterThan(0);
+        expect(examples.noMatch.length).toBeGreaterThan(0);
       });
 
-      for (const [index, example] of signal.examples.match.entries()) {
+      for (const [index, example] of examples.match.entries()) {
         it(`match example ${index + 1} (${example.file}) fires`, () => {
           const findings = scanFile(example.file, example.content);
           const own = findings.filter((f) => f.signal === signal.id);
@@ -73,7 +82,7 @@ describe('scan signal catalog', () => {
         });
       }
 
-      for (const [index, example] of signal.examples.noMatch.entries()) {
+      for (const [index, example] of examples.noMatch.entries()) {
         it(`noMatch example ${index + 1} (${example.file}) stays silent`, () => {
           const findings = scanFile(example.file, example.content);
           const own = findings.filter((f) => f.signal === signal.id);
@@ -125,6 +134,14 @@ describe('environment context', () => {
     ]);
     expect(result.context.framework).toBe('next');
     expect(result.context.appRouter).toBe(true);
+    expect(result.context.ppr).toBe(true);
+  });
+
+  it('finds the Next config by walking up from a subdirectory target', () => {
+    const result = scanTargets([
+      'skills/phase/evals/scenarios/ssr-semantics-guard/workspace/app',
+    ]);
+    expect(result.context.framework).toBe('next');
     expect(result.context.ppr).toBe(true);
   });
 
