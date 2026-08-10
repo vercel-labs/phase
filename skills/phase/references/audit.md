@@ -5,6 +5,7 @@ A repeatable procedure for auditing existing animation and rendering code. A det
 ## Contents
 
 - [When to run](#when-to-run)
+- [Step 0: Establish context](#step-0-establish-context)
 - [Step 1: Scan for candidates](#step-1-scan-for-candidates)
 - [Step 1.5: CSS, loading, and architecture pass](#step-15-css-loading-and-architecture-pass)
 - [Step 2: Classify each candidate](#step-2-classify-each-candidate)
@@ -26,6 +27,16 @@ A repeatable procedure for auditing existing animation and rendering code. A det
 - User asks to make a page render faster or reduce the cost of off-screen content.
 - User asks "can this use CSS instead?" or "should I use phase here?"
 - User asks to replace an existing animation library with phase.
+
+## Step 0: Establish context
+
+Recommendations carry obligations that findings do not, and the obligations depend on the environment. Before scanning, know what you are auditing:
+
+- **The framework and rendering model.** Next.js App Router? Server Components? PPR or streaming? The scanner stamps what it detects (see [Reading the output](#reading-the-output)), but its detection is best-effort; confirm from `package.json` and the config when it matters.
+- **What is server-rendered today.** Content in the initial SSR HTML is load-bearing for SEO, LCP, and any static shell. Changing that is never "just perf" (see [Step 2.5](#step-25-verify-the-blast-radius)).
+- **The entry points.** Skim the main routes/pages the user cares about so findings land in a mental map rather than a vacuum.
+
+This costs a minute and is what separates a recommendation from a guess.
 
 ## Step 1: Scan for candidates
 
