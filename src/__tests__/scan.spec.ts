@@ -1,5 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { SIGNAL_EXAMPLES } from '../../skills/phase/scripts/scan-examples.mjs';
@@ -37,10 +46,15 @@ interface CliRun {
   stderr: string;
 }
 
-function runCli(args: string[], cwd: string = SCENARIO_DIR): CliRun {
+function runCli(
+  args: string[],
+  cwd: string = SCENARIO_DIR,
+  input?: string,
+): CliRun {
   const run = spawnSync(process.execPath, [SCRIPT, ...args], {
     cwd,
     encoding: 'utf8',
+    input,
   });
   return { status: run.status ?? -1, stdout: run.stdout, stderr: run.stderr };
 }
@@ -371,8 +385,24 @@ describe('environment context', () => {
     expect(result.context.ppr).toBe(true);
   });
 
+  it('does not treat explicitly disabled Next features as PPR', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-scan-next-'));
+    try {
+      mkdirSync(join(root, 'src'));
+      writeFileSync(join(root, 'package.json'), '{}\n');
+      writeFileSync(
+        join(root, 'next.config.mjs'),
+        'export default { cacheComponents: false, experimental: { ppr: false } };\n',
+      );
+      writeFileSync(join(root, 'src', 'app.ts'), 'const ready = true;\n');
+      expect(scanTargets([root]).context.ppr).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('stamps context for a single file target (diff-scoped scans)', () => {
-    // `git diff --name-only | xargs scan.mjs` is the mode most likely to run
+    // A NUL-delimited changed-file scan is the mode most likely to run
     // against a Next.js app, and the mode where a missing stamp would hide
     // the blast-radius warning entirely.
     const result = scanTargets([
@@ -485,6 +515,17 @@ describe('suppression directive', () => {
     expect(findings.filter((f) => f.signal === 'manual-raf')).toEqual([]);
     expect(diag.suppressed).toBe(1);
   });
+
+  it('does not interpret directive text in a string as a suppression', () => {
+    const diag = newDiag();
+    const findings = scanFile(
+      'src/anim.ts',
+      'const help = "phase-scan-ignore manual-raf -- example";\nrequestAnimationFrame(step);\n',
+      diag,
+    );
+    expect(findings.some((f) => f.signal === 'manual-raf')).toBe(true);
+    expect(diag.suppressed).toBe(0);
+  });
 });
 
 describe('scan CLI', () => {
@@ -546,10 +587,40 @@ describe('scan CLI', () => {
 
   it('applies path exclusions to file targets (diff-scoped scans)', () => {
     // Excluded-directory context must survive when the file is passed
-    // directly, as in `git diff --name-only | xargs node scan.mjs`.
+    // directly, as in the documented `git diff ... -z | scan --stdin0`.
     const run = runCli(['--json', '../../../../../src/__tests__/scan.spec.ts']);
     expect(run.status).toBe(0);
     expect(JSON.parse(run.stdout).findings).toEqual([]);
+  });
+
+  it('reads NUL-delimited changed files and scans nothing on empty input', () => {
+    const changed = runCli(
+      ['--json', '--stdin0'],
+      SCENARIO_DIR,
+      'workspace/src/ticker.ts\0workspace/styles/globals.css\0',
+    );
+    const actual = JSON.parse(changed.stdout);
+    expect(actual.summary.filesScanned).toBe(2);
+    expect(actual.findings.length).toBeGreaterThan(0);
+
+    const empty = runCli(['--json', '--stdin0'], SCENARIO_DIR, '');
+    const emptyResult = JSON.parse(empty.stdout);
+    expect(emptyResult.targets).toEqual([]);
+    expect(emptyResult.summary.filesScanned).toBe(0);
+
+    const root = mkdtempSync(join(tmpdir(), 'phase-scan-stdin-'));
+    try {
+      const spaced = join(root, 'file with space.ts');
+      writeFileSync(spaced, 'requestAnimationFrame(step);\n');
+      const spacedRun = runCli(
+        ['--json', '--stdin0'],
+        SCENARIO_DIR,
+        `${spaced}\0`,
+      );
+      expect(JSON.parse(spacedRun.stdout).summary.filesScanned).toBe(1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('counts an overlapping target once', () => {
@@ -620,6 +691,23 @@ describe('scan CLI', () => {
     );
     expect(
       glob.findings.some((f: { file: string }) => f.file.endsWith('.css')),
+    ).toBe(false);
+
+    const rootGlob = JSON.parse(
+      runCli(
+        ['--json', '--exclude', '**/*.ts', 'workspace/src/ticker.ts'],
+        SCENARIO_DIR,
+      ).stdout,
+    );
+    expect(rootGlob.summary.filesScanned).toBe(0);
+
+    const basenameGlob = JSON.parse(
+      runCli(['--json', '--exclude', '*.css', 'workspace']).stdout,
+    );
+    expect(
+      basenameGlob.findings.some((f: { file: string }) =>
+        f.file.endsWith('.css'),
+      ),
     ).toBe(false);
   });
 

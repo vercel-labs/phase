@@ -49,12 +49,13 @@ node <skill-dir>/scripts/scan.mjs <target-dir>
 Targets can be directories or individual files, so a scan can cover only changed files:
 
 ```bash
-git diff --name-only | xargs node <skill-dir>/scripts/scan.mjs
+git diff --name-only --diff-filter=ACMR -z | node <skill-dir>/scripts/scan.mjs --stdin0
 ```
 
 | Option                 | Effect                                                                                                                                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `--json`               | Machine-readable output (schemaVersion 1): summary counts plus a flat findings array (`{signal, severity, noise, file, line, text, fix}`), stamped with the skill version that produced it |
+| `--stdin0`             | Read NUL-delimited targets from stdin. An empty stream scans nothing. Intended for changed-file scans                                                                                      |
 | `--fail-on <severity>` | Exit 1 if any finding is at or above `critical`, `high`, or `medium`. For CI gating                                                                                                        |
 | `--signal <id>`        | Report only this signal. Repeatable                                                                                                                                                        |
 | `--severity <level>`   | Report only this severity. Repeatable                                                                                                                                                      |
@@ -217,7 +218,7 @@ A comment `phase-scan-ignore <signal-id> -- <reason>` (colon after `ignore` also
 
 The directive is the only sanctioned way to silence a finding, but it is not the only way a finding can disappear. These are detection limits, not approved exits — reaching for one to clear a report is falsifying the audit:
 
-- `missing-reduced-motion` goes quiet for a whole file that mentions `prefers-reduced-motion`, `reducedMotion`, or imports `phase` anywhere, including in a comment.
+- `missing-reduced-motion` goes quiet for a whole file that uses `prefers-reduced-motion` or `reducedMotion`; confirm the handling applies to every animation in that file.
 - Renaming a file into an excluded path (`__tests__`, `__mocks__`, `.stories.`, `.spec.`, `.test.`) removes it from the scan.
 - Lines longer than 1,000 characters are treated as generated and are not scanned.
 

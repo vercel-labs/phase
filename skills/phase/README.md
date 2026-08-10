@@ -48,12 +48,13 @@ A pattern scanner finds what is wrong. An audit also asks what phase would make 
 
 ```bash
 node <skill-dir>/scripts/scan.mjs <dir-or-files...>
-git diff --name-only | xargs node <skill-dir>/scripts/scan.mjs   # changed files only
+git diff --name-only --diff-filter=ACMR -z | node <skill-dir>/scripts/scan.mjs --stdin0
 ```
 
 | Option                 | Effect                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------ |
 | `--json`               | Machine-readable output: summary, environment context, warnings, flat findings |
+| `--stdin0`             | Read NUL-delimited targets from stdin; empty input scans nothing               |
 | `--fail-on <severity>` | Exit 1 at or above `critical`/`high`/`medium` (for CI); default always exits 0 |
 | `--signal <id>`        | Report only this signal (repeatable)                                           |
 | `--severity <level>`   | Report only this severity (repeatable)                                         |

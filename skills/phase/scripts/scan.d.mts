@@ -28,6 +28,14 @@ export interface ScanSignal {
   supersedes?: string;
   fileTypes?: string | string[];
   perFile?: boolean;
+  /** Match executable code with comments and strings blanked. */
+  codeOnly?: boolean;
+  /** Apply negativePattern to code rather than strings or comments. */
+  negativeCodeOnly?: boolean;
+  /** Override the default ±5-line contextPattern radius. */
+  contextLines?: number;
+  /** Restrict contextPattern to the smallest enclosing brace block. */
+  contextScope?: 'block';
 }
 
 export interface ScanFinding {

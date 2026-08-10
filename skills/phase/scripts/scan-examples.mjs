@@ -37,6 +37,11 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/counter.tsx',
         content: 'requestAnimationFrame(() => setCount((c) => c + 1));\n',
       },
+      {
+        file: 'src/notes.ts',
+        content:
+          "// requestAnimationFrame(oldLoop);\nconst example = 'requestAnimationFrame(step)';\n",
+      },
     ],
   },
   'setstate-in-raf': {
@@ -49,6 +54,12 @@ export const SIGNAL_EXAMPLES = {
       {
         file: 'src/store.ts',
         content: "requestAnimationFrame(() => dispatch({ type: 'tick' }));\n",
+      },
+      {
+        // Real callbacks routinely exceed the old fixed ±5-line window.
+        file: 'src/long-progress.tsx',
+        content:
+          'requestAnimationFrame(() => {\n  measure();\n  normalize();\n  clampValue();\n  interpolate();\n  applyEasing();\n  writeFrame();\n  setProgress(next);\n});\n',
       },
     ],
     noMatch: [
@@ -72,6 +83,16 @@ export const SIGNAL_EXAMPLES = {
         content:
           'requestAnimationFrame(start);\nsetTimeout(fallbackStart, 100);\n',
       },
+      {
+        file: 'src/removed-state.tsx',
+        content:
+          "requestAnimationFrame(() => {\n  // setCount((c) => c + 1);\n  log('setCount(1)');\n  ref.current.textContent = String(n);\n});\n",
+      },
+      {
+        file: 'src/unrelated-state.tsx',
+        content:
+          'function tick() {\n  requestAnimationFrame(tick);\n}\nfunction update() {\n  setCount((c) => c + 1);\n}\n',
+      },
     ],
   },
   'setstate-in-ontick': {
@@ -85,6 +106,11 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/visualizer.tsx',
         content:
           "useCanvas({\n  draw: ({ ctx, frame }) => {\n    dispatch({ type: 'frame', at: frame.elapsed });\n  },\n});\n",
+      },
+      {
+        file: 'src/long-loop.tsx',
+        content:
+          'useLoop({\n  onTick: (frame) => {\n    step1();\n    step2();\n    step3();\n    step4();\n    step5();\n    step6();\n    setValue(frame.elapsed);\n  },\n});\n',
       },
     ],
     noMatch: [
@@ -232,12 +258,18 @@ export const SIGNAL_EXAMPLES = {
         content:
           '@keyframes spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n.spinner {\n  animation: spin 1s linear infinite;\n}\n',
       },
+      {
+        // An unrelated phase import does not make a raw rAF respect motion.
+        file: 'src/eased-spin.ts',
+        content:
+          "import { clamp } from 'phase';\nrequestAnimationFrame(spin);\n",
+      },
     ],
     noMatch: [
       {
         file: 'src/spin.ts',
         content:
-          "import { useLoop } from 'phase/react';\nrequestAnimationFrame(spin);\n",
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: spin });\n",
       },
       {
         file: 'src/styles.css',
@@ -394,6 +426,10 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/sheet.css',
         content: '.sheet {\n  transition: 0.3s ease-in-out 0.1s;\n}\n',
       },
+      {
+        file: 'src/multiline.css',
+        content: '.card {\n  transition:\n    all 300ms ease;\n}\n',
+      },
     ],
     noMatch: [
       {
@@ -414,6 +450,10 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/legacy.css',
         content:
           '.card {\n  -webkit-transition: all 0.3s ease-out;\n  -moz-transition: all 0.3s ease-out;\n}\n',
+      },
+      {
+        file: 'src/removed.css',
+        content: '/* transition: all 0.3s; */\n.card { opacity: 1; }\n',
       },
     ],
   },
@@ -469,6 +509,10 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/media.css',
         content:
           '@media (min-width: 600px) {\n  .sidebar { width: 240px; }\n}\n',
+      },
+      {
+        file: 'src/commented.css',
+        content: '/* @keyframes old { */\n.sidebar { width: 240px; }\n',
       },
     ],
   },

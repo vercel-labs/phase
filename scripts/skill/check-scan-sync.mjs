@@ -77,10 +77,14 @@ function markdownInfo(path) {
 const audit = readFileSync(auditPath, 'utf8');
 const tableRows = new Map();
 const rowRe =
-  /^\| `([a-z-]+)`\s+\| (critical|high|medium|dedup)\s+\| (precise|normal|noisy)\s+\|/gm;
+  /^\| `([a-z-]+)`\s+\| (critical|high|medium|dedup)\s+\| (precise|normal|noisy)\s+\|.*\|\s+\[[^\]]+\]\(([^)]+)\)\s+\|$/gm;
 let row;
 while ((row = rowRe.exec(audit)) !== null) {
-  tableRows.set(row[1], { severity: row[2], noise: row[3] });
+  const target = row[4];
+  const fix = target.startsWith('#')
+    ? `references/audit.md${target}`
+    : `references/${target.replace(/^\.\//, '')}`;
+  tableRows.set(row[1], { severity: row[2], noise: row[3], fix });
 }
 
 for (const signal of SIGNALS) {
@@ -97,6 +101,11 @@ for (const signal of SIGNALS) {
   if (documented.noise !== signal.noise) {
     fail(
       `audit.md lists ${signal.id} noise as ${documented.noise}, scan.mjs says ${signal.noise}`,
+    );
+  }
+  if (documented.fix !== signal.fix) {
+    fail(
+      `audit.md links ${signal.id} to ${documented.fix}, scan.mjs says ${signal.fix}`,
     );
   }
 }

@@ -12,7 +12,7 @@
  */
 
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // --- Public API -------------------------------------------------------------
@@ -142,6 +142,10 @@ export function scanFile(relPath, content, diag = null) {
 
   const findings = [];
   const lines = content.split(/\r?\n/);
+  const uncommentedLines = maskComments(lines);
+  const codeLines = maskStrings(uncommentedLines);
+  const uncommentedContent = uncommentedLines.join('\n');
+  const codeContent = codeLines.join('\n');
 
   if (diag) diag.analyzed++;
 
@@ -155,18 +159,25 @@ export function scanFile(relPath, content, diag = null) {
   }
   if (diag) diag.linesSkipped += overlong.size;
 
-  const suppressions = collectSuppressions(relPath, lines, diag);
+  const suppressions = collectSuppressions(relPath, commentText(lines), diag);
 
   for (const signal of SIGNALS) {
     if (!signalAppliesTo(signal, type, ext)) continue;
 
-    if (signal.negativePattern && signal.negativePattern.test(content)) {
+    if (
+      signal.negativePattern &&
+      signal.negativePattern.test(
+        signal.negativeCodeOnly ? codeContent : uncommentedContent,
+      )
+    ) {
       continue;
     }
 
     const signalFindings = scanSignal(
       signal,
       lines,
+      uncommentedLines,
+      codeLines,
       relPath,
       suppressions,
       overlong,
@@ -439,6 +450,13 @@ const STATE_UPDATE_CONTEXT =
 const BARE_DURATION_TRANSITION =
   /(?<![\w-])transition:\s*[\d.]+m?s(?:(?:\s*,\s*|\s+)(?:[\d.]+m?s|ease[\w-]*|linear|step[\w-]*|steps\([^)]*\)|cubic-bezier\([^)]*\)))*\s*(?:;|!|$)/;
 
+const NON_COMPOSITOR_TRANSITION = new RegExp(
+  /(?<![\w-])transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/
+    .source +
+    '|' +
+    BARE_DURATION_TRANSITION.source,
+);
+
 export const SIGNALS = [
   {
     id: 'manual-raf',
@@ -450,6 +468,7 @@ export const SIGNALS = [
     why: 'No visibility pausing, no shared clock, no cleanup.',
     fix: 'references/audit.md#common-replacements',
     pattern: /requestAnimationFrame/,
+    codeOnly: true,
   },
   {
     id: 'setstate-in-raf',
@@ -463,6 +482,9 @@ export const SIGNALS = [
     supersedes: 'manual-raf',
     pattern: /requestAnimationFrame/,
     contextPattern: STATE_UPDATE_CONTEXT,
+    codeOnly: true,
+    contextLines: 30,
+    contextScope: 'block',
   },
   {
     id: 'setstate-in-ontick',
@@ -475,6 +497,9 @@ export const SIGNALS = [
     fix: 'references/performance.md#never-setstate-inside-ontick--draw',
     pattern: /\bonTick\s*[:=(]|\bonDraw\s*[:=(]|\bdraw\s*:/,
     contextPattern: STATE_UPDATE_CONTEXT,
+    codeOnly: true,
+    contextLines: 30,
+    contextScope: 'block',
   },
   {
     id: 'forced-reflow',
@@ -556,10 +581,12 @@ export const SIGNALS = [
     fix: 'references/performance.md#reduced-motion-by-default',
     // `animation:(?!\s*none)` keeps `animation: none` (motion disabled) out.
     pattern: /requestAnimationFrame|@keyframes|animation:(?!\s*none\b)/,
-    // Suppress when the file already handles reduced motion, or genuinely
-    // imports phase (its hooks handle it automatically).
-    negativePattern: /prefers-reduced-motion|reducedMotion|from ['"]phase/,
+    // Suppress only when the file handles reduced motion. Importing phase is
+    // not enough: a raw rAF in the same file still bypasses its lifecycle.
+    negativePattern: /prefers-reduced-motion|reducedMotion/,
+    negativeCodeOnly: true,
     fileTypes: ['js', 'css'],
+    codeOnly: true,
     // The gap is a property of the whole file, not of each animating line.
     perFile: true,
   },
@@ -633,12 +660,7 @@ export const SIGNALS = [
     // bare-duration shorthand (names no property, so it animates `all`).
     // transform/opacity-only transitions do not match. Vendor-prefixed
     // forms are skipped so a prefixed block counts once, not five times.
-    pattern: new RegExp(
-      /(?<![\w-])transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/
-        .source +
-        '|' +
-        BARE_DURATION_TRANSITION.source,
-    ),
+    matcher: matchesNonCompositorTransition,
     fileTypes: 'css',
   },
   {
@@ -842,6 +864,21 @@ function matchesPermanentWillChange(lines, i) {
   return true;
 }
 
+/** Matches a complete transition declaration, including multiline values. */
+function matchesNonCompositorTransition(lines, i) {
+  if (!/(?<![\w-])transition(?:-property)?:\s*/.test(lines[i])) return false;
+
+  let declaration = lines[i];
+  for (
+    let j = i + 1;
+    j < lines.length && j <= i + 10 && !/[;}]/.test(declaration);
+    j++
+  ) {
+    declaration += ` ${lines[j].trim()}`;
+  }
+  return NON_COMPOSITOR_TRANSITION.test(declaration);
+}
+
 /**
  * The stable-callback idiom that useStableCallback shortens: a useCallback
  * with empty deps whose body calls through a ref, so the identity never
@@ -1035,13 +1072,115 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Produces either source with comments blanked or only the comment text.
+ * Character positions are preserved so finding excerpts still center on the
+ * original match. Strings are tracked so URLs and directive examples cannot
+ * become comments or suppressions.
+ */
+// oxlint-disable-next-line complexity -- the lexer has explicit quote/comment states
+function lexComments(lines, commentsOnly) {
+  const result = [];
+  let block = false;
+  let quote = null;
+
+  for (const line of lines) {
+    let output = '';
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      const next = line[i + 1];
+
+      if (block) {
+        output += commentsOnly ? ch : ' ';
+        if (ch === '*' && next === '/') {
+          output += commentsOnly ? next : ' ';
+          i++;
+          block = false;
+        }
+        continue;
+      }
+
+      if (quote !== null) {
+        output += commentsOnly ? ' ' : ch;
+        if (ch === '\\') {
+          if (i + 1 < line.length) {
+            output += commentsOnly ? ' ' : line[++i];
+          }
+        } else if (ch === quote) {
+          quote = null;
+        }
+        continue;
+      }
+
+      if (ch === '/' && next === '/') {
+        output += commentsOnly ? line.slice(i) : ' '.repeat(line.length - i);
+        break;
+      }
+      if (ch === '/' && next === '*') {
+        output += commentsOnly ? '/*' : '  ';
+        i++;
+        block = true;
+        continue;
+      }
+      if (ch === "'" || ch === '"' || ch === '`') {
+        quote = ch;
+      }
+      output += commentsOnly ? ' ' : ch;
+    }
+    result.push(output);
+    if (quote === "'" || quote === '"') quote = null;
+  }
+  return result;
+}
+
+function maskComments(lines) {
+  return lexComments(lines, false);
+}
+
+function commentText(lines) {
+  return lexComments(lines, true);
+}
+
+/** Blanks quoted text while preserving line lengths for code-only signals. */
+function maskStrings(lines) {
+  const result = [];
+  let quote = null;
+  for (const line of lines) {
+    let output = '';
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (quote !== null) {
+        output += ' ';
+        if (ch === '\\') {
+          if (i + 1 < line.length) {
+            output += ' ';
+            i++;
+          }
+        } else if (ch === quote) {
+          quote = null;
+        }
+      } else {
+        if (ch === "'" || ch === '"' || ch === '`') {
+          quote = ch;
+          output += ' ';
+        } else {
+          output += ch;
+        }
+      }
+    }
+    result.push(output);
+    if (quote === "'" || quote === '"') quote = null;
+  }
+  return result;
+}
+
 // Accepts both `phase-scan-ignore id` and `phase-scan-ignore: id`.
 const IGNORE_DIRECTIVE = /phase-scan-ignore:?\s+([a-z-]+)(?:\s+--\s*(\S.*))?/;
 
-function collectSuppressions(relPath, lines, diag) {
+function collectSuppressions(relPath, comments, diag) {
   const suppressions = new Map();
-  for (let i = 0; i < lines.length; i++) {
-    const directive = IGNORE_DIRECTIVE.exec(lines[i]);
+  for (let i = 0; i < comments.length; i++) {
+    const directive = IGNORE_DIRECTIVE.exec(comments[i]);
     if (!directive) continue;
     if (!directive[2]) {
       if (diag) {
@@ -1074,10 +1213,42 @@ function suppressedAnywhere(suppressions, signalId) {
   return false;
 }
 
+const braceRangeCache = new WeakMap();
+
+/** Smallest lexical brace block containing a line, with strings/comments gone. */
+function enclosingBlock(lines, lineIndex) {
+  let ranges = braceRangeCache.get(lines);
+  if (!ranges) {
+    ranges = [];
+    const stack = [];
+    for (let i = 0; i < lines.length; i++) {
+      for (const ch of lines[i]) {
+        if (ch === '{') {
+          stack.push(i);
+        } else if (ch === '}' && stack.length > 0) {
+          ranges.push({ start: stack.pop(), end: i });
+        }
+      }
+    }
+    braceRangeCache.set(lines, ranges);
+  }
+
+  let best = null;
+  for (const range of ranges) {
+    if (range.start > lineIndex || range.end < lineIndex) continue;
+    if (best === null || range.end - range.start < best.end - best.start) {
+      best = range;
+    }
+  }
+  return best;
+}
+
 /** Runs one signal over a file's lines, honoring suppressions and perFile. */
 function scanSignal(
   signal,
   lines,
+  uncommentedLines,
+  codeLines,
   relPath,
   suppressions,
   overlong,
@@ -1085,20 +1256,30 @@ function scanSignal(
   diag,
 ) {
   const findings = [];
+  const matchLines = signal.codeOnly ? codeLines : uncommentedLines;
   for (let i = 0; i < lines.length; i++) {
     if (overlong.has(i)) continue;
     const line = lines[i];
+    const matchLine = matchLines[i];
     let matchIndex = 0;
 
     if (signal.matcher) {
-      if (!signal.matcher(lines, i)) continue;
+      if (!signal.matcher(matchLines, i)) continue;
     } else {
-      const match = signal.pattern.exec(line);
+      const match = signal.pattern.exec(matchLine);
       if (!match) continue;
       matchIndex = match.index;
 
       if (signal.contextPattern) {
-        const context = lines.slice(Math.max(0, i - 5), i + 6).join('\n');
+        const contextLines = signal.codeOnly ? codeLines : uncommentedLines;
+        const radius = signal.contextLines ?? 5;
+        const block =
+          signal.contextScope === 'block'
+            ? enclosingBlock(contextLines, i)
+            : null;
+        const from = block?.start ?? Math.max(0, i - radius);
+        const to = block ? block.end + 1 : i + radius + 1;
+        const context = contextLines.slice(from, to).join('\n');
         if (!signal.contextPattern.test(context)) continue;
       }
     }
@@ -1118,7 +1299,7 @@ function scanSignal(
         i + 1,
         line,
         matchIndex,
-        executionOf(lines, i, type),
+        executionOf(uncommentedLines, i, type),
       ),
     );
 
@@ -1156,7 +1337,11 @@ function detectNextConfig(root, context) {
       );
       try {
         const content = readFileSync(join(dir, config), 'utf8');
-        if (/\b(?:ppr|experimental_ppr|cacheComponents)\s*[:=]/.test(content)) {
+        if (
+          /\b(?:ppr|experimental_ppr|cacheComponents)\s*[:=]\s*(?:true|['"]incremental['"])/.test(
+            content,
+          )
+        ) {
           context.ppr = true;
         }
       } catch {
@@ -1208,13 +1393,28 @@ function toPathMatcher(pattern) {
   if (!pattern.includes('*') && !pattern.includes('?')) {
     return (path) => path.includes(pattern);
   }
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-  const body = escaped
-    .split('**')
-    .map((part) => part.split('*').join('[^/]*').split('?').join('[^/]'))
-    .join('.*');
+  let body = '';
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    if (ch === '*' && pattern[i + 1] === '*') {
+      if (pattern[i + 2] === '/') {
+        body += '(?:.*/)?';
+        i += 2;
+      } else {
+        body += '.*';
+        i++;
+      }
+    } else if (ch === '*') {
+      body += '[^/]*';
+    } else if (ch === '?') {
+      body += '[^/]';
+    } else {
+      body += escapeRegExp(ch);
+    }
+  }
   const re = new RegExp(`^${body}$`);
-  return (path) => re.test(path);
+  const matchBase = !pattern.includes('/');
+  return (path) => re.test(matchBase ? basename(path) : path);
 }
 
 function skillVersion() {
@@ -1378,7 +1578,7 @@ function rankHotspots(findings, weight) {
   return [...byFile.entries()]
     .map(([file, items]) => ({ file, items }))
     .filter(({ items }) => items.length > 1)
-    .sort(
+    .toSorted(
       (a, b) =>
         b.items.length - a.items.length ||
         (weight.get(a.file) === weight.get(b.file) && a.file < b.file ? -1 : 1),
@@ -1392,14 +1592,14 @@ function summarizeSignals(items) {
     counts.set(item.signal, (counts.get(item.signal) ?? 0) + 1);
   }
   return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    .toSorted((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
     .map(([id, n]) => (n > 1 ? `${id} ×${n}` : id))
     .join(', ');
 }
 
 /** Per-frame first, then the most concentrated files, then source order. */
 function rankFindings(items, weight) {
-  return [...items].sort((a, b) => {
+  return [...items].toSorted((a, b) => {
     const aHot = EXECUTION_RANK[a.execution] ?? 2;
     const bHot = EXECUTION_RANK[b.execution] ?? 2;
     if (aHot !== bHot) return aHot - bHot;
@@ -1470,6 +1670,8 @@ Targets   directories or individual files (default: current directory)
 
 Options
   --json               emit machine-readable JSON (schemaVersion 1)
+  --stdin0             read additional NUL-delimited targets from stdin;
+                       an empty stream scans nothing instead of "."
   --fail-on <severity> exit 1 if any finding is at or above the given
                        severity (critical | high | medium); default is
                        exit 0 regardless of findings (advisory)
@@ -1496,7 +1698,12 @@ Exit codes: 0 = scan completed, 1 = --fail-on threshold hit, 2 = usage error.`;
 const NOISE_TIERS = ['precise', 'normal', 'noisy'];
 
 /** Boolean switches, by the argument that sets them. */
-const FLAGS = { '--json': 'json', '--help': 'help', '-h': 'help' };
+const FLAGS = {
+  '--json': 'json',
+  '--stdin0': 'stdin0',
+  '--help': 'help',
+  '-h': 'help',
+};
 
 /**
  * Options taking a value. `allowed` restricts it to an enum, `list` collects
@@ -1546,6 +1753,7 @@ function applyOption(opts, name, spec, raw) {
 function parseArgs(argv) {
   const opts = {
     json: false,
+    stdin0: false,
     help: false,
     failOn: null,
     signals: [],
@@ -1584,7 +1792,13 @@ function main() {
     return;
   }
 
-  if (opts.targets.length === 0) opts.targets.push('.');
+  if (opts.stdin0) {
+    const input = readFileSync(0, 'utf8');
+    for (const target of input.split('\0')) {
+      if (target !== '') opts.targets.push(target);
+    }
+  }
+  if (opts.targets.length === 0 && !opts.stdin0) opts.targets.push('.');
   for (const target of opts.targets) {
     try {
       lstatSync(target);
