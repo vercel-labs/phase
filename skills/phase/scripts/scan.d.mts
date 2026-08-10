@@ -41,12 +41,20 @@ export interface ScanFinding {
   fix: string;
 }
 
+export interface ScanContext {
+  framework: 'next' | null;
+  appRouter: boolean;
+  ppr: boolean;
+  clientComponents: number;
+}
+
 export interface ScanResult {
   targets: string[];
   filesScanned: number;
   findings: ScanFinding[];
   suppressed: number;
   warnings: string[];
+  context: ScanContext;
 }
 
 export interface ScanDiag {
@@ -66,6 +74,7 @@ export interface ScanJson {
     suppressed: number;
     bySeverity: { critical: number; high: number; medium: number };
   };
+  context: ScanContext | null;
   warnings: string[];
   findings: ScanFinding[];
 }

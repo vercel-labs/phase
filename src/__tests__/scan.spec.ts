@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { ScanDiag } from '../../skills/phase/scripts/scan.d.mts';
 import {
   scanFile,
+  scanTargets,
   SEVERITY_ORDER,
   SIGNALS,
 } from '../../skills/phase/scripts/scan.mjs';
@@ -81,6 +82,65 @@ describe('scan signal catalog', () => {
       }
     });
   }
+});
+
+describe('file selection', () => {
+  it('matches uppercase extensions (case-insensitive filesystems)', () => {
+    const findings = scanFile(
+      'src/Card.TSX',
+      '<div className="transition-all" />;\n',
+    );
+    expect(findings.some((f) => f.signal === 'tailwind-transition-all')).toBe(
+      true,
+    );
+  });
+
+  it('excludes agent-config dirs and the skill eval fixtures', () => {
+    const raf = 'requestAnimationFrame(t);\n';
+    expect(scanFile('.agents/skills/phase/tool.ts', raf)).toEqual([]);
+    expect(scanFile('.cursor/rules/example.ts', raf)).toEqual([]);
+    expect(
+      scanFile('skills/phase/evals/scenarios/x/workspace/src/t.ts', raf),
+    ).toEqual([]);
+  });
+});
+
+describe('matcher windows', () => {
+  it('does not flag a long WhenVisible tag whose fallback comes late', () => {
+    const props = Array.from({ length: 16 }, (_, i) => `  p${i}={v}`).join(
+      '\n',
+    );
+    const tag = `<WhenVisible\n${props}\n  fallback={<Box />}\n>\n`;
+    const findings = scanFile('src/x.tsx', tag);
+    expect(
+      findings.filter((f) => f.signal === 'when-visible-no-fallback'),
+    ).toEqual([]);
+  });
+});
+
+describe('environment context', () => {
+  it('detects Next.js App Router and PPR from the ssr-semantics workspace', () => {
+    const result = scanTargets([
+      'skills/phase/evals/scenarios/ssr-semantics-guard/workspace',
+    ]);
+    expect(result.context.framework).toBe('next');
+    expect(result.context.appRouter).toBe(true);
+    expect(result.context.ppr).toBe(true);
+  });
+
+  it('reports no framework for the plain fixture workspace', () => {
+    const result = scanTargets([
+      'skills/phase/evals/scenarios/false-positive-discipline/workspace',
+    ]);
+    expect(result.context.framework).toBe(null);
+  });
+
+  it('points the reader at Step 2.5 when Next.js is detected', () => {
+    const run = runCli(['../ssr-semantics-guard/workspace']);
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain('Context: Next.js + App Router + PPR');
+    expect(run.stdout).toContain('Step 2.5');
+  });
 });
 
 describe('suppression directive', () => {

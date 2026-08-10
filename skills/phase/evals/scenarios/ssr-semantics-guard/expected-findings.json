@@ -9,7 +9,8 @@
           "signal": "when-visible-no-fallback",
           "reason": "nothing is lazy-mounted yet; the page is fully server-rendered"
         }
-      ]
+      ],
+      "context": { "framework": "next", "appRouter": true, "ppr": true }
     }
   },
   "expectedBehavior": [

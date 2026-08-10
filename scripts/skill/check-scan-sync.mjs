@@ -175,6 +175,31 @@ for (const fileName of referenceFiles) {
   }
 }
 
+// --- 5. Eval scenario ground truth references real signals ---
+
+const scenariosDir = join(root, 'skills/phase/evals/scenarios');
+for (const scenario of readdirSync(scenariosDir)) {
+  const findingsPath = join(scenariosDir, scenario, 'expected-findings.json');
+  if (!existsSync(findingsPath)) continue;
+  let expected;
+  try {
+    expected = JSON.parse(readFileSync(findingsPath, 'utf8'));
+  } catch {
+    fail(`evals/${scenario}/expected-findings.json is not valid JSON`);
+    continue;
+  }
+  const assertions = expected.scan?.assertions;
+  const referenced = [
+    ...(assertions?.required ?? []),
+    ...(assertions?.requiredAbsent ?? []),
+  ];
+  for (const entry of referenced) {
+    if (!SIGNALS.some((s) => s.id === entry.signal)) {
+      fail(`evals/${scenario} references unknown signal \`${entry.signal}\``);
+    }
+  }
+}
+
 // --- Result ---
 
 if (errors > 0) {

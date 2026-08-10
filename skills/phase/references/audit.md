@@ -23,6 +23,7 @@ A repeatable procedure for auditing existing animation and rendering code. A det
 
 - User asks to review, optimize, or audit animation code.
 - User reports janky animations, high CPU usage, or excessive re-renders.
+- User asks to make a page render faster or reduce the cost of off-screen content.
 - User asks "can this use CSS instead?" or "should I use phase here?"
 - User asks to replace an existing animation library with phase.
 
@@ -131,6 +132,8 @@ Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before 
 ```
 
 <!-- scan-golden:end -->
+
+The scanner also stamps detected **environment context** into the output (a `Context:` line in text, a `context` object in JSON: `framework`, `appRouter`, `ppr`, `clientComponents`). When it reports Next.js, App Router, or PPR, treat that as detected fact and apply [Step 2.5](#step-25-verify-the-blast-radius) before any rendering recommendation. Detection is best-effort (config files are only checked at the target root), so its absence proves nothing: Step 2.5 applies regardless.
 
 Two orthogonal ratings guide how to act on each block:
 

@@ -29,8 +29,12 @@ Download `skills/phase/dist/phase-skill.zip` from this repository, unzip into yo
 The scanner ships with the skill. You don't need to install anything else. Once the skill is installed, ask your agent to audit your animation code; it reads `SKILL.md` → `references/audit.md`, runs `scripts/scan.mjs`, and classifies the findings against the decision ladder. To run it standalone:
 
 ```bash
-node <skill-dir>/scripts/scan.mjs <target-dir>
+node <skill-dir>/scripts/scan.mjs <target-dir-or-files>
+node <skill-dir>/scripts/scan.mjs --json <target>            # machine-readable
+node <skill-dir>/scripts/scan.mjs --fail-on high <target>    # CI gating
 ```
+
+Full flag, suppression, and output documentation lives in `references/audit.md` (Step 1).
 
 ## What's inside
 

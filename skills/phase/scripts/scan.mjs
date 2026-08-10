@@ -24,6 +24,12 @@ import { fileURLToPath } from 'node:url';
 export function scanTargets(paths) {
   const findings = [];
   const diag = { suppressed: 0, warnings: [] };
+  const context = {
+    framework: null,
+    appRouter: false,
+    ppr: false,
+    clientComponents: 0,
+  };
   let filesScanned = 0;
 
   for (const target of paths) {
@@ -31,6 +37,8 @@ export function scanTargets(paths) {
     const stat = lstatSync(root);
     const files = stat.isDirectory() ? walk(root) : [root];
     const base = stat.isDirectory() ? root : dirname(root);
+
+    if (stat.isDirectory()) detectNextConfig(root, context);
 
     for (const filePath of files) {
       let content;
@@ -45,6 +53,9 @@ export function scanTargets(paths) {
       const rel = stat.isDirectory()
         ? toPosix(relative(base, filePath))
         : toPosix(target).replace(/^\.\//, '');
+      // Excluded paths (tests, fixtures, agent config) must not poison
+      // environment detection either.
+      if (!EXCLUDED_PATHS.test(rel)) updateContext(rel, content, context);
       findings.push(...scanFile(rel, content, diag));
     }
   }
@@ -55,6 +66,7 @@ export function scanTargets(paths) {
     findings,
     suppressed: diag.suppressed,
     warnings: diag.warnings,
+    context,
   };
 }
 
@@ -133,6 +145,7 @@ export function formatJson(result) {
         medium: counts.medium,
       },
     },
+    context: result.context ?? null,
     warnings: result.warnings ?? [],
     findings: result.findings,
   };
@@ -188,6 +201,19 @@ export function formatText(result) {
       `Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup${suppressedNote}`,
       'Next: classify each candidate against references/audit.md Step 2 (the decision ladder).',
       'Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.',
+    );
+  }
+
+  // Environment facts change what a safe recommendation looks like; hand
+  // them to the reader instead of relying on it to go looking.
+  const context = result.context;
+  if (context?.framework === 'next') {
+    const bits = ['Next.js'];
+    if (context.appRouter) bits.push('App Router');
+    if (context.ppr) bits.push('PPR');
+    out.push(
+      '',
+      `Context: ${bits.join(' + ')} detected. Rendering recommendations must pass the blast-radius check (references/audit.md Step 2.5) before changing SSR content or mount timing.`,
     );
   }
 
@@ -1084,14 +1110,14 @@ function matchesKeyframesLayoutProp(lines, i) {
 }
 
 /**
- * WhenVisible/WhenIdle opening tag without a fallback prop. Reads up to 15
+ * WhenVisible/WhenIdle opening tag without a fallback prop. Reads up to 30
  * lines forward to capture multi-line JSX tags.
  */
 function matchesUngatedLazyMount(lines, i) {
   const open = /<When(?:Visible|Idle)\b/.exec(lines[i]);
   if (!open) return false;
   let tag = '';
-  for (let j = i; j < Math.min(lines.length, i + 15); j++) {
+  for (let j = i; j < Math.min(lines.length, i + 30); j++) {
     const line = j === i ? lines[j].slice(open.index) : lines[j];
     tag += line + '\n';
     if (/(?<!=)>/.test(line)) break;
@@ -1108,8 +1134,10 @@ const FILE_TYPE_EXTENSIONS = {
 
 const JSX_EXTENSIONS = new Set(['.tsx', '.jsx']);
 
+// Agent-config directories and this skill's own eval fixtures contain
+// deliberately bad example code; scanning them buries real findings.
 const EXCLUDED_PATHS =
-  /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__/;
+  /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__|\.agents\/|\.claude\/|\.cursor\/|skills\/phase\/evals\//;
 
 const SKIP_DIRS = new Set([
   'node_modules',
@@ -1122,6 +1150,10 @@ const SKIP_DIRS = new Set([
   '.turbo',
   '.vercel',
   'storybook-static',
+  '.agents',
+  '.claude',
+  '.cursor',
+  '.github',
 ]);
 
 const SKIP_FILES = /\.min\.|\.d\.ts$|\.d\.mts$/;
@@ -1205,6 +1237,42 @@ function toPosix(path) {
   return path.split('\\').join('/');
 }
 
+// Best-effort environment detection so recommendations can account for
+// rendering semantics (see references/audit.md Step 2.5). Config detection
+// only sees the target root; file-content markers work at any depth.
+function detectNextConfig(root, context) {
+  try {
+    const entries = readdirSync(root);
+    const config = entries.find((e) =>
+      /^next\.config\.(js|mjs|ts|cjs)$/.test(e),
+    );
+    if (!config) return;
+    context.framework = 'next';
+    const content = readFileSync(join(root, config), 'utf8');
+    if (/\b(?:ppr|experimental_ppr|cacheComponents)\s*[:=]/.test(content)) {
+      context.ppr = true;
+    }
+  } catch {
+    /* unreadable root */
+  }
+}
+
+function updateContext(rel, content, context) {
+  if (/(^|\/)app\/.*(page|layout|template)\.[jt]sx?$/.test(rel)) {
+    context.appRouter = true;
+    context.framework ??= 'next';
+  }
+  // The route-segment config shape, not the bare token: prose or tooling
+  // that merely mentions experimental_ppr must not count as detection.
+  if (/\bexport\s+const\s+experimental_ppr\s*=\s*true\b/.test(content)) {
+    context.ppr = true;
+    context.framework ??= 'next';
+  }
+  if (/^\s*['"]use client['"]/m.test(content)) {
+    context.clientComponents++;
+  }
+}
+
 function skillVersion() {
   try {
     const metadataPath = fileURLToPath(
@@ -1219,7 +1287,8 @@ function skillVersion() {
 function extOf(path) {
   const dot = path.lastIndexOf('.');
   if (dot <= path.lastIndexOf('/')) return null;
-  return path.slice(dot);
+  // Lowercased so case-insensitive filesystems (macOS, Windows) match.
+  return path.slice(dot).toLowerCase();
 }
 
 function typeOf(ext) {
