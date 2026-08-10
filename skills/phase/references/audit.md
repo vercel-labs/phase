@@ -213,6 +213,18 @@ Run this alongside the JS scan, before classifying. The scanner automates the CS
 - **Pointer handlers reading layout** (scanner: `pointer-listener-layout-read`). `pointermove`/`mousemove`/`touchmove` handlers calling `getBoundingClientRect` or reading `offset*` force a reflow per event, and move events fire far above frame rate. Replace with `usePointer` (one rAF-batched read per frame).
 - **Raw `matchMedia` subscriptions** (scanner: `raw-matchmedia`). Hand-rolled MediaQueryList listeners duplicate what the pooled `useMediaQuery`/`usePrefersReducedMotion` provide.
 
+### Opportunity checks (scanner-silent)
+
+A clean scan means no anti-pattern candidates, not no opportunities: the scanner finds what is wrong, this pass finds what phase would make better. Walk the entry points from Step 0 and check for:
+
+- **Long-running or infinite CSS animations** (spinners, marquees, animated gradients) with no visibility gating. Even with reduced-motion handled, they burn CPU/GPU off-screen and in background tabs. → `useLifecycle` toggling `animation-play-state` (see [decision-guide.md](./decision-guide.md)).
+- **`transitionend`/`animationend` listeners driving unmount or state.** → `Presence` / `Swap`.
+- **Eagerly mounted non-critical UI** (below-fold sections, chat widgets, pickers, heavy modals). → `Defer` (SSR-safe default) or `WhenVisible`/`WhenIdle`, subject to the [Step 2.5](#step-25-verify-the-blast-radius) semantics rules.
+- **`setTimeout`/`setInterval` chains sequencing UI states.** The scanner only flags timers near animation keywords; sequencing timers without them are invisible to it. → `useLoop` with `frame.elapsed` steps ([timed-sequences.md](./timed-sequences.md)).
+- **Scroll listeners doing position math without layout reads.** The scanner only flags handlers that read layout. → `useScroll`.
+
+Each opportunity still goes through Step 2 classification and Step 2.5 blast-radius verification like any scanner candidate; "no change" remains a valid verdict when the current code is already the cheapest sufficient tier.
+
 ### Classification ladders
 
 In addition to the animation ladder (`CSS → useTween → phase → external library`), classify loading and containment candidates:
@@ -328,11 +340,7 @@ While reading context (Step 2.5) you will see adjacent issues. The protocol:
 
 ## When NOT to run the audit
 
-Skip the scan when the codebase:
-
-- Uses only CSS transitions/animations with no JS animation code
-- Has no raw observer usage (no `new IntersectionObserver/ResizeObserver/MutationObserver`)
-- Has already been audited and the scanner confirms zero candidates
+Skip the audit when the codebase was audited recently and has not changed since. A zero-candidate scan by itself does not end an audit: the [opportunity checks](#opportunity-checks-scanner-silent) and the manual heuristics still apply.
 
 ## Severity weighting
 
