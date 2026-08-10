@@ -356,6 +356,13 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/menu.css',
         content: '.menu {\n  transition: 0.3s opacity;\n}\n',
       },
+      {
+        // Vendor-prefixed lines must not count: the unprefixed sibling
+        // (always present alongside) carries the single finding.
+        file: 'src/legacy.css',
+        content:
+          '.card {\n  -webkit-transition: all 0.3s ease-out;\n  -moz-transition: all 0.3s ease-out;\n}\n',
+      },
     ],
   },
   'keyframes-layout-animation': {
@@ -375,6 +382,12 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/drop.css',
         content:
           '@keyframes drop {\n  from { top: -10px; }\n  to { top: 0; }\n}\n',
+      },
+      {
+        // Vendor-prefixed keyframes blocks animate layout just the same.
+        file: 'src/legacy.css',
+        content:
+          '@-webkit-keyframes rise {\n  from {\n    height: 0;\n  }\n}\n',
       },
     ],
     noMatch: [

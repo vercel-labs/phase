@@ -258,8 +258,11 @@ const STATE_UPDATE_CONTEXT =
   /\bsetState\s*\(|\bdispatch\s*\(|\bset(?!Timeout\b|Interval\b|Immediate\b|Attribute|Property\b|PointerCapture\b|Item\b|Selection|RangeText\b|CustomValidity\b|Transform\b|LineDash\b|SinkId\b|RequestHeader\b)[A-Z]\w*\s*\(/;
 
 // Bare-duration transition shorthand (no property named, so it animates all).
+// The lookbehind skips vendor-prefixed forms (-webkit-transition:): prefixed
+// declarations always ship alongside the unprefixed one, which would count
+// each logical declaration up to five times.
 const BARE_DURATION_TRANSITION =
-  /transition:\s*[\d.]+m?s(?:\s*,?\s*(?:[\d.]+m?s|ease[\w-]*|linear|step[\w-]*|steps\([^)]*\)|cubic-bezier\([^)]*\)))*\s*(?:;|!|$)/;
+  /(?<![\w-])transition:\s*[\d.]+m?s(?:\s*,?\s*(?:[\d.]+m?s|ease[\w-]*|linear|step[\w-]*|steps\([^)]*\)|cubic-bezier\([^)]*\)))*\s*(?:;|!|$)/;
 
 export const SIGNALS = [
   {
@@ -420,9 +423,10 @@ export const SIGNALS = [
     fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
     // `transition: all`, a transition naming a layout property, or a
     // bare-duration shorthand (names no property, so it animates `all`).
-    // transform/opacity-only transitions do not match.
+    // transform/opacity-only transitions do not match. Vendor-prefixed
+    // forms are skipped so a prefixed block counts once, not five times.
     pattern: new RegExp(
-      /transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/
+      /(?<![\w-])transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/
         .source +
         '|' +
         BARE_DURATION_TRANSITION.source,
@@ -609,7 +613,7 @@ function matchesKeyframesLayoutProp(lines, i) {
         balance++;
       } else if (ch === '{') {
         if (balance === 0) {
-          if (/@keyframes/.test(line)) return true;
+          if (/@(?:-\w+-)?keyframes/.test(line)) return true;
         } else {
           balance--;
         }
