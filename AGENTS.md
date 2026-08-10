@@ -227,7 +227,7 @@ The audit scanner (`skills/phase/scripts/scan.mjs`) detects anti-pattern candida
 6. If the signal fires on the planted-defect fixture (`skills/phase/evals/scenarios/audit-planted-defects/workspace`), regenerate the goldens (`scan.mjs workspace > expected-scan.txt`, `--json` likewise) and run `pnpm skill:build` (regenerates audit.md's sample block).
 7. Run `pnpm format:fix && pnpm validate`.
 
-When a real-world audit failure surfaces (wrong recommendation, missed context), encode it as an eval scenario under `skills/phase/evals/scenarios/` (see `ssr-semantics-guard` for the pattern) so it can never regress silently.
+When a real-world audit failure surfaces (wrong recommendation, missed context), encode it as an eval scenario under `skills/phase/evals/scenarios/` (see `ssr-semantics-guard` for the pattern) so it can never regress silently. If a fixture workspace needs a `package.json`, keep it free of `scripts` and `dependencies`: pnpm's recursive runs discover nested projects, so a fixture script named `test` or `lint` would execute during `pnpm validate`.
 
 ## Before committing
 
