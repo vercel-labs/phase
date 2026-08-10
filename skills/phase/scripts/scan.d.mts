@@ -25,10 +25,6 @@ export interface ScanSignal {
   supersedes?: string;
   fileTypes?: string | string[];
   perFile?: boolean;
-  examples: {
-    match: ScanExample[];
-    noMatch: ScanExample[];
-  };
 }
 
 export interface ScanFinding {
