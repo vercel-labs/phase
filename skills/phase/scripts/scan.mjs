@@ -1236,6 +1236,9 @@ function enclosingBlock(lines, lineIndex) {
   let best = null;
   for (const range of ranges) {
     if (range.start > lineIndex || range.end < lineIndex) continue;
+    // Same-line destructuring (`draw: ({ ctx }) => {`) is not the callback
+    // body. A one-line callback still falls back to the local context window.
+    if (range.end === lineIndex) continue;
     if (best === null || range.end - range.start < best.end - best.start) {
       best = range;
     }
