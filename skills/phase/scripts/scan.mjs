@@ -251,6 +251,9 @@ export function formatText(result) {
 // are legitimate inside frame callbacks. The exclusions accept rare false
 // negatives when a React setter shares a DOM setter name (e.g. setSelection,
 // setTransform): missing one candidate beats flagging the recommended pattern.
+// Known accepted FP class (calibrated): non-React `dispatch(` from editor or
+// store libraries (e.g. a CodeMirror transaction) near a rAF; the noise tier
+// covers it, and distinguishing them line-based is not worth the complexity.
 const STATE_UPDATE_CONTEXT =
   /\bsetState\s*\(|\bdispatch\s*\(|\bset(?!Timeout\b|Interval\b|Immediate\b|Attribute|Property\b|PointerCapture\b|Item\b|Selection|RangeText\b|CustomValidity\b|Transform\b|LineDash\b|SinkId\b|RequestHeader\b)[A-Z]\w*\s*\(/;
 

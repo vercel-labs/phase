@@ -188,7 +188,7 @@ Severity and noise mirror the scanner's catalog; a repo check fails CI when this
 | `core-primitive-in-component`    | medium   | noisy   | `createLoop`/`createTicker`/`createLifecycle`/`createSight` in a component **(JSX)** | [decision-guide.md](./decision-guide.md#common-mistakes)                                                                   |
 | `manual-synced-ref`              | dedup    | precise | `useRef(v)` + unconditional `ref.current = v` (shorthand exists)                     | [use-synced-ref.md](./use-synced-ref.md)                                                                                   |
 
-> Manual heuristics the scanner cannot see: CSS-in-JS (styled-components, vanilla-extract) and non-Tailwind class systems; `getBoundingClientRect()` used only for an initial in-view check; and hand-wired "IO + visibilitychange + reduced motion → boolean" gates. See [Common replacements](#common-replacements).
+> Manual heuristics the scanner cannot see: CSS-in-JS (styled-components, emotion, vanilla-extract) hides the CSS signals entirely (JS signals still fire); Vue/Svelte/Astro single-file components are not scanned at all; in React Native code, `missing-reduced-motion` findings need judgment (the fix is the platform's reduced-motion API, not a CSS media query); `getBoundingClientRect()` used only for an initial in-view check; and hand-wired "IO + visibilitychange + reduced motion → boolean" gates. See [Common replacements](#common-replacements).
 
 ## Step 1.5: CSS, loading, and architecture pass
 

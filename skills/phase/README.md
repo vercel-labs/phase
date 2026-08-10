@@ -36,7 +36,7 @@ The agent reads `SKILL.md` → `references/audit.md`, runs the scanner, then cla
 
 ### Why you can trust the recommendations
 
-Findings are candidates, not verdicts: each carries a severity (how bad if real) and a calibrated noise tier (how much to trust the detection, backed by [a committed calibration log](evals/calibration.md)). Before recommending anything, the agent must verify the blast radius (framework, SSR, Next.js PPR; the scanner detects and stamps these) and label any recommendation that changes rendering semantics, which requires your explicit consent. Issues outside phase's domain (data fetching, bundling, server components) are reported and handed to the right skill, never improvised.
+Findings are candidates, not verdicts: each carries a severity (how bad if real) and a noise tier (how much to trust the detection), calibrated by hand-classifying findings across a dozen production open-source codebases; every observed false-positive class is encoded as an executable regression example in the test suite. Before recommending anything, the agent must verify the blast radius (framework, SSR, Next.js PPR; the scanner detects and stamps these) and label any recommendation that changes rendering semantics, which requires your explicit consent. Issues outside phase's domain (data fetching, bundling, server components) are reported and handed to the right skill, never improvised.
 
 ### Scanner CLI
 

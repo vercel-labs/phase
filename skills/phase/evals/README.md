@@ -1,6 +1,6 @@
 # phase skill evals
 
-Seed scenarios for evaluating an agent using the phase skill, plus the scanner's [calibration log](./calibration.md) (evidence behind every noise tier). Contributor tooling only: this directory is excluded from the consumer zip, from lint, and from formatting (fixtures are frozen test data; the goldens pin `file:line` positions).
+Seed scenarios for evaluating an agent using the phase skill. Contributor tooling only: this directory is excluded from the consumer zip, from lint, and from formatting (fixtures are frozen test data; the goldens pin `file:line` positions). Scanner noise tiers are calibrated against real codebases per the "Recalibrating the scanner" procedure in the repo's `AGENTS.md`; outcomes are encoded as executable `noMatch` examples and detection fixes, not committed as per-repo scorecards.
 
 ## Structure
 
