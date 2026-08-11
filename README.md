@@ -1312,7 +1312,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `createTicker`            |             855 B |
 | `createSight`             |             967 B |
 | `createLifecycle`         |           1.48 kB |
-| `createLoop`              |            2.7 kB |
+| `createLoop`              |           2.71 kB |
 | `createScrollProgress`    |             866 B |
 | `createRenderState`       |             495 B |
 | `createDevicePixelRatio`  |             546 B |
@@ -1326,10 +1326,10 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           2.97 kB |
+| `useLoop`                 |           2.98 kB |
 | `useLifecycle`            |           1.71 kB |
 | `useSight`                |           1.18 kB |
-| `useCanvas`               |           3.68 kB |
+| `useCanvas`               |            3.7 kB |
 | `useMutation`             |           1.36 kB |
 | `usePointer`              |           1.48 kB |
 | `useScroll`               |           1.72 kB |

@@ -59,7 +59,12 @@ export interface UseLoopResult<T extends Element = HTMLDivElement> {
   ref: RefObject<T | null>;
   phase: LoopPhase;
   phaseReason: LoopReason;
-  /** Always-current quality state. Quality changes do not trigger a render. */
+  /**
+   * Always-current quality state, read through a getter: access it where you
+   * need it (`result.quality`) rather than destructuring, which snapshots the
+   * value. Quality changes never trigger a render; use `onQualityChange` to be
+   * notified.
+   */
   quality: Quality;
   /** Active signal; `'unfocused'` has reporting priority when both are active. */
   qualityReason: DegradedReason | undefined;

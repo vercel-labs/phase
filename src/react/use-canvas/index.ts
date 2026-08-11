@@ -73,7 +73,12 @@ export interface UseCanvasResult {
   restart: () => void;
   phase: LoopPhase;
   phaseReason: LoopReason;
-  /** Always-current quality state. Quality changes do not trigger a render. */
+  /**
+   * Always-current quality state, read through a getter: access it where you
+   * need it (`result.quality`) rather than destructuring, which snapshots the
+   * value. Quality changes never trigger a render; use `onQualityChange` to be
+   * notified.
+   */
   quality: Quality;
   /** Active signal; `'unfocused'` has reporting priority when both are active. */
   qualityReason: DegradedReason | undefined;
@@ -87,10 +92,6 @@ const INITIAL_STATE: CanvasState = {
   phase: 'idle',
   phaseReason: 'initial',
 };
-
-// A paused loop delivers no frames, so the reduced-motion static paint draws
-// with a fixed zero-timeline frame. Module-level and reused: never mutated.
-const STATIC_FRAME: FrameState = { time: 0, delta: 0, elapsed: 0, frame: 0 };
 
 /**
  * Canvas-specific animation with DPR-aware sizing, ResizeObserver coalescing,
@@ -161,6 +162,11 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
     let contextLost = false;
     let loopInstance: ReturnType<typeof createLoop> | null = null;
 
+    // A paused loop delivers no frames, so the reduced-motion paint supplies a
+    // zero timeline. Owned per instance: a consumer that mutates the frame it
+    // receives cannot corrupt another canvas.
+    const staticFrame: FrameState = { time: 0, delta: 0, elapsed: 0, frame: 0 };
+
     // --- Canvas buffer sizing ---
 
     // Last applied buffer state. Assigning canvas.width/height clears the
@@ -181,7 +187,7 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
       if (loopInstance?.phaseReason !== 'reduced-motion') return;
       if (loopInstance.phase !== 'paused') return;
       if (contextLost || !ctxRef.current) return;
-      drawRef.current(ctxRef.current, STATIC_FRAME, sizeRef.current);
+      drawRef.current(ctxRef.current, staticFrame, sizeRef.current);
     }
 
     function applySize(width: number, height: number): void {

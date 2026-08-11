@@ -83,6 +83,7 @@ Quality-driven FPS changes mutate the ticker's scheduling gate in place: `frame.
 - **Never call React `setState` inside `onTick`.** It fires 60 times/sec. Write to refs or DOM directly.
 - **Never allocate intermediate objects inside `onTick`.** No objects, arrays, closures, maps, filters, or spreads. `FrameState` is mutated in place; reuse external variables. A final string assigned directly to a DOM style is the unavoidable output boundary.
 - **Never store a reference to `frame`.** It's the same object every tick, mutated in place. Read values immediately.
+- **Don't reference the loop instance inside `onPhaseChange` / `onQualityChange` without a guard.** With `start: 'auto'` (or an already-unfocused window) the first callback fires synchronously during `createLoop`, before the instance exists.
 - **Don't call `pause()` / `resume()` on a loop.** Suspension is signal-driven. Use `createLifecycle` / `useLifecycle` for manual pause, or `useLoop({ enabled })` in React.
 - **Don't call `start()` after `stop()`.** `stop()` is terminal. Create a new loop instance.
 - **Don't use `createLoop` without an element.** Throws `PhaseError` with code `no_element`.

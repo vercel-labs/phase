@@ -34,7 +34,7 @@ const { restart, phase, phaseReason, quality, qualityReason, qualityBehavior } =
 | `restart`         | `() => void`                    | Tear down and rebuild (e.g. after config change)                                                 |
 | `phase`           | `LoopPhase`                     | Current loop phase                                                                               |
 | `phaseReason`     | `LoopReason`                    | `'initial' \| 'started' \| 'resumed' \| 'sight' \| 'reduced-motion' \| 'degraded' \| 'disposed'` |
-| `quality`         | `Quality`                       | Always-current signal state; no quality-only render                                              |
+| `quality`         | `Quality`                       | Always-current signal state (getter; do not destructure); no quality-only render                 |
 | `qualityReason`   | `DegradedReason \| undefined`   | Always-current reason; unfocused reports first when both are active                              |
 | `qualityBehavior` | `DegradedBehavior \| undefined` | Always-current resolved behavior after precedence                                                |
 

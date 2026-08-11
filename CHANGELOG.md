@@ -16,6 +16,8 @@
 - **Changed:** `useCanvas` applies 1x DPR only while throttling, skips redundant buffer reallocation, and keeps the exact physical pixel box across quality transitions.
 - **Changed:** `useTween` reads updated easing callbacks without restarting.
 - **Fixed:** Reentrant `stop()` from `onTick` or `onQualityChange` halts delivery, timers, and teardown-time ticker resurrection.
+- **Fixed:** A non-positive or non-finite `fps` no longer disables frame-budget detection or trips it on every frame.
+- **Fixed:** Frame-budget detection restarts at fps changes and pauses, so a cross-cadence gap or a stale partial count cannot trigger a false degrade.
 
 ## 0.0.9
 

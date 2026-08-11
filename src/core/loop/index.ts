@@ -54,7 +54,10 @@ export interface LoopOptions {
    * `setState` here (60 calls/sec = 60 re-renders/sec).
    */
   onTick: (frame: FrameState) => void;
-  /** Base FPS cap. Default: uncapped (display refresh rate). */
+  /**
+   * Base FPS cap. Default: uncapped (display refresh rate). Values that are
+   * not positive and finite are treated as uncapped.
+   */
   fps?: number;
   /** Behavior when the user prefers reduced motion. Default `'pause'`. */
   reducedMotion?: LoopReducedMotion;
@@ -77,9 +80,18 @@ export interface LoopOptions {
   intersectionOptions?: IntersectionObserverInit;
   /** Whether to start honoring signals immediately. Default `'auto'`. */
   start?: 'auto' | 'manual';
-  /** Called on every loop phase or phase-reason transition. */
+  /**
+   * Called on every loop phase or phase-reason transition. With the default
+   * `start: 'auto'` the first transition fires synchronously during
+   * `createLoop`, before it returns, so do not reference the loop instance
+   * from this callback without guarding for it.
+   */
   onPhaseChange?: (phase: LoopPhase, reason: LoopReason) => void;
-  /** Called when quality, reporting-priority reason, or resolved behavior changes. */
+  /**
+   * Called when quality, reporting-priority reason, or resolved behavior
+   * changes. Fires synchronously during `createLoop` when the window is
+   * already unfocused (see `onPhaseChange` for the instance caveat).
+   */
   onQualityChange?: QualityChangeCallback;
   /** Abort signal that stops the loop when aborted. */
   signal?: AbortSignal;
@@ -192,10 +204,16 @@ export function createLoop(options: LoopOptions): Loop {
   let overBudgetCount = 0;
 
   // Frame-budget measurement: raw gap between delivered frames against 1.5x
-  // the current target interval. 0 = no previous frame (start or resume), so
-  // pause gaps never count as jank.
+  // the current target interval. 0 = no previous frame (start, resume, or an
+  // fps change), so pause gaps and cross-cadence gaps never count as jank.
   let lastBudgetTime = 0;
-  let budgetThreshold: number = 1500 / 60;
+  let budgetThreshold = 0;
+
+  // The fps currently applied to the ticker, tracked so an unchanged value
+  // skips the (measurement-resetting) re-apply. `undefined` is a real value
+  // here (uncapped), so a separate flag marks "never applied".
+  let appliedFps: number | undefined;
+  let hasAppliedFps = false;
 
   // Pending optimistic frame-budget recovery timer (see RECOVERY_RETRY_MS).
   let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -290,10 +308,23 @@ export function createLoop(options: LoopOptions): Loop {
     return Math.min(baseFps, throttleFps);
   }
 
-  /** Sync the ticker's FPS gate and the budget threshold to the resolved fps. */
+  /**
+   * Sync the ticker's FPS gate and the budget threshold to the resolved fps.
+   * A non-positive or non-finite `fps` leaves the ticker uncapped, so the
+   * threshold falls back to the 60fps budget rather than becoming Infinity,
+   * negative, or NaN (which would disable or constantly trip detection).
+   */
   function applyEffectiveFps(): void {
     const fps: number | undefined = getEffectiveFps();
-    budgetThreshold = 1500 / (fps ?? 60);
+    if (hasAppliedFps && fps === appliedFps) return;
+    hasAppliedFps = true;
+    appliedFps = fps;
+
+    budgetThreshold = 1500 / (fps !== undefined && fps > 0 ? fps : 60);
+    // A gap produced under the previous cadence must not be measured against
+    // the new threshold; start measuring fresh from the next delivered frame.
+    lastBudgetTime = 0;
+    overBudgetCount = 0;
     ticker?.setFps(fps);
   }
 
@@ -352,15 +383,16 @@ export function createLoop(options: LoopOptions): Loop {
 
     if (!ticker) {
       // First activation: stop() is terminal, so this runs once per loop.
-      const fps: number | undefined = getEffectiveFps();
-      budgetThreshold = 1500 / (fps ?? 60);
-      ticker = createTicker({ fps, onTick: loopTick });
+      applyEffectiveFps(); // resolves appliedFps + budget threshold
+      ticker = createTicker({ fps: appliedFps, onTick: loopTick });
       ticker.start();
       setPhase('running', _reason === 'initial' ? 'started' : 'resumed');
     } else if (_phase === 'paused') {
       // The ticker excludes paused time and resets its own delta; the budget
-      // measurement starts fresh so the pause gap never reads as jank.
+      // measurement starts fresh so neither the pause gap nor a stale
+      // consecutive count carries across the pause.
       lastBudgetTime = 0;
+      overBudgetCount = 0;
       ticker.resume();
       setPhase('running', 'resumed');
     }

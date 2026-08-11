@@ -33,7 +33,7 @@ const { ref, phase, phaseReason, quality, qualityReason, qualityBehavior } =
 | `ref`             | `RefObject<T \| null>`          | Attach to the animated element                                                                   |
 | `phase`           | `LoopPhase`                     | `'idle' \| 'running' \| 'paused' \| 'stopped'`                                                   |
 | `phaseReason`     | `LoopReason`                    | `'initial' \| 'started' \| 'resumed' \| 'sight' \| 'reduced-motion' \| 'degraded' \| 'disposed'` |
-| `quality`         | `Quality`                       | Always-current signal state; no quality-only render                                              |
+| `quality`         | `Quality`                       | Always-current signal state (getter; do not destructure); no quality-only render                 |
 | `qualityReason`   | `DegradedReason \| undefined`   | Always-current reason; unfocused reports first when both are active                              |
 | `qualityBehavior` | `DegradedBehavior \| undefined` | Always-current resolved behavior after precedence                                                |
 

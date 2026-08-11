@@ -4,6 +4,12 @@ import { createMockMatchMedia } from '../../__mocks__/match-media';
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 let mockMM: ReturnType<typeof createMockMatchMedia>;
 
+// Every loop built in a test is stopped in afterEach. A failed assertion skips
+// the `loop.stop()` at the end of a test body, and a live loop keeps its window
+// focus listeners: it would then re-enter on the next test's blur/focus event,
+// re-register rAF, and hijack the manual clock from the loop under test.
+const openLoops: Array<{ stop: () => void }> = [];
+
 beforeEach(() => {
   vi.useFakeTimers();
   mockIO = createMockIntersectionObserver();
@@ -19,13 +25,20 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const loop of openLoops.splice(0)) loop.stop();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.resetModules();
 });
 
 async function getModule() {
-  return import('.');
+  const mod = await import('.');
+  const createLoop: typeof mod.createLoop = (options) => {
+    const loop = mod.createLoop(options);
+    openLoops.push(loop);
+    return loop;
+  };
+  return { ...mod, createLoop };
 }
 
 function makeSightVisible(el: Element): void {
@@ -600,6 +613,83 @@ describe('quality signal - frame budget', () => {
     clock.advance(16);
     expect(loop.quality).toBe('full');
     expect(onQualityChange).toHaveBeenCalledTimes(2); // degrade, recover
+    clock.restore();
+    loop.stop();
+  });
+
+  it('a non-positive fps cap falls back to the 60fps budget', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    // fps: 0 leaves the ticker uncapped; the threshold must not become
+    // Infinity (detection dead) or negative (every frame trips instantly).
+    const loop = createLoop({ element: el, onTick: vi.fn(), fps: 0 });
+    makeSightVisible(el);
+
+    clock.advance(16); // healthy frames at the 60fps fallback threshold
+    clock.advance(16);
+    clock.advance(16);
+    clock.advance(16);
+    expect(loop.quality).toBe('full');
+
+    degradeViaBudget(clock); // sustained 35ms gaps still degrade
+    expect(loop.quality).toBe('degraded');
+    expect(loop.qualityReason).toBe('frame-budget');
+    clock.restore();
+    loop.stop();
+  });
+
+  it('does not measure a gap produced under the previous fps cap', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const onQualityChange = vi.fn();
+    const loop = createLoop({ element: el, onTick: vi.fn(), onQualityChange });
+    makeSightVisible(el);
+
+    degradeViaBudget(clock); // degrade -> 30fps
+    expect(onQualityChange).toHaveBeenCalledTimes(1);
+
+    // Recovery restores full speed, tightening the threshold to 25ms. The
+    // boundary gap was produced under the 30fps cadence, so it must not be
+    // measured: only two of these three 33ms gaps may count, leaving the loop
+    // one short of re-degrading.
+    await vi.advanceTimersByTimeAsync(RECOVERY_RETRY_MS);
+    expect(loop.quality).toBe('full');
+    clock.advance(33);
+    clock.advance(33);
+    clock.advance(33);
+    expect(loop.quality).toBe('full');
+    expect(onQualityChange).toHaveBeenCalledTimes(2); // degrade, recover
+
+    // A fourth genuinely-late frame does re-degrade: detection is not disabled.
+    clock.advance(33);
+    expect(loop.quality).toBe('degraded');
+    expect(loop.qualityReason).toBe('frame-budget');
+    clock.restore();
+    loop.stop();
+  });
+
+  it('does not carry a stale over-budget count across a pause', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const loop = createLoop({ element: el, onTick: vi.fn() });
+    makeSightVisible(el);
+
+    // Two consecutive over-budget frames: one short of the threshold.
+    clock.advance(16);
+    clock.advance(OVER_BUDGET_DELTA);
+    clock.advance(OVER_BUDGET_DELTA);
+    expect(loop.quality).toBe('full');
+
+    makeSightHidden(el);
+    makeSightVisible(el); // resume clears the partial count
+
+    // A single post-resume over-budget frame must not complete the old streak.
+    clock.advance(16); // first frame after resume: no gap to measure
+    clock.advance(OVER_BUDGET_DELTA);
+    expect(loop.quality).toBe('full');
     clock.restore();
     loop.stop();
   });
