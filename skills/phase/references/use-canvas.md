@@ -13,19 +13,19 @@ const { restart, phase, phaseReason, quality, qualityReason, qualityBehavior } =
 
 ### Options
 
-| Option                | Type                                   | Default      | Description                                             |
-| --------------------- | -------------------------------------- | ------------ | ------------------------------------------------------- |
-| `containerRef`        | `RefObject<Element \| null>`           | required     | Element that determines canvas size                     |
-| `canvasRef`           | `RefObject<HTMLCanvasElement \| null>` | required     | The `<canvas>` element                                  |
-| `draw`                | `CanvasDrawFn`                         | required     | Called every frame                                      |
-| `fps`                 | `number`                               | none         | Base FPS cap; uncapped uses display refresh             |
-| `enabled`             | `boolean`                              | `true`       | When `false`, tears down everything                     |
-| `reducedMotion`       | `'pause' \| 'ignore'`                  | `'pause'`    | Behavior under reduced motion                           |
-| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'`    | `'pause'`    | Behavior while the window is unfocused                  |
-| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'`    | `'throttle'` | Behavior after 3 frames exceed 1.5x the target interval |
-| `throttleFps`         | `number`                               | `30`         | Shared throttle cap; never raises a lower `fps`         |
-| `intersectionOptions` | `IntersectionObserverInit`             | none         | Forwarded to visibility; value changes rebuild the loop |
-| `onQualityChange`     | `QualityChangeCallback`                | none         | Transient notification; does not trigger a render       |
+| Option                | Type                                   | Default      | Description                                                     |
+| --------------------- | -------------------------------------- | ------------ | --------------------------------------------------------------- |
+| `containerRef`        | `RefObject<Element \| null>`           | required     | Element that determines canvas size                             |
+| `canvasRef`           | `RefObject<HTMLCanvasElement \| null>` | required     | The `<canvas>` element                                          |
+| `draw`                | `CanvasDrawFn`                         | required     | Called every frame                                              |
+| `fps`                 | `number`                               | none         | Base FPS cap; uncapped uses display refresh                     |
+| `enabled`             | `boolean`                              | `true`       | When `false`, tears down everything                             |
+| `reducedMotion`       | `'pause' \| 'ignore'`                  | `'pause'`    | Behavior under reduced motion                                   |
+| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'`    | `'pause'`    | Behavior while the window is unfocused                          |
+| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'`    | `'throttle'` | Behavior after 3 raw frame gaps exceed 1.5x the target interval |
+| `throttleFps`         | `number`                               | `30`         | Shared throttle cap; never raises a lower `fps`                 |
+| `intersectionOptions` | `IntersectionObserverInit`             | none         | Forwarded to visibility; value changes rebuild the loop         |
+| `onQualityChange`     | `QualityChangeCallback`                | none         | Transient notification; does not trigger a render               |
 
 ### Return
 
@@ -71,7 +71,7 @@ const { restart, phase, phaseReason, quality, qualityReason, qualityBehavior } =
 - Draw in CSS pixels. `ctx` is already scaled for `devicePixelRatio`. DPR changes (e.g. dragging between monitors) are tracked reactively, including chained switches (A -> B -> C).
 - Use `frameBudget: 'pause'` for heavy GPU work that can't gracefully degrade.
 - Read always-current `quality`/`qualityReason`/`qualityBehavior` to adapt rendering (fewer particles, simpler shaders), including under `'ignore'`. They do not cause quality-only React renders; use `onQualityChange` for transient notification. The buffer drops to 1x DPR only while `qualityBehavior` is `'throttle'`. Paused and ignored signals keep full resolution.
-- Frame-budget throttle does not auto-recover from good throttled frames alone; another quality reconciliation must observe recovery. `frameBudget: 'pause'` retries after 2 seconds. See [createLoop](./create-loop.md#frame-budget-recovery).
+- Every frame-budget degrade schedules a 2-second optimistic re-measure that restores full speed and re-degrades if jank persists. See [createLoop](./create-loop.md#frame-budget-recovery).
 - For 3D overlays on DOM elements, pair with `useSize({ box: 'border-box' })` for the target element's dimensions. Use a separate container for the canvas (the RO pool allows one observer per element, so sharing a ref between `useSize` and `useCanvas` would clobber one subscription). If you also need viewport-relative position (DOM-to-WebGL coordinate mapping), that requires `getBoundingClientRect()` on scroll/resize in a custom hook, since no async observer exists for element position:
 
   ```tsx
@@ -92,7 +92,7 @@ const { restart, phase, phaseReason, quality, qualityReason, qualityBehavior } =
 
 ## Reduced motion
 
-Default `'pause'`: the canvas paints exactly one static frame (`elapsed: 0`) once the container is first visible, then stops. It is never left blank. There is no `'complete'` for canvas loops; draw your reduced-motion state on that single frame.
+Default `'pause'`: the loop delivers no frames, and the canvas paints one static frame (zero timeline: `elapsed: 0`) each time its buffer is created or resized, so it is never left blank even when a resize clears the bitmap. There is no `'complete'` for canvas loops; draw your reduced-motion state on that static frame.
 
 ## See also
 

@@ -214,10 +214,10 @@ loop.start();
 
 Two signals trigger degradation, and each has its own behavior:
 
-| Trigger      | `qualityReason`  | When                                                                         | Default behavior                                 | Recovery                                           |
-| ------------ | ---------------- | ---------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------- |
-| Window blur  | `'unfocused'`    | User switches to another window                                              | `'pause'`; timeline freezes and resumes in place | Resumes on window focus                            |
-| Frame budget | `'frame-budget'` | 3 consecutive frames exceed 1.5x the current target interval (25ms at 60fps) | `'throttle'`; FPS capped (30 by default)         | Does not auto-recover (throttle); 2s retry (pause) |
+| Trigger      | `qualityReason`  | When                                                                                 | Default behavior                                 | Recovery                                 |
+| ------------ | ---------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------ | ---------------------------------------- |
+| Window blur  | `'unfocused'`    | User switches to another window                                                      | `'pause'`; timeline freezes and resumes in place | Resumes on window focus                  |
+| Frame budget | `'frame-budget'` | 3 consecutive raw frame gaps exceed 1.5x the current target interval (25ms at 60fps) | `'throttle'`; FPS capped (30 by default)         | 2s optimistic re-measure (all behaviors) |
 
 Read `loop.quality`, `loop.qualityReason`, and `loop.qualityBehavior` to adapt rendering (fewer particles, lower-fidelity shaders, skip non-essential visual passes). Quality is observable regardless of the configured behavior. Even `'ignore'` reports it. When both signals are active, `qualityReason` reports `'unfocused'`, while `qualityBehavior` reports the independently resolved behavior after applying `pause` > `throttle` > `ignore`.
 
@@ -260,7 +260,7 @@ createLoop({
 | `onQualityChange`     | `QualityChangeCallback`             | none         | Called whenever quality, reason, or resolved behavior changes |
 | `signal`              | `AbortSignal`                       | none         | Stops the loop when aborted                                   |
 
-Under `reducedMotion: 'pause'` every loop consumer receives exactly one static frame (`elapsed: 0`) once the element is first visible, then stays paused. This is especially important for canvas, which would otherwise stay blank. Loops have no `'complete'`: an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (e.g. Tailwind's `motion-reduce:`), or use `useTween` for values with a defined target.
+Under `reducedMotion: 'pause'` the loop is strongly paused: zero scheduling, zero callbacks. Reduced-motion users see the initial markup, so author the reduced-motion state in markup or CSS (e.g. Tailwind's `motion-reduce:`). Canvas is the exception: `useCanvas` paints one static frame (`elapsed: 0`) each time its buffer is created or resized, so the surface is never blank. Loops have no `'complete'`: an open-ended loop has no end state the library can know; use `useTween` for values with a defined target.
 
 `createLoop` has no imperative `pause()` or `resume()`. Signals own suspension. For manual suspension, use `createLifecycle`; in React, toggle `useLoop({ enabled })`.
 
@@ -281,6 +281,8 @@ ticker.start();
 ```
 
 All tickers share a single `requestAnimationFrame` loop. Every subscriber reads the same `performance.now()` value each frame, so independent animations stay in visual sync.
+
+`setFps(fps?)` changes the FPS cap in place: only the scheduling gate changes, so `elapsed`, `delta`, the frame count, and `FrameState` identity stay continuous, and no early frame leaks through the new cap. `createLoop` uses this for quality-driven throttling.
 
 #### Ticker phases
 
@@ -336,19 +338,18 @@ lifecycle.resume();
 lifecycle.stop();
 ```
 
-The raw sight signal is also available as `lifecycle.visible` and through `onVisibleChange(visible)`. Use these when you need visibility independently of the composed phase, such as when reduced motion outranks sight and keeps the phase paused.
+For raw visibility independent of the composed pause priority (with detailed viewport/document/bfcache reasons), use [`createSight`](#createsight) directly.
 
 #### Lifecycle options
 
-| Option                | Type                                                       | Default   | Description                                               |
-| --------------------- | ---------------------------------------------------------- | --------- | --------------------------------------------------------- |
-| `element`             | `Element`                                                  | required  | Element whose visibility gates the lifecycle              |
-| `reducedMotion`       | `'pause' \| 'ignore'`                                      | `'pause'` | Whether reduced motion pauses                             |
-| `intersectionOptions` | `IntersectionObserverInit`                                 | none      | Forwarded to the pooled visibility observer               |
-| `start`               | `'auto' \| 'manual'`                                       | `'auto'`  | Whether to honor signals immediately                      |
-| `onPhaseChange`       | `(phase: LifecyclePhase, reason: LifecycleReason) => void` | none      | Called on composed phase transitions                      |
-| `onVisibleChange`     | `(visible: boolean) => void`                               | none      | Called on raw sight changes independent of pause priority |
-| `signal`              | `AbortSignal`                                              | none      | Stops the lifecycle when aborted                          |
+| Option                | Type                                                       | Default   | Description                                  |
+| --------------------- | ---------------------------------------------------------- | --------- | -------------------------------------------- |
+| `element`             | `Element`                                                  | required  | Element whose visibility gates the lifecycle |
+| `reducedMotion`       | `'pause' \| 'ignore'`                                      | `'pause'` | Whether reduced motion pauses                |
+| `intersectionOptions` | `IntersectionObserverInit`                                 | none      | Forwarded to the pooled visibility observer  |
+| `start`               | `'auto' \| 'manual'`                                       | `'auto'`  | Whether to honor signals immediately         |
+| `onPhaseChange`       | `(phase: LifecyclePhase, reason: LifecycleReason) => void` | none      | Called on composed phase transitions         |
+| `signal`              | `AbortSignal`                                              | none      | Stops the lifecycle when aborted             |
 
 `createLoop` is built on `createLifecycle` (it adds a ticker and quality signals on top). Loop-level optimizations (shared clock, zero-allocation `FrameState`, delta clamping, FPS cap, strong pause) only apply when `phase` drives the loop. Lifecycle-level optimizations (pooled observers, composed document-visibility + bfcache + viewport, reduced motion) carry over to consumer-owned loops.
 
@@ -788,12 +789,14 @@ return (
 
 Returns `restart`, reactive `phase`/`phaseReason`, and always-current `quality`/`qualityReason`/`qualityBehavior` getters.
 
-| Concern      | How useCanvas handles it                                                                                                            |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| DPR (retina) | Uses `devicePixelContentBoxSize` for exact physical pixels when available, falls back to `width * dpr`. Listens for DPR changes.    |
-| Resize       | Shared ResizeObserver. Canvas resized on container change. No `getBoundingClientRect`.                                              |
-| Context loss | Listens for `contextlost`/`contextrestored`. Skips draws while lost and resumes drawing after restoration.                          |
-| Quality      | While a signal is configured to throttle and the loop is running, DPR drops to 1x. Paused and ignored signals keep full resolution. |
+| Concern        | How useCanvas handles it                                                                                                                         |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| DPR (retina)   | Uses `devicePixelContentBoxSize` for exact physical pixels when available, falls back to `width * dpr`. Listens for DPR changes.                 |
+| Resize         | Shared ResizeObserver. Canvas resized on container change. No `getBoundingClientRect`.                                                           |
+| Context loss   | Listens for `contextlost`/`contextrestored`. Skips draws while lost; restoration rebuilds the buffer and repaints.                               |
+| Quality        | While the resolved quality behavior is throttle, DPR drops to 1x. Paused and ignored signals keep full resolution.                               |
+| Reduced motion | Paints one static frame (`elapsed: 0`) per buffer creation or resize, so a paused canvas is never blank.                                         |
+| Reallocation   | Skips redundant `canvas.width`/`height` writes (each write clears the bitmap) and keeps the exact physical pixel box across quality transitions. |
 
 `useLoop` and `useCanvas` share the loop controls `fps`, `enabled`, `reducedMotion`, `unfocused`, `frameBudget`, `throttleFps`, `intersectionOptions`, and `onQualityChange`. Their quality getters are always current even when the loop remains running, without causing a React render. For heavy GPU work, consider `frameBudget: 'pause'`.
 
@@ -1306,10 +1309,10 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |             834 B |
+| `createTicker`            |             855 B |
 | `createSight`             |             967 B |
-| `createLifecycle`         |            1.5 kB |
-| `createLoop`              |           2.89 kB |
+| `createLifecycle`         |           1.48 kB |
+| `createLoop`              |            2.7 kB |
 | `createScrollProgress`    |             866 B |
 | `createRenderState`       |             495 B |
 | `createDevicePixelRatio`  |             546 B |
@@ -1323,10 +1326,10 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           3.17 kB |
-| `useLifecycle`            |           1.74 kB |
+| `useLoop`                 |           2.97 kB |
+| `useLifecycle`            |           1.71 kB |
 | `useSight`                |           1.18 kB |
-| `useCanvas`               |           3.85 kB |
+| `useCanvas`               |           3.68 kB |
 | `useMutation`             |           1.36 kB |
 | `usePointer`              |           1.48 kB |
 | `useScroll`               |           1.72 kB |

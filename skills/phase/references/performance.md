@@ -134,7 +134,7 @@ createLoop({ element: el, onTick: draw, reducedMotion: 'ignore' });
 
 **Do:** Only use `'ignore'` for non-decorative motion (data visualization that communicates via movement, a game, an accessibility feature that uses motion).
 
-**End states belong in markup or CSS, not the loop.** A paused loop shows its first frame (loops paint exactly one static frame once visible, so canvases are never blank). When the reduced-motion experience should show the _finished_ composition instead, author it declaratively: hide the animated subtree and show a static complete version.
+**End states belong in markup or CSS, not the loop.** A reduced-motion paused loop delivers zero frames, so reduced-motion users see the initial markup (`useCanvas` is the exception: it paints one static frame per buffer creation so canvases are never blank). When the reduced-motion experience should show the _finished_ composition instead, author it declaratively: hide the animated subtree and show a static complete version.
 
 ```tsx
 <g className="motion-reduce:hidden">{/* animated segments */}</g>
@@ -192,7 +192,7 @@ onTick: (frame) => {
 
 **Do:** Use `frame.delta` and `frame.elapsed` — both account for pause time and clamping.
 
-`createLoop` owns the consumer timeline independently from its replaceable internal ticker. Quality-driven FPS rebuilds preserve `frame.elapsed`, `frame.delta`, `frame.frame`, and `FrameState` identity.
+Quality-driven FPS changes mutate the ticker's scheduling gate in place (`setFps`), so `frame.elapsed`, `frame.delta`, `frame.frame`, and `FrameState` identity are continuous through every throttle transition.
 
 ### Observer pooling
 

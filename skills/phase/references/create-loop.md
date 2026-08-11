@@ -12,20 +12,20 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 ### Options
 
-| Option                | Type                                | Default      | Description                                               |
-| --------------------- | ----------------------------------- | ------------ | --------------------------------------------------------- |
-| `element`             | `Element`                           | required     | Element to observe for visibility                         |
-| `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running                           |
-| `fps`                 | `number`                            | none         | Base FPS cap; uncapped uses display refresh               |
-| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior when user prefers reduced motion                 |
-| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused                    |
-| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after 3 frames exceed 1.5x the target interval   |
-| `throttleFps`         | `number`                            | `30`         | Shared throttle cap; never raises a lower `fps`           |
-| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to the underlying IO                            |
-| `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately                              |
-| `onPhaseChange`       | `(phase, reason) => void`           | none         | Called on every phase transition                          |
-| `onQualityChange`     | `QualityChangeCallback`             | none         | Called when quality, reason, or resolved behavior changes |
-| `signal`              | `AbortSignal`                       | none         | Stops the loop when the signal is aborted                 |
+| Option                | Type                                | Default      | Description                                                     |
+| --------------------- | ----------------------------------- | ------------ | --------------------------------------------------------------- |
+| `element`             | `Element`                           | required     | Element to observe for visibility                               |
+| `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running                                 |
+| `fps`                 | `number`                            | none         | Base FPS cap; uncapped uses display refresh                     |
+| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior when user prefers reduced motion                       |
+| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused                          |
+| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after 3 raw frame gaps exceed 1.5x the target interval |
+| `throttleFps`         | `number`                            | `30`         | Shared throttle cap; never raises a lower `fps`                 |
+| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to the underlying IO                                  |
+| `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately                                    |
+| `onPhaseChange`       | `(phase, reason) => void`           | none         | Called on every phase transition                                |
+| `onQualityChange`     | `QualityChangeCallback`             | none         | Called when quality, reason, or resolved behavior changes       |
+| `signal`              | `AbortSignal`                       | none         | Stops the loop when the signal is aborted                       |
 
 ### Return (Loop)
 
@@ -72,11 +72,11 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 ### Frame-budget recovery
 
-- `'throttle'`: quality remains degraded until another quality reconciliation observes recovery (for example, a focus event). Good throttled frames alone do not restore full quality.
-- `'pause'`: a 2-second timer optimistically resumes and re-measures. Another sustained over-budget sequence pauses and schedules the next retry.
-- `'ignore'`: quality remains observable, but phase, FPS, and canvas DPR are unchanged.
+A frame-budget degrade cannot clear itself: pause stops measuring entirely, and throttle widens the delivered gaps to match the cap. Every degrade therefore schedules the same 2-second optimistic re-measure, regardless of behavior: the loop restores full speed (or resumes) and re-measures; sustained jank re-trips the threshold within a few frames and reschedules. Under `'ignore'` quality is observable but phase, FPS, and canvas DPR never change.
 
-The consumer timeline belongs to the loop, not its replaceable internal ticker. Throttle-driven ticker rebuilds preserve `frame.elapsed`, `frame.delta`, `frame.frame`, and `FrameState` identity.
+Detection uses the raw gap between delivered frames, not the 40ms-clamped `frame.delta`, so degrades still trigger at low fps caps where the clamped value could never cross the threshold.
+
+Quality-driven FPS changes mutate the ticker's scheduling gate in place: `frame.elapsed`, `frame.delta`, `frame.frame`, and `FrameState` identity are continuous through every throttle transition, and the new cap applies from the very next frame.
 
 ## Don't
 
@@ -89,10 +89,10 @@ The consumer timeline belongs to the loop, not its replaceable internal ticker. 
 
 ## Reduced motion
 
-Default: `'pause'`. The loop pauses entirely when reduced motion is enabled (`phaseReason` is `'reduced-motion'`), after delivering exactly one static frame (`elapsed: 0`) once the element is first visible. Canvas surfaces therefore show their initial state instead of staying blank.
+Default: `'pause'`. The loop pauses entirely when reduced motion is enabled (`phaseReason` is `'reduced-motion'`): a strong pause, with zero scheduling and zero callbacks. Author the reduced-motion state in markup or CSS (`motion-reduce:`); for canvas, `useCanvas` paints one static frame per buffer creation so the surface is never blank.
 
 - `'ignore'`: Keep running regardless. Use only for non-decorative motion (e.g. a data visualization that conveys information via movement).
-- There is no `'complete'` for loops: an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (`motion-reduce:`), or use `useTween` for a value with a defined target.
+- There is no `'complete'` for loops: an open-ended loop has no end state the library can know. Use `useTween` for a value with a defined target.
 
 ## See also
 

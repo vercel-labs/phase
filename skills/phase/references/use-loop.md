@@ -13,18 +13,18 @@ const { ref, phase, phaseReason, quality, qualityReason, qualityBehavior } =
 
 ### Options
 
-| Option                | Type                                | Default      | Description                                             |
-| --------------------- | ----------------------------------- | ------------ | ------------------------------------------------------- |
-| `ref`                 | `RefObject<T \| null>`              | returned     | Bring your own ref, or attach the returned one          |
-| `onTick`              | `LoopTickFn`                        | required     | Called every frame (write to refs/DOM only)             |
-| `fps`                 | `number`                            | none         | Base FPS cap; uncapped uses display refresh             |
-| `enabled`             | `boolean`                           | `true`       | When `false`, tears down the loop (reports `idle`)      |
-| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior under reduced motion                           |
-| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused                  |
-| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after 3 frames exceed 1.5x the target interval |
-| `throttleFps`         | `number`                            | `30`         | Shared throttle cap; never raises a lower `fps`         |
-| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to IO                                         |
-| `onQualityChange`     | `QualityChangeCallback`             | none         | Transient notification; does not trigger a render       |
+| Option                | Type                                | Default      | Description                                                     |
+| --------------------- | ----------------------------------- | ------------ | --------------------------------------------------------------- |
+| `ref`                 | `RefObject<T \| null>`              | returned     | Bring your own ref, or attach the returned one                  |
+| `onTick`              | `LoopTickFn`                        | required     | Called every frame (write to refs/DOM only)                     |
+| `fps`                 | `number`                            | none         | Base FPS cap; uncapped uses display refresh                     |
+| `enabled`             | `boolean`                           | `true`       | When `false`, tears down the loop (reports `idle`)              |
+| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior under reduced motion                                   |
+| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused                          |
+| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after 3 raw frame gaps exceed 1.5x the target interval |
+| `throttleFps`         | `number`                            | `30`         | Shared throttle cap; never raises a lower `fps`                 |
+| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to IO                                                 |
+| `onQualityChange`     | `QualityChangeCallback`             | none         | Transient notification; does not trigger a render               |
 
 ### Return
 
@@ -81,11 +81,11 @@ const { ref, phase, phaseReason, quality, qualityReason, qualityBehavior } =
 
 Each signal has its own behavior; `pause` wins over `throttle` wins over `ignore` when both are active. The defaults pause on window blur (the timeline freezes and resumes in place on refocus, with no restart or catch-up) and throttle on frame-budget pressure. `quality`, `qualityReason`, and `qualityBehavior` stay current through refs even when the loop remains running, and stay observable under `'ignore'`. They do not cause quality-only React renders; use `onQualityChange` for transient notification. If both signals are active, the reason reports unfocused first while the behavior reports the independently resolved action. `throttleFps` is shared and cannot raise a lower base `fps`.
 
-Frame-budget throttle does not auto-recover from good throttled frames alone; another quality reconciliation must observe recovery. `frameBudget: 'pause'` retries after 2 seconds. See [createLoop](./create-loop.md#frame-budget-recovery) for the full matrix.
+Every frame-budget degrade schedules a 2-second optimistic re-measure: the loop restores full speed and re-degrades within a few frames if jank persists. See [createLoop](./create-loop.md#frame-budget-recovery).
 
 ## Reduced motion
 
-Default `'pause'`: the loop pauses with `phaseReason` `'reduced-motion'`, after painting exactly one static frame (`elapsed: 0`) once the element is first visible. There is no `'complete'` for loops because an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (`motion-reduce:`), or use `useTween` for a value with a defined target. Use `'ignore'` only for non-decorative motion.
+Default `'pause'`: the loop pauses with `phaseReason` `'reduced-motion'` and delivers zero frames (strong pause). Author the reduced-motion state in markup or CSS (`motion-reduce:`); the initial markup is what reduced-motion users see. There is no `'complete'` for loops because an open-ended loop has no end state the library can know; use `useTween` for a value with a defined target. Use `'ignore'` only for non-decorative motion.
 
 ## See also
 

@@ -20,14 +20,15 @@ const ticker = createTicker(options: TickerOptions): Ticker;
 
 ### Return (Ticker)
 
-| Property      | Type           | Description                                                     |
-| ------------- | -------------- | --------------------------------------------------------------- |
-| `start()`     | `() => void`   | Begin ticking                                                   |
-| `stop()`      | `() => void`   | Terminal (cannot restart)                                       |
-| `pause()`     | `() => void`   | Strong pause (cancels rAF subscription)                         |
-| `resume()`    | `() => void`   | Resume from pause                                               |
-| `phase`       | `TickerPhase`  | `'idle' \| 'running' \| 'paused' \| 'stopped'`                  |
-| `phaseReason` | `TickerReason` | `'initial' \| 'started' \| 'resumed' \| 'manual' \| 'disposed'` |
+| Property       | Type                     | Description                                                     |
+| -------------- | ------------------------ | --------------------------------------------------------------- |
+| `start()`      | `() => void`             | Begin ticking                                                   |
+| `stop()`       | `() => void`             | Terminal (cannot restart)                                       |
+| `pause()`      | `() => void`             | Strong pause (cancels rAF subscription)                         |
+| `resume()`     | `() => void`             | Resume from pause                                               |
+| `setFps(fps?)` | `(fps?: number) => void` | Change the FPS cap in place; the timeline never resets          |
+| `phase`        | `TickerPhase`            | `'idle' \| 'running' \| 'paused' \| 'stopped'`                  |
+| `phaseReason`  | `TickerReason`           | `'initial' \| 'started' \| 'resumed' \| 'manual' \| 'disposed'` |
 
 ### FrameState
 
@@ -55,6 +56,7 @@ const ticker = createTicker(options: TickerOptions): Ticker;
 ## Do
 
 - Use `pause()` / `resume()` for intentional suspension (e.g. user pauses a game).
+- Use `setFps()` to change speed mid-run: only the scheduling gate changes, so `elapsed`, `delta`, the frame count, and `FrameState` identity stay continuous and no early frame leaks through the new cap.
 - Rely on the shared clock: all tickers read the same `performance.now()` per frame, so multiple animations stay in sync.
 - Trust delta clamping: after a long pause, `frame.delta` is clamped to 40ms. No teleporting.
 

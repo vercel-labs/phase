@@ -12,15 +12,14 @@ const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
 
 ### Options
 
-| Option                | Type                                                       | Default   | Description                                                                            |
-| --------------------- | ---------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------- |
-| `element`             | `Element`                                                  | required  | Element to observe for visibility                                                      |
-| `reducedMotion`       | `'pause' \| 'ignore'`                                      | `'pause'` | Whether reduced motion pauses the lifecycle                                            |
-| `intersectionOptions` | `IntersectionObserverInit`                                 | none      | Forwarded to pooled IO                                                                 |
-| `start`               | `'auto' \| 'manual'`                                       | `'auto'`  | Whether to start immediately                                                           |
-| `onPhaseChange`       | `(phase: LifecyclePhase, reason: LifecycleReason) => void` | none      | Called on phase transitions                                                            |
-| `onVisibleChange`     | `(visible: boolean) => void`                               | none      | Raw sight signal, even when the phase swallows it (e.g. reduced motion outranks sight) |
-| `signal`              | `AbortSignal`                                              | none      | Stops the lifecycle when the signal is aborted                                         |
+| Option                | Type                                                       | Default   | Description                                    |
+| --------------------- | ---------------------------------------------------------- | --------- | ---------------------------------------------- |
+| `element`             | `Element`                                                  | required  | Element to observe for visibility              |
+| `reducedMotion`       | `'pause' \| 'ignore'`                                      | `'pause'` | Whether reduced motion pauses the lifecycle    |
+| `intersectionOptions` | `IntersectionObserverInit`                                 | none      | Forwarded to pooled IO                         |
+| `start`               | `'auto' \| 'manual'`                                       | `'auto'`  | Whether to start immediately                   |
+| `onPhaseChange`       | `(phase: LifecyclePhase, reason: LifecycleReason) => void` | none      | Called on phase transitions                    |
+| `signal`              | `AbortSignal`                                              | none      | Stops the lifecycle when the signal is aborted |
 
 ### Return (Lifecycle)
 
@@ -32,7 +31,6 @@ const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
 | `resume()`    | `() => void`      | Clear manual pause                                                                             |
 | `phase`       | `LifecyclePhase`  | `'idle' \| 'active' \| 'paused' \| 'stopped'`                                                  |
 | `phaseReason` | `LifecycleReason` | `'initial' \| 'started' \| 'resumed' \| 'sight' \| 'reduced-motion' \| 'manual' \| 'disposed'` |
-| `visible`     | `boolean`         | Current sight visibility, independent of the composed pause priority                           |
 
 ## When to use
 
@@ -59,7 +57,7 @@ const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
   ```
 - Use `pause()` / `resume()` for contextual suspension (modal open, panel covers animation).
 - Trust pause priority: `reduced-motion` > `sight` > `manual`. If multiple pause reasons apply, the highest-priority one is reported.
-- Read `visible` or subscribe with `onVisibleChange` when you need the composed sight boolean independently of pause priority. Use `createSight` directly when you need its detailed viewport/document/bfcache reason.
+- Use `createSight` directly when you need raw visibility independently of the composed pause priority (it also reports the detailed viewport/document/bfcache reason).
 - Gate a framework-free engine loaded via dynamic `import()`. Construct the lifecycle after the module resolves, drive the engine's imperative `start()` / `stop()` from `onPhaseChange`, and dispose both on teardown:
 
   ```ts

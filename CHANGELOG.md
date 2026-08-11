@@ -4,16 +4,18 @@
 
 ### Patch Changes
 
-- **Changed:** `createLoop` preserves frame timing and `FrameState` identity across ticker rebuilds.
+- **Added:** Added `Ticker.setFps` for in-place FPS cap changes with a continuous timeline.
+- **Changed:** `createLoop` keeps one persistent ticker; quality-driven FPS changes never reset `frame.elapsed`, `frame.delta`, `frame.frame`, or `FrameState` identity.
 - **Changed (breaking):** Replaced `degraded` and `degradedFps` with `unfocused`, `frameBudget`, and `throttleFps`.
 - **Changed (breaking):** Loop reduced motion now accepts `'pause' | 'ignore'` through `LoopReducedMotion`.
 - **Changed (breaking):** Tween reduced motion now accepts `'complete' | 'ignore'` through `TweenReducedMotion`.
 - **Removed (breaking):** Removed `ReducedMotionBehavior`.
 - **Added:** Added `qualityBehavior`, `QualityChangeCallback`, and `onQualityChange`.
-- **Added:** Added `visible` and `onVisibleChange` to `createLifecycle`.
-- **Changed:** Loops paint one static frame before pausing for reduced motion.
-- **Changed:** `useCanvas` applies 1x DPR only while throttling.
+- **Changed:** Frame-budget detection measures raw frame gaps and recovers via a 2s optimistic re-measure for all behaviors.
+- **Changed:** Reduced-motion pause delivers zero frames; `useCanvas` paints one static frame per buffer creation or resize.
+- **Changed:** `useCanvas` applies 1x DPR only while throttling, skips redundant buffer reallocation, and keeps the exact physical pixel box across quality transitions.
 - **Changed:** `useTween` reads updated easing callbacks without restarting.
+- **Fixed:** Reentrant `stop()` from `onTick` or `onQualityChange` halts delivery, timers, and teardown-time ticker resurrection.
 
 ## 0.0.9
 
