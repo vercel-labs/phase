@@ -21,6 +21,7 @@ beforeEach(() => {
     writable: true,
     configurable: true,
   });
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
 });
 
 afterEach(() => {
@@ -91,6 +92,28 @@ describe('useCanvas', () => {
     expect(() => {
       renderHook(() => useCanvas({ containerRef, canvasRef, draw: vi.fn() }));
     }).not.toThrow();
+  });
+
+  it('recreates visibility observation when intersection values change', async () => {
+    const useCanvas = await getHook();
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+    const { rerender } = renderHook(
+      ({ rootMargin }: { rootMargin: string }) =>
+        useCanvas({
+          containerRef,
+          canvasRef,
+          draw: vi.fn(),
+          intersectionOptions: { rootMargin },
+        }),
+      { initialProps: { rootMargin: '10px' } },
+    );
+    expect(mockIO.instances.at(-1)?.options?.rootMargin).toBe('10px');
+
+    rerender({ rootMargin: '20px' });
+    expect(mockIO.instances.at(-1)?.options?.rootMargin).toBe('20px');
   });
 });
 

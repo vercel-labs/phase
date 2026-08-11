@@ -15,6 +15,7 @@ beforeEach(() => {
     writable: true,
     configurable: true,
   });
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
 });
 
 afterEach(() => {
@@ -277,6 +278,28 @@ describe('quality signal', () => {
       expect(loop.quality).toBe('full');
       expect(loop.qualityReason).toBeUndefined();
       expect(loop.qualityBehavior).toBeUndefined();
+      loop.stop();
+    });
+
+    it('seeds quality from document.hasFocus on creation', async () => {
+      const { createLoop } = await getModule();
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      const el = document.createElement('div');
+      const loop = createLoop({
+        element: el,
+        onTick: vi.fn(),
+        start: 'manual',
+      });
+
+      expect(loop.phase).toBe('idle');
+      expect(loop.quality).toBe('degraded');
+      expect(loop.qualityReason).toBe('unfocused');
+      expect(loop.qualityBehavior).toBe('pause');
+
+      loop.start();
+      makeSightVisible(el);
+      expect(loop.phase).toBe('paused');
+      expect(loop.phaseReason).toBe('degraded');
       loop.stop();
     });
   });

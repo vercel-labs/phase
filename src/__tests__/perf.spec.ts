@@ -124,6 +124,7 @@ describe('react-zero-rerender', () => {
       writable: true,
       configurable: true,
     });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
 
     const { useLoop } = await import('../react/use-loop');
 

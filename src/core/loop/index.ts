@@ -383,11 +383,11 @@ export function createLoop(options: LoopOptions): Loop {
   // once the element is first visible, then stay paused. lastTickTime stays 0
   // so a later real resume still gets a clean first delta.
 
-  function paintOnce(): void {
+  function paintOnce(now: number): void {
     paintRafId = 0;
     if (_phase !== 'paused' || _reason !== 'reduced-motion') return;
     if (frame.frame !== 0 || !lifecycle.visible) return;
-    frame.time = performance.now();
+    frame.time = now;
     frame.delta = DEFAULT_FIRST_DELTA_MS;
     frame.elapsed = 0;
     frame.frame = 1;
@@ -476,6 +476,8 @@ export function createLoop(options: LoopOptions): Loop {
   });
 
   const unsubFocus: () => void = subscribeFocusTracking(onFocusChange);
+  focusDegraded = !document.hasFocus();
+  if (focusDegraded) reconcileQuality();
 
   // --- Public API ---
 

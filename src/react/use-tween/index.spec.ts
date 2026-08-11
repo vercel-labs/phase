@@ -21,6 +21,9 @@ async function getHook() {
   return mod.useTween;
 }
 
+const linear = (progress: number): number => progress;
+const complete = (): number => 1;
+
 describe('useTween', () => {
   it('returns initial target on first render (no animation)', async () => {
     const useTween = await getHook();
@@ -99,8 +102,6 @@ describe('useTween', () => {
 
   it('uses the latest easing callback without restarting the tween', async () => {
     const useTween = await getHook();
-    const linear = (progress: number): number => progress;
-    const complete = (): number => 1;
     const { result, rerender } = renderHook(
       ({
         target,

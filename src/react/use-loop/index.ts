@@ -34,7 +34,7 @@ export interface UseLoopOptions<T extends Element = HTMLDivElement> {
   /** Base FPS cap. Default: uncapped (display refresh rate). */
   fps?: number;
   enabled?: boolean;
-  /** Behavior when the user prefers reduced motion. Default `'pause'`. */
+  /** Reduced-motion behavior. Default `'pause'` (one static frame once visible). */
   reducedMotion?: LoopReducedMotion;
   /**
    * Behavior while `document.hasFocus()` is false. Default `'pause'`.

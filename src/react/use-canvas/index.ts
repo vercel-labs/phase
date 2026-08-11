@@ -63,6 +63,8 @@ export interface UseCanvasOptions {
   frameBudget?: DegradedBehavior;
   /** Shared throttle cap; never raises a lower `fps` cap. Default `30`. */
   throttleFps?: number;
+  /** Options forwarded to the pooled visibility observer. Value changes rebuild the loop. */
+  intersectionOptions?: IntersectionObserverInit;
   /** Transient quality notification. Does not trigger a React render. */
   onQualityChange?: QualityChangeCallback;
 }
@@ -111,9 +113,16 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
     unfocused,
     frameBudget,
     throttleFps,
+    intersectionOptions,
   } = options;
   const drawRef = useSyncedRef(options.draw);
   const onQualityChangeRef = useSyncedRef(options.onQualityChange);
+  const intersectionRoot = intersectionOptions?.root;
+  const intersectionRootMargin = intersectionOptions?.rootMargin;
+  const intersectionThreshold = intersectionOptions?.threshold;
+  const intersectionThresholdKey = Array.isArray(intersectionThreshold)
+    ? intersectionThreshold.join(',')
+    : intersectionThreshold;
 
   const [state, setState] = useState<CanvasState>(INITIAL_STATE);
   const [restartNonce, setRestartNonce] = useState(0);
@@ -227,6 +236,7 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
       unfocused,
       frameBudget,
       throttleFps,
+      intersectionOptions,
       onTick: (frame) => {
         if (contextLost || !ctxRef.current) return;
         drawRef.current(ctxRef.current, frame, sizeRef.current);
@@ -265,6 +275,9 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
     unfocused,
     frameBudget,
     throttleFps,
+    intersectionRoot,
+    intersectionRootMargin,
+    intersectionThresholdKey,
     restartNonce,
   ]);
 

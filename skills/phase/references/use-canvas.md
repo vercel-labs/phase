@@ -13,18 +13,19 @@ const { restart, phase, phaseReason, quality, qualityReason, qualityBehavior } =
 
 ### Options
 
-| Option            | Type                                   | Default      | Description                                             |
-| ----------------- | -------------------------------------- | ------------ | ------------------------------------------------------- |
-| `containerRef`    | `RefObject<Element \| null>`           | required     | Element that determines canvas size                     |
-| `canvasRef`       | `RefObject<HTMLCanvasElement \| null>` | required     | The `<canvas>` element                                  |
-| `draw`            | `CanvasDrawFn`                         | required     | Called every frame                                      |
-| `fps`             | `number`                               | none         | Base FPS cap; uncapped uses display refresh             |
-| `enabled`         | `boolean`                              | `true`       | When `false`, tears down everything                     |
-| `reducedMotion`   | `'pause' \| 'ignore'`                  | `'pause'`    | Behavior under reduced motion                           |
-| `unfocused`       | `'pause' \| 'throttle' \| 'ignore'`    | `'pause'`    | Behavior while the window is unfocused                  |
-| `frameBudget`     | `'pause' \| 'throttle' \| 'ignore'`    | `'throttle'` | Behavior after 3 frames exceed 1.5x the target interval |
-| `throttleFps`     | `number`                               | `30`         | Shared throttle cap; never raises a lower `fps`         |
-| `onQualityChange` | `QualityChangeCallback`                | none         | Transient notification; does not trigger a render       |
+| Option                | Type                                   | Default      | Description                                             |
+| --------------------- | -------------------------------------- | ------------ | ------------------------------------------------------- |
+| `containerRef`        | `RefObject<Element \| null>`           | required     | Element that determines canvas size                     |
+| `canvasRef`           | `RefObject<HTMLCanvasElement \| null>` | required     | The `<canvas>` element                                  |
+| `draw`                | `CanvasDrawFn`                         | required     | Called every frame                                      |
+| `fps`                 | `number`                               | none         | Base FPS cap; uncapped uses display refresh             |
+| `enabled`             | `boolean`                              | `true`       | When `false`, tears down everything                     |
+| `reducedMotion`       | `'pause' \| 'ignore'`                  | `'pause'`    | Behavior under reduced motion                           |
+| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'`    | `'pause'`    | Behavior while the window is unfocused                  |
+| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'`    | `'throttle'` | Behavior after 3 frames exceed 1.5x the target interval |
+| `throttleFps`         | `number`                               | `30`         | Shared throttle cap; never raises a lower `fps`         |
+| `intersectionOptions` | `IntersectionObserverInit`             | none         | Forwarded to visibility; value changes rebuild the loop |
+| `onQualityChange`     | `QualityChangeCallback`                | none         | Transient notification; does not trigger a render       |
 
 ### Return
 
@@ -46,12 +47,11 @@ const { restart, phase, phaseReason, quality, qualityReason, qualityBehavior } =
 
 ## When not to use
 
-| Instead of this                         | Use                                                                               |
-| --------------------------------------- | --------------------------------------------------------------------------------- |
-| DOM transforms (not canvas)             | `useLoop` (no canvas concerns)                                                    |
-| WebGL via three.js/Pixi (own renderer)  | `useLifecycle` + your renderer's loop                                             |
-| Static canvas (draw once)               | One-shot `useEffect` with canvas API                                              |
-| Custom visibility root/margin/threshold | `useLoop` or core `createLoop`; `useCanvas` does not expose `intersectionOptions` |
+| Instead of this                        | Use                                   |
+| -------------------------------------- | ------------------------------------- |
+| DOM transforms (not canvas)            | `useLoop` (no canvas concerns)        |
+| WebGL via three.js/Pixi (own renderer) | `useLifecycle` + your renderer's loop |
+| Static canvas (draw once)              | One-shot `useEffect` with canvas API  |
 
 ## Do
 

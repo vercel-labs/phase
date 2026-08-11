@@ -17,6 +17,7 @@ beforeEach(() => {
     writable: true,
     configurable: true,
   });
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
 });
 
 afterEach(() => {

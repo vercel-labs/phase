@@ -772,18 +772,19 @@ return (
 
 `useCanvas` coordinates two elements (a sizing container and the canvas), so you pass both refs in.
 
-| Option            | Type                                   | Default      | Description                                     |
-| ----------------- | -------------------------------------- | ------------ | ----------------------------------------------- |
-| `containerRef`    | `RefObject<Element \| null>`           | required     | Element that determines size and visibility     |
-| `canvasRef`       | `RefObject<HTMLCanvasElement \| null>` | required     | Canvas whose 2D context and buffer are managed  |
-| `draw`            | `CanvasDrawFn`                         | required     | Per-frame draw callback                         |
-| `fps`             | `number`                               | none         | Base FPS cap; uncapped uses display refresh     |
-| `enabled`         | `boolean`                              | `true`       | When false, tears down and reports `idle`       |
-| `reducedMotion`   | `'pause' \| 'ignore'`                  | `'pause'`    | Behavior under reduced motion                   |
-| `unfocused`       | `'pause' \| 'throttle' \| 'ignore'`    | `'pause'`    | Behavior while the window is unfocused          |
-| `frameBudget`     | `'pause' \| 'throttle' \| 'ignore'`    | `'throttle'` | Behavior after sustained over-budget frames     |
-| `throttleFps`     | `number`                               | `30`         | Shared throttle cap; never raises a lower `fps` |
-| `onQualityChange` | `QualityChangeCallback`                | none         | Transient quality notification; does not render |
+| Option                | Type                                   | Default      | Description                                             |
+| --------------------- | -------------------------------------- | ------------ | ------------------------------------------------------- |
+| `containerRef`        | `RefObject<Element \| null>`           | required     | Element that determines size and visibility             |
+| `canvasRef`           | `RefObject<HTMLCanvasElement \| null>` | required     | Canvas whose 2D context and buffer are managed          |
+| `draw`                | `CanvasDrawFn`                         | required     | Per-frame draw callback                                 |
+| `fps`                 | `number`                               | none         | Base FPS cap; uncapped uses display refresh             |
+| `enabled`             | `boolean`                              | `true`       | When false, tears down and reports `idle`               |
+| `reducedMotion`       | `'pause' \| 'ignore'`                  | `'pause'`    | Behavior under reduced motion                           |
+| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'`    | `'pause'`    | Behavior while the window is unfocused                  |
+| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'`    | `'throttle'` | Behavior after sustained over-budget frames             |
+| `throttleFps`         | `number`                               | `30`         | Shared throttle cap; never raises a lower `fps`         |
+| `intersectionOptions` | `IntersectionObserverInit`             | none         | Forwarded to visibility; value changes rebuild the loop |
+| `onQualityChange`     | `QualityChangeCallback`                | none         | Transient quality notification; does not render         |
 
 Returns `restart`, reactive `phase`/`phaseReason`, and always-current `quality`/`qualityReason`/`qualityBehavior` getters.
 
@@ -794,7 +795,7 @@ Returns `restart`, reactive `phase`/`phaseReason`, and always-current `quality`/
 | Context loss | Listens for `contextlost`/`contextrestored`. Skips draws while lost and resumes drawing after restoration.                          |
 | Quality      | While a signal is configured to throttle and the loop is running, DPR drops to 1x. Paused and ignored signals keep full resolution. |
 
-`useLoop` and `useCanvas` share the loop controls `fps`, `enabled`, `reducedMotion`, `unfocused`, `frameBudget`, `throttleFps`, and `onQualityChange`. Their quality getters are always current even when the loop remains running, without causing a React render. For heavy GPU work, consider `frameBudget: 'pause'`.
+`useLoop` and `useCanvas` share the loop controls `fps`, `enabled`, `reducedMotion`, `unfocused`, `frameBudget`, `throttleFps`, `intersectionOptions`, and `onQualityChange`. Their quality getters are always current even when the loop remains running, without causing a React render. For heavy GPU work, consider `frameBudget: 'pause'`.
 
 ### useTween
 
@@ -1308,7 +1309,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `createTicker`            |             834 B |
 | `createSight`             |             967 B |
 | `createLifecycle`         |            1.5 kB |
-| `createLoop`              |           2.88 kB |
+| `createLoop`              |           2.89 kB |
 | `createScrollProgress`    |             866 B |
 | `createRenderState`       |             495 B |
 | `createDevicePixelRatio`  |             546 B |
@@ -1322,10 +1323,10 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           3.18 kB |
+| `useLoop`                 |           3.17 kB |
 | `useLifecycle`            |           1.74 kB |
 | `useSight`                |           1.18 kB |
-| `useCanvas`               |            3.8 kB |
+| `useCanvas`               |           3.85 kB |
 | `useMutation`             |           1.36 kB |
 | `usePointer`              |           1.48 kB |
 | `useScroll`               |           1.72 kB |
