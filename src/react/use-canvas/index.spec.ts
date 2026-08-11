@@ -137,6 +137,112 @@ describe('devicePixelContentBoxSize', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Reduced-motion paint
+// ---------------------------------------------------------------------------
+
+describe('reduced-motion paint', () => {
+  it('paints one static frame instead of staying blank', async () => {
+    const useCanvas = await getHook();
+    mockMM.setMatches('(prefers-reduced-motion: reduce)', true);
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+    const draw = vi.fn();
+
+    const { result } = renderHook(() =>
+      useCanvas({ containerRef, canvasRef, draw }),
+    );
+    expect(draw).not.toHaveBeenCalled();
+
+    act(() => {
+      mockIO.trigger(container, true);
+      vi.advanceTimersByTime(16); // fire the one-shot paint rAF
+    });
+
+    expect(draw).toHaveBeenCalledTimes(1);
+    expect(result.current.phase).toBe('paused');
+    expect(result.current.phaseReason).toBe('reduced-motion');
+
+    // Still paused: no further draws.
+    act(() => {
+      vi.advanceTimersByTime(48);
+    });
+    expect(draw).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Degraded buffer scaling
+// ---------------------------------------------------------------------------
+
+describe('degraded buffer scaling', () => {
+  it('paused-degraded (blur, default) keeps the full-res buffer', async () => {
+    const useCanvas = await getHook();
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+
+    vi.stubGlobal('devicePixelRatio', 2);
+
+    const { result } = renderHook(() =>
+      useCanvas({ containerRef, canvasRef, draw: vi.fn() }),
+    );
+    act(() => {
+      mockIO.trigger(container, true);
+    });
+    expect(result.current.phase).toBe('running');
+
+    // Blur pauses by default; quality reads degraded while paused.
+    act(() => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+    });
+    expect(result.current.phase).toBe('paused');
+    expect(result.current.quality).toBe('degraded');
+
+    // A resize during the pause must not downscale the buffer.
+    mockRO.triggerWithPhysicalSize(container, 375, 667, 750, 1334);
+    expect(canvas.width).toBe(750);
+    expect(canvas.height).toBe(1334);
+  });
+
+  it('running-degraded (throttle) downscales the buffer', async () => {
+    const useCanvas = await getHook();
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+
+    vi.stubGlobal('devicePixelRatio', 2);
+
+    const { result } = renderHook(() =>
+      useCanvas({
+        containerRef,
+        canvasRef,
+        draw: vi.fn(),
+        unfocused: 'throttle',
+      }),
+    );
+    act(() => {
+      mockIO.trigger(container, true);
+    });
+
+    act(() => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+    });
+    expect(result.current.phase).toBe('running');
+
+    // Degraded output at low fps: render into a CSS-pixel buffer.
+    mockRO.triggerWithPhysicalSize(container, 375, 667, 750, 1334);
+    expect(canvas.width).toBe(375);
+    expect(canvas.height).toBe(667);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // restart
 // ---------------------------------------------------------------------------
 

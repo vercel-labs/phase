@@ -314,11 +314,15 @@ describe('quality signal', () => {
     });
   });
 
-  describe('quality does not affect phase', () => {
-    it('quality can be degraded while phase is running', async () => {
+  describe('quality is observable independent of behavior', () => {
+    it("unfocused: 'throttle' keeps the loop running while degraded", async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({
+        element: el,
+        onTick: vi.fn(),
+        unfocused: 'throttle',
+      });
       makeSightVisible(el);
 
       vi.spyOn(document, 'hasFocus').mockReturnValue(false);
@@ -331,15 +335,11 @@ describe('quality signal', () => {
   });
 });
 
-describe('quality signal - degraded option', () => {
-  it('degraded: pause + unfocused -> loop pauses with reason=degraded', async () => {
+describe('per-signal behavior - unfocused', () => {
+  it('default: blur pauses the loop with reason=degraded', async () => {
     const { createLoop } = await getModule();
     const el = document.createElement('div');
-    const loop = createLoop({
-      element: el,
-      onTick: vi.fn(),
-      degraded: 'pause',
-    });
+    const loop = createLoop({ element: el, onTick: vi.fn() });
     makeSightVisible(el);
 
     vi.spyOn(document, 'hasFocus').mockReturnValue(false);
@@ -348,36 +348,14 @@ describe('quality signal - degraded option', () => {
     expect(loop.phase).toBe('paused');
     expect(loop.phaseReason).toBe('degraded');
     expect(loop.quality).toBe('degraded');
-    loop.stop();
-  });
-
-  it('degraded: ignore + unfocused -> quality updates but loop keeps running', async () => {
-    const { createLoop } = await getModule();
-    const el = document.createElement('div');
-    const loop = createLoop({
-      element: el,
-      onTick: vi.fn(),
-      degraded: 'ignore',
-    });
-    makeSightVisible(el);
-
-    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    window.dispatchEvent(new Event('blur'));
-
-    expect(loop.phase).toBe('running');
-    expect(loop.quality).toBe('degraded');
     expect(loop.qualityReason).toBe('unfocused');
     loop.stop();
   });
 
-  it('degraded: pause recovers when focus returns', async () => {
+  it('default: focus resumes the loop and quality recovers', async () => {
     const { createLoop } = await getModule();
     const el = document.createElement('div');
-    const loop = createLoop({
-      element: el,
-      onTick: vi.fn(),
-      degraded: 'pause',
-    });
+    const loop = createLoop({ element: el, onTick: vi.fn() });
     makeSightVisible(el);
 
     const hasFocusSpy = vi.spyOn(document, 'hasFocus');
@@ -388,7 +366,27 @@ describe('quality signal - degraded option', () => {
     hasFocusSpy.mockReturnValue(true);
     window.dispatchEvent(new Event('focus'));
     expect(loop.phase).toBe('running');
+    expect(loop.phaseReason).toBe('resumed');
     expect(loop.quality).toBe('full');
+    loop.stop();
+  });
+
+  it("'ignore': quality updates but the loop keeps running", async () => {
+    const { createLoop } = await getModule();
+    const el = document.createElement('div');
+    const loop = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      unfocused: 'ignore',
+    });
+    makeSightVisible(el);
+
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+
+    expect(loop.phase).toBe('running');
+    expect(loop.quality).toBe('degraded');
+    expect(loop.qualityReason).toBe('unfocused');
     loop.stop();
   });
 });
@@ -505,14 +503,14 @@ describe('quality signal - frame budget', () => {
     loop.stop();
   });
 
-  it('pause: degrades then recovers via timer (not permanent)', async () => {
+  it("frameBudget: 'pause' degrades then recovers via timer (not permanent)", async () => {
     const { createLoop } = await getModule();
     const clock = setupManualClock();
     const el = document.createElement('div');
     const loop = createLoop({
       element: el,
       onTick: vi.fn(),
-      degraded: 'pause',
+      frameBudget: 'pause',
     });
     makeSightVisible(el);
 
@@ -528,14 +526,14 @@ describe('quality signal - frame budget', () => {
     loop.stop();
   });
 
-  it('pause: stop() cancels a pending recovery timer', async () => {
+  it("frameBudget: 'pause': stop() cancels a pending recovery timer", async () => {
     const { createLoop } = await getModule();
     const clock = setupManualClock();
     const el = document.createElement('div');
     const loop = createLoop({
       element: el,
       onTick: vi.fn(),
-      degraded: 'pause',
+      frameBudget: 'pause',
     });
     makeSightVisible(el);
 
@@ -546,6 +544,33 @@ describe('quality signal - frame budget', () => {
     await vi.advanceTimersByTimeAsync(RECOVERY_RETRY_MS);
     expect(loop.phase).toBe('stopped');
     clock.restore();
+  });
+
+  it("frameBudget: 'ignore': quality degrades but fps and phase are untouched", async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const cb = vi.fn();
+    const loop = createLoop({
+      element: el,
+      onTick: cb,
+      frameBudget: 'ignore',
+    });
+    makeSightVisible(el);
+
+    degradeViaBudget(clock);
+    expect(loop.phase).toBe('running');
+    expect(loop.quality).toBe('degraded');
+    expect(loop.qualityReason).toBe('frame-budget');
+
+    // No throttle: every ~16ms frame still ticks (no 30fps gate).
+    await Promise.resolve();
+    const ticksBefore = cb.mock.calls.length;
+    clock.advance(16);
+    clock.advance(16);
+    expect(cb.mock.calls.length).toBe(ticksBefore + 2);
+    clock.restore();
+    loop.stop();
   });
 });
 
@@ -559,8 +584,13 @@ describe('quality signal - frame budget', () => {
 // ---------------------------------------------------------------------------
 
 type CreateLoop = Awaited<ReturnType<typeof getModule>>['createLoop'];
+type LoopExtraOptions = Partial<Parameters<CreateLoop>[0]>;
 
-function trackLoop(createLoop: CreateLoop, el: Element) {
+function trackLoop(
+  createLoop: CreateLoop,
+  el: Element,
+  extra?: LoopExtraOptions,
+) {
   const refs: unknown[] = [];
   const last = { time: 0, delta: 0, elapsed: 0, frame: 0 };
   const loop = createLoop({
@@ -569,6 +599,7 @@ function trackLoop(createLoop: CreateLoop, el: Element) {
       refs.push(frame);
       Object.assign(last, frame);
     },
+    ...extra,
   });
   return { loop, refs, last };
 }
@@ -578,7 +609,11 @@ describe('frame timeline continuity', () => {
     const { createLoop } = await getModule();
     const clock = setupManualClock();
     const el = document.createElement('div');
-    const { loop, refs, last } = trackLoop(createLoop, el);
+    // Explicit throttle: the default (pause) never rebuilds on focus changes,
+    // and this test exists to exercise the rebuild path.
+    const { loop, refs, last } = trackLoop(createLoop, el, {
+      unfocused: 'throttle',
+    });
     makeSightVisible(el); // timeline starts at clock=0
 
     clock.advance(16); // tick 1 at 16
@@ -617,7 +652,9 @@ describe('frame timeline continuity', () => {
     const { createLoop } = await getModule();
     const clock = setupManualClock();
     const el = document.createElement('div');
-    const { loop, last } = trackLoop(createLoop, el);
+    const { loop, last } = trackLoop(createLoop, el, {
+      unfocused: 'throttle',
+    });
     makeSightVisible(el);
 
     clock.advance(16); // tick 1 at 16
@@ -654,6 +691,162 @@ describe('frame timeline continuity', () => {
     expect(last.frame).toBe(2);
     clock.restore();
     loop.stop();
+  });
+
+  it('mixed signals: frame-budget throttle + unfocused pause stay continuous', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    // Defaults: unfocused 'pause', frameBudget 'throttle'.
+    const { loop, refs, last } = trackLoop(createLoop, el);
+    makeSightVisible(el); // timeline starts at clock=0
+
+    // Ticks at 16, 51, 86, 121: three 35ms deltas degrade via frame budget.
+    clock.advance(16);
+    clock.advance(35);
+    clock.advance(35);
+    clock.advance(35);
+    expect(loop.qualityReason).toBe('frame-budget');
+    expect(loop.phase).toBe('running'); // throttle keeps running
+    await Promise.resolve(); // rebuild at 30fps
+
+    clock.advance(35); // tick 5 at 156 (under the 30fps budget, count resets)
+    expect(last.delta).toBe(35);
+    expect(last.elapsed).toBe(156);
+    expect(last.frame).toBe(5);
+
+    // Blur while throttled: pause wins over throttle.
+    clock.skip(10); // 10ms of running time before the pause
+    const hasFocusSpy = vi.spyOn(document, 'hasFocus');
+    hasFocusSpy.mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+    expect(loop.phase).toBe('paused');
+    expect(loop.phaseReason).toBe('degraded');
+    expect(loop.qualityReason).toBe('unfocused');
+
+    clock.skip(1000); // paused time, excluded from the timeline
+    hasFocusSpy.mockReturnValue(true);
+    window.dispatchEvent(new Event('focus'));
+    expect(loop.phase).toBe('running');
+    expect(loop.quality).toBe('full');
+    await Promise.resolve(); // fps changed while paused: rebuild at full speed
+
+    clock.advance(16); // tick 6 at 1182
+    expect(last.delta).toBeCloseTo(16.67); // clean post-resume delta
+    expect(last.elapsed).toBe(182); // 156 + 10 running + 16, pause excluded
+    expect(last.frame).toBe(6);
+    expect(refs.every((r) => r === refs[0])).toBe(true);
+    clock.restore();
+    loop.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reduced-motion paint
+//
+// With reducedMotion 'pause' active from the start the loop never ticks, which
+// leaves canvas surfaces blank. The loop delivers exactly one frame (elapsed 0)
+// once the element is first visible, then stays paused.
+// ---------------------------------------------------------------------------
+
+describe('reduced-motion paint', () => {
+  it('paints exactly one frame once the element becomes visible', async () => {
+    const { createLoop } = await getModule();
+    enableReducedMotion();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const { loop, last, refs } = trackLoop(createLoop, el);
+
+    expect(loop.phase).toBe('paused');
+    expect(loop.phaseReason).toBe('reduced-motion');
+
+    // Not visible yet: no paint is scheduled.
+    clock.advance(16);
+    expect(last.frame).toBe(0);
+
+    // First visibility triggers the deferred one-shot paint.
+    makeSightVisible(el);
+    clock.advance(16); // paint fires at clock=32
+    expect(last.frame).toBe(1);
+    expect(last.elapsed).toBe(0);
+    expect(last.delta).toBeCloseTo(16.67);
+
+    // Still paused: no further frames.
+    clock.advance(16);
+    clock.advance(16);
+    expect(last.frame).toBe(1);
+    expect(loop.phase).toBe('paused');
+
+    // Reduced motion lifts at clock=64: the real timeline starts fresh.
+    disableReducedMotion();
+    expect(loop.phase).toBe('running');
+    clock.advance(16); // tick at 80
+    expect(last.frame).toBe(2);
+    expect(last.delta).toBeCloseTo(16.67);
+    expect(last.elapsed).toBe(16);
+    expect(refs.every((r) => r === refs[0])).toBe(true);
+    clock.restore();
+    loop.stop();
+  });
+
+  it('does not paint when reduced motion activates mid-run', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const { loop, last } = trackLoop(createLoop, el);
+    makeSightVisible(el);
+
+    clock.advance(16); // tick 1
+    expect(last.frame).toBe(1);
+
+    enableReducedMotion();
+    expect(loop.phase).toBe('paused');
+    expect(loop.phaseReason).toBe('reduced-motion');
+
+    // The last painted frame is already on screen — no extra paint.
+    clock.advance(16);
+    clock.advance(16);
+    expect(last.frame).toBe(1);
+    clock.restore();
+    loop.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Removed options (type-level)
+// ---------------------------------------------------------------------------
+
+describe('removed options (type-level)', () => {
+  it('rejects the pre-0.0.9 degraded API and loop complete', async () => {
+    const { createLoop } = await getModule();
+    const el = document.createElement('div');
+
+    const loop = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      start: 'manual',
+      // @ts-expect-error -- replaced by `unfocused` / `frameBudget`
+      degraded: 'pause',
+    });
+    loop.stop();
+
+    const loop2 = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      start: 'manual',
+      // @ts-expect-error -- replaced by `throttleFps`
+      degradedFps: 24,
+    });
+    loop2.stop();
+
+    const loop3 = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      start: 'manual',
+      // @ts-expect-error -- loops have no end state; 'complete' is tween-only
+      reducedMotion: 'complete',
+    });
+    loop3.stop();
   });
 });
 

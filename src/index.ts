@@ -58,8 +58,8 @@ export type {
   LoopOptions,
   LoopPhase,
   LoopReason,
+  LoopReducedMotion,
   Quality,
-  ReducedMotionBehavior,
 } from './core/loop';
 export type {
   ScrollProgress,

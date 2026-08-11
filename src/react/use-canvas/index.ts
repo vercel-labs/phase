@@ -12,13 +12,12 @@ import {
   createLoop,
   type LoopPhase,
   type LoopReason,
+  type LoopReducedMotion,
   type Quality,
   type DegradedBehavior,
   type DegradedReason,
-  type ReducedMotionBehavior,
 } from '../../core/loop';
 import type { FrameState } from '../../core/tick';
-import { degradedConfig } from '../_internal/degraded-config';
 import { useSyncedRef } from '../use-synced-ref';
 
 export interface Size {
@@ -47,11 +46,14 @@ export interface UseCanvasOptions {
   draw: CanvasDrawFn;
   fps?: number;
   enabled?: boolean;
-  reducedMotion?: ReducedMotionBehavior;
-  /** Behavior when quality degrades. Default `'throttle'`. For heavy GPU work, `'pause'` is often the right call. */
-  degraded?: DegradedBehavior;
-  /** FPS cap when `degraded` is `'throttle'`. Default `30`. */
-  degradedFps?: number;
+  /** Behavior when the user prefers reduced motion. Default `'pause'` (paints one static frame). */
+  reducedMotion?: LoopReducedMotion;
+  /** Behavior while the window is unfocused. Default `'pause'`. */
+  unfocused?: DegradedBehavior;
+  /** Behavior after sustained over-budget frames. Default `'throttle'`. For heavy GPU work, `'pause'` is often the right call. */
+  frameBudget?: DegradedBehavior;
+  /** FPS cap while any quality signal resolves to `'throttle'`. Default `30`. */
+  throttleFps?: number;
 }
 
 export interface UseCanvasResult {
@@ -90,8 +92,9 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
     fps,
     enabled = true,
     reducedMotion,
-    degraded,
-    degradedFps,
+    unfocused,
+    frameBudget,
+    throttleFps,
   } = options;
   const drawRef = useSyncedRef(options.draw);
 
@@ -100,7 +103,6 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
 
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const sizeRef = useRef<Size>({ width: 0, height: 0 });
-  const qualityRef = useSyncedRef(state.quality);
 
   useEffect(() => {
     const container: Element | null = containerRef.current;
@@ -114,6 +116,7 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
 
     let dpr: number = readDpr();
     let contextLost = false;
+    let loopInstance: ReturnType<typeof createLoop> | null = null;
 
     // --- Canvas buffer sizing ---
 
@@ -123,7 +126,12 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
       physicalBox?: ResizeObserverSize,
     ): void {
       sizeRef.current = { width, height };
-      const isDegraded: boolean = qualityRef.current === 'degraded';
+      // Downscale the buffer only while degraded output is actually being
+      // produced. A paused-but-degraded loop (e.g. blurred window) keeps the
+      // full-res buffer so the resume frame is crisp.
+      const isDegraded: boolean =
+        loopInstance?.quality === 'degraded' &&
+        loopInstance.phase === 'running';
 
       let bufferWidth: number;
       let bufferHeight: number;
@@ -186,13 +194,13 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
 
     // --- Animation loop ---
 
-    let loopInstance: ReturnType<typeof createLoop> | null = null;
-
     const loop = createLoop({
       element: container,
       fps,
       reducedMotion,
-      ...degradedConfig(degraded, degradedFps),
+      unfocused,
+      frameBudget,
+      throttleFps,
       onTick: (frame) => {
         if (contextLost || !ctxRef.current) return;
         drawRef.current(ctxRef.current, frame, sizeRef.current);
@@ -221,7 +229,15 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
 
     return teardown;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, fps, reducedMotion, degraded, degradedFps, restartNonce]);
+  }, [
+    enabled,
+    fps,
+    reducedMotion,
+    unfocused,
+    frameBudget,
+    throttleFps,
+    restartNonce,
+  ]);
 
   // Restart bumps a nonce so the effect re-runs: it tears down the current
   // loop + observers and rebuilds them on the next cycle.

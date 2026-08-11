@@ -4,13 +4,12 @@ import {
   createLoop,
   type LoopPhase,
   type LoopReason,
+  type LoopReducedMotion,
   type Quality,
   type DegradedBehavior,
   type DegradedReason,
-  type ReducedMotionBehavior,
 } from '../../core/loop';
 import type { FrameState } from '../../core/tick';
-import { degradedConfig } from '../_internal/degraded-config';
 import { useSyncedRef } from '../use-synced-ref';
 
 /**
@@ -33,11 +32,14 @@ export interface UseLoopOptions<T extends Element = HTMLDivElement> {
   onTick: LoopTickFn;
   fps?: number;
   enabled?: boolean;
-  reducedMotion?: ReducedMotionBehavior;
-  /** Behavior when quality degrades (window blur, frame-budget). Default `'throttle'`. */
-  degraded?: DegradedBehavior;
-  /** FPS cap when `degraded` is `'throttle'`. Default `30`. */
-  degradedFps?: number;
+  /** Behavior when the user prefers reduced motion. Default `'pause'`. */
+  reducedMotion?: LoopReducedMotion;
+  /** Behavior while the window is unfocused. Default `'pause'`. */
+  unfocused?: DegradedBehavior;
+  /** Behavior after sustained over-budget frames. Default `'throttle'`. */
+  frameBudget?: DegradedBehavior;
+  /** FPS cap while any quality signal resolves to `'throttle'`. Default `30`. */
+  throttleFps?: number;
   intersectionOptions?: IntersectionObserverInit;
 }
 
@@ -80,8 +82,9 @@ export function useLoop<T extends Element = HTMLDivElement>(
     fps,
     enabled = true,
     reducedMotion,
-    degraded,
-    degradedFps,
+    unfocused,
+    frameBudget,
+    throttleFps,
     intersectionOptions,
   } = options;
   const onTickRef = useSyncedRef(options.onTick);
@@ -105,8 +108,10 @@ export function useLoop<T extends Element = HTMLDivElement>(
       onTick: (frame) => onTickRef.current(frame),
       fps,
       reducedMotion,
+      unfocused,
+      frameBudget,
+      throttleFps,
       intersectionOptions,
-      ...degradedConfig(degraded, degradedFps),
       onPhaseChange: (phase, reason) => {
         // Read from loopRef instead of the local `loop` variable to avoid
         // accessing it before createLoop returns (start:'auto' fires
@@ -127,7 +132,7 @@ export function useLoop<T extends Element = HTMLDivElement>(
       loopRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, fps, reducedMotion, degraded, degradedFps]);
+  }, [enabled, fps, reducedMotion, unfocused, frameBudget, throttleFps]);
 
   return { ref, ...state };
 }

@@ -1,9 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 
 import { invalidDurationError } from '../../core/_internal/errors';
-import type { ReducedMotionBehavior } from '../../core/loop';
 import { prefersReducedMotion } from '../../core/reduced-motion';
 import { clamp01, easeOutCubic } from '../../ease';
+
+/**
+ * Behavior under reduced motion. `'complete'` jumps straight to the target
+ * (the value still arrives, the animation is skipped); `'ignore'` animates
+ * regardless. Tweens have a defined target, so there is no `'pause'`.
+ */
+export type TweenReducedMotion = 'complete' | 'ignore';
 
 export interface UseTweenOptions {
   target: number;
@@ -12,7 +18,7 @@ export interface UseTweenOptions {
   easing?: (progress: number) => number;
   enabled?: boolean;
   /** Default: `'complete'`. Tweens jump to target under reduced motion. */
-  reducedMotion?: ReducedMotionBehavior;
+  reducedMotion?: TweenReducedMotion;
 }
 
 /**
