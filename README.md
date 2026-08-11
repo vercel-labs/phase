@@ -1233,14 +1233,14 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
 | `createTicker`            |             834 B |
-| `createSight`             |             963 B |
-| `createLifecycle`         |           1.47 kB |
+| `createSight`             |             967 B |
+| `createLifecycle`         |           1.48 kB |
 | `createLoop`              |           2.59 kB |
-| `createScrollProgress`    |             878 B |
+| `createScrollProgress`    |             866 B |
 | `createRenderState`       |             495 B |
 | `createDevicePixelRatio`  |             544 B |
-| `createMutation`          |           1.17 kB |
-| `createPointer`           |           1.26 kB |
+| `createMutation`          |           1.18 kB |
+| `createPointer`           |           1.27 kB |
 | `createScroll`            |           1.45 kB |
 | `createThrottle`          |             657 B |
 | `createDebounce`          |             559 B |
@@ -1251,16 +1251,16 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **React**                 |                   |
 | `useLoop`                 |           2.82 kB |
 | `useLifecycle`            |           1.68 kB |
-| `useSight`                |           1.19 kB |
+| `useSight`                |           1.18 kB |
 | `useCanvas`               |           3.44 kB |
 | `useMutation`             |           1.36 kB |
-| `usePointer`              |           1.48 kB |
+| `usePointer`              |           1.47 kB |
 | `useScroll`               |           1.72 kB |
 | `useThrottledCallback`    |             797 B |
 | `useDebouncedCallback`    |             688 B |
 | `useTween`                |             619 B |
 | `usePresence`             |             591 B |
-| `useScrollProgress`       |             993 B |
+| `useScrollProgress`       |             997 B |
 | `useSize`                 |             378 B |
 | `useContainerQuery`       |             384 B |
 | `useMediaQuery`           |             246 B |

@@ -1,7 +1,7 @@
 const QUOTES = Array.from({ length: 200 }, (_, i) => ({
   id: i,
-  quote: 'phase quote number ' + i,
-  author: 'Customer ' + i,
+  quote: `phase quote number ${i}`,
+  author: `Customer ${i}`,
 }));
 
 export function Testimonials() {

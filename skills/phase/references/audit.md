@@ -159,7 +159,7 @@ js-opacity-transform — JS-driven opacity/transform (may be CSS-only candidate)
   why: Often replaceable by a CSS transition, or needs phase for lifecycle.
   use: a CSS transition, or useLoop if it needs per-frame JS
   read: references/decision-guide.md#tier-1-css-only-no-js
-  src/ticker.ts:4  el.style.transform = 'translateX(' + width / 10 + 'px)';
+  src/ticker.ts:4  el.style.transform = `translateX(${width / 10}px)`;
 
 permanent-will-change — Permanent will-change (wastes GPU memory when idle) (1) · noise: normal
   why: A GPU layer is held even while nothing animates.

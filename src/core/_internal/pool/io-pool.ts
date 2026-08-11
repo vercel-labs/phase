@@ -71,7 +71,7 @@ function getPoolKey(opts: IntersectionObserverInit): string {
     ? opts.threshold.join(',')
     : String(opts.threshold ?? 0);
 
-  return root + '|' + margin + '|' + threshold;
+  return `${root}|${margin}|${threshold}`;
 }
 
 /** Return an existing pool entry for this key, or create and register a new one. */

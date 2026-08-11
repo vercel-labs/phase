@@ -451,10 +451,7 @@ const BARE_DURATION_TRANSITION =
   /(?<![\w-])transition:\s*[\d.]+m?s(?:(?:\s*,\s*|\s+)(?:[\d.]+m?s|ease[\w-]*|linear|step[\w-]*|steps\([^)]*\)|cubic-bezier\([^)]*\)))*\s*(?:;|!|$)/;
 
 const NON_COMPOSITOR_TRANSITION = new RegExp(
-  /(?<![\w-])transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/
-    .source +
-    '|' +
-    BARE_DURATION_TRANSITION.source,
+  `${/(?<![\w-])transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/.source}|${BARE_DURATION_TRANSITION.source}`,
 );
 
 export const SIGNALS = [
@@ -975,7 +972,7 @@ function matchesUngatedLazyMount(lines, i) {
   let depth = 0;
   for (let j = i; j < Math.min(lines.length, i + 30); j++) {
     const line = j === i ? lines[j].slice(open.index) : lines[j];
-    tag += line + '\n';
+    tag += `${line}\n`;
     let closed = false;
     for (let k = 0; k < line.length; k++) {
       const ch = line[k];
@@ -1426,6 +1423,18 @@ function skillVersion() {
       new URL('../metadata.json', import.meta.url),
     );
     return JSON.parse(readFileSync(metadataPath, 'utf8')).version;
+  } catch {
+    // Some skill installers omit generated metadata; SKILL.md is canonical.
+  }
+
+  try {
+    const skillPath = fileURLToPath(new URL('../SKILL.md', import.meta.url));
+    const skill = readFileSync(skillPath, 'utf8');
+    const frontmatter = skill.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? '';
+    return (
+      frontmatter.match(/^\s+version:\s*['"]?([^'"\s]+)['"]?\s*$/m)?.[1] ??
+      'unknown'
+    );
   } catch {
     return 'unknown';
   }

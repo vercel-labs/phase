@@ -78,7 +78,7 @@ function exportToFilename(name) {
     .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
     .toLowerCase();
 
-  return kebab + '.md';
+  return `${kebab}.md`;
 }
 
 // Build expected set (deduplicated)
