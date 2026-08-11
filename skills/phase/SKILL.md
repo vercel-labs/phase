@@ -1,11 +1,11 @@
 ---
 name: phase
-description: "Use when building, reviewing, or optimizing web animations OR rendering performance (frame loops, scroll/viewport reveals, mount/unmount transitions, canvas/WebGL lifecycles, reduced-motion handling, lazy rendering, deferring off-screen or non-critical work) with the phase library. Also use when auditing existing animation or rendering code to decide between CSS-only, minimal JS, phase, or a heavier library like motion. Trigger on janky animations, per-frame allocations, forced reflows, re-renders from animation loops, animations that don't pause off-screen, missing reduced-motion support, content-visibility, lazy-mounting on viewport or idle, requestIdleCallback, deferring rendering of long pages, or questions like 'should I use CSS or JS for this animation' or 'how do I render this off-screen content faster'. Always use this skill when you mention phase or any phase export."
+description: "Use when building, reviewing, or optimizing web animations OR rendering performance (frame loops, scroll/viewport reveals, mount/unmount transitions, canvas/WebGL lifecycles, reduced-motion handling, lazy rendering, deferring off-screen or non-critical work) with the phase library. Also use when auditing existing animation or rendering code to decide between browser-driven CSS/WAAPI, minimal JS, phase, or a heavier library like motion. Trigger on janky animations, per-frame allocations, forced reflows, re-renders from animation loops, animations that don't pause off-screen, missing reduced-motion support, content-visibility, lazy-mounting on viewport or idle, requestIdleCallback, deferring rendering of long pages, or questions like 'should I use CSS or JS for this animation' or 'how do I render this off-screen content faster'. Always use this skill when you mention phase or any phase export."
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.16'
-  abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend CSS-only, minimal JS, phase, or an external library.'
+  version: '0.0.17'
+  abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library.'
 ---
 
 ## Prerequisite: ensure phase is installed
@@ -20,12 +20,12 @@ This skill teaches you to implement phase primitives correctly, preserve perform
 
 Always prefer the cheapest tier that satisfies the requirement. Never recommend phase where CSS suffices; never recommend an external library where phase suffices.
 
-| Tier                 | When                                                                           | Tools                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **CSS-only**         | Enter/exit, hover, state toggles, opacity and transform toggles                | `transition`, `@starting-style`, `animation`, View Transitions API                             |
-| **Minimal JS**       | One value into React render, no per-frame DOM writes                           | `useTween` (or CSS if render cost is trivial)                                                  |
-| **phase**            | Per-frame JS, visibility pausing, canvas, lifecycle-aware loops, render gating | `useLoop`, `useCanvas`, `useLifecycle`, `Presence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer` |
-| **External library** | Spring physics, gesture systems, declarative keyframe orchestration            | `motion`, GSAP, etc.                                                                           |
+| Tier                 | When                                                                | Tools                                                                                          |
+| -------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Browser-driven**   | Static transitions or deterministic timelines known before playback | CSS `transition`/`animation`, View Transitions API, WAAPI                                      |
+| **Minimal JS**       | One value into React render, no per-frame DOM writes                | `useTween` (or CSS if render cost is trivial)                                                  |
+| **phase**            | Live per-frame JS, canvas, lifecycle-aware loops, render gating     | `useLoop`, `useCanvas`, `useLifecycle`, `Presence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer` |
+| **External library** | Spring physics, gesture systems, declarative keyframe orchestration | `motion`, GSAP, etc.                                                                           |
 
 For the full decision tree, read [references/decision-guide.md](references/decision-guide.md). This ladder ranks _animation_ cost; rendering work runs on a parallel track.
 
@@ -65,7 +65,7 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 | Scroll/size/visibility without re-renders?           | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
 | Reactive reduced-motion check for non-phase code?    | `usePrefersReducedMotion`                                                                   |
 | Need reactive `devicePixelRatio` for buffer sizing?  | `useDevicePixelRatio`                                                                       |
-| Visibility-aware timed sequences (do X, wait, do Y)? | `useLoop` with `fps: 1–2` and `frame.elapsed`-based steps                                   |
+| Visibility-aware timed sequences (do X, wait, do Y)? | CSS/WAAPI + `useLifecycle` when deterministic; `useLoop` when the steps need live JS        |
 | Rate-limit event-driven work (sockets, workers)?     | `useThrottledCallback`                                                                      |
 | Run once after a burst settles (resize, typing)?     | `useDebouncedCallback`                                                                      |
 
@@ -216,4 +216,4 @@ grep -ri "starting:opacity\|data-\[phase=exiting\]" skills/phase/references/  # 
 | [performance.md](references/performance.md)                 | Writing or reviewing hot-path animation code                                    |
 | [audit.md](references/audit.md)                             | Auditing existing animations for optimization opportunities                     |
 | [abort-signals.md](references/abort-signals.md)             | Tearing down core primitives with an `AbortSignal` (`signal` option)            |
-| [timed-sequences.md](references/timed-sequences.md)         | Building multi-step timed animation sequences with `useLoop`                    |
+| [timed-sequences.md](references/timed-sequences.md)         | Choosing browser keyframes or `useLoop` for multi-step timelines                |

@@ -458,7 +458,7 @@ export const SIGNALS = [
   {
     id: 'manual-raf',
     replacement:
-      'useLoop (or useCanvas): shared clock, visibility pausing, auto cleanup',
+      'CSS/WAAPI if deterministic; otherwise useLoop/useCanvas for lifecycle + cleanup',
     label: 'Manual requestAnimationFrame loop',
     severity: 'high',
     noise: 'noisy',
@@ -560,11 +560,11 @@ export const SIGNALS = [
   {
     id: 'js-opacity-transform',
     replacement: 'a CSS transition, or useLoop if it needs per-frame JS',
-    label: 'JS-driven opacity/transform (may be CSS-only candidate)',
+    label: 'JS-driven opacity/transform (may be browser-driven)',
     severity: 'medium',
     noise: 'noisy',
     why: 'Often replaceable by a CSS transition, or needs phase for lifecycle.',
-    fix: 'references/decision-guide.md#tier-1-css-only-no-js',
+    fix: 'references/decision-guide.md#tier-1-browser-driven-css-or-waapi',
     pattern: /\.style\.(opacity|transform)\s*=/,
   },
   {
@@ -589,7 +589,8 @@ export const SIGNALS = [
   },
   {
     id: 'background-animation',
-    replacement: 'useLoop with fps: 1-2 and frame.elapsed steps',
+    replacement:
+      'CSS/WAAPI keyframes when deterministic; otherwise useLoop with elapsed steps',
     label: 'setInterval/setTimeout for animation (no visibility check)',
     severity: 'high',
     noise: 'noisy',
@@ -757,6 +758,18 @@ export const SIGNALS = [
     fileTypes: 'jsx',
   },
   {
+    id: 'phase-loop-browser-keyframes',
+    replacement:
+      'CSS or WAAPI keyframes for playback; useLifecycle only to play/pause',
+    label: 'Phase loop may be a browser-keyframe candidate',
+    severity: 'medium',
+    noise: 'noisy',
+    why: 'An elapsed-only transform/opacity timeline may not need per-frame JS.',
+    fix: 'references/decision-guide.md#browser-driven-timelines-css-or-waapi',
+    matcher: matchesPhaseLoopBrowserKeyframes,
+    perFile: true,
+  },
+  {
     id: 'when-visible-no-fallback',
     replacement: 'a fallback sized to the final content height',
     label: 'WhenVisible/WhenIdle without a sized fallback (layout shift)',
@@ -899,6 +912,27 @@ function matchesStableCallback(lines, i) {
 function matchesPermanentWillChangeClass(lines, i) {
   if (!/\bwill-change-transform\b/.test(lines[i])) return false;
   return !/\?|&&/.test(lines[i]);
+}
+
+/**
+ * A phase loop whose visible output may be fully describable up front as
+ * browser keyframes. This is deliberately noisy: the audit must still verify
+ * that the timeline has no live inputs, physics, layout reads, or required JS
+ * side effects. The signal exists to force that cheaper-tier question.
+ */
+function matchesPhaseLoopBrowserKeyframes(lines, i) {
+  if (!/\b(?:useLoop|createLoop)(?:\s*<[^;{]*>)?\s*\(/.test(lines[i])) {
+    return false;
+  }
+
+  const source = lines.join('\n');
+  const derivesFromElapsed = /\bframe\.elapsed\b/.test(source);
+  const writesKeyframeFriendlyOutput =
+    /\.style\.(?:opacity|transform)\s*=|\.style\.setProperty\(\s*['"](?:opacity|transform)['"]|\.setAttribute\(\s*['"](?:opacity|transform)['"]|\.set(?:Translate|Scale|Rotate|SkewX|SkewY)\s*\(/.test(
+      source,
+    );
+
+  return derivesFromElapsed && writesKeyframeFriendlyOutput;
 }
 
 /**
