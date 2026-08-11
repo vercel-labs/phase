@@ -18,9 +18,14 @@ const changedFiles = execFileSync('git', ['diff', '--name-only', base, '--'], {
   .split('\n')
   .filter(Boolean);
 
+// Tests and mocks never ship: the build bundles only the three barrel entry
+// points, and the published files are dist/LICENSE/README.md. A spec-only
+// change must not demand a version bump for an identical package.
+const TEST_ONLY = /\.spec\.|\.test\.|__tests__\/|__mocks__\//;
+
 const packageSourceChanged = changedFiles.some(
   (file) =>
-    file.startsWith('src/') ||
+    (file.startsWith('src/') && !TEST_ONLY.test(file)) ||
     file === 'tsconfig.json' ||
     file === 'tsdown.config.ts',
 );

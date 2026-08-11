@@ -4,7 +4,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.14'
+  version: '0.0.15'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend CSS-only, minimal JS, phase, or an external library.'
 ---
 
@@ -126,7 +126,9 @@ The audit procedure and invariants above catch JS anti-patterns. These rules cat
 
 ## Audit
 
-When you review, optimize, or audit animation code, follow [references/audit.md](references/audit.md). It provides a repeatable procedure backed by a deterministic scanner (`scripts/scan.mjs`) that surfaces anti-pattern candidates before judgment.
+When you review, optimize, or audit animation code, follow [references/audit.md](references/audit.md). It provides a repeatable procedure backed by a deterministic scanner (`scripts/scan.mjs`) that surfaces anti-pattern candidates before judgment. The scan is the floor of an audit, not the whole of it: audit.md's manual and opportunity passes cover what regex cannot see (scanner-silent phase wins like ungated infinite CSS animations, `transitionend` unmount wiring, and eagerly mounted non-critical UI), so a clean scan alone never concludes an audit.
+
+Two rules make audit recommendations trustworthy. First, every recommendation is blast-radius checked (audit.md Step 2.5): read the surrounding code, determine the rendering environment (Server Component, SSR, Next.js PPR), and classify the change as semantics-preserving or semantics-changing. Semantics-changing recommendations (anything that removes content from server HTML or alters hydration/mount timing) are labeled and need the user's explicit consent; `Defer` is the SSR-safe default. Second, findings outside phase's domain (data fetching waterfalls, bundle architecture, server-component boundaries) are handed off, never improvised: report them under "Out of scope" and point to `react-best-practices` from vercel-labs/agent-skills.
 
 ## API reference index
 
