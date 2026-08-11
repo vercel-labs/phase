@@ -79,12 +79,12 @@ Reach for core primitives in React when the hook doesn't fit, such as building a
 
 Tests enforce these guarantees for animation hot paths. Violating them in consumer code is always a bug. (Rendering helpers carry one rule of their own: reserve fallback height so `WhenVisible` / `WhenIdle` don't shift layout, see [references/rendering-recipes.md](references/rendering-recipes.md).)
 
-1. **Zero per-frame allocations.** No objects, arrays, closures, template literals, or spreads in `onTick`/`draw`.
+1. **Zero intermediate per-frame allocations.** No objects, arrays, closures, maps, filters, or spreads in `onTick`/`draw`. A final string assigned directly to a DOM style is the unavoidable output boundary.
 2. **Never `setState` inside `onTick`.** Write to refs or the DOM directly. Only phase transitions trigger internal re-renders; quality transitions update refs and transient callbacks.
 3. **No forced reflows.** Never call `getBoundingClientRect()`, `offsetWidth`, `getComputedStyle()` in animation paths. Use `useSize` / ResizeObserver.
 4. **Strong pause.** `cancelAnimationFrame()` stops scheduling entirely. Zero callbacks, zero CPU when paused.
-5. **Reduced motion by default.** All primitives respect `prefers-reduced-motion: reduce` automatically. Bypassing requires explicit `reducedMotion: 'ignore'`.
-6. **Frame-locked shared clock.** One `performance.now()` per rAF frame. Multiple animations stay in sync.
+5. **Reduced motion by default.** Animation and lifecycle primitives respect `prefers-reduced-motion: reduce` automatically. Bypassing requires explicit `reducedMotion: 'ignore'`.
+6. **Frame-locked shared clock.** `createTicker`, `createLoop`, `useLoop`, and `useCanvas` share one `performance.now()` per rAF frame. `useTween` is finite React-state animation and intentionally uses its own rAF.
 
 For the full performance ruleset, read [references/performance.md](references/performance.md).
 

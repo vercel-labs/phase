@@ -97,6 +97,31 @@ describe('useTween', () => {
     expect(result.current).toBeGreaterThanOrEqual(midValue);
   });
 
+  it('uses the latest easing callback without restarting the tween', async () => {
+    const useTween = await getHook();
+    const linear = (progress: number): number => progress;
+    const complete = (): number => 1;
+    const { result, rerender } = renderHook(
+      ({
+        target,
+        easing,
+      }: {
+        target: number;
+        easing: (progress: number) => number;
+      }) => useTween({ target, duration: 300, easing }),
+      { initialProps: { target: 0, easing: linear } },
+    );
+
+    rerender({ target: 100, easing: linear });
+    act(() => vi.advanceTimersByTime(100));
+    expect(result.current).toBeGreaterThan(0);
+    expect(result.current).toBeLessThan(100);
+
+    rerender({ target: 100, easing: complete });
+    act(() => vi.advanceTimersByTime(16));
+    expect(result.current).toBe(100);
+  });
+
   it('delay keeps value at start before animating', async () => {
     const useTween = await getHook();
     const { result, rerender } = renderHook(

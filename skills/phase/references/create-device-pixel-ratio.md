@@ -31,11 +31,12 @@ const watcher = createDevicePixelRatio(options: DevicePixelRatioOptions): Device
 
 ## When not to use
 
-| Instead of this                        | Use                                           |
-| -------------------------------------- | --------------------------------------------- |
-| React component                        | `useDevicePixelRatio`                         |
-| Canvas animation with DPR-aware sizing | `useCanvas` / `createLoop` handle DPR for you |
-| One-shot read with no subscription     | `window.devicePixelRatio` directly            |
+| Instead of this                              | Use                                                      |
+| -------------------------------------------- | -------------------------------------------------------- |
+| React component                              | `useDevicePixelRatio`                                    |
+| React canvas animation with DPR-aware sizing | `useCanvas` handles DPR for you                          |
+| Imperative/non-React canvas sizing           | Use `createDevicePixelRatio` with your own buffer sizing |
+| One-shot read with no subscription           | `window.devicePixelRatio` directly                       |
 
 ## Do
 

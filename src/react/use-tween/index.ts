@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { invalidDurationError } from '../../core/_internal/errors';
 import { prefersReducedMotion } from '../../core/reduced-motion';
 import { clamp01, easeOutCubic } from '../../ease';
+import { useSyncedRef } from '../use-synced-ref';
 
 /**
  * Behavior under reduced motion. `'complete'` jumps straight to the target
@@ -34,6 +35,10 @@ export interface UseTweenOptions {
  * pause, or delta clamping. Routing it through the shared clock would add bundle
  * weight for no benefit.
  *
+ * The reduced-motion preference is read when the effect starts rather than
+ * subscribed mid-tween. The latest `easing` callback is read from a synced ref
+ * without restarting the active tween.
+ *
  * @example
  * const value = useTween({ target: 100, duration: 500 });
  */
@@ -48,6 +53,7 @@ export function useTween(options: UseTweenOptions): number {
   } = options;
 
   const [value, setValue] = useState(target);
+  const easingRef = useSyncedRef(easing);
 
   const fromRef = useRef(target);
   const currentRef = useRef(target);
@@ -89,7 +95,8 @@ export function useTween(options: UseTweenOptions): number {
       }
 
       const progress: number = clamp01(elapsed / duration);
-      const current: number = from + (target - from) * easing(progress);
+      const current: number =
+        from + (target - from) * easingRef.current(progress);
       currentRef.current = current;
       setValue(current);
 

@@ -114,14 +114,16 @@ An element (or ancestor) set to `display:none` has no layout box, so `Intersecti
 **Don't** re-check it by hand — it's already handled, and reading layout to do so forces a reflow:
 
 ```ts
-if (getComputedStyle(el).display === 'none') loop.pause(); // redundant + forced reflow
+if (getComputedStyle(el).display === 'none') {
+  // Redundant forced reflow. Visibility already pauses phase loops.
+}
 ```
 
-**Scope: only `display:none`.** `visibility: hidden` and `opacity: 0` keep the layout box, so IO still reports them as intersecting and phase keeps running. Pause those yourself (`enabled`, `stop()`, `pause()`).
+**Scope: only `display:none`.** `visibility: hidden` and `opacity: 0` keep the layout box, so IO still reports them as intersecting and phase keeps running. Use React `enabled`, terminal `stop()`, or `createLifecycle.pause()` for intentional suspension.
 
 ### Reduced motion by default
 
-All phase primitives respect `prefers-reduced-motion: reduce` automatically. Bypassing requires explicit `reducedMotion: 'ignore'`.
+Phase animation and lifecycle primitives respect `prefers-reduced-motion: reduce` automatically. Bypassing requires explicit `reducedMotion: 'ignore'`.
 
 **Don't:**
 
@@ -158,7 +160,7 @@ return <Anim onTick={(frame) => draw(frame, props)} />;
 
 ### Frame-locked shared clock
 
-All tickers share one `requestAnimationFrame` loop with a single `performance.now()` read per frame.
+All tickers share one `requestAnimationFrame` loop with a single `performance.now()` read per frame. This covers `createTicker`, `createLoop`, `useLoop`, and `useCanvas`. `useTween` is a finite React-state tween and intentionally uses its own rAF.
 
 **Don't:**
 
@@ -172,7 +174,7 @@ requestAnimationFrame(function loop2() {
 });
 ```
 
-**Do:** Use multiple `createTicker` / `useLoop` instances — they automatically share the clock.
+**Do:** Use multiple `createTicker` / `useLoop` instances; they automatically share the clock.
 
 ### Delta clamping
 
@@ -189,6 +191,8 @@ onTick: (frame) => {
 ```
 
 **Do:** Use `frame.delta` and `frame.elapsed` — both account for pause time and clamping.
+
+`createLoop` owns the consumer timeline independently from its replaceable internal ticker. Quality-driven FPS rebuilds preserve `frame.elapsed`, `frame.delta`, `frame.frame`, and `FrameState` identity.
 
 ### Observer pooling
 

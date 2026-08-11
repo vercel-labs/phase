@@ -38,11 +38,12 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 
 ## When not to use
 
-| Instead of this                            | Use                      |
-| ------------------------------------------ | ------------------------ |
-| You want phase to drive the loop           | `useLoop` or `useCanvas` |
-| Just need visibility (no animation gating) | `useSight`               |
-| Framework-agnostic code                    | `createLifecycle`        |
+| Instead of this                                 | Use                                                   |
+| ----------------------------------------------- | ----------------------------------------------------- |
+| You want phase to drive the loop                | `useLoop` or `useCanvas`                              |
+| Just need visibility (no animation gating)      | `useSight`                                            |
+| Framework-agnostic code                         | `createLifecycle`                                     |
+| Need raw sight while pause reasons are composed | Core `createLifecycle` (`visible`, `onVisibleChange`) |
 
 ## Do
 

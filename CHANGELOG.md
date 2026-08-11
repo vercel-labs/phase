@@ -11,6 +11,7 @@
 - Under `reducedMotion: 'pause'`, loops paint exactly one static frame once the element is first visible, so canvas surfaces are never blank.
 - `createLifecycle` exposes the raw sight signal: a `visible` getter and an `onVisibleChange` callback.
 - `useCanvas` keeps full resolution for paused and ignored signals; the 1x-DPR downscale applies only while the resolved quality behavior is `'throttle'`.
+- `useTween` reads the latest `easing` callback without restarting the active tween.
 
 ## 0.0.9
 

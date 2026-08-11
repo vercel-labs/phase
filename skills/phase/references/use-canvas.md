@@ -46,11 +46,12 @@ const { restart, phase, phaseReason, quality, qualityReason, qualityBehavior } =
 
 ## When not to use
 
-| Instead of this                        | Use                                   |
-| -------------------------------------- | ------------------------------------- |
-| DOM transforms (not canvas)            | `useLoop` (no canvas concerns)        |
-| WebGL via three.js/Pixi (own renderer) | `useLifecycle` + your renderer's loop |
-| Static canvas (draw once)              | One-shot `useEffect` with canvas API  |
+| Instead of this                         | Use                                                                               |
+| --------------------------------------- | --------------------------------------------------------------------------------- |
+| DOM transforms (not canvas)             | `useLoop` (no canvas concerns)                                                    |
+| WebGL via three.js/Pixi (own renderer)  | `useLifecycle` + your renderer's loop                                             |
+| Static canvas (draw once)               | One-shot `useEffect` with canvas API                                              |
+| Custom visibility root/margin/threshold | `useLoop` or core `createLoop`; `useCanvas` does not expose `intersectionOptions` |
 
 ## Do
 
