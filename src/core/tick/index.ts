@@ -49,11 +49,15 @@ export interface Ticker {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Prevents teleportation on resume. Matches motion's maxElapsed. */
-const MAX_DELTA_MS = 40;
+/**
+ * Prevents teleportation on resume. Matches motion's maxElapsed.
+ * Exported for loop-level timelines that must clamp identically; not part of
+ * the public package API (not re-exported from any barrel).
+ */
+export const MAX_DELTA_MS = 40;
 
-/** Default first-frame delta when no previous tick exists. */
-const DEFAULT_FIRST_DELTA_MS = 16.67;
+/** Default first-frame delta when no previous tick exists. See MAX_DELTA_MS on export. */
+export const DEFAULT_FIRST_DELTA_MS = 16.67;
 
 // ---------------------------------------------------------------------------
 // Shared frame-locked clock

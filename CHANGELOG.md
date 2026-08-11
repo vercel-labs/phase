@@ -1,5 +1,11 @@
 # phase
 
+## 0.0.9
+
+### Patch Changes
+
+- Fix `createLoop` resetting `frame.elapsed`, `frame.delta`, `frame.frame`, and the `FrameState` object identity when adaptive quality rebuilds the internal ticker (window blur/focus, frame-budget throttling). The loop now owns the consumer-facing frame timeline; the ticker is only a scheduler.
+
 ## 0.0.8
 
 ### Patch Changes

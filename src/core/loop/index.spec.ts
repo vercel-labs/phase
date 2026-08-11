@@ -424,6 +424,10 @@ function setupManualClock() {
       clock += ms;
       rafCb?.(clock);
     },
+    /** Step the clock forward without dispatching a frame. */
+    skip(ms: number): void {
+      clock += ms;
+    },
     restore(): void {
       nowSpy.mockRestore();
     },
@@ -452,6 +456,51 @@ describe('quality signal - frame budget', () => {
 
     expect(loop.quality).toBe('degraded');
     expect(loop.qualityReason).toBe('frame-budget');
+    clock.restore();
+    loop.stop();
+  });
+
+  it('throttle rebuild keeps delta, elapsed, frame count, and identity exact', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const refs: unknown[] = [];
+    const last = { time: 0, delta: 0, elapsed: 0, frame: 0 };
+    const loop = createLoop({
+      element: el,
+      onTick: (frame) => {
+        refs.push(frame);
+        Object.assign(last, frame);
+      },
+    });
+    makeSightVisible(el); // timeline starts at clock=0
+
+    // Ticks at 16, 51, 86, 121; the 3 consecutive 35ms deltas degrade quality.
+    degradeViaBudget(clock);
+    expect(loop.qualityReason).toBe('frame-budget');
+    expect(last.frame).toBe(4);
+    expect(last.elapsed).toBe(121);
+
+    await Promise.resolve(); // run the queued 30fps ticker rebuild
+
+    // First tick of the replacement ticker: the 35ms gap spans the rebuild
+    // and must be fully accounted for in both delta and elapsed.
+    clock.advance(OVER_BUDGET_DELTA); // tick at 156
+    expect(last.delta).toBe(35);
+    expect(last.elapsed).toBe(156);
+    expect(last.frame).toBe(5);
+
+    // The 30fps gate skips sub-interval frames; the next delivered tick's
+    // delta spans the skipped frame — still on the same continuous timeline.
+    clock.advance(16); // clock=172: 16 < 33.3ms interval, skipped
+    expect(last.frame).toBe(5);
+    clock.advance(20); // tick at 192
+    expect(last.delta).toBe(36);
+    expect(last.elapsed).toBe(192);
+    expect(last.frame).toBe(6);
+
+    // Zero per-frame allocations: one FrameState object across rebuilds.
+    expect(refs.every((r) => r === refs[0])).toBe(true);
     clock.restore();
     loop.stop();
   });
@@ -497,6 +546,114 @@ describe('quality signal - frame budget', () => {
     await vi.advanceTimersByTimeAsync(RECOVERY_RETRY_MS);
     expect(loop.phase).toBe('stopped');
     clock.restore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Frame timeline continuity
+//
+// The loop owns the consumer-facing FrameState. Quality-driven ticker rebuilds
+// (focus loss/gain, frame-budget throttling) and visibility pauses must never
+// reset or skew delta, elapsed, or the frame counter. Assertions are exact
+// values, not monotonicity, so a reset or a dropped gap cannot pass.
+// ---------------------------------------------------------------------------
+
+type CreateLoop = Awaited<ReturnType<typeof getModule>>['createLoop'];
+
+function trackLoop(createLoop: CreateLoop, el: Element) {
+  const refs: unknown[] = [];
+  const last = { time: 0, delta: 0, elapsed: 0, frame: 0 };
+  const loop = createLoop({
+    element: el,
+    onTick: (frame) => {
+      refs.push(frame);
+      Object.assign(last, frame);
+    },
+  });
+  return { loop, refs, last };
+}
+
+describe('frame timeline continuity', () => {
+  it('focus-driven rebuilds do not drop running time between ticks', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const { loop, refs, last } = trackLoop(createLoop, el);
+    makeSightVisible(el); // timeline starts at clock=0
+
+    clock.advance(16); // tick 1 at 16
+    expect(last.delta).toBeCloseTo(16.67); // first-ever tick default
+    expect(last.elapsed).toBe(16);
+    expect(last.frame).toBe(1);
+
+    // Blur 10ms after the last tick: no frame has observed that 10ms yet, but
+    // it is running time and must stay on the timeline across the rebuild.
+    clock.skip(10); // clock=26
+    const hasFocusSpy = vi.spyOn(document, 'hasFocus');
+    hasFocusSpy.mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+    await Promise.resolve(); // rebuild at degraded 30fps
+
+    clock.advance(25); // tick 2 at 51
+    expect(last.delta).toBe(35); // 51 - 16, spanning the rebuild
+    expect(last.elapsed).toBe(51);
+    expect(last.frame).toBe(2);
+
+    hasFocusSpy.mockReturnValue(true);
+    window.dispatchEvent(new Event('focus'));
+    await Promise.resolve(); // rebuild back at full fps
+
+    clock.advance(16); // tick 3 at 67
+    expect(last.delta).toBe(16);
+    expect(last.elapsed).toBe(67);
+    expect(last.frame).toBe(3);
+
+    expect(refs.every((r) => r === refs[0])).toBe(true);
+    clock.restore();
+    loop.stop();
+  });
+
+  it('delta spanning a rebuild is still clamped to 40ms', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const { loop, last } = trackLoop(createLoop, el);
+    makeSightVisible(el);
+
+    clock.advance(16); // tick 1 at 16
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+    await Promise.resolve(); // rebuild
+
+    clock.advance(120); // tick 2 at 136
+    expect(last.delta).toBe(40); // clamped, no teleport
+    expect(last.elapsed).toBe(136); // elapsed stays wall-accurate
+    expect(last.frame).toBe(2);
+    clock.restore();
+    loop.stop();
+  });
+
+  it('elapsed excludes paused time and resume gets a clean delta', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const { loop, last } = trackLoop(createLoop, el);
+    makeSightVisible(el);
+
+    clock.advance(16); // tick 1 at 16
+    expect(last.elapsed).toBe(16);
+
+    makeSightHidden(el); // pause at clock=16
+    expect(loop.phase).toBe('paused');
+    clock.skip(1000); // paused time, must not appear in delta or elapsed
+    makeSightVisible(el); // resume at clock=1016
+
+    clock.advance(16); // tick 2 at 1032
+    expect(last.delta).toBeCloseTo(16.67); // clean default, not the pause gap
+    expect(last.elapsed).toBe(32); // 1032 - 1000 paused
+    expect(last.frame).toBe(2);
+    clock.restore();
+    loop.stop();
   });
 });
 

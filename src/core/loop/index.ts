@@ -1,7 +1,7 @@
 import { linkAbortSignal } from '../_internal/abort';
 import { noElementError, serverContextError } from '../_internal/errors';
 import { createLifecycle } from '../lifecycle';
-import { createTicker } from '../tick';
+import { createTicker, DEFAULT_FIRST_DELTA_MS, MAX_DELTA_MS } from '../tick';
 import type { FrameState, Ticker } from '../tick';
 
 // ---------------------------------------------------------------------------
@@ -139,6 +139,29 @@ export function createLoop(options: LoopOptions): Loop {
   let overBudgetCount = 0;
   let ticker: Ticker | null = null;
 
+  // --- Loop-owned timeline ---
+  //
+  // Adaptive quality destroys and recreates the internal ticker while the loop
+  // is running, and a ticker resets its own timeline on every start. So the
+  // consumer-facing FrameState and all timing bookkeeping live here, where they
+  // survive rebuilds; the ticker is only a scheduler.
+
+  // Pre-allocated, mutated in place each frame — zero allocations per tick.
+  const frame: FrameState = { time: 0, delta: 0, elapsed: 0, frame: 0 };
+
+  // Frame budget for the current ticker generation (updated by buildTicker).
+  let budget: number = 1000 / 60;
+
+  // Timestamp of the previous tick; 0 means none (fresh start or just resumed)
+  // so the next tick uses the default first delta instead of the real gap.
+  let lastTickTime = 0;
+
+  // elapsed = now - timelineStart - totalPausedTime, mirroring the ticker's
+  // own elapsed semantics but spanning every ticker generation.
+  let timelineStart = 0;
+  let totalPausedTime = 0;
+  let pauseStartTime = 0;
+
   // Quality signal flags
   let focusDegraded = false;
 
@@ -217,19 +240,32 @@ export function createLoop(options: LoopOptions): Loop {
     ticker = null;
   }
 
+  // The one frame callback, created once and shared by every ticker
+  // generation. Reads only the shared-clock timestamp from the ticker's frame;
+  // delta, elapsed, and the frame counter come from the loop's own timeline so
+  // rebuilds never reset or skew them.
+  function bridgeTick(tickerFrame: FrameState): void {
+    const now: number = tickerFrame.time;
+    const rawDelta: number =
+      lastTickTime === 0 ? DEFAULT_FIRST_DELTA_MS : now - lastTickTime;
+    lastTickTime = now;
+
+    frame.time = now;
+    frame.delta = rawDelta > MAX_DELTA_MS ? MAX_DELTA_MS : rawDelta;
+    frame.elapsed = now - timelineStart - totalPausedTime;
+    frame.frame++;
+
+    checkFrameBudget(frame.delta);
+    onTick(frame);
+  }
+
   function buildTicker(): void {
     const targetFps: number | undefined = getEffectiveFps();
-    const budget: number = 1000 / (targetFps ?? 60);
+    budget = 1000 / (targetFps ?? 60);
 
     destroyTicker();
 
-    ticker = createTicker({
-      fps: targetFps,
-      onTick: (frame) => {
-        checkFrameBudget(frame.delta, budget);
-        onTick(frame);
-      },
-    });
+    ticker = createTicker({ fps: targetFps, onTick: bridgeTick });
     ticker.start();
   }
 
@@ -238,7 +274,7 @@ export function createLoop(options: LoopOptions): Loop {
     buildTicker();
   }
 
-  function checkFrameBudget(delta: number, budget: number): void {
+  function checkFrameBudget(delta: number): void {
     if (delta <= budget * 1.5) {
       overBudgetCount = 0;
       return;
@@ -273,15 +309,23 @@ export function createLoop(options: LoopOptions): Loop {
     const pauseReason = shouldPause();
 
     if (pauseReason) {
-      if (ticker && _phase === 'running') ticker.pause();
+      if (ticker && _phase === 'running') {
+        ticker.pause();
+        pauseStartTime = performance.now();
+      }
       setPhase('paused', pauseReason);
       return;
     }
 
     if (!ticker) {
+      // First activation: stop() is terminal, so this runs once per loop.
+      timelineStart = performance.now();
       buildTicker();
       setPhase('running', _reason === 'initial' ? 'started' : 'resumed');
     } else if (_phase === 'paused') {
+      totalPausedTime += performance.now() - pauseStartTime;
+      // Reset so the first resumed tick gets a clean delta (not the pause gap).
+      lastTickTime = 0;
       ticker.resume();
       setPhase('running', 'resumed');
     }
