@@ -16,7 +16,7 @@ You can't accidentally tank the main thread, leak an observer, jank on scroll, o
 - **Respects reduced motion by default.** Accessibility is built in, not an opt-in.
 - **Never forces a reflow.** No `getBoundingClientRect`, no layout thrash, anywhere in the package.
 - **Zero re-renders from the frame loop.** Per-frame work writes to refs and the DOM, never React state.
-- **Frame-locked shared clock.** Every animation on the page reads one clock, so nothing drifts out of sync.
+- **Frame-locked shared clock.** `createLoop`, `useLoop`, and `useCanvas` share one clock, so independent loop-driven animations stay in sync. `useTween` is a finite React-state tween and intentionally uses its own rAF.
 - **Renders only what matters.** Skip painting off-screen content, mount non-critical UI when idle.
 
 Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every export stays [sub-kilobyte to a few kilobytes](#bundle-size).
@@ -108,7 +108,7 @@ Four lines of animation code. Behind them, performance-critical plumbing:
 
 ## Philosophy
 
-Every primitive in `phase` exposes its state as a **phase** (a single string: `idle`, `running`, `paused`, `active`, `exiting`...) paired with a **reason** explaining _why_ that transition happened.
+Every lifecycle primitive in `phase` exposes its state as a **phase** (a single string: `idle`, `running`, `paused`, `active`, `exiting`...) paired with a **reason** explaining _why_ that transition happened. Finite math helpers and `useTween` are not lifecycle state machines.
 
 ```ts
 const { phase, phaseReason, qualityReason, qualityBehavior } = useLoop({
@@ -154,7 +154,7 @@ If a gap fails any criterion, phase closes it in the [skill](#agent-skill) (audi
 | ----------- | -------------------------------------------- | --------------------------------------------------- |
 | Timing      | Frame clocks and animation loops             | createLoop, useLoop, useCanvas, useTween            |
 | Observation | Reactive wrappers around browser observers   | useSight, useSize, useScrollProgress, useMediaQuery |
-| Lifecycle   | Activation signals composed from IO+MQL+rIC  | useLifecycle, useIdle, useWhenIdle                  |
+| Lifecycle   | Activation signals composed from IO+MQL+rIC  | createLifecycle, useLifecycle, useIdle, useWhenIdle |
 | Composition | Mount/unmount orchestration with transitions | Presence, Swap, WhenVisible, WhenIdle, Defer        |
 | Math        | Pure easing and interpolation functions      | lerp, clamp, easeOutCubic                           |
 | Utility     | React ref/callback patterns for phase users  | useSyncedRef, useStableCallback                     |
@@ -180,6 +180,7 @@ import { createLoop } from 'phase';
 
 const loop = createLoop({
   element: el,
+  start: 'manual',
   onTick: (frame) => {
     // frame.time    — performance.now()
     // frame.delta   — ms since last tick (clamped to 40ms)
@@ -228,7 +229,7 @@ Each quality signal accepts the same three values. When multiple signals are act
 | ------------ | ---------------------------------------------------- | ------------------------------------- |
 | `'throttle'` | Cap FPS (default 30, configurable via `throttleFps`) | Still runs, only slower               |
 | `'pause'`    | Pause the loop; `frame.elapsed` freezes              | Decorative motion, heavy canvas/WebGL |
-| `'ignore'`   | Keep running at full quality                         | Critical UI that must never degrade   |
+| `'ignore'`   | Keep execution unchanged; quality still reports      | Critical UI that must never slow down |
 
 ```ts
 createLoop({
@@ -244,19 +245,24 @@ createLoop({
 
 #### Loop options
 
-| Option            | Type                                | Default      | Description                                                   |
-| ----------------- | ----------------------------------- | ------------ | ------------------------------------------------------------- |
-| `element`         | `Element`                           | required     | Element to observe for visibility                             |
-| `onTick`          | `(frame: FrameState) => void`       | required     | Called each frame while running                               |
-| `fps`             | `number`                            | none         | Cap frames per second                                         |
-| `reducedMotion`   | `'pause' \| 'ignore'`               | `'pause'`    | Behavior when user prefers reduced motion                     |
-| `unfocused`       | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused                        |
-| `frameBudget`     | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after sustained over-budget frames                   |
-| `throttleFps`     | `number`                            | `30`         | FPS cap while a signal resolves to throttle                   |
-| `onPhaseChange`   | `(phase, reason) => void`           | none         | Called on every phase transition                              |
-| `onQualityChange` | `QualityChangeCallback`             | none         | Called whenever quality, reason, or resolved behavior changes |
+| Option                | Type                                | Default      | Description                                                   |
+| --------------------- | ----------------------------------- | ------------ | ------------------------------------------------------------- |
+| `element`             | `Element`                           | required     | Element to observe for visibility                             |
+| `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running                               |
+| `fps`                 | `number`                            | none         | Cap frames per second                                         |
+| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior when user prefers reduced motion                     |
+| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused                        |
+| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after sustained over-budget frames                   |
+| `throttleFps`         | `number`                            | `30`         | FPS cap while a signal resolves to throttle                   |
+| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to the pooled visibility observer                   |
+| `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to honor signals immediately                          |
+| `onPhaseChange`       | `(phase, reason) => void`           | none         | Called on every phase transition                              |
+| `onQualityChange`     | `QualityChangeCallback`             | none         | Called whenever quality, reason, or resolved behavior changes |
+| `signal`              | `AbortSignal`                       | none         | Stops the loop when aborted                                   |
 
-Under `reducedMotion: 'pause'` the loop paints exactly one static frame (`elapsed: 0`) once the element is first visible. Canvas surfaces show their initial state instead of staying blank, and the loop then stays paused. Loops have no `'complete'`: an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (e.g. Tailwind's `motion-reduce:`), or use `useTween` for values with a defined target.
+Under `reducedMotion: 'pause'` every loop consumer receives exactly one static frame (`elapsed: 0`) once the element is first visible, then stays paused. This is especially important for canvas, which would otherwise stay blank. Loops have no `'complete'`: an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (e.g. Tailwind's `motion-reduce:`), or use `useTween` for values with a defined target.
+
+`createLoop` has no imperative `pause()` or `resume()`. Signals own suspension. For manual suspension, use `createLifecycle`; in React, toggle `useLoop({ enabled })`.
 
 ### createTicker
 
@@ -331,6 +337,18 @@ lifecycle.stop();
 ```
 
 The raw sight signal is also available as `lifecycle.visible` and through `onVisibleChange(visible)`. Use these when you need visibility independently of the composed phase, such as when reduced motion outranks sight and keeps the phase paused.
+
+#### Lifecycle options
+
+| Option                | Type                                                       | Default   | Description                                               |
+| --------------------- | ---------------------------------------------------------- | --------- | --------------------------------------------------------- |
+| `element`             | `Element`                                                  | required  | Element whose visibility gates the lifecycle              |
+| `reducedMotion`       | `'pause' \| 'ignore'`                                      | `'pause'` | Whether reduced motion pauses                             |
+| `intersectionOptions` | `IntersectionObserverInit`                                 | none      | Forwarded to the pooled visibility observer               |
+| `start`               | `'auto' \| 'manual'`                                       | `'auto'`  | Whether to honor signals immediately                      |
+| `onPhaseChange`       | `(phase: LifecyclePhase, reason: LifecycleReason) => void` | none      | Called on composed phase transitions                      |
+| `onVisibleChange`     | `(visible: boolean) => void`                               | none      | Called on raw sight changes independent of pause priority |
+| `signal`              | `AbortSignal`                                              | none      | Stops the lifecycle when aborted                          |
 
 `createLoop` is built on `createLifecycle` (it adds a ticker and quality signals on top). Loop-level optimizations (shared clock, zero-allocation `FrameState`, delta clamping, FPS cap, strong pause) only apply when `phase` drives the loop. Lifecycle-level optimizations (pooled observers, composed document-visibility + bfcache + viewport, reduced motion) carry over to consumer-owned loops.
 
@@ -676,6 +694,21 @@ Your `onTick` callback always sees the latest props, state, and refs without res
 
 **Never call `setState` inside `onTick`.** It runs 60 times per second. Write to refs or the DOM directly. Internally, only phase transitions trigger React re-renders. Quality stays available through always-current result getters and the transient `onQualityChange` callback.
 
+| Option                | Type                                | Default      | Description                                             |
+| --------------------- | ----------------------------------- | ------------ | ------------------------------------------------------- |
+| `ref`                 | `RefObject<T \| null>`              | returned     | Bring your own ref, or attach the returned ref          |
+| `onTick`              | `LoopTickFn`                        | required     | Per-frame callback; write to refs or DOM                |
+| `fps`                 | `number`                            | none         | Base FPS cap; uncapped uses display refresh             |
+| `enabled`             | `boolean`                           | `true`       | When false, tears down and reports `idle`               |
+| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior under reduced motion                           |
+| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused                  |
+| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after sustained over-budget frames             |
+| `throttleFps`         | `number`                            | `30`         | Shared throttle cap; never raises a lower `fps`         |
+| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to visibility; value changes rebuild the loop |
+| `onQualityChange`     | `QualityChangeCallback`             | none         | Transient quality notification; does not render         |
+
+Returns `ref`, reactive `phase`/`phaseReason`, and always-current `quality`/`qualityReason`/`qualityBehavior` getters.
+
 ### useLifecycle
 
 The activation signal for a loop you own. Wraps [`createLifecycle`](#createlifecycle), returning `active` / `paused` so a consumer-owned render loop (WebGL, three.js, a Web Worker) can pause when the element leaves the viewport, the document enters a background tab, or reduced motion is active. These visibility cases report `phaseReason: 'sight'`.
@@ -705,7 +738,8 @@ function Hero() {
 | `reducedMotion`       | `'pause' \| 'ignore'`      | `'pause'` | Whether reduced motion pauses the lifecycle           |
 | `paused`              | `boolean`                  | `false`   | Manual pause (e.g. a panel opened over the animation) |
 | `enabled`             | `boolean`                  | `true`    | When `false`, tears down and reports `idle`           |
-| `intersectionOptions` | `IntersectionObserverInit` | —         | Forwarded to the underlying observer                  |
+| `intersectionOptions` | `IntersectionObserverInit` | none      | Forwarded to the underlying observer                  |
+| `onPhaseChange`       | `(phase, reason) => void`  | none      | Synchronous notification before React renders         |
 
 Returns `{ ref, phase, phaseReason, isActive }`. See [Choosing a primitive](#choosing-a-primitive) for `useSight` vs `useLifecycle`.
 
@@ -738,6 +772,21 @@ return (
 
 `useCanvas` coordinates two elements (a sizing container and the canvas), so you pass both refs in.
 
+| Option            | Type                                   | Default      | Description                                     |
+| ----------------- | -------------------------------------- | ------------ | ----------------------------------------------- |
+| `containerRef`    | `RefObject<Element \| null>`           | required     | Element that determines size and visibility     |
+| `canvasRef`       | `RefObject<HTMLCanvasElement \| null>` | required     | Canvas whose 2D context and buffer are managed  |
+| `draw`            | `CanvasDrawFn`                         | required     | Per-frame draw callback                         |
+| `fps`             | `number`                               | none         | Base FPS cap; uncapped uses display refresh     |
+| `enabled`         | `boolean`                              | `true`       | When false, tears down and reports `idle`       |
+| `reducedMotion`   | `'pause' \| 'ignore'`                  | `'pause'`    | Behavior under reduced motion                   |
+| `unfocused`       | `'pause' \| 'throttle' \| 'ignore'`    | `'pause'`    | Behavior while the window is unfocused          |
+| `frameBudget`     | `'pause' \| 'throttle' \| 'ignore'`    | `'throttle'` | Behavior after sustained over-budget frames     |
+| `throttleFps`     | `number`                               | `30`         | Shared throttle cap; never raises a lower `fps` |
+| `onQualityChange` | `QualityChangeCallback`                | none         | Transient quality notification; does not render |
+
+Returns `restart`, reactive `phase`/`phaseReason`, and always-current `quality`/`qualityReason`/`qualityBehavior` getters.
+
 | Concern      | How useCanvas handles it                                                                                                            |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | DPR (retina) | Uses `devicePixelContentBoxSize` for exact physical pixels when available, falls back to `width * dpr`. Listens for DPR changes.    |
@@ -745,7 +794,7 @@ return (
 | Context loss | Listens for `contextlost`/`contextrestored`. Skips draws while lost and resumes drawing after restoration.                          |
 | Quality      | While a signal is configured to throttle and the loop is running, DPR drops to 1x. Paused and ignored signals keep full resolution. |
 
-Both hooks accept the same quality controls as `createLoop`: `unfocused`, `frameBudget`, and `throttleFps`. Their `quality`, `qualityReason`, and `qualityBehavior` getters are always current even when the loop remains running, without causing a React render. Use `onQualityChange` for transient notification. For heavy GPU work, consider `frameBudget: 'pause'`.
+`useLoop` and `useCanvas` share the loop controls `fps`, `enabled`, `reducedMotion`, `unfocused`, `frameBudget`, `throttleFps`, and `onQualityChange`. Their quality getters are always current even when the loop remains running, without causing a React render. For heavy GPU work, consider `frameBudget: 'pause'`.
 
 ### useTween
 
@@ -760,6 +809,17 @@ const opacity = useTween({ target: isVisible ? 1 : 0, duration: 300 });
 Use `useTween` for single values where the render is cheap (counters, progress bars, opacity). Use `useLoop` when animating many elements or doing canvas work, since per-frame `setState` doesn't scale.
 
 Reduced motion default: `'complete'` (jumps to target instantly). The value still reaches its destination; it skips the animation.
+
+| Option          | Type                           | Default        | Description                                  |
+| --------------- | ------------------------------ | -------------- | -------------------------------------------- |
+| `target`        | `number`                       | required       | Value to animate toward                      |
+| `duration`      | `number`                       | `300`          | Duration in milliseconds; must be positive   |
+| `delay`         | `number`                       | `0`            | Delay before animation starts                |
+| `easing`        | `(progress: number) => number` | `easeOutCubic` | Progress easing function                     |
+| `enabled`       | `boolean`                      | `true`         | When false, jumps directly to target         |
+| `reducedMotion` | `'complete' \| 'ignore'`       | `'complete'`   | Jump to target or animate despite preference |
+
+`useTween` is a finite React-state tween. It does not use the shared loop clock and does not add visibility, focus, or frame-budget lifecycle handling. Use `useLoop` or `useCanvas` when work must pause offscreen.
 
 ### usePresence
 
@@ -1212,7 +1272,7 @@ All tickers share one `requestAnimationFrame` loop with a single `performance.no
 
 ### Delta clamping
 
-When a loop resumes after a pause, `frame.delta` is clamped to 40 ms. Animations resume from where they left off with no teleporting.
+`frame.delta` is clamped to 40 ms on every tick, including after resume, so long gaps cannot teleport an animation. `frame.elapsed` excludes paused time.
 
 ## Errors
 
