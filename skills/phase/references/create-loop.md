@@ -16,15 +16,15 @@ const loop = createLoop(options: LoopOptions): Loop;
 | --------------------- | ----------------------------------- | ------------ | ------------------------------------------- |
 | `element`             | `Element`                           | required     | Element to observe for visibility           |
 | `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running             |
-| `fps`                 | `number`                            | —            | Cap frames per second                       |
+| `fps`                 | `number`                            | none         | Cap frames per second                       |
 | `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior when user prefers reduced motion   |
 | `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused      |
 | `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after sustained over-budget frames |
 | `throttleFps`         | `number`                            | `30`         | FPS cap while a signal resolves to throttle |
-| `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to the underlying IO              |
+| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to the underlying IO              |
 | `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately                |
-| `onPhaseChange`       | `(phase, reason) => void`           | —            | Called on every phase transition            |
-| `signal`              | `AbortSignal`                       | —            | Stops the loop when the signal is aborted   |
+| `onPhaseChange`       | `(phase, reason) => void`           | none         | Called on every phase transition            |
+| `signal`              | `AbortSignal`                       | none         | Stops the loop when the signal is aborted   |
 
 ### Return (Loop)
 
@@ -77,7 +77,7 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 ## Reduced motion
 
-Default: `'pause'`. The loop pauses entirely when reduced motion is enabled (`phaseReason` is `'reduced-motion'`), after delivering exactly one static frame (`elapsed: 0`) once the element is first visible — so canvas surfaces show their initial state instead of staying blank.
+Default: `'pause'`. The loop pauses entirely when reduced motion is enabled (`phaseReason` is `'reduced-motion'`), after delivering exactly one static frame (`elapsed: 0`) once the element is first visible. Canvas surfaces therefore show their initial state instead of staying blank.
 
 - `'ignore'`: Keep running regardless. Use only for non-decorative motion (e.g. a data visualization that conveys information via movement).
 - There is no `'complete'` for loops: an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (`motion-reduce:`), or use `useTween` for a value with a defined target.

@@ -5,7 +5,7 @@
 ### Patch Changes
 
 - Fix `createLoop` resetting `frame.elapsed`, `frame.delta`, `frame.frame`, and the `FrameState` object identity when adaptive quality rebuilds the internal ticker (window blur/focus, frame-budget throttling). The loop now owns the consumer-facing frame timeline; the ticker is only a scheduler.
-- **Breaking:** replace `degraded`/`degradedFps` on `createLoop`/`useLoop`/`useCanvas` with per-signal options: `unfocused` (default `'pause'` — blur freezes the timeline, refocus resumes in place), `frameBudget` (default `'throttle'`), and `throttleFps` (default `30`). `pause` wins over `throttle` wins over `ignore` when both signals are active.
+- **Breaking:** replace `degraded`/`degradedFps` on `createLoop`/`useLoop`/`useCanvas` with per-signal options: `unfocused` (default `'pause'`, so blur freezes the timeline and refocus resumes in place), `frameBudget` (default `'throttle'`), and `throttleFps` (default `30`). `pause` wins over `throttle` wins over `ignore` when both signals are active.
 - **Breaking:** loops accept `reducedMotion: 'pause' | 'ignore'` (`LoopReducedMotion`); the documented-but-unimplemented `'complete'` is removed. `useTween` owns `TweenReducedMotion` (`'complete' | 'ignore'`); its never-implemented `'pause'` is removed. `ReducedMotionBehavior` is no longer exported.
 - Under `reducedMotion: 'pause'`, loops paint exactly one static frame once the element is first visible, so canvas surfaces are never blank.
 - `createLifecycle` exposes the raw sight signal: a `visible` getter and an `onVisibleChange` callback.

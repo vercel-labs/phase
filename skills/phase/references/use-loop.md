@@ -16,13 +16,13 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 | --------------------- | ----------------------------------- | ------------ | -------------------------------------------------- |
 | `ref`                 | `RefObject<T \| null>`              | returned     | Bring your own ref, or attach the returned one     |
 | `onTick`              | `LoopTickFn`                        | required     | Called every frame (write to refs/DOM only)        |
-| `fps`                 | `number`                            | —            | Cap frames per second                              |
+| `fps`                 | `number`                            | none         | Cap frames per second                              |
 | `enabled`             | `boolean`                           | `true`       | When `false`, tears down the loop (reports `idle`) |
 | `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior under reduced motion                      |
 | `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused             |
 | `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after sustained over-budget frames        |
 | `throttleFps`         | `number`                            | `30`         | FPS cap while a signal resolves to `'throttle'`    |
-| `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to IO                                    |
+| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to IO                                    |
 
 ### Return
 
@@ -76,11 +76,11 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 
 ## Quality signals
 
-Each signal has its own behavior; `pause` wins over `throttle` wins over `ignore` when both are active. The defaults pause on window blur (the timeline freezes and resumes in place on refocus — no restart, no catch-up) and throttle on frame-budget pressure. `quality`/`qualityReason` stay observable regardless of behavior.
+Each signal has its own behavior; `pause` wins over `throttle` wins over `ignore` when both are active. The defaults pause on window blur (the timeline freezes and resumes in place on refocus, with no restart or catch-up) and throttle on frame-budget pressure. `quality`/`qualityReason` stay observable regardless of behavior.
 
 ## Reduced motion
 
-Default `'pause'`: the loop pauses with `phaseReason` `'reduced-motion'`, after painting exactly one static frame (`elapsed: 0`) once the element is first visible. There is no `'complete'` for loops — an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (`motion-reduce:`), or use `useTween` for a value with a defined target. Use `'ignore'` only for non-decorative motion.
+Default `'pause'`: the loop pauses with `phaseReason` `'reduced-motion'`, after painting exactly one static frame (`elapsed: 0`) once the element is first visible. There is no `'complete'` for loops because an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (`motion-reduce:`), or use `useTween` for a value with a defined target. Use `'ignore'` only for non-decorative motion.
 
 ## See also
 

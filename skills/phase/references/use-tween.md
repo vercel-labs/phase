@@ -58,7 +58,7 @@ Returns the current animated `number`.
 
 ## Reduced motion
 
-Default `'complete'`: jumps to target instantly. The value still arrives at its destination. The animation is skipped. This is the right default for tweens that must reach their final state. There is no `'pause'` for tweens — a value frozen mid-flight reads as a stuck UI; the type is `TweenReducedMotion` (`'complete' | 'ignore'`).
+Default `'complete'`: jumps to target instantly. The value still arrives at its destination. The animation is skipped. This is the right default for tweens that must reach their final state. There is no `'pause'` for tweens because a value frozen mid-flight reads as a stuck UI. The type is `TweenReducedMotion` (`'complete' | 'ignore'`).
 
 ## See also
 

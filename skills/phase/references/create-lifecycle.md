@@ -16,11 +16,11 @@ const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
 | --------------------- | ---------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------- |
 | `element`             | `Element`                                                  | required  | Element to observe for visibility                                                      |
 | `reducedMotion`       | `'pause' \| 'ignore'`                                      | `'pause'` | Whether reduced motion pauses the lifecycle                                            |
-| `intersectionOptions` | `IntersectionObserverInit`                                 | —         | Forwarded to pooled IO                                                                 |
+| `intersectionOptions` | `IntersectionObserverInit`                                 | none      | Forwarded to pooled IO                                                                 |
 | `start`               | `'auto' \| 'manual'`                                       | `'auto'`  | Whether to start immediately                                                           |
-| `onPhaseChange`       | `(phase: LifecyclePhase, reason: LifecycleReason) => void` | —         | Called on phase transitions                                                            |
-| `onVisibleChange`     | `(visible: boolean) => void`                               | —         | Raw sight signal, even when the phase swallows it (e.g. reduced motion outranks sight) |
-| `signal`              | `AbortSignal`                                              | —         | Stops the lifecycle when the signal is aborted                                         |
+| `onPhaseChange`       | `(phase: LifecyclePhase, reason: LifecycleReason) => void` | none      | Called on phase transitions                                                            |
+| `onVisibleChange`     | `(visible: boolean) => void`                               | none      | Raw sight signal, even when the phase swallows it (e.g. reduced motion outranks sight) |
+| `signal`              | `AbortSignal`                                              | none      | Stops the lifecycle when the signal is aborted                                         |
 
 ### Return (Lifecycle)
 

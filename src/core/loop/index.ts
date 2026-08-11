@@ -11,7 +11,7 @@ import type { FrameState, Ticker } from '../tick';
 /**
  * Behavior under reduced motion. `'pause'` stops the loop (after painting one
  * static frame once visible); `'ignore'` keeps running. Loops have no defined
- * end state, so there is no `'complete'` — jump-to-target lives on `useTween`.
+ * end state, so there is no `'complete'`; jump-to-target lives on `useTween`.
  */
 export type LoopReducedMotion = 'pause' | 'ignore';
 
@@ -150,7 +150,7 @@ export function createLoop(options: LoopOptions): Loop {
   // consumer-facing FrameState and all timing bookkeeping live here, where they
   // survive rebuilds; the ticker is only a scheduler.
 
-  // Pre-allocated, mutated in place each frame — zero allocations per tick.
+  // Pre-allocated and mutated in place each frame: zero allocations per tick.
   const frame: FrameState = { time: 0, delta: 0, elapsed: 0, frame: 0 };
 
   // Frame budget for the current ticker generation (updated by buildTicker).
@@ -310,7 +310,7 @@ export function createLoop(options: LoopOptions): Loop {
 
     reconcileQuality();
     // Pause behavior stops ticking once degraded, so no future frame can clear
-    // the degraded state — schedule a timed retry. Throttle keeps running.
+    // the degraded state, so schedule a timed retry. Throttle keeps running.
     if (frameBudget === 'pause') scheduleBudgetRecovery();
   }
 

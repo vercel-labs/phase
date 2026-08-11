@@ -210,12 +210,12 @@ loop.start();
 
 Two signals trigger degradation, and each has its own behavior:
 
-| Trigger      | `qualityReason`  | When                                           | Default behavior                               | Recovery                                           |
-| ------------ | ---------------- | ---------------------------------------------- | ---------------------------------------------- | -------------------------------------------------- |
-| Window blur  | `'unfocused'`    | User switches to another window                | `'pause'` — timeline freezes, resumes in place | Resumes on window focus                            |
-| Frame budget | `'frame-budget'` | 3+ consecutive frames exceed the 16.6ms budget | `'throttle'` — FPS capped (30 by default)      | Does not auto-recover (throttle); 2s retry (pause) |
+| Trigger      | `qualityReason`  | When                                           | Default behavior                                 | Recovery                                           |
+| ------------ | ---------------- | ---------------------------------------------- | ------------------------------------------------ | -------------------------------------------------- |
+| Window blur  | `'unfocused'`    | User switches to another window                | `'pause'`; timeline freezes and resumes in place | Resumes on window focus                            |
+| Frame budget | `'frame-budget'` | 3+ consecutive frames exceed the 16.6ms budget | `'throttle'`; FPS capped (30 by default)         | Does not auto-recover (throttle); 2s retry (pause) |
 
-Read `loop.quality` and `loop.qualityReason` to adapt rendering (fewer particles, lower-fidelity shaders, skip non-essential visual passes). Quality is observable regardless of the configured behavior — even `'ignore'` reports it.
+Read `loop.quality` and `loop.qualityReason` to adapt rendering (fewer particles, lower-fidelity shaders, skip non-essential visual passes). Quality is observable regardless of the configured behavior. Even `'ignore'` reports it.
 
 #### Per-signal behaviors: `unfocused` and `frameBudget`
 
@@ -243,14 +243,14 @@ createLoop({
 | --------------- | ----------------------------------- | ------------ | ------------------------------------------- |
 | `element`       | `Element`                           | required     | Element to observe for visibility           |
 | `onTick`        | `(frame: FrameState) => void`       | required     | Called each frame while running             |
-| `fps`           | `number`                            | —            | Cap frames per second                       |
+| `fps`           | `number`                            | none         | Cap frames per second                       |
 | `reducedMotion` | `'pause' \| 'ignore'`               | `'pause'`    | Behavior when user prefers reduced motion   |
 | `unfocused`     | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused      |
 | `frameBudget`   | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after sustained over-budget frames |
 | `throttleFps`   | `number`                            | `30`         | FPS cap while a signal resolves to throttle |
-| `onPhaseChange` | `(phase, reason) => void`           | —            | Called on every phase transition            |
+| `onPhaseChange` | `(phase, reason) => void`           | none         | Called on every phase transition            |
 
-Under `reducedMotion: 'pause'` the loop paints exactly one static frame (`elapsed: 0`) once the element is first visible — canvas surfaces show their initial state instead of staying blank — then stays paused. Loops have no `'complete'`: an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (e.g. Tailwind's `motion-reduce:`), or use `useTween` for values with a defined target.
+Under `reducedMotion: 'pause'` the loop paints exactly one static frame (`elapsed: 0`) once the element is first visible. Canvas surfaces show their initial state instead of staying blank, and the loop then stays paused. Loops have no `'complete'`: an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (e.g. Tailwind's `motion-reduce:`), or use `useTween` for values with a defined target.
 
 ### createTicker
 
@@ -323,6 +323,8 @@ lifecycle.resume();
 // cleanup:
 lifecycle.stop();
 ```
+
+The raw sight signal is also available as `lifecycle.visible` and through `onVisibleChange(visible)`. Use these when you need visibility independently of the composed phase, such as when reduced motion outranks sight and keeps the phase paused.
 
 `createLoop` is built on `createLifecycle` (it adds a ticker and quality signals on top). Loop-level optimizations (shared clock, zero-allocation `FrameState`, delta clamping, FPS cap, strong pause) only apply when `phase` drives the loop. Lifecycle-level optimizations (pooled observers, composed document-visibility + bfcache + viewport, reduced motion) carry over to consumer-owned loops.
 

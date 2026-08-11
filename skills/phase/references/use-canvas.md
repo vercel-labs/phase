@@ -18,7 +18,7 @@ const { restart, phase, phaseReason, quality, qualityReason } =
 | `containerRef`  | `RefObject<Element \| null>`           | required     | Element that determines canvas size          |
 | `canvasRef`     | `RefObject<HTMLCanvasElement \| null>` | required     | The `<canvas>` element                       |
 | `draw`          | `CanvasDrawFn`                         | required     | Called every frame                           |
-| `fps`           | `number`                               | —            | Cap frames per second                        |
+| `fps`           | `number`                               | none         | Cap frames per second                        |
 | `enabled`       | `boolean`                              | `true`       | When `false`, tears down everything          |
 | `reducedMotion` | `'pause' \| 'ignore'`                  | `'pause'`    | Behavior under reduced motion                |
 | `unfocused`     | `'pause' \| 'throttle' \| 'ignore'`    | `'pause'`    | Behavior while the window is unfocused       |
@@ -88,7 +88,7 @@ const { restart, phase, phaseReason, quality, qualityReason } =
 
 ## Reduced motion
 
-Default `'pause'`: the canvas paints exactly one static frame (`elapsed: 0`) once the container is first visible, then stops — it is never left blank. There is no `'complete'` for canvas loops; draw your reduced-motion state on that single frame.
+Default `'pause'`: the canvas paints exactly one static frame (`elapsed: 0`) once the container is first visible, then stops. It is never left blank. There is no `'complete'` for canvas loops; draw your reduced-motion state on that single frame.
 
 ## See also
 

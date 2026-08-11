@@ -489,7 +489,7 @@ describe('quality signal - frame budget', () => {
     expect(last.frame).toBe(5);
 
     // The 30fps gate skips sub-interval frames; the next delivered tick's
-    // delta spans the skipped frame — still on the same continuous timeline.
+    // delta spans the skipped frame and stays on the same continuous timeline.
     clock.advance(16); // clock=172: 16 < 33.3ms interval, skipped
     expect(last.frame).toBe(5);
     clock.advance(20); // tick at 192
@@ -803,7 +803,7 @@ describe('reduced-motion paint', () => {
     expect(loop.phase).toBe('paused');
     expect(loop.phaseReason).toBe('reduced-motion');
 
-    // The last painted frame is already on screen — no extra paint.
+    // The last painted frame is already on screen, so no extra paint.
     clock.advance(16);
     clock.advance(16);
     expect(last.frame).toBe(1);
