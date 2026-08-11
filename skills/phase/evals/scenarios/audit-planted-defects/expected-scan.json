@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "skillVersion": "0.0.16",
+  "skillVersion": "0.0.17",
   "targets": [
     "workspace"
   ],
@@ -207,7 +207,7 @@
       "execution": "per-frame",
       "file": "src/ticker.ts",
       "line": 4,
-      "text": "el.style.transform = 'translateX(' + width / 10 + 'px)';",
+      "text": "el.style.transform = `translateX(${width / 10}px)`;",
       "fix": "references/decision-guide.md#tier-1-css-only-no-js"
     },
     {

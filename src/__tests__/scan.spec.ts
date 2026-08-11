@@ -347,9 +347,7 @@ describe('coverage accounting', () => {
   });
 
   it('still finds nothing scannable in a minified bundle', () => {
-    const minified =
-      'var a=1;'.repeat(200) +
-      "setInterval(()=>{el.style.transform='translateX(1px)'},16);";
+    const minified = `${'var a=1;'.repeat(200)}setInterval(()=>{el.style.transform='translateX(1px)'},16);`;
     expect(scanFile('src/seed-bundle.mjs', minified)).toEqual([]);
   });
 });
@@ -546,6 +544,38 @@ describe('scan CLI', () => {
     expect(actual).toEqual(golden);
     const metadata = JSON.parse(readFileSync(METADATA, 'utf8'));
     expect(actual.skillVersion).toBe(metadata.version);
+  });
+
+  it('reads the installed skill version when metadata.json is absent', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-installed-skill-'));
+    const scripts = join(root, 'scripts');
+    const workspace = join(root, 'workspace');
+    mkdirSync(scripts);
+    mkdirSync(workspace);
+
+    try {
+      const installedScript = join(scripts, 'scan.mjs');
+      writeFileSync(installedScript, readFileSync(SCRIPT, 'utf8'));
+      writeFileSync(
+        join(root, 'SKILL.md'),
+        "---\nname: phase\nmetadata:\n  version: '1.2.3'\n---\n",
+      );
+      writeFileSync(
+        join(workspace, 'clean.ts'),
+        'export const clean = true;\n',
+      );
+
+      const run = spawnSync(
+        process.execPath,
+        [installedScript, '--json', workspace],
+        { encoding: 'utf8' },
+      );
+
+      expect(run.status).toBe(0);
+      expect(JSON.parse(run.stdout).skillVersion).toBe('1.2.3');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('reports reason-less directives as warnings on stderr', () => {

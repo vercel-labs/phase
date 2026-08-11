@@ -149,8 +149,8 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
 
       canvas.width = bufferWidth;
       canvas.height = bufferHeight;
-      canvas.style.width = width + 'px';
-      canvas.style.height = height + 'px';
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
 
       const effectiveDpr: number = isDegraded ? 1 : dpr;
       ctxRef.current?.setTransform(effectiveDpr, 0, 0, effectiveDpr, 0, 0);

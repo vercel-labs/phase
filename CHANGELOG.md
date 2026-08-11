@@ -1,6 +1,6 @@
 # phase
 
-## 0.0.9
+## 0.0.10
 
 ### Patch Changes
 
@@ -10,6 +10,12 @@
 - Under `reducedMotion: 'pause'`, loops paint exactly one static frame once the element is first visible, so canvas surfaces are never blank.
 - `createLifecycle` exposes the raw sight signal: a `visible` getter and an `onVisibleChange` callback.
 - `useCanvas` keeps the full-resolution buffer while the loop is paused-degraded; the 1x-DPR downscale applies only while degraded output is actually rendering.
+
+## 0.0.9
+
+### Patch Changes
+
+- Replace shipped string concatenation with template literals.
 
 ## 0.0.8
 

@@ -63,12 +63,9 @@ if (startIdx === -1 || endIdx === -1) {
   throw new Error('Missing SIZE-TABLE markers in README.md');
 }
 
-const updated =
-  readme.slice(0, startIdx + START.length) +
-  '\n' +
-  table +
-  '\n' +
-  readme.slice(endIdx);
+const updated = `${readme.slice(0, startIdx + START.length)}
+${table}
+${readme.slice(endIdx)}`;
 
 writeFileSync(README, updated);
 execSync(`pnpm exec oxfmt ${README}`, { cwd: ROOT, stdio: 'inherit' });
