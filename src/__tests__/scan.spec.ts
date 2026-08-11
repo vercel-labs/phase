@@ -347,9 +347,7 @@ describe('coverage accounting', () => {
   });
 
   it('still finds nothing scannable in a minified bundle', () => {
-    const minified =
-      'var a=1;'.repeat(200) +
-      "setInterval(()=>{el.style.transform='translateX(1px)'},16);";
+    const minified = `${'var a=1;'.repeat(200)}setInterval(()=>{el.style.transform='translateX(1px)'},16);`;
     expect(scanFile('src/seed-bundle.mjs', minified)).toEqual([]);
   });
 });

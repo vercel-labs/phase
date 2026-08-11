@@ -19,6 +19,7 @@
     "no-use-before-define": "off",
     "no-optional-chaining": "off",
     "no-async-await": "off",
-    "no-plusplus": "off"
+    "no-plusplus": "off",
+    "prefer-template": "error"
   }
 }
