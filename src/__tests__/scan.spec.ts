@@ -548,6 +548,38 @@ describe('scan CLI', () => {
     expect(actual.skillVersion).toBe(metadata.version);
   });
 
+  it('reads the installed skill version when metadata.json is absent', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-installed-skill-'));
+    const scripts = join(root, 'scripts');
+    const workspace = join(root, 'workspace');
+    mkdirSync(scripts);
+    mkdirSync(workspace);
+
+    try {
+      const installedScript = join(scripts, 'scan.mjs');
+      writeFileSync(installedScript, readFileSync(SCRIPT, 'utf8'));
+      writeFileSync(
+        join(root, 'SKILL.md'),
+        "---\nname: phase\nmetadata:\n  version: '1.2.3'\n---\n",
+      );
+      writeFileSync(
+        join(workspace, 'clean.ts'),
+        'export const clean = true;\n',
+      );
+
+      const run = spawnSync(
+        process.execPath,
+        [installedScript, '--json', workspace],
+        { encoding: 'utf8' },
+      );
+
+      expect(run.status).toBe(0);
+      expect(JSON.parse(run.stdout).skillVersion).toBe('1.2.3');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('reports reason-less directives as warnings on stderr', () => {
     const run = runCli(['workspace']);
     expect(run.stderr).toContain('phase-scan-ignore is missing a reason');

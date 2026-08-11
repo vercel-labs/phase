@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "skillVersion": "0.0.15",
   "targets": [
-    "workspace"
+    "skills/phase/evals/scenarios/audit-planted-defects/workspace"
   ],
   "summary": {
     "filesScanned": 9,
@@ -207,7 +207,7 @@
       "execution": "per-frame",
       "file": "src/ticker.ts",
       "line": 4,
-      "text": "el.style.transform = 'translateX(' + width / 10 + 'px)';",
+      "text": "el.style.transform = `translateX(${width / 10}px)`;",
       "fix": "references/decision-guide.md#tier-1-css-only-no-js"
     },
     {
