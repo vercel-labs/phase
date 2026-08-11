@@ -15,7 +15,14 @@ import type { FrameState, Ticker } from '../tick';
  */
 export type LoopReducedMotion = 'pause' | 'ignore';
 
-/** Per-signal behavior when a quality signal is active. */
+/**
+ * Per-signal behavior when a quality signal is active.
+ *
+ * `'pause'` strongly pauses scheduling, `'throttle'` caps the ticker at
+ * `throttleFps`, and `'ignore'` reports quality without changing execution.
+ * When signals overlap, pause takes precedence over throttle, which takes
+ * precedence over ignore.
+ */
 export type DegradedBehavior = 'throttle' | 'pause' | 'ignore';
 
 export type LoopPhase = 'idle' | 'running' | 'paused' | 'stopped';
@@ -26,11 +33,19 @@ export type LoopReason =
   | 'sight'
   | 'reduced-motion'
   | 'degraded'
-  | 'manual'
   | 'disposed';
 
+/** Whether any quality signal is active, independent of its configured behavior. */
 export type Quality = 'full' | 'degraded';
+/** Active quality signal. Unfocused takes reporting priority when both are active. */
 export type DegradedReason = 'unfocused' | 'frame-budget';
+
+/** Called when quality, reporting-priority reason, or resolved behavior changes. */
+export type QualityChangeCallback = (
+  quality: Quality,
+  reason: DegradedReason | undefined,
+  behavior: DegradedBehavior | undefined,
+) => void;
 
 export interface LoopOptions {
   element: Element;
@@ -39,18 +54,33 @@ export interface LoopOptions {
    * `setState` here (60 calls/sec = 60 re-renders/sec).
    */
   onTick: (frame: FrameState) => void;
+  /** Base FPS cap. Default: uncapped (display refresh rate). */
   fps?: number;
   /** Behavior when the user prefers reduced motion. Default `'pause'`. */
   reducedMotion?: LoopReducedMotion;
-  /** Behavior while the window is unfocused. Default `'pause'`. */
+  /**
+   * Behavior while `document.hasFocus()` is false. Default `'pause'`.
+   * Document/viewport visibility is separate and always strongly pauses.
+   */
   unfocused?: DegradedBehavior;
-  /** Behavior after sustained over-budget frames. Default `'throttle'`. */
+  /**
+   * Behavior after three consecutive frames exceed 1.5x the current target
+   * interval (25ms at 60fps). Default `'throttle'`.
+   */
   frameBudget?: DegradedBehavior;
-  /** FPS cap while any quality signal resolves to `'throttle'`. Default `30`. */
+  /**
+   * Shared FPS cap while any active signal resolves to `'throttle'`.
+   * Never raises a lower `fps` cap. Default `30`.
+   */
   throttleFps?: number;
+  /** Options forwarded to the pooled visibility observer. */
   intersectionOptions?: IntersectionObserverInit;
+  /** Whether to start honoring signals immediately. Default `'auto'`. */
   start?: 'auto' | 'manual';
+  /** Called on every loop phase or phase-reason transition. */
   onPhaseChange?: (phase: LoopPhase, reason: LoopReason) => void;
+  /** Called when quality, reporting-priority reason, or resolved behavior changes. */
+  onQualityChange?: QualityChangeCallback;
   /** Abort signal that stops the loop when aborted. */
   signal?: AbortSignal;
 }
@@ -60,8 +90,12 @@ export interface Loop {
   stop(): void;
   readonly phase: LoopPhase;
   readonly phaseReason: LoopReason;
+  /** Current quality signal state, independent of pause/throttle/ignore behavior. */
   readonly quality: Quality;
+  /** Active signal; `'unfocused'` has reporting priority when both are active. */
   readonly qualityReason: DegradedReason | undefined;
+  /** Resolved behavior after applying pause > throttle > ignore precedence. */
+  readonly qualityBehavior: DegradedBehavior | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,6 +161,7 @@ export function createLoop(options: LoopOptions): Loop {
     intersectionOptions,
     start: startMode = 'auto',
     onPhaseChange,
+    onQualityChange,
     signal,
   } = options;
 
@@ -138,6 +173,7 @@ export function createLoop(options: LoopOptions): Loop {
   let _reason: LoopReason = 'initial';
   let _quality: Quality = 'full';
   let _qualityReason: DegradedReason | undefined;
+  let _qualityBehavior: DegradedBehavior | undefined;
 
   let intentStarted = false;
   let overBudgetCount = 0;
@@ -169,8 +205,8 @@ export function createLoop(options: LoopOptions): Loop {
   // --- Quality signals ---
   //
   // Each signal is tracked independently and resolves through its own
-  // configured behavior. quality/qualityReason always reflect the active
-  // signals (even for 'ignore') so consumers can observe and adapt.
+  // configured behavior. Quality state, reporting-priority reason, and resolved
+  // behavior stay observable (even for 'ignore') so consumers can adapt.
 
   let focusDegraded = false;
   // Latched at reconcileQuality time: over-budget frames reset the counter on
@@ -195,9 +231,38 @@ export function createLoop(options: LoopOptions): Loop {
     onPhaseChange?.(phase, reason);
   }
 
-  function setQuality(quality: Quality, reason?: DegradedReason): void {
+  function setQuality(
+    quality: Quality,
+    reason: DegradedReason | undefined,
+    behavior: DegradedBehavior | undefined,
+  ): void {
+    if (
+      _quality === quality &&
+      _qualityReason === reason &&
+      _qualityBehavior === behavior
+    ) {
+      return;
+    }
     _quality = quality;
     _qualityReason = reason;
+    _qualityBehavior = behavior;
+    onQualityChange?.(quality, reason, behavior);
+  }
+
+  function getQualityBehavior(): DegradedBehavior | undefined {
+    const focusBehavior: DegradedBehavior | undefined = focusDegraded
+      ? unfocused
+      : undefined;
+    const budgetBehavior: DegradedBehavior | undefined = budgetDegraded
+      ? frameBudget
+      : undefined;
+    if (focusBehavior === 'pause' || budgetBehavior === 'pause') return 'pause';
+    if (focusBehavior === 'throttle' || budgetBehavior === 'throttle') {
+      return 'throttle';
+    }
+    if (focusBehavior === 'ignore' || budgetBehavior === 'ignore')
+      return 'ignore';
+    return undefined;
   }
 
   /**
@@ -208,11 +273,11 @@ export function createLoop(options: LoopOptions): Loop {
     budgetDegraded = overBudgetCount >= OVER_BUDGET_THRESHOLD;
 
     if (focusDegraded) {
-      setQuality('degraded', 'unfocused');
+      setQuality('degraded', 'unfocused', getQualityBehavior());
     } else if (budgetDegraded) {
-      setQuality('degraded', 'frame-budget');
+      setQuality('degraded', 'frame-budget', getQualityBehavior());
     } else {
-      setQuality('full');
+      setQuality('full', undefined, undefined);
     }
 
     reconcile();
@@ -241,10 +306,7 @@ export function createLoop(options: LoopOptions): Loop {
   // --- Ticker lifecycle ---
 
   function getEffectiveFps(): number | undefined {
-    const throttled: boolean =
-      (focusDegraded && unfocused === 'throttle') ||
-      (budgetDegraded && frameBudget === 'throttle');
-    if (!throttled) return baseFps;
+    if (_qualityBehavior !== 'throttle') return baseFps;
     if (baseFps === undefined) return throttleFps;
     return Math.min(baseFps, throttleFps);
   }
@@ -353,12 +415,7 @@ export function createLoop(options: LoopOptions): Loop {
     if (lifecycle.phase === 'paused')
       return lifecycle.phaseReason as LoopReason;
     // Quality-driven pause stays here — it needs the ticker's frame timing.
-    if (
-      (focusDegraded && unfocused === 'pause') ||
-      (budgetDegraded && frameBudget === 'pause')
-    ) {
-      return 'degraded';
-    }
+    if (_qualityBehavior === 'pause') return 'degraded';
     return null;
   }
 
@@ -463,6 +520,9 @@ export function createLoop(options: LoopOptions): Loop {
     },
     get qualityReason() {
       return _qualityReason;
+    },
+    get qualityBehavior() {
+      return _qualityBehavior;
     },
   };
 }

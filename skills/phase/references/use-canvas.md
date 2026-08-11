@@ -7,33 +7,35 @@ Everything `useLoop` provides, plus DPR-aware buffer sizing, ResizeObserver coal
 ```ts
 import { useCanvas } from 'phase/react';
 
-const { restart, phase, phaseReason, quality, qualityReason } =
+const { restart, phase, phaseReason, quality, qualityReason, qualityBehavior } =
   useCanvas(options);
 ```
 
 ### Options
 
-| Option          | Type                                   | Default      | Description                                  |
-| --------------- | -------------------------------------- | ------------ | -------------------------------------------- |
-| `containerRef`  | `RefObject<Element \| null>`           | required     | Element that determines canvas size          |
-| `canvasRef`     | `RefObject<HTMLCanvasElement \| null>` | required     | The `<canvas>` element                       |
-| `draw`          | `CanvasDrawFn`                         | required     | Called every frame                           |
-| `fps`           | `number`                               | none         | Cap frames per second                        |
-| `enabled`       | `boolean`                              | `true`       | When `false`, tears down everything          |
-| `reducedMotion` | `'pause' \| 'ignore'`                  | `'pause'`    | Behavior under reduced motion                |
-| `unfocused`     | `'pause' \| 'throttle' \| 'ignore'`    | `'pause'`    | Behavior while the window is unfocused       |
-| `frameBudget`   | `'pause' \| 'throttle' \| 'ignore'`    | `'throttle'` | For heavy GPU work, `'pause'` is often right |
-| `throttleFps`   | `number`                               | `30`         | FPS cap while a signal resolves to throttle  |
+| Option            | Type                                   | Default      | Description                                             |
+| ----------------- | -------------------------------------- | ------------ | ------------------------------------------------------- |
+| `containerRef`    | `RefObject<Element \| null>`           | required     | Element that determines canvas size                     |
+| `canvasRef`       | `RefObject<HTMLCanvasElement \| null>` | required     | The `<canvas>` element                                  |
+| `draw`            | `CanvasDrawFn`                         | required     | Called every frame                                      |
+| `fps`             | `number`                               | none         | Base FPS cap; uncapped uses display refresh             |
+| `enabled`         | `boolean`                              | `true`       | When `false`, tears down everything                     |
+| `reducedMotion`   | `'pause' \| 'ignore'`                  | `'pause'`    | Behavior under reduced motion                           |
+| `unfocused`       | `'pause' \| 'throttle' \| 'ignore'`    | `'pause'`    | Behavior while the window is unfocused                  |
+| `frameBudget`     | `'pause' \| 'throttle' \| 'ignore'`    | `'throttle'` | Behavior after 3 frames exceed 1.5x the target interval |
+| `throttleFps`     | `number`                               | `30`         | Shared throttle cap; never raises a lower `fps`         |
+| `onQualityChange` | `QualityChangeCallback`                | none         | Transient notification; does not trigger a render       |
 
 ### Return
 
-| Property        | Type                          | Description                                      |
-| --------------- | ----------------------------- | ------------------------------------------------ |
-| `restart`       | `() => void`                  | Tear down and rebuild (e.g. after config change) |
-| `phase`         | `LoopPhase`                   | Current loop phase                               |
-| `phaseReason`   | `LoopReason`                  | Why                                              |
-| `quality`       | `Quality`                     | `'full' \| 'degraded'`                           |
-| `qualityReason` | `DegradedReason \| undefined` | Why quality degraded                             |
+| Property          | Type                            | Description                                                                                      |
+| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `restart`         | `() => void`                    | Tear down and rebuild (e.g. after config change)                                                 |
+| `phase`           | `LoopPhase`                     | Current loop phase                                                                               |
+| `phaseReason`     | `LoopReason`                    | `'initial' \| 'started' \| 'resumed' \| 'sight' \| 'reduced-motion' \| 'degraded' \| 'disposed'` |
+| `quality`         | `Quality`                       | Always-current signal state; no quality-only render                                              |
+| `qualityReason`   | `DegradedReason \| undefined`   | Always-current reason; unfocused reports first when both are active                              |
+| `qualityBehavior` | `DegradedBehavior \| undefined` | Always-current resolved behavior after precedence                                                |
 
 ## When to use
 
@@ -67,7 +69,8 @@ const { restart, phase, phaseReason, quality, qualityReason } =
 - Extract `draw` to a named function using the exported `CanvasDrawFn` type: `const draw: CanvasDrawFn = (ctx, frame, size) => { ... }`.
 - Draw in CSS pixels. `ctx` is already scaled for `devicePixelRatio`. DPR changes (e.g. dragging between monitors) are tracked reactively, including chained switches (A -> B -> C).
 - Use `frameBudget: 'pause'` for heavy GPU work that can't gracefully degrade.
-- Read `quality` to adapt rendering (fewer particles, simpler shaders). The buffer only drops to 1x DPR while degraded output is actually rendering; paused loops keep the full-res buffer so the resume frame is crisp.
+- Read always-current `quality`/`qualityReason`/`qualityBehavior` to adapt rendering (fewer particles, simpler shaders), including under `'ignore'`. They do not cause quality-only React renders; use `onQualityChange` for transient notification. The buffer drops to 1x DPR only while `qualityBehavior` is `'throttle'`. Paused and ignored signals keep full resolution.
+- Frame-budget throttle does not auto-recover from good throttled frames alone; another quality reconciliation must observe recovery. `frameBudget: 'pause'` retries after 2 seconds. See [createLoop](./create-loop.md#frame-budget-recovery).
 - For 3D overlays on DOM elements, pair with `useSize({ box: 'border-box' })` for the target element's dimensions. Use a separate container for the canvas (the RO pool allows one observer per element, so sharing a ref between `useSize` and `useCanvas` would clobber one subscription). If you also need viewport-relative position (DOM-to-WebGL coordinate mapping), that requires `getBoundingClientRect()` on scroll/resize in a custom hook, since no async observer exists for element position:
 
   ```tsx

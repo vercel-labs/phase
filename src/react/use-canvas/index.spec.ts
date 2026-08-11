@@ -201,6 +201,7 @@ describe('degraded buffer scaling', () => {
     });
     expect(result.current.phase).toBe('paused');
     expect(result.current.quality).toBe('degraded');
+    expect(result.current.qualityBehavior).toBe('pause');
 
     // A resize during the pause must not downscale the buffer.
     mockRO.triggerWithPhysicalSize(container, 375, 667, 750, 1334);
@@ -234,11 +235,47 @@ describe('degraded buffer scaling', () => {
       window.dispatchEvent(new Event('blur'));
     });
     expect(result.current.phase).toBe('running');
+    expect(result.current.quality).toBe('degraded');
+    expect(result.current.qualityReason).toBe('unfocused');
+    expect(result.current.qualityBehavior).toBe('throttle');
 
     // Degraded output at low fps: render into a CSS-pixel buffer.
     mockRO.triggerWithPhysicalSize(container, 375, 667, 750, 1334);
     expect(canvas.width).toBe(375);
     expect(canvas.height).toBe(667);
+  });
+
+  it("running-degraded with 'ignore' keeps the full-res buffer", async () => {
+    const useCanvas = await getHook();
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+
+    vi.stubGlobal('devicePixelRatio', 2);
+
+    const { result } = renderHook(() =>
+      useCanvas({
+        containerRef,
+        canvasRef,
+        draw: vi.fn(),
+        unfocused: 'ignore',
+      }),
+    );
+    act(() => {
+      mockIO.trigger(container, true);
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+    });
+
+    expect(result.current.phase).toBe('running');
+    expect(result.current.quality).toBe('degraded');
+    expect(result.current.qualityReason).toBe('unfocused');
+    expect(result.current.qualityBehavior).toBe('ignore');
+
+    mockRO.triggerWithPhysicalSize(container, 375, 667, 750, 1334);
+    expect(canvas.width).toBe(750);
+    expect(canvas.height).toBe(1334);
   });
 });
 

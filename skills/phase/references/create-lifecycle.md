@@ -1,6 +1,6 @@
 # `createLifecycle`
 
-The activation decision for an animation, decoupled from who drives the frames. Composes visibility (`createSight`), reduced motion, and a manual pause into a single `active` / `paused` phase.
+The activation decision for an animation, decoupled from who drives the frames. Composes visibility (`createSight`), reduced motion, and a manual pause into a single `active` / `paused` phase. Lifecycle reason `'sight'` covers both viewport visibility and document visibility, including background tabs and bfcache transitions.
 
 ## Signature
 
@@ -59,6 +59,7 @@ const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
   ```
 - Use `pause()` / `resume()` for contextual suspension (modal open, panel covers animation).
 - Trust pause priority: `reduced-motion` > `sight` > `manual`. If multiple pause reasons apply, the highest-priority one is reported.
+- Read `visible` or subscribe with `onVisibleChange` when you need the composed sight boolean independently of pause priority. Use `createSight` directly when you need its detailed viewport/document/bfcache reason.
 - Gate a framework-free engine loaded via dynamic `import()`. Construct the lifecycle after the module resolves, drive the engine's imperative `start()` / `stop()` from `onPhaseChange`, and dispose both on teardown:
 
   ```ts

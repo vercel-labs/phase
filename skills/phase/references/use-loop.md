@@ -7,38 +7,41 @@ The primary React hook. Wraps `createLoop` with React lifecycle management. Visi
 ```ts
 import { useLoop } from 'phase/react';
 
-const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
+const { ref, phase, phaseReason, quality, qualityReason, qualityBehavior } =
+  useLoop<T>(options);
 ```
 
 ### Options
 
-| Option                | Type                                | Default      | Description                                        |
-| --------------------- | ----------------------------------- | ------------ | -------------------------------------------------- |
-| `ref`                 | `RefObject<T \| null>`              | returned     | Bring your own ref, or attach the returned one     |
-| `onTick`              | `LoopTickFn`                        | required     | Called every frame (write to refs/DOM only)        |
-| `fps`                 | `number`                            | none         | Cap frames per second                              |
-| `enabled`             | `boolean`                           | `true`       | When `false`, tears down the loop (reports `idle`) |
-| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior under reduced motion                      |
-| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused             |
-| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after sustained over-budget frames        |
-| `throttleFps`         | `number`                            | `30`         | FPS cap while a signal resolves to `'throttle'`    |
-| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to IO                                    |
+| Option                | Type                                | Default      | Description                                             |
+| --------------------- | ----------------------------------- | ------------ | ------------------------------------------------------- |
+| `ref`                 | `RefObject<T \| null>`              | returned     | Bring your own ref, or attach the returned one          |
+| `onTick`              | `LoopTickFn`                        | required     | Called every frame (write to refs/DOM only)             |
+| `fps`                 | `number`                            | none         | Base FPS cap; uncapped uses display refresh             |
+| `enabled`             | `boolean`                           | `true`       | When `false`, tears down the loop (reports `idle`)      |
+| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior under reduced motion                           |
+| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused                  |
+| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after 3 frames exceed 1.5x the target interval |
+| `throttleFps`         | `number`                            | `30`         | Shared throttle cap; never raises a lower `fps`         |
+| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to IO                                         |
+| `onQualityChange`     | `QualityChangeCallback`             | none         | Transient notification; does not trigger a render       |
 
 ### Return
 
-| Property        | Type                          | Description                                    |
-| --------------- | ----------------------------- | ---------------------------------------------- |
-| `ref`           | `RefObject<T \| null>`        | Attach to the animated element                 |
-| `phase`         | `LoopPhase`                   | `'idle' \| 'running' \| 'paused' \| 'stopped'` |
-| `phaseReason`   | `LoopReason`                  | Why the current phase was entered              |
-| `quality`       | `Quality`                     | `'full' \| 'degraded'`                         |
-| `qualityReason` | `DegradedReason \| undefined` | `'unfocused' \| 'frame-budget'`                |
+| Property          | Type                            | Description                                                                                      |
+| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `ref`             | `RefObject<T \| null>`          | Attach to the animated element                                                                   |
+| `phase`           | `LoopPhase`                     | `'idle' \| 'running' \| 'paused' \| 'stopped'`                                                   |
+| `phaseReason`     | `LoopReason`                    | `'initial' \| 'started' \| 'resumed' \| 'sight' \| 'reduced-motion' \| 'degraded' \| 'disposed'` |
+| `quality`         | `Quality`                       | Always-current signal state; no quality-only render                                              |
+| `qualityReason`   | `DegradedReason \| undefined`   | Always-current reason; unfocused reports first when both are active                              |
+| `qualityBehavior` | `DegradedBehavior \| undefined` | Always-current resolved behavior after precedence                                                |
 
 ## When to use
 
 - Animating DOM elements in a per-frame loop (transforms, positions, colors).
 - You need visibility-aware pausing (zero CPU off-screen).
-- You want phase/quality signals exposed as React state for conditional rendering.
+- You want reactive phase state plus always-current quality getters and transient quality notification.
 
 ## When not to use
 
@@ -76,7 +79,9 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 
 ## Quality signals
 
-Each signal has its own behavior; `pause` wins over `throttle` wins over `ignore` when both are active. The defaults pause on window blur (the timeline freezes and resumes in place on refocus, with no restart or catch-up) and throttle on frame-budget pressure. `quality`/`qualityReason` stay observable regardless of behavior.
+Each signal has its own behavior; `pause` wins over `throttle` wins over `ignore` when both are active. The defaults pause on window blur (the timeline freezes and resumes in place on refocus, with no restart or catch-up) and throttle on frame-budget pressure. `quality`, `qualityReason`, and `qualityBehavior` stay current through refs even when the loop remains running, and stay observable under `'ignore'`. They do not cause quality-only React renders; use `onQualityChange` for transient notification. If both signals are active, the reason reports unfocused first while the behavior reports the independently resolved action. `throttleFps` is shared and cannot raise a lower base `fps`.
+
+Frame-budget throttle does not auto-recover from good throttled frames alone; another quality reconciliation must observe recovery. `frameBudget: 'pause'` retries after 2 seconds. See [createLoop](./create-loop.md#frame-budget-recovery) for the full matrix.
 
 ## Reduced motion
 

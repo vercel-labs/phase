@@ -276,6 +276,7 @@ describe('quality signal', () => {
       });
       expect(loop.quality).toBe('full');
       expect(loop.qualityReason).toBeUndefined();
+      expect(loop.qualityBehavior).toBeUndefined();
       loop.stop();
     });
   });
@@ -293,6 +294,7 @@ describe('quality signal', () => {
 
       expect(loop.quality).toBe('degraded');
       expect(loop.qualityReason).toBe('unfocused');
+      expect(loop.qualityBehavior).toBe('pause');
       loop.stop();
     });
 
@@ -332,6 +334,38 @@ describe('quality signal', () => {
       expect(loop.quality).toBe('degraded');
       loop.stop();
     });
+
+    it('onQualityChange reports quality and reason transitions', async () => {
+      const { createLoop } = await getModule();
+      const el = document.createElement('div');
+      const onQualityChange = vi.fn();
+      const loop = createLoop({
+        element: el,
+        onTick: vi.fn(),
+        unfocused: 'ignore',
+        onQualityChange,
+      });
+      makeSightVisible(el);
+
+      const hasFocusSpy = vi.spyOn(document, 'hasFocus');
+      hasFocusSpy.mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+      expect(onQualityChange).toHaveBeenLastCalledWith(
+        'degraded',
+        'unfocused',
+        'ignore',
+      );
+
+      hasFocusSpy.mockReturnValue(true);
+      window.dispatchEvent(new Event('focus'));
+      expect(onQualityChange).toHaveBeenLastCalledWith(
+        'full',
+        undefined,
+        undefined,
+      );
+      expect(onQualityChange).toHaveBeenCalledTimes(2);
+      loop.stop();
+    });
   });
 });
 
@@ -349,6 +383,7 @@ describe('per-signal behavior - unfocused', () => {
     expect(loop.phaseReason).toBe('degraded');
     expect(loop.quality).toBe('degraded');
     expect(loop.qualityReason).toBe('unfocused');
+    expect(loop.qualityBehavior).toBe('pause');
     loop.stop();
   });
 
@@ -387,6 +422,7 @@ describe('per-signal behavior - unfocused', () => {
     expect(loop.phase).toBe('running');
     expect(loop.quality).toBe('degraded');
     expect(loop.qualityReason).toBe('unfocused');
+    expect(loop.qualityBehavior).toBe('ignore');
     loop.stop();
   });
 });
@@ -572,6 +608,34 @@ describe('quality signal - frame budget', () => {
     clock.restore();
     loop.stop();
   });
+
+  it('resolved behavior is independent of reporting-priority reason', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const loop = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      unfocused: 'ignore',
+      frameBudget: 'pause',
+    });
+    makeSightVisible(el);
+
+    degradeViaBudget(clock);
+    expect(loop.phase).toBe('paused');
+    expect(loop.qualityReason).toBe('frame-budget');
+    expect(loop.qualityBehavior).toBe('pause');
+
+    // Unfocused reports first, but the active frame-budget pause still wins.
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+    expect(loop.qualityReason).toBe('unfocused');
+    expect(loop.qualityBehavior).toBe('pause');
+    expect(loop.phase).toBe('paused');
+
+    clock.restore();
+    loop.stop();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -708,14 +772,10 @@ describe('frame timeline continuity', () => {
     clock.advance(35);
     expect(loop.qualityReason).toBe('frame-budget');
     expect(loop.phase).toBe('running'); // throttle keeps running
-    await Promise.resolve(); // rebuild at 30fps
+    await Promise.resolve(); // rebuild at 30fps; frame budget remains active
 
-    clock.advance(35); // tick 5 at 156 (under the 30fps budget, count resets)
-    expect(last.delta).toBe(35);
-    expect(last.elapsed).toBe(156);
-    expect(last.frame).toBe(5);
-
-    // Blur while throttled: pause wins over throttle.
+    // Blur before the next tick can clear the frame-budget counter. Both
+    // signals are active: unfocused pause wins over frame-budget throttle.
     clock.skip(10); // 10ms of running time before the pause
     const hasFocusSpy = vi.spyOn(document, 'hasFocus');
     hasFocusSpy.mockReturnValue(false);
@@ -723,17 +783,28 @@ describe('frame timeline continuity', () => {
     expect(loop.phase).toBe('paused');
     expect(loop.phaseReason).toBe('degraded');
     expect(loop.qualityReason).toBe('unfocused');
+    expect(loop.qualityBehavior).toBe('pause');
 
     clock.skip(1000); // paused time, excluded from the timeline
     hasFocusSpy.mockReturnValue(true);
     window.dispatchEvent(new Event('focus'));
     expect(loop.phase).toBe('running');
+    expect(loop.qualityReason).toBe('frame-budget');
+    expect(loop.qualityBehavior).toBe('throttle');
+
+    clock.advance(35); // tick 5 at 1166, still throttled
+    expect(last.delta).toBeCloseTo(16.67); // clean post-resume delta
+    expect(last.elapsed).toBe(166); // 121 + 10 running + 35, pause excluded
+    expect(last.frame).toBe(5);
+
+    // A later quality reconciliation observes the recovered frame budget.
+    window.dispatchEvent(new Event('focus'));
     expect(loop.quality).toBe('full');
-    await Promise.resolve(); // fps changed while paused: rebuild at full speed
+    await Promise.resolve(); // rebuild back at full fps
 
     clock.advance(16); // tick 6 at 1182
-    expect(last.delta).toBeCloseTo(16.67); // clean post-resume delta
-    expect(last.elapsed).toBe(182); // 156 + 10 running + 16, pause excluded
+    expect(last.delta).toBe(16);
+    expect(last.elapsed).toBe(182);
     expect(last.frame).toBe(6);
     expect(refs.every((r) => r === refs[0])).toBe(true);
     clock.restore();

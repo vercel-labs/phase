@@ -33,6 +33,15 @@ export { Swap } from './swap';
 
 // Types
 export type { LoopTickFn, UseLoopOptions, UseLoopResult } from './use-loop';
+export type {
+  DegradedBehavior,
+  DegradedReason,
+  LoopPhase,
+  LoopReason,
+  LoopReducedMotion,
+  Quality,
+  QualityChangeCallback,
+} from '../core/loop';
 export type { UseLifecycleOptions, UseLifecycleResult } from './use-lifecycle';
 export type {
   LifecyclePhase,

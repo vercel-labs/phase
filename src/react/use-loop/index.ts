@@ -8,6 +8,7 @@ import {
   type Quality,
   type DegradedBehavior,
   type DegradedReason,
+  type QualityChangeCallback,
 } from '../../core/loop';
 import type { FrameState } from '../../core/tick';
 import { useSyncedRef } from '../use-synced-ref';
@@ -30,17 +31,27 @@ export interface UseLoopOptions<T extends Element = HTMLDivElement> {
    * `setState` here (60 calls/sec = 60 re-renders/sec).
    */
   onTick: LoopTickFn;
+  /** Base FPS cap. Default: uncapped (display refresh rate). */
   fps?: number;
   enabled?: boolean;
   /** Behavior when the user prefers reduced motion. Default `'pause'`. */
   reducedMotion?: LoopReducedMotion;
-  /** Behavior while the window is unfocused. Default `'pause'`. */
+  /**
+   * Behavior while `document.hasFocus()` is false. Default `'pause'`.
+   * Offscreen/background-tab visibility is separate and always pauses.
+   */
   unfocused?: DegradedBehavior;
-  /** Behavior after sustained over-budget frames. Default `'throttle'`. */
+  /**
+   * Behavior after three consecutive frames exceed 1.5x the current target
+   * interval. Default `'throttle'`.
+   */
   frameBudget?: DegradedBehavior;
-  /** FPS cap while any quality signal resolves to `'throttle'`. Default `30`. */
+  /** Shared throttle cap; never raises a lower `fps` cap. Default `30`. */
   throttleFps?: number;
+  /** Options forwarded to the pooled visibility observer. Value changes rebuild the loop. */
   intersectionOptions?: IntersectionObserverInit;
+  /** Transient quality notification. Does not trigger a React render. */
+  onQualityChange?: QualityChangeCallback;
 }
 
 export interface UseLoopResult<T extends Element = HTMLDivElement> {
@@ -48,11 +59,15 @@ export interface UseLoopResult<T extends Element = HTMLDivElement> {
   ref: RefObject<T | null>;
   phase: LoopPhase;
   phaseReason: LoopReason;
+  /** Always-current quality state. Quality changes do not trigger a render. */
   quality: Quality;
+  /** Active signal; `'unfocused'` has reporting priority when both are active. */
   qualityReason: DegradedReason | undefined;
+  /** Resolved behavior after applying pause > throttle > ignore precedence. */
+  qualityBehavior: DegradedBehavior | undefined;
 }
 
-type LoopState = Omit<UseLoopResult, 'ref'>;
+type LoopState = Pick<UseLoopResult, 'phase' | 'phaseReason'>;
 
 // Disabled or unmounted: the loop isn't created, so it reports `idle` — matching
 // useCanvas and useLifecycle. (Toggling `enabled` tears down and recreates the
@@ -60,19 +75,18 @@ type LoopState = Omit<UseLoopResult, 'ref'>;
 const INITIAL_STATE: LoopState = {
   phase: 'idle',
   phaseReason: 'initial',
-  quality: 'full',
-  qualityReason: undefined,
 };
 
 /**
  * Ref-based animation loop that never triggers re-renders from the frame loop.
  *
  * @example
- * const { ref, phase } = useLoop({
+ * const { ref, phase, qualityReason, qualityBehavior } = useLoop({
  *   onTick: (frame) => {
  *     ref.current.style.transform = `translateX(${frame.elapsed * 0.1}px)`;
  *   },
  * });
+ * // qualityReason identifies the signal; qualityBehavior is the resolved action.
  * return <div ref={ref} />;
  */
 export function useLoop<T extends Element = HTMLDivElement>(
@@ -88,6 +102,13 @@ export function useLoop<T extends Element = HTMLDivElement>(
     intersectionOptions,
   } = options;
   const onTickRef = useSyncedRef(options.onTick);
+  const onQualityChangeRef = useSyncedRef(options.onQualityChange);
+  const intersectionRoot = intersectionOptions?.root;
+  const intersectionRootMargin = intersectionOptions?.rootMargin;
+  const intersectionThreshold = intersectionOptions?.threshold;
+  const intersectionThresholdKey = Array.isArray(intersectionThreshold)
+    ? intersectionThreshold.join(',')
+    : intersectionThreshold;
 
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options.ref ?? internalRef;
@@ -95,11 +116,17 @@ export function useLoop<T extends Element = HTMLDivElement>(
   const [state, setState] = useState<LoopState>(INITIAL_STATE);
 
   const loopRef = useRef<ReturnType<typeof createLoop> | null>(null);
+  const qualityRef = useRef<Quality>('full');
+  const qualityReasonRef = useRef<DegradedReason | undefined>(undefined);
+  const qualityBehaviorRef = useRef<DegradedBehavior | undefined>(undefined);
 
   useEffect(() => {
     const element: Element | null = ref.current;
     if (!element || !enabled) {
       setState(INITIAL_STATE);
+      qualityRef.current = 'full';
+      qualityReasonRef.current = undefined;
+      qualityBehaviorRef.current = undefined;
       return;
     }
 
@@ -113,16 +140,16 @@ export function useLoop<T extends Element = HTMLDivElement>(
       throttleFps,
       intersectionOptions,
       onPhaseChange: (phase, reason) => {
-        // Read from loopRef instead of the local `loop` variable to avoid
-        // accessing it before createLoop returns (start:'auto' fires
-        // onPhaseChange synchronously during construction).
-        const current = loopRef.current;
         setState({
           phase,
           phaseReason: reason,
-          quality: current?.quality ?? 'full',
-          qualityReason: current?.qualityReason,
         });
+      },
+      onQualityChange: (quality, qualityReason, qualityBehavior) => {
+        qualityRef.current = quality;
+        qualityReasonRef.current = qualityReason;
+        qualityBehaviorRef.current = qualityBehavior;
+        onQualityChangeRef.current?.(quality, qualityReason, qualityBehavior);
       },
     });
     loopRef.current = loop;
@@ -132,7 +159,29 @@ export function useLoop<T extends Element = HTMLDivElement>(
       loopRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, fps, reducedMotion, unfocused, frameBudget, throttleFps]);
+  }, [
+    enabled,
+    fps,
+    reducedMotion,
+    unfocused,
+    frameBudget,
+    throttleFps,
+    intersectionRoot,
+    intersectionRootMargin,
+    intersectionThresholdKey,
+  ]);
 
-  return { ref, ...state };
+  return {
+    ref,
+    ...state,
+    get quality() {
+      return qualityRef.current;
+    },
+    get qualityReason() {
+      return qualityReasonRef.current;
+    },
+    get qualityBehavior() {
+      return qualityBehaviorRef.current;
+    },
+  };
 }

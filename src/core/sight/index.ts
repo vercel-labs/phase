@@ -33,7 +33,7 @@ export interface Sight {
 // ---------------------------------------------------------------------------
 
 /**
- * Visibility observer combining document focus and viewport intersection.
+ * Visibility observer combining document visibility and viewport intersection.
  *
  * `phase` is `'visible'` only when both the document is visible (not backgrounded)
  * and the element is within the viewport. Uses a shared IntersectionObserver

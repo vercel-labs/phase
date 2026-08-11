@@ -12,34 +12,36 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 ### Options
 
-| Option                | Type                                | Default      | Description                                 |
-| --------------------- | ----------------------------------- | ------------ | ------------------------------------------- |
-| `element`             | `Element`                           | required     | Element to observe for visibility           |
-| `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running             |
-| `fps`                 | `number`                            | none         | Cap frames per second                       |
-| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior when user prefers reduced motion   |
-| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused      |
-| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after sustained over-budget frames |
-| `throttleFps`         | `number`                            | `30`         | FPS cap while a signal resolves to throttle |
-| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to the underlying IO              |
-| `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately                |
-| `onPhaseChange`       | `(phase, reason) => void`           | none         | Called on every phase transition            |
-| `signal`              | `AbortSignal`                       | none         | Stops the loop when the signal is aborted   |
+| Option                | Type                                | Default      | Description                                               |
+| --------------------- | ----------------------------------- | ------------ | --------------------------------------------------------- |
+| `element`             | `Element`                           | required     | Element to observe for visibility                         |
+| `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running                           |
+| `fps`                 | `number`                            | none         | Base FPS cap; uncapped uses display refresh               |
+| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior when user prefers reduced motion                 |
+| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused                    |
+| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after 3 frames exceed 1.5x the target interval   |
+| `throttleFps`         | `number`                            | `30`         | Shared throttle cap; never raises a lower `fps`           |
+| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to the underlying IO                            |
+| `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately                              |
+| `onPhaseChange`       | `(phase, reason) => void`           | none         | Called on every phase transition                          |
+| `onQualityChange`     | `QualityChangeCallback`             | none         | Called when quality, reason, or resolved behavior changes |
+| `signal`              | `AbortSignal`                       | none         | Stops the loop when the signal is aborted                 |
 
 ### Return (Loop)
 
-| Property        | Type                          | Description                                    |
-| --------------- | ----------------------------- | ---------------------------------------------- |
-| `start()`       | `() => void`                  | Begin the loop (no-op if already running)      |
-| `stop()`        | `() => void`                  | Terminal (disposes everything)                 |
-| `phase`         | `LoopPhase`                   | `'idle' \| 'running' \| 'paused' \| 'stopped'` |
-| `phaseReason`   | `LoopReason`                  | Why the current phase was entered              |
-| `quality`       | `Quality`                     | `'full' \| 'degraded'`                         |
-| `qualityReason` | `DegradedReason \| undefined` | `'unfocused' \| 'frame-budget'`                |
+| Property          | Type                            | Description                                                                                      |
+| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `start()`         | `() => void`                    | Begin the loop (no-op if already running)                                                        |
+| `stop()`          | `() => void`                    | Terminal (disposes everything)                                                                   |
+| `phase`           | `LoopPhase`                     | `'idle' \| 'running' \| 'paused' \| 'stopped'`                                                   |
+| `phaseReason`     | `LoopReason`                    | `'initial' \| 'started' \| 'resumed' \| 'sight' \| 'reduced-motion' \| 'degraded' \| 'disposed'` |
+| `quality`         | `Quality`                       | Signal state, independent of configured behavior                                                 |
+| `qualityReason`   | `DegradedReason \| undefined`   | `'unfocused' \| 'frame-budget'`; unfocused reports first when both are active                    |
+| `qualityBehavior` | `DegradedBehavior \| undefined` | Resolved behavior after `pause` > `throttle` > `ignore` precedence                               |
 
 ## When to use
 
-- You need a per-frame animation loop that automatically pauses when off-screen, in a background tab, or in an unfocused window.
+- You need a per-frame animation loop with two independent pause paths: sight always pauses for offscreen elements or background tabs, while the configurable `unfocused` quality signal handles window blur.
 - You want zero CPU when the element isn't visible (strong pause via `cancelAnimationFrame`).
 - You need per-signal quality behavior (pause on blur, FPS throttle on frame budget overflow).
 - You're animating DOM elements (transforms, opacity, positions) in a frame loop.
@@ -63,9 +65,16 @@ const loop = createLoop(options: LoopOptions): Loop;
   };
   ```
 - Call `stop()` when the animation is permanently done (e.g. component unmounts, page navigates away).
-- Read `phase` and `phaseReason` to debug unexpected pauses; `qualityReason` names the active quality signal.
+- Read `phase` and `phaseReason` to debug unexpected pauses. `qualityReason` names the reporting-priority signal, while `qualityBehavior` names the independently resolved action. Quality remains observable under `'ignore'`.
 - Rely on the defaults: window blur pauses (the timeline freezes and resumes in place on refocus), frame-budget pressure throttles to `throttleFps`. When both are active, `pause` wins over `throttle` wins over `ignore`.
+- Remember that `throttleFps` cannot raise a lower base `fps` cap.
 - Use `frameBudget: 'pause'` for heavy canvas/WebGL that can't gracefully degrade.
+
+### Frame-budget recovery
+
+- `'throttle'`: quality remains degraded until another quality reconciliation observes recovery (for example, a focus event). Good throttled frames alone do not restore full quality.
+- `'pause'`: a 2-second timer optimistically resumes and re-measures. Another sustained over-budget sequence pauses and schedules the next retry.
+- `'ignore'`: quality remains observable, but phase, FPS, and canvas DPR are unchanged.
 
 ## Don't
 

@@ -16,6 +16,7 @@ import {
   type Quality,
   type DegradedBehavior,
   type DegradedReason,
+  type QualityChangeCallback,
 } from '../../core/loop';
 import type { FrameState } from '../../core/tick';
 import { useSyncedRef } from '../use-synced-ref';
@@ -44,31 +45,45 @@ export interface UseCanvasOptions {
    * Draw directly to the canvas. Never call React `setState` here.
    */
   draw: CanvasDrawFn;
+  /** Base FPS cap. Default: uncapped (display refresh rate). */
   fps?: number;
+  /** When `false`, tears down the canvas lifecycle and reports `idle`. Default `true`. */
   enabled?: boolean;
   /** Behavior when the user prefers reduced motion. Default `'pause'` (paints one static frame). */
   reducedMotion?: LoopReducedMotion;
-  /** Behavior while the window is unfocused. Default `'pause'`. */
+  /**
+   * Behavior while `document.hasFocus()` is false. Default `'pause'`.
+   * Offscreen/background-tab visibility is separate and always pauses.
+   */
   unfocused?: DegradedBehavior;
-  /** Behavior after sustained over-budget frames. Default `'throttle'`. For heavy GPU work, `'pause'` is often the right call. */
+  /**
+   * Behavior after three consecutive frames exceed 1.5x the current target
+   * interval. Default `'throttle'`. For heavy GPU work, `'pause'` is often right.
+   */
   frameBudget?: DegradedBehavior;
-  /** FPS cap while any quality signal resolves to `'throttle'`. Default `30`. */
+  /** Shared throttle cap; never raises a lower `fps` cap. Default `30`. */
   throttleFps?: number;
+  /** Transient quality notification. Does not trigger a React render. */
+  onQualityChange?: QualityChangeCallback;
 }
 
 export interface UseCanvasResult {
   restart: () => void;
   phase: LoopPhase;
   phaseReason: LoopReason;
+  /** Always-current quality state. Quality changes do not trigger a render. */
   quality: Quality;
+  /** Active signal; `'unfocused'` has reporting priority when both are active. */
   qualityReason: DegradedReason | undefined;
+  /** Resolved behavior after applying pause > throttle > ignore precedence. */
+  qualityBehavior: DegradedBehavior | undefined;
 }
 
-const INITIAL_STATE: Omit<UseCanvasResult, 'restart'> = {
+type CanvasState = Pick<UseCanvasResult, 'phase' | 'phaseReason'>;
+
+const INITIAL_STATE: CanvasState = {
   phase: 'idle',
   phaseReason: 'initial',
-  quality: 'full',
-  qualityReason: undefined,
 };
 
 /**
@@ -76,7 +91,7 @@ const INITIAL_STATE: Omit<UseCanvasResult, 'restart'> = {
  * context management, and GPU context loss recovery.
  *
  * @example
- * useCanvas({
+ * const { qualityReason, qualityBehavior } = useCanvas({
  *   containerRef,
  *   canvasRef,
  *   draw: (ctx, frame, size) => {
@@ -84,6 +99,7 @@ const INITIAL_STATE: Omit<UseCanvasResult, 'restart'> = {
  *     // render...
  *   },
  * });
+ * // A throttling quality signal also lowers the canvas buffer to 1x DPR.
  */
 export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
   const {
@@ -97,17 +113,27 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
     throttleFps,
   } = options;
   const drawRef = useSyncedRef(options.draw);
+  const onQualityChangeRef = useSyncedRef(options.onQualityChange);
 
-  const [state, setState] = useState(INITIAL_STATE);
+  const [state, setState] = useState<CanvasState>(INITIAL_STATE);
   const [restartNonce, setRestartNonce] = useState(0);
 
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const sizeRef = useRef<Size>({ width: 0, height: 0 });
+  const qualityRef = useRef<Quality>('full');
+  const qualityReasonRef = useRef<DegradedReason | undefined>(undefined);
+  const qualityBehaviorRef = useRef<DegradedBehavior | undefined>(undefined);
 
   useEffect(() => {
     const container: Element | null = containerRef.current;
     const canvasEl: HTMLCanvasElement | null = canvasRef.current;
-    if (!container || !canvasEl || !enabled) return;
+    if (!container || !canvasEl || !enabled) {
+      setState(INITIAL_STATE);
+      qualityRef.current = 'full';
+      qualityReasonRef.current = undefined;
+      qualityBehaviorRef.current = undefined;
+      return;
+    }
     const canvas: HTMLCanvasElement = canvasEl;
 
     const initialCtx: CanvasRenderingContext2D | null = canvas.getContext('2d');
@@ -126,12 +152,12 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
       physicalBox?: ResizeObserverSize,
     ): void {
       sizeRef.current = { width, height };
-      // Downscale the buffer only while degraded output is actually being
-      // produced. A paused-but-degraded loop (e.g. blurred window) keeps the
-      // full-res buffer so the resume frame is crisp.
+      // Downscale only while the resolved behavior is actively throttling.
+      // Paused and ignored signals keep full resolution, so resume stays crisp.
       const isDegraded: boolean =
         loopInstance?.quality === 'degraded' &&
-        loopInstance.phase === 'running';
+        loopInstance.phase === 'running' &&
+        loopInstance.qualityBehavior === 'throttle';
 
       let bufferWidth: number;
       let bufferHeight: number;
@@ -206,12 +232,15 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
         drawRef.current(ctxRef.current, frame, sizeRef.current);
       },
       onPhaseChange: (phase, reason) => {
-        setState({
-          phase,
-          phaseReason: reason,
-          quality: loopInstance?.quality ?? 'full',
-          qualityReason: loopInstance?.qualityReason,
-        });
+        setState({ phase, phaseReason: reason });
+        applySize(sizeRef.current.width, sizeRef.current.height);
+      },
+      onQualityChange: (quality, qualityReason, qualityBehavior) => {
+        qualityRef.current = quality;
+        qualityReasonRef.current = qualityReason;
+        qualityBehaviorRef.current = qualityBehavior;
+        onQualityChangeRef.current?.(quality, qualityReason, qualityBehavior);
+        applySize(sizeRef.current.width, sizeRef.current.height);
       },
     });
     loopInstance = loop;
@@ -245,5 +274,17 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
     setRestartNonce((n) => n + 1);
   }, []);
 
-  return { restart, ...state };
+  return {
+    restart,
+    ...state,
+    get quality() {
+      return qualityRef.current;
+    },
+    get qualityReason() {
+      return qualityReasonRef.current;
+    },
+    get qualityBehavior() {
+      return qualityBehaviorRef.current;
+    },
+  };
 }

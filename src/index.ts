@@ -60,6 +60,7 @@ export type {
   LoopReason,
   LoopReducedMotion,
   Quality,
+  QualityChangeCallback,
 } from './core/loop';
 export type {
   ScrollProgress,

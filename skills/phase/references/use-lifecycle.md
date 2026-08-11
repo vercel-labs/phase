@@ -1,6 +1,6 @@
 # `useLifecycle`
 
-The activation signal for loops you own. Wraps `createLifecycle` and returns `active` / `paused` so a consumer-owned render loop can pause when off-screen or under reduced motion.
+The activation signal for loops you own. Wraps `createLifecycle` and returns `active` / `paused` so a consumer-owned render loop can pause when the element leaves the viewport, the document enters a background tab, or reduced motion is active. Viewport and document visibility both report `phaseReason: 'sight'`.
 
 ## Signature
 

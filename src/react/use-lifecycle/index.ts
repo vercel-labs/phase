@@ -71,6 +71,12 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
   const { reducedMotion, intersectionOptions, enabled = true } = options ?? {};
   const paused = options?.paused ?? false;
   const onPhaseChangeRef = useSyncedRef(options?.onPhaseChange);
+  const intersectionRoot = intersectionOptions?.root;
+  const intersectionRootMargin = intersectionOptions?.rootMargin;
+  const intersectionThreshold = intersectionOptions?.threshold;
+  const intersectionThresholdKey = Array.isArray(intersectionThreshold)
+    ? intersectionThreshold.join(',')
+    : intersectionThreshold;
 
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
@@ -104,7 +110,13 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
       lifecycleRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, reducedMotion]);
+  }, [
+    enabled,
+    reducedMotion,
+    intersectionRoot,
+    intersectionRootMargin,
+    intersectionThresholdKey,
+  ]);
 
   // Sync subsequent `paused` changes onto the live lifecycle.
   useEffect(() => {
