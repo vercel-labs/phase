@@ -4,14 +4,16 @@
 
 ### Patch Changes
 
-- Fix `createLoop` resetting `frame.elapsed`, `frame.delta`, `frame.frame`, and the `FrameState` object identity when adaptive quality rebuilds the internal ticker (window blur/focus, frame-budget throttling). The loop now owns the consumer-facing frame timeline; the ticker is only a scheduler.
-- **Breaking:** replace `degraded`/`degradedFps` on `createLoop`/`useLoop`/`useCanvas` with per-signal options: `unfocused` (default `'pause'`, so blur freezes the timeline and refocus resumes in place), `frameBudget` (default `'throttle'`), and `throttleFps` (default `30`). `pause` wins over `throttle` wins over `ignore` when both signals are active.
-- **Breaking:** loops accept `reducedMotion: 'pause' | 'ignore'` (`LoopReducedMotion`); the documented-but-unimplemented `'complete'` is removed. `useTween` owns `TweenReducedMotion` (`'complete' | 'ignore'`); its never-implemented `'pause'` is removed. `ReducedMotionBehavior` is no longer exported.
-- Add `qualityBehavior` and `onQualityChange` so resolved pause/throttle/ignore behavior is observable independently from reporting-priority `qualityReason`; React hooks expose always-current quality getters and transient callbacks without quality-only re-renders.
-- Under `reducedMotion: 'pause'`, loops paint exactly one static frame once the element is first visible, so canvas surfaces are never blank.
-- `createLifecycle` exposes the raw sight signal: a `visible` getter and an `onVisibleChange` callback.
-- `useCanvas` keeps full resolution for paused and ignored signals; the 1x-DPR downscale applies only while the resolved quality behavior is `'throttle'`.
-- `useTween` reads the latest `easing` callback without restarting the active tween.
+- **Changed:** `createLoop` preserves frame timing and `FrameState` identity across ticker rebuilds.
+- **Changed (breaking):** Replaced `degraded` and `degradedFps` with `unfocused`, `frameBudget`, and `throttleFps`.
+- **Changed (breaking):** Loop reduced motion now accepts `'pause' | 'ignore'` through `LoopReducedMotion`.
+- **Changed (breaking):** Tween reduced motion now accepts `'complete' | 'ignore'` through `TweenReducedMotion`.
+- **Removed (breaking):** Removed `ReducedMotionBehavior`.
+- **Added:** Added `qualityBehavior`, `QualityChangeCallback`, and `onQualityChange`.
+- **Added:** Added `visible` and `onVisibleChange` to `createLifecycle`.
+- **Changed:** Loops paint one static frame before pausing for reduced motion.
+- **Changed:** `useCanvas` applies 1x DPR only while throttling.
+- **Changed:** `useTween` reads updated easing callbacks without restarting.
 
 ## 0.0.9
 
