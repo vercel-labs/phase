@@ -49,7 +49,7 @@ export interface UseCanvasOptions {
   fps?: number;
   /** When `false`, tears down the canvas lifecycle and reports `idle`. Default `true`. */
   enabled?: boolean;
-  /** Behavior when the user prefers reduced motion. Default `'pause'` (paints one static frame). */
+  /** Behavior when the user prefers reduced motion. Default `'pause'` (one static frame per buffer creation). */
   reducedMotion?: LoopReducedMotion;
   /**
    * Behavior while `document.hasFocus()` is false. Default `'pause'`.
@@ -88,9 +88,17 @@ const INITIAL_STATE: CanvasState = {
   phaseReason: 'initial',
 };
 
+// A paused loop delivers no frames, so the reduced-motion static paint draws
+// with a fixed zero-timeline frame. Module-level and reused: never mutated.
+const STATIC_FRAME: FrameState = { time: 0, delta: 0, elapsed: 0, frame: 0 };
+
 /**
  * Canvas-specific animation with DPR-aware sizing, ResizeObserver coalescing,
  * context management, and GPU context loss recovery.
+ *
+ * Under reduced motion the loop delivers no frames; the canvas paints one
+ * static frame (zero timeline) each time its buffer is created or resized, so
+ * it is never left blank.
  *
  * @example
  * const { qualityReason, qualityBehavior } = useCanvas({
@@ -155,46 +163,76 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
 
     // --- Canvas buffer sizing ---
 
-    function applySize(
-      width: number,
-      height: number,
-      physicalBox?: ResizeObserverSize,
-    ): void {
-      sizeRef.current = { width, height };
-      // Downscale only while the resolved behavior is actively throttling.
-      // Paused and ignored signals keep full resolution, so resume stays crisp.
-      const isDegraded: boolean =
-        loopInstance?.quality === 'degraded' &&
-        loopInstance.phase === 'running' &&
-        loopInstance.qualityBehavior === 'throttle';
+    // Last applied buffer state. Assigning canvas.width/height clears the
+    // bitmap and resets context state even with the same value, so redundant
+    // re-applies (phase flips, repeated quality events) must be skipped.
+    let bufferWidth = 0;
+    let bufferHeight = 0;
+    let appliedDpr = 0;
+    // Last exact physical box from ResizeObserver, preserved across quality
+    // transitions so full-resolution restores don't fall back to width * dpr.
+    let physicalWidth = 0;
+    let physicalHeight = 0;
 
-      let bufferWidth: number;
-      let bufferHeight: number;
+    // The loop delivers zero frames while paused for reduced motion, so paint
+    // the initial state once per buffer (re)creation: never a blank canvas,
+    // and a resize while paused repaints at the new size.
+    function drawStaticFrame(): void {
+      if (loopInstance?.phaseReason !== 'reduced-motion') return;
+      if (loopInstance.phase !== 'paused') return;
+      if (contextLost || !ctxRef.current) return;
+      drawRef.current(ctxRef.current, STATIC_FRAME, sizeRef.current);
+    }
 
-      if (isDegraded) {
-        bufferWidth = width;
-        bufferHeight = height;
-      } else if (physicalBox) {
-        bufferWidth = physicalBox.inlineSize;
-        bufferHeight = physicalBox.blockSize;
+    function applySize(width: number, height: number): void {
+      sizeRef.current.width = width;
+      sizeRef.current.height = height;
+
+      // Downscale to 1x only while the resolved behavior is throttling.
+      // Paused and ignored signals keep full resolution.
+      const throttled: boolean = loopInstance?.qualityBehavior === 'throttle';
+
+      let nextWidth: number;
+      let nextHeight: number;
+      if (throttled) {
+        nextWidth = width;
+        nextHeight = height;
+      } else if (physicalWidth > 0) {
+        nextWidth = physicalWidth;
+        nextHeight = physicalHeight;
       } else {
-        bufferWidth = width * dpr;
-        bufferHeight = height * dpr;
+        nextWidth = width * dpr;
+        nextHeight = height * dpr;
       }
+      const nextDpr: number = throttled ? 1 : dpr;
 
-      canvas.width = bufferWidth;
-      canvas.height = bufferHeight;
+      if (
+        nextWidth === bufferWidth &&
+        nextHeight === bufferHeight &&
+        nextDpr === appliedDpr
+      ) {
+        return;
+      }
+      bufferWidth = nextWidth;
+      bufferHeight = nextHeight;
+      appliedDpr = nextDpr;
+
+      canvas.width = nextWidth;
+      canvas.height = nextHeight;
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
-
-      const effectiveDpr: number = isDegraded ? 1 : dpr;
-      ctxRef.current?.setTransform(effectiveDpr, 0, 0, effectiveDpr, 0, 0);
+      ctxRef.current?.setTransform(nextDpr, 0, 0, nextDpr, 0, 0);
+      drawStaticFrame();
     }
 
     // --- DPR monitoring (e.g. user drags window between monitors) ---
 
     const unsubDpr: () => void = subscribeDpr((newDpr) => {
       dpr = newDpr;
+      // The cached physical box belongs to the previous density; fall back to
+      // width * dpr until ResizeObserver reports fresh physical pixels.
+      physicalWidth = 0;
+      physicalHeight = 0;
       applySize(sizeRef.current.width, sizeRef.current.height);
     });
 
@@ -205,7 +243,9 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
       if (!box) return;
       const physicalBox: ResizeObserverSize | undefined =
         entry.devicePixelContentBoxSize?.[0];
-      applySize(box.inlineSize, box.blockSize, physicalBox);
+      physicalWidth = physicalBox ? physicalBox.inlineSize : 0;
+      physicalHeight = physicalBox ? physicalBox.blockSize : 0;
+      applySize(box.inlineSize, box.blockSize);
     });
 
     // --- GPU context loss recovery ---
@@ -221,6 +261,11 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
       if (!restoredCtx) return;
       ctxRef.current = restoredCtx;
       contextLost = false;
+      // The bitmap and context state were lost; force a full re-apply even
+      // when the computed dimensions are unchanged.
+      bufferWidth = 0;
+      bufferHeight = 0;
+      appliedDpr = 0;
       applySize(sizeRef.current.width, sizeRef.current.height);
     }
 
@@ -243,13 +288,13 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
       },
       onPhaseChange: (phase, reason) => {
         setState({ phase, phaseReason: reason });
-        applySize(sizeRef.current.width, sizeRef.current.height);
       },
       onQualityChange: (quality, qualityReason, qualityBehavior) => {
         qualityRef.current = quality;
         qualityReasonRef.current = qualityReason;
         qualityBehaviorRef.current = qualityBehavior;
         onQualityChangeRef.current?.(quality, qualityReason, qualityBehavior);
+        // Buffer resolution follows the resolved behavior (throttle = 1x).
         applySize(sizeRef.current.width, sizeRef.current.height);
       },
     });

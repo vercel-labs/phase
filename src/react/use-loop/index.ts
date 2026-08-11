@@ -115,7 +115,6 @@ export function useLoop<T extends Element = HTMLDivElement>(
 
   const [state, setState] = useState<LoopState>(INITIAL_STATE);
 
-  const loopRef = useRef<ReturnType<typeof createLoop> | null>(null);
   const qualityRef = useRef<Quality>('full');
   const qualityReasonRef = useRef<DegradedReason | undefined>(undefined);
   const qualityBehaviorRef = useRef<DegradedBehavior | undefined>(undefined);
@@ -152,11 +151,9 @@ export function useLoop<T extends Element = HTMLDivElement>(
         onQualityChangeRef.current?.(quality, qualityReason, qualityBehavior);
       },
     });
-    loopRef.current = loop;
 
     return () => {
       loop.stop();
-      loopRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [

@@ -260,42 +260,6 @@ describe('createLifecycle', () => {
     });
   });
 
-  describe('raw sight visibility', () => {
-    it('visible getter reflects sight independent of phase', async () => {
-      const { createLifecycle } = await getModule();
-      const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el });
-      expect(lifecycle.visible).toBe(false);
-
-      makeVisible(el);
-      expect(lifecycle.visible).toBe(true);
-
-      makeHidden(el);
-      expect(lifecycle.visible).toBe(false);
-      lifecycle.stop();
-    });
-
-    it('onVisibleChange fires even when reduced motion swallows the phase change', async () => {
-      const { createLifecycle } = await getModule();
-      enableReducedMotion();
-      const el = document.createElement('div');
-      const onVisibleChange = vi.fn();
-      const lifecycle = createLifecycle({ element: el, onVisibleChange });
-
-      // Reduced motion outranks sight: the phase stays paused/reduced-motion...
-      makeVisible(el);
-      expect(lifecycle.phase).toBe('paused');
-      expect(lifecycle.phaseReason).toBe('reduced-motion');
-      // ...but the raw visibility signal still reports.
-      expect(onVisibleChange).toHaveBeenCalledWith(true);
-      expect(lifecycle.visible).toBe(true);
-
-      makeHidden(el);
-      expect(onVisibleChange).toHaveBeenCalledWith(false);
-      lifecycle.stop();
-    });
-  });
-
   describe('SSR', () => {
     it('throws when document is undefined', async () => {
       const origDocument = globalThis.document;

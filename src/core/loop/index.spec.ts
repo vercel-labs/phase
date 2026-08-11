@@ -517,7 +517,7 @@ describe('quality signal - frame budget', () => {
     loop.stop();
   });
 
-  it('throttle rebuild keeps delta, elapsed, frame count, and identity exact', async () => {
+  it('throttling keeps delta, elapsed, frame count, and identity exact', async () => {
     const { createLoop } = await getModule();
     const clock = setupManualClock();
     const el = document.createElement('div');
@@ -532,16 +532,14 @@ describe('quality signal - frame budget', () => {
     });
     makeSightVisible(el); // timeline starts at clock=0
 
-    // Ticks at 16, 51, 86, 121; the 3 consecutive 35ms deltas degrade quality.
+    // Ticks at 16, 51, 86, 121; the 3 consecutive 35ms gaps degrade quality
+    // and retune the same ticker to 30fps synchronously.
     degradeViaBudget(clock);
     expect(loop.qualityReason).toBe('frame-budget');
     expect(last.frame).toBe(4);
     expect(last.elapsed).toBe(121);
 
-    await Promise.resolve(); // run the queued 30fps ticker rebuild
-
-    // First tick of the replacement ticker: the 35ms gap spans the rebuild
-    // and must be fully accounted for in both delta and elapsed.
+    // First throttled tick: the 35ms gap is fully accounted for.
     clock.advance(OVER_BUDGET_DELTA); // tick at 156
     expect(last.delta).toBe(35);
     expect(last.elapsed).toBe(156);
@@ -556,8 +554,71 @@ describe('quality signal - frame budget', () => {
     expect(last.elapsed).toBe(192);
     expect(last.frame).toBe(6);
 
-    // Zero per-frame allocations: one FrameState object across rebuilds.
+    // Zero per-frame allocations: one FrameState object throughout.
     expect(refs.every((r) => r === refs[0])).toBe(true);
+    clock.restore();
+    loop.stop();
+  });
+
+  it('throttling never leaks an early frame through the new cap', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const cb = vi.fn();
+    const loop = createLoop({ element: el, onTick: cb });
+    makeSightVisible(el);
+
+    degradeViaBudget(clock); // degrade lands on the tick at clock=121
+    const ticksAtDegrade = cb.mock.calls.length;
+
+    // 16ms later is inside the new 33.3ms interval: must be gated.
+    clock.advance(16);
+    expect(cb.mock.calls.length).toBe(ticksAtDegrade);
+    clock.restore();
+    loop.stop();
+  });
+
+  it('throttle recovers via the optimistic re-measure timer', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const onQualityChange = vi.fn();
+    const loop = createLoop({ element: el, onTick: vi.fn(), onQualityChange });
+    makeSightVisible(el);
+
+    degradeViaBudget(clock);
+    expect(loop.quality).toBe('degraded');
+    expect(loop.qualityBehavior).toBe('throttle');
+
+    // The timer clears the latch and restores full speed for re-measure.
+    await vi.advanceTimersByTimeAsync(RECOVERY_RETRY_MS);
+    expect(loop.quality).toBe('full');
+    expect(loop.phase).toBe('running');
+
+    // Healthy frames keep it recovered; sustained jank would re-trip.
+    clock.advance(16);
+    clock.advance(16);
+    expect(loop.quality).toBe('full');
+    expect(onQualityChange).toHaveBeenCalledTimes(2); // degrade, recover
+    clock.restore();
+    loop.stop();
+  });
+
+  it('low fps caps can still degrade (raw gap, not clamped delta)', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const loop = createLoop({ element: el, onTick: vi.fn(), fps: 24 });
+    makeSightVisible(el);
+
+    // Threshold at 24fps is 62.5ms; the clamped 40ms delta could never cross
+    // it, but the raw gap between delivered frames can.
+    clock.advance(50); // first tick
+    clock.advance(70);
+    clock.advance(70);
+    clock.advance(70);
+    expect(loop.quality).toBe('degraded');
+    expect(loop.qualityReason).toBe('frame-budget');
     clock.restore();
     loop.stop();
   });
@@ -623,11 +684,34 @@ describe('quality signal - frame budget', () => {
     expect(loop.qualityReason).toBe('frame-budget');
 
     // No throttle: every ~16ms frame still ticks (no 30fps gate).
-    await Promise.resolve();
     const ticksBefore = cb.mock.calls.length;
     clock.advance(16);
     clock.advance(16);
     expect(cb.mock.calls.length).toBe(ticksBefore + 2);
+    clock.restore();
+    loop.stop();
+  });
+
+  it("frameBudget: 'ignore': sustained jank reports the degrade exactly once", async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const onQualityChange = vi.fn();
+    const loop = createLoop({
+      element: el,
+      onTick: vi.fn(),
+      frameBudget: 'ignore',
+      onQualityChange,
+    });
+    makeSightVisible(el);
+
+    degradeViaBudget(clock);
+    expect(onQualityChange).toHaveBeenCalledTimes(1);
+
+    // Further over-budget frames must not re-fire the callback.
+    clock.advance(OVER_BUDGET_DELTA);
+    clock.advance(OVER_BUDGET_DELTA);
+    expect(onQualityChange).toHaveBeenCalledTimes(1);
     clock.restore();
     loop.stop();
   });
@@ -664,10 +748,11 @@ describe('quality signal - frame budget', () => {
 // ---------------------------------------------------------------------------
 // Frame timeline continuity
 //
-// The loop owns the consumer-facing FrameState. Quality-driven ticker rebuilds
-// (focus loss/gain, frame-budget throttling) and visibility pauses must never
-// reset or skew delta, elapsed, or the frame counter. Assertions are exact
-// values, not monotonicity, so a reset or a dropped gap cannot pass.
+// One persistent ticker owns the consumer-facing FrameState; quality-driven
+// FPS changes mutate its gate in place and visibility pauses suspend it.
+// Neither must ever reset or skew delta, elapsed, or the frame counter.
+// Assertions are exact values, not monotonicity, so a reset or a dropped gap
+// cannot pass.
 // ---------------------------------------------------------------------------
 
 type CreateLoop = Awaited<ReturnType<typeof getModule>>['createLoop'];
@@ -692,12 +777,12 @@ function trackLoop(
 }
 
 describe('frame timeline continuity', () => {
-  it('focus-driven rebuilds do not drop running time between ticks', async () => {
+  it('focus-driven fps changes do not drop running time between ticks', async () => {
     const { createLoop } = await getModule();
     const clock = setupManualClock();
     const el = document.createElement('div');
-    // Explicit throttle: the default (pause) never rebuilds on focus changes,
-    // and this test exists to exercise the rebuild path.
+    // Explicit throttle: the default (pause) never changes fps on focus
+    // changes, and this test exists to exercise the fps-transition path.
     const { loop, refs, last } = trackLoop(createLoop, el, {
       unfocused: 'throttle',
     });
@@ -709,21 +794,19 @@ describe('frame timeline continuity', () => {
     expect(last.frame).toBe(1);
 
     // Blur 10ms after the last tick: no frame has observed that 10ms yet, but
-    // it is running time and must stay on the timeline across the rebuild.
+    // it is running time and must stay on the timeline across the fps change.
     clock.skip(10); // clock=26
     const hasFocusSpy = vi.spyOn(document, 'hasFocus');
     hasFocusSpy.mockReturnValue(false);
-    window.dispatchEvent(new Event('blur'));
-    await Promise.resolve(); // rebuild at degraded 30fps
+    window.dispatchEvent(new Event('blur')); // gate drops to 30fps in place
 
     clock.advance(25); // tick 2 at 51
-    expect(last.delta).toBe(35); // 51 - 16, spanning the rebuild
+    expect(last.delta).toBe(35); // 51 - 16, spanning the transition
     expect(last.elapsed).toBe(51);
     expect(last.frame).toBe(2);
 
     hasFocusSpy.mockReturnValue(true);
-    window.dispatchEvent(new Event('focus'));
-    await Promise.resolve(); // rebuild back at full fps
+    window.dispatchEvent(new Event('focus')); // gate back to full fps
 
     clock.advance(16); // tick 3 at 67
     expect(last.delta).toBe(16);
@@ -746,8 +829,7 @@ describe('frame timeline continuity', () => {
 
     clock.advance(16); // tick 1 at 16
     vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    window.dispatchEvent(new Event('blur'));
-    await Promise.resolve(); // rebuild
+    window.dispatchEvent(new Event('blur')); // gate drops to 30fps in place
 
     clock.advance(120); // tick 2 at 136
     expect(last.delta).toBe(40); // clamped, no teleport
@@ -788,17 +870,17 @@ describe('frame timeline continuity', () => {
     const { loop, refs, last } = trackLoop(createLoop, el);
     makeSightVisible(el); // timeline starts at clock=0
 
-    // Ticks at 16, 51, 86, 121: three 35ms deltas degrade via frame budget.
+    // Ticks at 16, 51, 86, 121: three 35ms gaps degrade via frame budget and
+    // retune the ticker to 30fps in place.
     clock.advance(16);
     clock.advance(35);
     clock.advance(35);
     clock.advance(35);
     expect(loop.qualityReason).toBe('frame-budget');
     expect(loop.phase).toBe('running'); // throttle keeps running
-    await Promise.resolve(); // rebuild at 30fps; frame budget remains active
 
-    // Blur before the next tick can clear the frame-budget counter. Both
-    // signals are active: unfocused pause wins over frame-budget throttle.
+    // Blur while throttled: both signals are active, and unfocused pause wins
+    // over frame-budget throttle.
     clock.skip(10); // 10ms of running time before the pause
     const hasFocusSpy = vi.spyOn(document, 'hasFocus');
     hasFocusSpy.mockReturnValue(false);
@@ -812,6 +894,7 @@ describe('frame timeline continuity', () => {
     hasFocusSpy.mockReturnValue(true);
     window.dispatchEvent(new Event('focus'));
     expect(loop.phase).toBe('running');
+    // The frame-budget latch persists across the pause until its timer.
     expect(loop.qualityReason).toBe('frame-budget');
     expect(loop.qualityBehavior).toBe('throttle');
 
@@ -820,10 +903,9 @@ describe('frame timeline continuity', () => {
     expect(last.elapsed).toBe(166); // 121 + 10 running + 35, pause excluded
     expect(last.frame).toBe(5);
 
-    // A later quality reconciliation observes the recovered frame budget.
-    window.dispatchEvent(new Event('focus'));
+    // The optimistic re-measure timer clears the frame-budget latch.
+    await vi.advanceTimersByTimeAsync(RECOVERY_RETRY_MS);
     expect(loop.quality).toBe('full');
-    await Promise.resolve(); // rebuild back at full fps
 
     clock.advance(16); // tick 6 at 1182
     expect(last.delta).toBe(16);
@@ -836,15 +918,14 @@ describe('frame timeline continuity', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Reduced-motion paint
+// Reduced motion: strong pause
 //
-// With reducedMotion 'pause' active from the start the loop never ticks, which
-// leaves canvas surfaces blank. The loop delivers exactly one frame (elapsed 0)
-// once the element is first visible, then stays paused.
+// A paused loop schedules nothing and delivers zero frames. The canvas
+// static-frame fallback lives in useCanvas, not here.
 // ---------------------------------------------------------------------------
 
-describe('reduced-motion paint', () => {
-  it('paints exactly one frame once the element becomes visible', async () => {
+describe('reduced motion strong pause', () => {
+  it('delivers zero frames while reduced motion is active', async () => {
     const { createLoop } = await getModule();
     enableReducedMotion();
     const clock = setupManualClock();
@@ -854,36 +935,24 @@ describe('reduced-motion paint', () => {
     expect(loop.phase).toBe('paused');
     expect(loop.phaseReason).toBe('reduced-motion');
 
-    // Not visible yet: no paint is scheduled.
+    clock.advance(16);
+    makeSightVisible(el); // visibility alone must not deliver frames
     clock.advance(16);
     expect(last.frame).toBe(0);
+    expect(refs.length).toBe(0);
 
-    // First visibility triggers the deferred one-shot paint.
-    makeSightVisible(el);
-    clock.advance(16); // paint fires at clock=32
-    expect(last.frame).toBe(1);
-    expect(last.elapsed).toBe(0);
-    expect(last.delta).toBeCloseTo(16.67);
-
-    // Still paused: no further frames.
-    clock.advance(16);
-    clock.advance(16);
-    expect(last.frame).toBe(1);
-    expect(loop.phase).toBe('paused');
-
-    // Reduced motion lifts at clock=64: the real timeline starts fresh.
+    // Reduced motion lifts at clock=32: the timeline starts fresh.
     disableReducedMotion();
     expect(loop.phase).toBe('running');
-    clock.advance(16); // tick at 80
-    expect(last.frame).toBe(2);
+    clock.advance(16); // tick at 48
+    expect(last.frame).toBe(1);
     expect(last.delta).toBeCloseTo(16.67);
     expect(last.elapsed).toBe(16);
-    expect(refs.every((r) => r === refs[0])).toBe(true);
     clock.restore();
     loop.stop();
   });
 
-  it('does not paint when reduced motion activates mid-run', async () => {
+  it('freezes on the last frame when reduced motion activates mid-run', async () => {
     const { createLoop } = await getModule();
     const clock = setupManualClock();
     const el = document.createElement('div');
@@ -897,12 +966,101 @@ describe('reduced-motion paint', () => {
     expect(loop.phase).toBe('paused');
     expect(loop.phaseReason).toBe('reduced-motion');
 
-    // The last painted frame is already on screen, so no extra paint.
+    // The last painted frame stays on screen; nothing further is delivered.
     clock.advance(16);
     clock.advance(16);
     expect(last.frame).toBe(1);
     clock.restore();
     loop.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reentrancy
+//
+// Consumer callbacks can dispose the loop mid-transition. Nothing may run
+// after the terminal stop: no onTick, no quality callbacks, no timers, and no
+// resurrected ticker.
+// ---------------------------------------------------------------------------
+
+describe('reentrant stop', () => {
+  it('stop() inside onQualityChange halts ticks and schedules no recovery', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const cb = vi.fn();
+    // Declared before creation: the seeding path cannot fire here because
+    // hasFocus is mocked true in setup.
+    let loopHandle: { stop(): void } | null = null;
+    const onQualityChange = vi.fn(() => loopHandle?.stop());
+    const loop = createLoop({ element: el, onTick: cb, onQualityChange });
+    loopHandle = loop;
+    makeSightVisible(el);
+
+    // The threshold-crossing frame degrades, the callback stops the loop, and
+    // that frame must not be delivered to onTick.
+    clock.advance(16);
+    clock.advance(35);
+    clock.advance(35);
+    const ticksBeforeDegrade = cb.mock.calls.length;
+    clock.advance(35);
+    expect(loop.phase).toBe('stopped');
+    expect(cb.mock.calls.length).toBe(ticksBeforeDegrade);
+    expect(onQualityChange).toHaveBeenCalledTimes(1);
+
+    // No recovery timer was scheduled after the reentrant stop.
+    await vi.advanceTimersByTimeAsync(RECOVERY_RETRY_MS);
+    expect(onQualityChange).toHaveBeenCalledTimes(1);
+
+    // And no ticker survived: further frames deliver nothing.
+    clock.advance(16);
+    clock.advance(16);
+    expect(cb.mock.calls.length).toBe(ticksBeforeDegrade);
+    clock.restore();
+  });
+
+  it('stop() inside onTick prevents any further delivery', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    let ticks = 0;
+    let loopHandle: { stop(): void } | null = null;
+    const loop = createLoop({
+      element: el,
+      onTick: () => {
+        ticks++;
+        if (ticks === 2) loopHandle?.stop();
+      },
+    });
+    loopHandle = loop;
+    makeSightVisible(el);
+
+    clock.advance(16);
+    clock.advance(16); // stops itself here
+    clock.advance(16);
+    clock.advance(16);
+    expect(ticks).toBe(2);
+    expect(loop.phase).toBe('stopped');
+    clock.restore();
+  });
+
+  it('stop() never resurrects a ticker through lifecycle teardown', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const cb = vi.fn();
+    const loop = createLoop({ element: el, onTick: cb });
+    makeSightVisible(el);
+    clock.advance(16);
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    loop.stop();
+    // lifecycle.stop() fires a phase change during teardown; a reconcile there
+    // must not create and start a fresh ticker.
+    clock.advance(16);
+    clock.advance(16);
+    expect(cb).toHaveBeenCalledTimes(1);
+    clock.restore();
   });
 });
 

@@ -30,12 +30,6 @@ export interface LifecycleOptions {
   intersectionOptions?: IntersectionObserverInit;
   start?: 'auto' | 'manual';
   onPhaseChange?: (phase: LifecyclePhase, reason: LifecycleReason) => void;
-  /**
-   * Called on every sight visibility change, independent of the composed
-   * phase. The phase can swallow sight changes (e.g. reduced motion outranks
-   * sight while both pause); this reports the raw signal.
-   */
-  onVisibleChange?: (visible: boolean) => void;
   /** Abort signal that stops the lifecycle when aborted. */
   signal?: AbortSignal;
 }
@@ -51,8 +45,6 @@ export interface Lifecycle {
   resume(): void;
   readonly phase: LifecyclePhase;
   readonly phaseReason: LifecycleReason;
-  /** Current sight visibility, independent of the composed pause priority. */
-  readonly visible: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,7 +87,6 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
     intersectionOptions,
     start: startMode = 'auto',
     onPhaseChange,
-    onVisibleChange,
     signal,
   } = options;
 
@@ -144,7 +135,6 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
   function onSightChange(phase: SightPhase): void {
     sightVisible = phase === 'visible';
     reconcile();
-    onVisibleChange?.(sightVisible);
   }
 
   function onReducedMotionChange(matches: boolean): void {
@@ -215,9 +205,6 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
     },
     get phaseReason() {
       return _reason;
-    },
-    get visible() {
-      return sightVisible;
     },
   };
 }

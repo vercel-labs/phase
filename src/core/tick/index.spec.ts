@@ -314,6 +314,66 @@ describe('FPS cap', () => {
 });
 
 // ---------------------------------------------------------------------------
+// setFps
+// ---------------------------------------------------------------------------
+
+describe('setFps', () => {
+  it('changes the gate without resetting the timeline', async () => {
+    const { createTicker } = await getModule();
+    const refs: unknown[] = [];
+    const last = { time: 0, delta: 0, elapsed: 0, frame: 0 };
+    const ticker = createTicker({
+      onTick: (f) => {
+        refs.push(f);
+        Object.assign(last, f);
+      },
+    });
+    ticker.start();
+    advanceFrame(16);
+    advanceFrame(16);
+    expect(last.frame).toBe(2);
+    const elapsedBefore = last.elapsed;
+
+    ticker.setFps(30);
+    // The next two 16ms frames sit under the 33.3ms interval: gated, with no
+    // timeline reset and no leaked uncapped frame.
+    advanceFrame(16);
+    advanceFrame(16);
+    expect(last.frame).toBe(2);
+
+    // The third frame crosses the interval and delivers, with a real delta
+    // spanning the skipped frames and a continuous elapsed/frame count.
+    advanceFrame(16);
+    expect(last.frame).toBe(3);
+    expect(last.delta).toBe(40); // 48ms real gap, clamped to MAX_DELTA_MS
+    expect(last.elapsed).toBe(elapsedBefore + 48);
+    expect(refs.every((r) => r === refs[0])).toBe(true);
+    ticker.stop();
+  });
+
+  it('removing the cap restores full delivery without a timeline reset', async () => {
+    const { createTicker } = await getModule();
+    const last = { time: 0, delta: 0, elapsed: 0, frame: 0 };
+    const ticker = createTicker({
+      fps: 30,
+      onTick: (f) => {
+        Object.assign(last, f);
+      },
+    });
+    ticker.start();
+    for (let i = 0; i < 6; i++) advanceFrame(16);
+    const framesAt30 = last.frame;
+    expect(framesAt30).toBeLessThan(6); // the 30fps gate skipped frames
+
+    ticker.setFps(undefined);
+    for (let i = 0; i < 6; i++) advanceFrame(16);
+    // Uncapped: every subsequent rAF frame delivers, continuing the count.
+    expect(last.frame).toBe(framesAt30 + 6);
+    ticker.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Shared clock
 // ---------------------------------------------------------------------------
 

@@ -1,7 +1,7 @@
 import { linkAbortSignal } from '../_internal/abort';
 import { noElementError, serverContextError } from '../_internal/errors';
 import { createLifecycle } from '../lifecycle';
-import { createTicker, DEFAULT_FIRST_DELTA_MS, MAX_DELTA_MS } from '../tick';
+import { createTicker } from '../tick';
 import type { FrameState, Ticker } from '../tick';
 
 // ---------------------------------------------------------------------------
@@ -9,9 +9,9 @@ import type { FrameState, Ticker } from '../tick';
 // ---------------------------------------------------------------------------
 
 /**
- * Behavior under reduced motion. `'pause'` stops the loop (after painting one
- * static frame once visible); `'ignore'` keeps running. Loops have no defined
- * end state, so there is no `'complete'`; jump-to-target lives on `useTween`.
+ * Behavior under reduced motion. `'pause'` stops the loop entirely;
+ * `'ignore'` keeps running. Loops have no defined end state, so there is no
+ * `'complete'`; jump-to-target lives on `useTween`.
  */
 export type LoopReducedMotion = 'pause' | 'ignore';
 
@@ -64,8 +64,8 @@ export interface LoopOptions {
    */
   unfocused?: DegradedBehavior;
   /**
-   * Behavior after three consecutive frames exceed 1.5x the current target
-   * interval (25ms at 60fps). Default `'throttle'`.
+   * Behavior after three consecutive delivered frames arrive more than 1.5x
+   * the current target interval apart (25ms at 60fps). Default `'throttle'`.
    */
   frameBudget?: DegradedBehavior;
   /**
@@ -109,11 +109,10 @@ const OVER_BUDGET_THRESHOLD = 3;
 const DEFAULT_THROTTLE_FPS = 30;
 
 /**
- * With `frameBudget: 'pause'` a frame-budget degrade pauses the loop, so no
- * further frames tick to clear it. Without a timer the loop would stay paused
- * forever after a transient spike. After this delay the loop optimistically
- * un-pauses and re-measures, rescheduling on each subsequent degrade. (Throttle
- * keeps ticking, so it does not use this.)
+ * A frame-budget degrade cannot clear itself: pause stops measuring entirely,
+ * and throttle widens the delivered gaps to match the cap. After this delay
+ * the loop optimistically restores full speed and re-measures; sustained jank
+ * re-trips the threshold within a few frames and reschedules.
  */
 const RECOVERY_RETRY_MS = 2000;
 
@@ -124,11 +123,11 @@ const RECOVERY_RETRY_MS = 2000;
 /**
  * Lifecycle-aware animation loop composing ticker, visibility, and reduced motion.
  *
- * Pass an element and get a loop that pauses when the element leaves the viewport,
- * the tab is backgrounded, or the window loses focus, resumes when they return,
- * and cleans up with `stop()`. Each quality signal has its own behavior:
- * `unfocused` pauses by default (blur freezes the timeline, refocus resumes in
- * place), `frameBudget` throttles by default (slow devices degrade gracefully).
+ * Pass an element and get a loop that pauses when the element leaves the
+ * viewport or the tab is backgrounded (always), applies configurable behavior
+ * when the window loses focus (`unfocused`, default pause: blur freezes the
+ * timeline, refocus resumes in place) or frames exceed budget (`frameBudget`,
+ * default throttle), and cleans up with `stop()`.
  *
  * @remarks
  * The loop is signal-driven and exposes only `start()` and `stop()`. There is no
@@ -176,51 +175,30 @@ export function createLoop(options: LoopOptions): Loop {
   let _qualityBehavior: DegradedBehavior | undefined;
 
   let intentStarted = false;
-  let overBudgetCount = 0;
+
+  // One persistent ticker owns the timeline (FrameState, elapsed, delta
+  // clamping, pause exclusion). Quality changes mutate its FPS gate in place
+  // via setFps, so the consumer timeline never resets or skews.
   let ticker: Ticker | null = null;
-
-  // --- Loop-owned timeline ---
-  //
-  // Adaptive quality destroys and recreates the internal ticker while the loop
-  // is running, and a ticker resets its own timeline on every start. So the
-  // consumer-facing FrameState and all timing bookkeeping live here, where they
-  // survive rebuilds; the ticker is only a scheduler.
-
-  // Pre-allocated and mutated in place each frame: zero allocations per tick.
-  const frame: FrameState = { time: 0, delta: 0, elapsed: 0, frame: 0 };
-
-  // Frame budget for the current ticker generation (updated by buildTicker).
-  let budget: number = 1000 / 60;
-
-  // Timestamp of the previous tick; 0 means none (fresh start or just resumed)
-  // so the next tick uses the default first delta instead of the real gap.
-  let lastTickTime = 0;
-
-  // elapsed = now - timelineStart - totalPausedTime, mirroring the ticker's
-  // own elapsed semantics but spanning every ticker generation.
-  let timelineStart = 0;
-  let totalPausedTime = 0;
-  let pauseStartTime = 0;
 
   // --- Quality signals ---
   //
-  // Each signal is tracked independently and resolves through its own
-  // configured behavior. Quality state, reporting-priority reason, and resolved
-  // behavior stay observable (even for 'ignore') so consumers can adapt.
+  // Each signal is explicit state resolved through its configured behavior.
+  // Quality, reporting-priority reason, and resolved behavior stay observable
+  // (even for 'ignore') so consumers can adapt.
 
   let focusDegraded = false;
-  // Latched at reconcileQuality time: over-budget frames reset the counter on
-  // the next good frame, but the degrade holds until a signal re-evaluates it.
   let budgetDegraded = false;
+  let overBudgetCount = 0;
 
-  // The fps the current ticker was built with, to rebuild only on change.
-  let appliedFps: number | undefined;
+  // Frame-budget measurement: raw gap between delivered frames against 1.5x
+  // the current target interval. 0 = no previous frame (start or resume), so
+  // pause gaps never count as jank.
+  let lastBudgetTime = 0;
+  let budgetThreshold: number = 1500 / 60;
 
-  // Pending frameBudget:'pause' recovery timer (see RECOVERY_RETRY_MS).
+  // Pending optimistic frame-budget recovery timer (see RECOVERY_RETRY_MS).
   let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // Pending one-shot reduced-motion paint (see schedulePaint). 0 = none.
-  let paintRafId = 0;
 
   // --- State transitions ---
 
@@ -270,7 +248,7 @@ export function createLoop(options: LoopOptions): Loop {
    * wins over throttle wins over ignore when multiple signals are active.
    */
   function reconcileQuality(): void {
-    budgetDegraded = overBudgetCount >= OVER_BUDGET_THRESHOLD;
+    if (_phase === 'stopped') return;
 
     if (focusDegraded) {
       setQuality('degraded', 'unfocused', getQualityBehavior());
@@ -281,17 +259,18 @@ export function createLoop(options: LoopOptions): Loop {
     }
 
     reconcile();
-    syncTicker();
+    applyEffectiveFps();
   }
 
   /**
-   * Un-pause and re-measure after a frameBudget:'pause' degrade. If frames are
-   * still over budget, the next degrade reschedules this.
+   * Optimistically clear a frame-budget degrade and re-measure at full speed.
+   * If frames are still over budget, the next degrade reschedules this.
    */
   function scheduleBudgetRecovery(): void {
-    if (recoveryTimer !== null) return;
+    if (recoveryTimer !== null || _phase === 'stopped') return;
     recoveryTimer = setTimeout(() => {
       recoveryTimer = null;
+      budgetDegraded = false;
       overBudgetCount = 0;
       reconcileQuality();
     }, RECOVERY_RETRY_MS);
@@ -303,7 +282,7 @@ export function createLoop(options: LoopOptions): Loop {
     recoveryTimer = null;
   }
 
-  // --- Ticker lifecycle ---
+  // --- Ticker control ---
 
   function getEffectiveFps(): number | undefined {
     if (_qualityBehavior !== 'throttle') return baseFps;
@@ -311,99 +290,39 @@ export function createLoop(options: LoopOptions): Loop {
     return Math.min(baseFps, throttleFps);
   }
 
-  function destroyTicker(): void {
-    if (!ticker) return;
-    ticker.stop();
-    ticker = null;
+  /** Sync the ticker's FPS gate and the budget threshold to the resolved fps. */
+  function applyEffectiveFps(): void {
+    const fps: number | undefined = getEffectiveFps();
+    budgetThreshold = 1500 / (fps ?? 60);
+    ticker?.setFps(fps);
   }
 
-  // The one frame callback, created once and shared by every ticker
-  // generation. Reads only the shared-clock timestamp from the ticker's frame;
-  // delta, elapsed, and the frame counter come from the loop's own timeline so
-  // rebuilds never reset or skew them.
-  function bridgeTick(tickerFrame: FrameState): void {
-    const now: number = tickerFrame.time;
-    const rawDelta: number =
-      lastTickTime === 0 ? DEFAULT_FIRST_DELTA_MS : now - lastTickTime;
-    lastTickTime = now;
+  function checkFrameBudget(now: number): void {
+    const last: number = lastBudgetTime;
+    lastBudgetTime = now;
+    if (last === 0) return; // first delivered frame since start/resume
 
-    frame.time = now;
-    frame.delta = rawDelta > MAX_DELTA_MS ? MAX_DELTA_MS : rawDelta;
-    frame.elapsed = now - timelineStart - totalPausedTime;
-    frame.frame++;
-
-    checkFrameBudget(frame.delta);
-    onTick(frame);
-  }
-
-  function buildTicker(): void {
-    const targetFps: number | undefined = getEffectiveFps();
-    budget = 1000 / (targetFps ?? 60);
-    appliedFps = targetFps;
-
-    destroyTicker();
-
-    ticker = createTicker({ fps: targetFps, onTick: bridgeTick });
-    ticker.start();
-  }
-
-  function rebuildTicker(): void {
-    if (_phase !== 'running' || !ticker) return;
-    // A microtask can be stale after rapid signal flips (blur + refocus in one
-    // task); skip when the fps already matches.
-    if (getEffectiveFps() === appliedFps) return;
-    buildTicker();
-  }
-
-  /** Rebuild only when the resolved fps no longer matches the ticker's. */
-  function syncTicker(): void {
-    if (!ticker || _phase !== 'running') return;
-    if (getEffectiveFps() !== appliedFps) queueMicrotask(rebuildTicker);
-  }
-
-  function checkFrameBudget(delta: number): void {
-    if (delta <= budget * 1.5) {
+    if (now - last <= budgetThreshold) {
       overBudgetCount = 0;
       return;
     }
 
     overBudgetCount++;
-    if (overBudgetCount < OVER_BUDGET_THRESHOLD) return;
+    if (budgetDegraded || overBudgetCount < OVER_BUDGET_THRESHOLD) return;
 
+    budgetDegraded = true;
     reconcileQuality();
-    // Pause behavior stops ticking once degraded, so no future frame can clear
-    // the degraded state, so schedule a timed retry. Throttle keeps running.
-    if (frameBudget === 'pause') scheduleBudgetRecovery();
+    scheduleBudgetRecovery();
   }
 
-  // --- One-shot reduced-motion paint ---
-  //
-  // With reducedMotion 'pause' active from the start the loop never ticks,
-  // which leaves canvas surfaces blank. Deliver exactly one frame (elapsed 0)
-  // once the element is first visible, then stay paused. lastTickTime stays 0
-  // so a later real resume still gets a clean first delta.
-
-  function paintOnce(now: number): void {
-    paintRafId = 0;
-    if (_phase !== 'paused' || _reason !== 'reduced-motion') return;
-    if (frame.frame !== 0 || !lifecycle.visible) return;
-    frame.time = now;
-    frame.delta = DEFAULT_FIRST_DELTA_MS;
-    frame.elapsed = 0;
-    frame.frame = 1;
+  // The one frame callback, created once for the life of the loop. Forwards
+  // the ticker-owned frame after measuring the budget from raw frame gaps
+  // (the clamped delta would hide jank at low fps caps).
+  function loopTick(frame: FrameState): void {
+    checkFrameBudget(frame.time);
+    // A budget degrade may have paused or stopped the loop synchronously.
+    if (_phase !== 'running') return;
     onTick(frame);
-  }
-
-  function schedulePaint(): void {
-    if (_phase !== 'paused' || _reason !== 'reduced-motion') return;
-    if (frame.frame !== 0 || paintRafId !== 0 || !lifecycle.visible) return;
-    paintRafId = requestAnimationFrame(paintOnce);
-  }
-
-  function cancelPaint(): void {
-    if (paintRafId === 0) return;
-    cancelAnimationFrame(paintRafId);
-    paintRafId = 0;
   }
 
   // --- Reconcile ---
@@ -426,30 +345,24 @@ export function createLoop(options: LoopOptions): Loop {
     const pauseReason = shouldPause();
 
     if (pauseReason) {
-      if (ticker && _phase === 'running') {
-        ticker.pause();
-        pauseStartTime = performance.now();
-      }
+      if (ticker && _phase === 'running') ticker.pause();
       setPhase('paused', pauseReason);
-      schedulePaint();
       return;
     }
 
     if (!ticker) {
       // First activation: stop() is terminal, so this runs once per loop.
-      cancelPaint();
-      timelineStart = performance.now();
-      buildTicker();
+      const fps: number | undefined = getEffectiveFps();
+      budgetThreshold = 1500 / (fps ?? 60);
+      ticker = createTicker({ fps, onTick: loopTick });
+      ticker.start();
       setPhase('running', _reason === 'initial' ? 'started' : 'resumed');
     } else if (_phase === 'paused') {
-      cancelPaint();
-      totalPausedTime += performance.now() - pauseStartTime;
-      // Reset so the first resumed tick gets a clean delta (not the pause gap).
-      lastTickTime = 0;
+      // The ticker excludes paused time and resets its own delta; the budget
+      // measurement starts fresh so the pause gap never reads as jank.
+      lastBudgetTime = 0;
       ticker.resume();
       setPhase('running', 'resumed');
-      // Apply any fps change that happened while paused.
-      syncTicker();
     }
   }
 
@@ -462,17 +375,15 @@ export function createLoop(options: LoopOptions): Loop {
 
   // --- Init subsystems ---
 
-  // Lifecycle owns the visibility + reduced-motion decision. The loop layers the
-  // ticker and quality (frame-budget / focus) on top. Driven manually so it only
-  // activates once the loop itself starts. onVisibleChange feeds the deferred
-  // reduced-motion paint (the composed phase hides sight while RM-paused).
+  // Lifecycle owns the visibility + reduced-motion decision. The loop layers
+  // the ticker and quality (frame-budget / focus) on top. Driven manually so
+  // it only activates once the loop itself starts.
   const lifecycle = createLifecycle({
     element,
     reducedMotion,
     intersectionOptions,
     start: 'manual',
     onPhaseChange: reconcile,
-    onVisibleChange: schedulePaint,
   });
 
   const unsubFocus: () => void = subscribeFocusTracking(onFocusChange);
@@ -492,11 +403,13 @@ export function createLoop(options: LoopOptions): Loop {
     if (_phase === 'stopped') return;
     unlinkAbort?.();
     clearBudgetRecovery();
-    cancelPaint();
-    destroyTicker();
+    // Transition first: teardown below fires callbacks (lifecycle onPhaseChange
+    // re-enters reconcile), and the stopped guard must already hold.
+    setPhase('stopped', 'disposed');
+    ticker?.stop();
+    ticker = null;
     lifecycle.stop();
     unsubFocus();
-    setPhase('stopped', 'disposed');
   }
 
   // Declared before assignment because an already-aborted signal makes

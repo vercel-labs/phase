@@ -41,6 +41,12 @@ export interface Ticker {
   stop(): void;
   pause(): void;
   resume(): void;
+  /**
+   * Change the FPS cap in place. The timeline (elapsed, delta history, frame
+   * count, `FrameState` identity) is untouched; only the scheduling gate
+   * changes. `undefined` removes the cap.
+   */
+  setFps(fps?: number): void;
   readonly phase: TickerPhase;
   readonly phaseReason: TickerReason;
 }
@@ -49,15 +55,11 @@ export interface Ticker {
 // Constants
 // ---------------------------------------------------------------------------
 
-/**
- * Prevents teleportation on resume. Matches motion's maxElapsed.
- * Exported for loop-level timelines that must clamp identically; not part of
- * the public package API (not re-exported from any barrel).
- */
-export const MAX_DELTA_MS = 40;
+/** Prevents teleportation on resume. Matches motion's maxElapsed. */
+const MAX_DELTA_MS = 40;
 
-/** Default first-frame delta when no previous tick exists. See MAX_DELTA_MS on export. */
-export const DEFAULT_FIRST_DELTA_MS = 16.67;
+/** Default first-frame delta when no previous tick exists. */
+const DEFAULT_FIRST_DELTA_MS = 16.67;
 
 // ---------------------------------------------------------------------------
 // Shared frame-locked clock
@@ -126,7 +128,7 @@ export function createTicker(options: TickerOptions): Ticker {
   }
 
   const { onTick, fps, signal } = options;
-  const minFrameTime: number = fps ? 1000 / fps : 0;
+  let minFrameTime: number = fps ? 1000 / fps : 0;
 
   let _phase: TickerPhase = 'idle';
   let _reason: TickerReason = 'initial';
@@ -211,6 +213,10 @@ export function createTicker(options: TickerOptions): Ticker {
     leaveSharedClock = null;
   }
 
+  function setFps(nextFps?: number): void {
+    minFrameTime = nextFps ? 1000 / nextFps : 0;
+  }
+
   // Declared before assignment because an already-aborted signal makes
   // linkAbortSignal call stop() synchronously, which reads unlinkAbort.
   let unlinkAbort: (() => void) | undefined;
@@ -221,6 +227,7 @@ export function createTicker(options: TickerOptions): Ticker {
     stop,
     pause,
     resume,
+    setFps,
     get phase() {
       return _phase;
     },
