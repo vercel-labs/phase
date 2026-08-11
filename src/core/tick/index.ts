@@ -44,7 +44,7 @@ export interface Ticker {
   /**
    * Change the FPS cap in place. The timeline (elapsed, delta history, frame
    * count, `FrameState` identity) is untouched; only the scheduling gate
-   * changes. `undefined` removes the cap.
+   * changes. `undefined` removes the cap, mirroring the `fps` option.
    */
   setFps(fps?: number): void;
   readonly phase: TickerPhase;

@@ -282,7 +282,7 @@ ticker.start();
 
 All tickers share a single `requestAnimationFrame` loop. Every subscriber reads the same `performance.now()` value each frame, so independent animations stay in visual sync.
 
-`setFps(fps?)` changes the FPS cap in place: only the scheduling gate changes, so `elapsed`, `delta`, the frame count, and `FrameState` identity stay continuous, and no early frame leaks through the new cap. `createLoop` uses this for quality-driven throttling.
+`setFps(fps?)` changes the FPS cap in place: only the scheduling gate changes, so `elapsed`, `delta`, the frame count, and `FrameState` identity stay continuous, and no early frame leaks through the new cap. Passing `undefined` removes the cap, mirroring the `fps` option. `createLoop` uses this for quality-driven throttling.
 
 #### Ticker phases
 
