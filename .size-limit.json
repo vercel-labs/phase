@@ -21,7 +21,7 @@
     "name": "createLoop",
     "path": "src/index.ts",
     "import": "{ createLoop }",
-    "limit": "2.85 kB"
+    "limit": "3.1 kB"
   },
   {
     "name": "createScrollProgress",
@@ -93,14 +93,14 @@
     "path": "src/react/index.ts",
     "import": "{ useLoop }",
     "ignore": ["react"],
-    "limit": "3.05 kB"
+    "limit": "3.3 kB"
   },
   {
     "name": "useLifecycle",
     "path": "src/react/index.ts",
     "import": "{ useLifecycle }",
     "ignore": ["react"],
-    "limit": "1.7 kB"
+    "limit": "1.8 kB"
   },
   {
     "name": "useSight",
@@ -114,7 +114,7 @@
     "path": "src/react/index.ts",
     "import": "{ useCanvas }",
     "ignore": ["react"],
-    "limit": "3.75 kB"
+    "limit": "4 kB"
   },
   {
     "name": "useMutation",

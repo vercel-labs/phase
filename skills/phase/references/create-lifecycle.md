@@ -12,14 +12,15 @@ const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
 
 ### Options
 
-| Option                | Type                                                       | Default   | Description                                    |
-| --------------------- | ---------------------------------------------------------- | --------- | ---------------------------------------------- |
-| `element`             | `Element`                                                  | required  | Element to observe for visibility              |
-| `reducedMotion`       | `'pause' \| 'ignore'`                                      | `'pause'` | Whether reduced motion pauses the lifecycle    |
-| `intersectionOptions` | `IntersectionObserverInit`                                 | —         | Forwarded to pooled IO                         |
-| `start`               | `'auto' \| 'manual'`                                       | `'auto'`  | Whether to start immediately                   |
-| `onPhaseChange`       | `(phase: LifecyclePhase, reason: LifecycleReason) => void` | —         | Called on phase transitions                    |
-| `signal`              | `AbortSignal`                                              | —         | Stops the lifecycle when the signal is aborted |
+| Option                | Type                                                       | Default   | Description                                                                            |
+| --------------------- | ---------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------- |
+| `element`             | `Element`                                                  | required  | Element to observe for visibility                                                      |
+| `reducedMotion`       | `'pause' \| 'ignore'`                                      | `'pause'` | Whether reduced motion pauses the lifecycle                                            |
+| `intersectionOptions` | `IntersectionObserverInit`                                 | —         | Forwarded to pooled IO                                                                 |
+| `start`               | `'auto' \| 'manual'`                                       | `'auto'`  | Whether to start immediately                                                           |
+| `onPhaseChange`       | `(phase: LifecyclePhase, reason: LifecycleReason) => void` | —         | Called on phase transitions                                                            |
+| `onVisibleChange`     | `(visible: boolean) => void`                               | —         | Raw sight signal, even when the phase swallows it (e.g. reduced motion outranks sight) |
+| `signal`              | `AbortSignal`                                              | —         | Stops the lifecycle when the signal is aborted                                         |
 
 ### Return (Lifecycle)
 
@@ -31,6 +32,7 @@ const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
 | `resume()`    | `() => void`      | Clear manual pause                                                                             |
 | `phase`       | `LifecyclePhase`  | `'idle' \| 'active' \| 'paused' \| 'stopped'`                                                  |
 | `phaseReason` | `LifecycleReason` | `'initial' \| 'started' \| 'resumed' \| 'sight' \| 'reduced-motion' \| 'manual' \| 'disposed'` |
+| `visible`     | `boolean`         | Current sight visibility, independent of the composed pause priority                           |
 
 ## When to use
 

@@ -12,18 +12,19 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 ### Options
 
-| Option                | Type                                | Default      | Description                               |
-| --------------------- | ----------------------------------- | ------------ | ----------------------------------------- |
-| `element`             | `Element`                           | required     | Element to observe for visibility         |
-| `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running           |
-| `fps`                 | `number`                            | —            | Cap frames per second                     |
-| `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion |
-| `degraded`            | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades            |
-| `degradedFps`         | `number`                            | `30`         | FPS cap in degraded throttle mode         |
-| `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to the underlying IO            |
-| `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately              |
-| `onPhaseChange`       | `(phase, reason) => void`           | —            | Called on every phase transition          |
-| `signal`              | `AbortSignal`                       | —            | Stops the loop when the signal is aborted |
+| Option                | Type                                | Default      | Description                                 |
+| --------------------- | ----------------------------------- | ------------ | ------------------------------------------- |
+| `element`             | `Element`                           | required     | Element to observe for visibility           |
+| `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running             |
+| `fps`                 | `number`                            | —            | Cap frames per second                       |
+| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior when user prefers reduced motion   |
+| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused      |
+| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after sustained over-budget frames |
+| `throttleFps`         | `number`                            | `30`         | FPS cap while a signal resolves to throttle |
+| `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to the underlying IO              |
+| `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately                |
+| `onPhaseChange`       | `(phase, reason) => void`           | —            | Called on every phase transition            |
+| `signal`              | `AbortSignal`                       | —            | Stops the loop when the signal is aborted   |
 
 ### Return (Loop)
 
@@ -38,9 +39,9 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 ## When to use
 
-- You need a per-frame animation loop that automatically pauses when off-screen or in a background tab.
+- You need a per-frame animation loop that automatically pauses when off-screen, in a background tab, or in an unfocused window.
 - You want zero CPU when the element isn't visible (strong pause via `cancelAnimationFrame`).
-- You need quality degradation signals (FPS throttle on window blur or frame budget overflow).
+- You need per-signal quality behavior (pause on blur, FPS throttle on frame budget overflow).
 - You're animating DOM elements (transforms, opacity, positions) in a frame loop.
 
 ## When not to use
@@ -62,8 +63,9 @@ const loop = createLoop(options: LoopOptions): Loop;
   };
   ```
 - Call `stop()` when the animation is permanently done (e.g. component unmounts, page navigates away).
-- Read `phase` and `phaseReason` to debug unexpected pauses.
-- Use `degraded: 'pause'` for heavy canvas/WebGL that can't gracefully degrade.
+- Read `phase` and `phaseReason` to debug unexpected pauses; `qualityReason` names the active quality signal.
+- Rely on the defaults: window blur pauses (the timeline freezes and resumes in place on refocus), frame-budget pressure throttles to `throttleFps`. When both are active, `pause` wins over `throttle` wins over `ignore`.
+- Use `frameBudget: 'pause'` for heavy canvas/WebGL that can't gracefully degrade.
 
 ## Don't
 
@@ -75,10 +77,10 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 ## Reduced motion
 
-Default: `'pause'`. The loop pauses entirely when reduced motion is enabled. The `phaseReason` will be `'reduced-motion'`.
+Default: `'pause'`. The loop pauses entirely when reduced motion is enabled (`phaseReason` is `'reduced-motion'`), after delivering exactly one static frame (`elapsed: 0`) once the element is first visible — so canvas surfaces show their initial state instead of staying blank.
 
-- `'complete'`: Jump to the end state instantly (useful for tweens that have a target). The loop runs one final tick then stops.
 - `'ignore'`: Keep running regardless. Use only for non-decorative motion (e.g. a data visualization that conveys information via movement).
+- There is no `'complete'` for loops: an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (`motion-reduce:`), or use `useTween` for a value with a defined target.
 
 ## See also
 

@@ -208,45 +208,49 @@ loop.start();
 | `full`     | Normal operation      | Configured FPS, full DPR          |
 | `degraded` | Resources constrained | FPS capped to 30, DPR drops to 1x |
 
-Two signals trigger degradation:
+Two signals trigger degradation, and each has its own behavior:
 
-| Trigger      | `qualityReason`  | When                                           | Recovery                 |
-| ------------ | ---------------- | ---------------------------------------------- | ------------------------ |
-| Window blur  | `'unfocused'`    | User switches to another window                | Recovers on window focus |
-| Frame budget | `'frame-budget'` | 3+ consecutive frames exceed the 16.6ms budget | Does not auto-recover    |
+| Trigger      | `qualityReason`  | When                                           | Default behavior                               | Recovery                                           |
+| ------------ | ---------------- | ---------------------------------------------- | ---------------------------------------------- | -------------------------------------------------- |
+| Window blur  | `'unfocused'`    | User switches to another window                | `'pause'` — timeline freezes, resumes in place | Resumes on window focus                            |
+| Frame budget | `'frame-budget'` | 3+ consecutive frames exceed the 16.6ms budget | `'throttle'` — FPS capped (30 by default)      | Does not auto-recover (throttle); 2s retry (pause) |
 
-Read `loop.quality` and `loop.qualityReason` to adapt rendering (fewer particles, lower-fidelity shaders, skip non-essential visual passes).
+Read `loop.quality` and `loop.qualityReason` to adapt rendering (fewer particles, lower-fidelity shaders, skip non-essential visual passes). Quality is observable regardless of the configured behavior — even `'ignore'` reports it.
 
-#### The `degraded` option
+#### Per-signal behaviors: `unfocused` and `frameBudget`
 
-Controls the loop's response when quality degrades. Same three-value pattern as `reducedMotion`.
+Each quality signal accepts the same three values. When multiple signals are active, `pause` wins over `throttle` wins over `ignore`.
 
-| Value        | Behavior                                             | Use case                                            |
-| ------------ | ---------------------------------------------------- | --------------------------------------------------- |
-| `'throttle'` | Cap FPS (default 30, configurable via `degradedFps`) | Most animations. Still runs, only slower            |
-| `'pause'`    | Pause the loop entirely                              | Heavy canvas/WebGL. If it can't run well, don't run |
-| `'ignore'`   | Keep running at full quality                         | Critical UI that must never degrade                 |
+| Value        | Behavior                                             | Use case                              |
+| ------------ | ---------------------------------------------------- | ------------------------------------- |
+| `'throttle'` | Cap FPS (default 30, configurable via `throttleFps`) | Still runs, only slower               |
+| `'pause'`    | Pause the loop; `frame.elapsed` freezes              | Decorative motion, heavy canvas/WebGL |
+| `'ignore'`   | Keep running at full quality                         | Critical UI that must never degrade   |
 
 ```ts
 createLoop({
   element: el,
   onTick: draw,
-  degraded: 'throttle', // default
-  degradedFps: 20, // only accepted when degraded is 'throttle'
+  unfocused: 'pause', // default: blur freezes, refocus resumes in place
+  frameBudget: 'throttle', // default: slow devices degrade gracefully
+  throttleFps: 20, // shared cap for any signal resolving to 'throttle'
 });
 ```
 
 #### Loop options
 
-| Option          | Type                                | Default      | Description                               |
-| --------------- | ----------------------------------- | ------------ | ----------------------------------------- |
-| `element`       | `Element`                           | required     | Element to observe for visibility         |
-| `onTick`        | `(frame: FrameState) => void`       | required     | Called each frame while running           |
-| `fps`           | `number`                            | —            | Cap frames per second                     |
-| `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion |
-| `degraded`      | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades            |
-| `degradedFps`   | `number`                            | `30`         | FPS cap in degraded throttle mode         |
-| `onPhaseChange` | `(phase, reason) => void`           | —            | Called on every phase transition          |
+| Option          | Type                                | Default      | Description                                 |
+| --------------- | ----------------------------------- | ------------ | ------------------------------------------- |
+| `element`       | `Element`                           | required     | Element to observe for visibility           |
+| `onTick`        | `(frame: FrameState) => void`       | required     | Called each frame while running             |
+| `fps`           | `number`                            | —            | Cap frames per second                       |
+| `reducedMotion` | `'pause' \| 'ignore'`               | `'pause'`    | Behavior when user prefers reduced motion   |
+| `unfocused`     | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused      |
+| `frameBudget`   | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after sustained over-budget frames |
+| `throttleFps`   | `number`                            | `30`         | FPS cap while a signal resolves to throttle |
+| `onPhaseChange` | `(phase, reason) => void`           | —            | Called on every phase transition            |
+
+Under `reducedMotion: 'pause'` the loop paints exactly one static frame (`elapsed: 0`) once the element is first visible — canvas surfaces show their initial state instead of staying blank — then stays paused. Loops have no `'complete'`: an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (e.g. Tailwind's `motion-reduce:`), or use `useTween` for values with a defined target.
 
 ### createTicker
 
@@ -730,9 +734,9 @@ return (
 | DPR (retina) | Uses `devicePixelContentBoxSize` for exact physical pixels when available, falls back to `width * dpr`. Listens for DPR changes. |
 | Resize       | Shared ResizeObserver. Canvas resized on container change. No `getBoundingClientRect`.                                           |
 | Context loss | Listens for `contextlost`/`contextrestored`. Pauses on loss, recovers on restore.                                                |
-| Quality      | When degraded, DPR drops to 1x automatically (halves GPU pixel count).                                                           |
+| Quality      | While running degraded, DPR drops to 1x automatically (halves GPU pixel count). Paused loops keep the full-res buffer.           |
 
-Both hooks accept the same quality controls as `createLoop`: `degraded` and `degradedFps`. For heavy GPU work, consider `degraded: 'pause'`.
+Both hooks accept the same quality controls as `createLoop`: `unfocused`, `frameBudget`, and `throttleFps`. For heavy GPU work, consider `frameBudget: 'pause'`.
 
 ### useTween
 
@@ -1234,8 +1238,8 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Core**                  |                   |
 | `createTicker`            |             834 B |
 | `createSight`             |             963 B |
-| `createLifecycle`         |           1.47 kB |
-| `createLoop`              |           2.68 kB |
+| `createLifecycle`         |           1.49 kB |
+| `createLoop`              |            2.8 kB |
 | `createScrollProgress`    |             878 B |
 | `createRenderState`       |             495 B |
 | `createDevicePixelRatio`  |             544 B |
@@ -1249,29 +1253,29 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           2.91 kB |
-| `useLifecycle`            |           1.68 kB |
+| `useLoop`                 |           3.01 kB |
+| `useLifecycle`            |           1.71 kB |
 | `useSight`                |           1.19 kB |
-| `useCanvas`               |           3.53 kB |
+| `useCanvas`               |           3.63 kB |
 | `useMutation`             |           1.36 kB |
 | `usePointer`              |           1.48 kB |
 | `useScroll`               |           1.72 kB |
 | `useThrottledCallback`    |             797 B |
 | `useDebouncedCallback`    |             688 B |
-| `useTween`                |             619 B |
+| `useTween`                |             617 B |
 | `usePresence`             |             591 B |
 | `useScrollProgress`       |             993 B |
 | `useSize`                 |             378 B |
-| `useContainerQuery`       |             384 B |
+| `useContainerQuery`       |             356 B |
 | `useMediaQuery`           |             246 B |
-| `usePrefersReducedMotion` |             272 B |
-| `useDevicePixelRatio`     |             231 B |
+| `usePrefersReducedMotion` |             274 B |
+| `useDevicePixelRatio`     |             230 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
 | `Presence`                |             741 B |
 | `WhenVisible`             |           1.44 kB |
 | `WhenIdle`                |             593 B |
-| `Defer`                   |              86 B |
+| `Defer`                   |              85 B |
 | `useIdle`                 |             435 B |
 | `useWhenIdle`             |             445 B |
 | `useRenderState`          |             527 B |

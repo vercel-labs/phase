@@ -18,9 +18,10 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 | `onTick`              | `LoopTickFn`                        | required     | Called every frame (write to refs/DOM only)        |
 | `fps`                 | `number`                            | —            | Cap frames per second                              |
 | `enabled`             | `boolean`                           | `true`       | When `false`, tears down the loop (reports `idle`) |
-| `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior under reduced motion                      |
-| `degraded`            | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades                     |
-| `degradedFps`         | `number`                            | `30`         | FPS cap in degraded throttle mode                  |
+| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior under reduced motion                      |
+| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused             |
+| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after sustained over-budget frames        |
+| `throttleFps`         | `number`                            | `30`         | FPS cap while a signal resolves to `'throttle'`    |
 | `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to IO                                    |
 
 ### Return
@@ -73,9 +74,13 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 - **Never allocate inside `onTick`.** No objects, arrays, closures, or spreads. Template literals for the final `style.*` write are acceptable (see [performance.md](./performance.md)).
 - **Never store a reference to `frame`.** Same object mutated in place each tick.
 
+## Quality signals
+
+Each signal has its own behavior; `pause` wins over `throttle` wins over `ignore` when both are active. The defaults pause on window blur (the timeline freezes and resumes in place on refocus — no restart, no catch-up) and throttle on frame-budget pressure. `quality`/`qualityReason` stay observable regardless of behavior.
+
 ## Reduced motion
 
-Default `'pause'`: loop pauses, `phaseReason` is `'reduced-motion'`. Use `'complete'` for tweens that should jump to target. Use `'ignore'` only for non-decorative motion.
+Default `'pause'`: the loop pauses with `phaseReason` `'reduced-motion'`, after painting exactly one static frame (`elapsed: 0`) once the element is first visible. There is no `'complete'` for loops — an open-ended loop has no end state the library can know. Author the reduced-motion end state in markup or CSS (`motion-reduce:`), or use `useTween` for a value with a defined target. Use `'ignore'` only for non-decorative motion.
 
 ## See also
 

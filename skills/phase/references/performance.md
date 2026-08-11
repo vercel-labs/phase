@@ -132,6 +132,15 @@ createLoop({ element: el, onTick: draw, reducedMotion: 'ignore' });
 
 **Do:** Only use `'ignore'` for non-decorative motion (data visualization that communicates via movement, a game, an accessibility feature that uses motion).
 
+**End states belong in markup or CSS, not the loop.** A paused loop shows its first frame (loops paint exactly one static frame once visible, so canvases are never blank). When the reduced-motion experience should show the _finished_ composition instead, author it declaratively — hide the animated subtree and show a static complete version:
+
+```tsx
+<g className="motion-reduce:hidden">{/* animated segments */}</g>
+<path className="hidden motion-reduce:block" d={COMPLETE_PATH} />
+```
+
+The library cannot know an open-ended loop's end state, which is why loops accept only `'pause' | 'ignore'`. `useTween` (which has a defined target) defaults to `'complete'` and jumps to it.
+
 ### Stable function references
 
 Per-frame callbacks should be created once, not recreated every render.

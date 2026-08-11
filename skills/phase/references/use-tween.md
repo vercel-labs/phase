@@ -12,14 +12,14 @@ const value: number = useTween(options);
 
 ### Options
 
-| Option          | Type                                | Default        | Description                   |
-| --------------- | ----------------------------------- | -------------- | ----------------------------- |
-| `target`        | `number`                            | required       | Value to animate toward       |
-| `duration`      | `number`                            | `300`          | Animation duration in ms      |
-| `delay`         | `number`                            | `0`            | Delay before starting in ms   |
-| `easing`        | `(progress: number) => number`      | `easeOutCubic` | Easing function               |
-| `enabled`       | `boolean`                           | `true`         | When `false`, jumps to target |
-| `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'complete'`   | Behavior under reduced motion |
+| Option          | Type                           | Default        | Description                   |
+| --------------- | ------------------------------ | -------------- | ----------------------------- |
+| `target`        | `number`                       | required       | Value to animate toward       |
+| `duration`      | `number`                       | `300`          | Animation duration in ms      |
+| `delay`         | `number`                       | `0`            | Delay before starting in ms   |
+| `easing`        | `(progress: number) => number` | `easeOutCubic` | Easing function               |
+| `enabled`       | `boolean`                      | `true`         | When `false`, jumps to target |
+| `reducedMotion` | `'complete' \| 'ignore'`       | `'complete'`   | Behavior under reduced motion |
 
 ### Return
 
@@ -58,7 +58,7 @@ Returns the current animated `number`.
 
 ## Reduced motion
 
-Default `'complete'`: jumps to target instantly. The value still arrives at its destination. The animation is skipped. This is the right default for tweens that must reach their final state.
+Default `'complete'`: jumps to target instantly. The value still arrives at its destination. The animation is skipped. This is the right default for tweens that must reach their final state. There is no `'pause'` for tweens — a value frozen mid-flight reads as a stuck UI; the type is `TweenReducedMotion` (`'complete' | 'ignore'`).
 
 ## See also
 
