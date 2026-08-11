@@ -34,22 +34,27 @@ This fails in three ways:
 Prefer browser keyframes when the whole timeline can be described before playback:
 
 - Values depend only on time.
-- Targets and keyframes are known when the sequence starts.
+- Targets and CSS-animatable keyframes are known when the sequence starts.
 - No JavaScript side effect is required on every frame.
 
 Use CSS for static keyframes and WAAPI when keyframes are generated from runtime data or need imperative control. Add `useLifecycle` only to pause/resume playback off-screen and for reduced motion. Use `useLoop` when frames depend on live pointer/scroll data, layout, simulation state, canvas/WebGL, or JS work that keyframes cannot represent.
 
-## Deterministic sequence: browser keyframes + `useLifecycle`
+## Keyframe-friendly sequence: browser keyframes + `useLifecycle`
 
 Create animations once, pause them immediately, then let lifecycle changes control playback. The browser samples the timeline; React and phase do no per-frame work.
+
+First paint and reduced motion are separate visual requirements. Render the normal CSS state to match keyframe zero so WAAPI does not snap after hydration. In a `prefers-reduced-motion: reduce` rule, render a meaningful static state (usually the final frame) and skip WAAPI setup. `useLifecycle` pauses work; it does not choose that static fallback for you.
 
 ```tsx
 const animationsRef = useRef<Animation[]>([]);
 const { ref, isActive } = useLifecycle<HTMLDivElement>();
+const shouldReduceMotion = usePrefersReducedMotion();
 
 useEffect(() => {
   const root = ref.current;
-  if (!root) return;
+  // The synchronous check also covers the initial hydration render, where
+  // usePrefersReducedMotion intentionally still returns false.
+  if (!root || shouldReduceMotion || prefersReducedMotion()) return;
 
   const bars = root.querySelectorAll<HTMLElement>('[data-bar]');
   const animations = Array.from(bars, (bar, index) =>
@@ -67,16 +72,21 @@ useEffect(() => {
     for (const animation of animations) animation.cancel();
     animationsRef.current = [];
   };
-}, [ref]);
+}, [ref, shouldReduceMotion]);
 
 useEffect(() => {
   for (const animation of animationsRef.current) {
     if (isActive) animation.play();
     else animation.pause();
   }
-}, [isActive]);
+}, [isActive, shouldReduceMotion]);
 
-return <div ref={ref}>{/* bars */}</div>;
+return (
+  <div ref={ref}>
+    {/* CSS: keyframe-zero state normally; final static state under reduce */}
+    {/* bars */}
+  </div>
+);
 ```
 
 WAAPI is not a blanket compositor guarantee. Prefer `transform`/`opacity`, avoid layout-dependent keyframes, and confirm main-thread, layout, and paint cost in a performance trace.
@@ -229,12 +239,12 @@ This is the right choice when CSS handles the timing and interpolation and you o
 
 ## When to use each
 
-| Timeline needs                                           | Use                                                        |
-| -------------------------------------------------------- | ---------------------------------------------------------- |
-| Static keyframes                                         | CSS + `useLifecycle` toggling `animation-play-state`       |
-| Generated keyframes / imperative playback                | WAAPI + `useLifecycle` calling `play()` / `pause()`        |
-| Live per-frame JS, simulation, canvas, or changing input | `useLoop` with `frame.elapsed` / `frame.delta` as required |
-| Enter/exit only                                          | `Presence` / `WhenVisible` with CSS transitions            |
+| Timeline needs                                                | Use                                                        |
+| ------------------------------------------------------------- | ---------------------------------------------------------- |
+| Static keyframes                                              | CSS + `useLifecycle` toggling `animation-play-state`       |
+| Generated, browser-animatable keyframes / imperative playback | WAAPI + `useLifecycle` calling `play()` / `pause()`        |
+| Live per-frame JS, simulation, canvas, or changing input      | `useLoop` with `frame.elapsed` / `frame.delta` as required |
+| Enter/exit only                                               | `Presence` / `WhenVisible` with CSS transitions            |
 
 ## See also
 

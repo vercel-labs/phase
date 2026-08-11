@@ -43,7 +43,7 @@ missing-reduced-motion — Animation without reduced-motion check (5) · noise: 
 
 manual-raf — Manual requestAnimationFrame loop (4, all per-frame) · noise: noisy
   why: No visibility pausing, no shared clock, no cleanup.
-  use: CSS/WAAPI if deterministic; otherwise useLoop/useCanvas for lifecycle + cleanup
+  use: CSS/WAAPI if browser-animatable; otherwise useLoop/useCanvas for lifecycle + cleanup
   read: references/audit.md#common-replacements
   src/ticker.ts:5  requestAnimationFrame(tick);
   src/ticker.ts:7  requestAnimationFrame(tick);
@@ -77,8 +77,8 @@ raw-io — Raw IntersectionObserver (not pooled) (1, all per-frame) · noise: no
   src/lazy-image.tsx:7  const io = new IntersectionObserver(([entry]) => {
 
 js-opacity-transform — JS-driven opacity/transform (may be browser-driven) (1, all per-frame) · noise: noisy
-  why: Often replaceable by a CSS transition, or needs phase for lifecycle.
-  use: a CSS transition, or useLoop if it needs per-frame JS
+  why: May be browser-driven; inspect whether JavaScript must compute live frames.
+  use: CSS/WAAPI if browser-animatable; useLoop only for required live per-frame JS
   read: references/decision-guide.md#tier-1-browser-driven-css-or-waapi
   src/ticker.ts:4  el.style.transform = `translateX(${width / 10}px)`;
 

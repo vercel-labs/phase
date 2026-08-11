@@ -122,7 +122,7 @@ missing-reduced-motion — Animation without reduced-motion check (5) · noise: 
 
 manual-raf — Manual requestAnimationFrame loop (4, all per-frame) · noise: noisy
   why: No visibility pausing, no shared clock, no cleanup.
-  use: CSS/WAAPI if deterministic; otherwise useLoop/useCanvas for lifecycle + cleanup
+  use: CSS/WAAPI if browser-animatable; otherwise useLoop/useCanvas for lifecycle + cleanup
   read: references/audit.md#common-replacements
   src/ticker.ts:5  requestAnimationFrame(tick);
   src/ticker.ts:7  requestAnimationFrame(tick);
@@ -156,8 +156,8 @@ raw-io — Raw IntersectionObserver (not pooled) (1, all per-frame) · noise: no
   src/lazy-image.tsx:7  const io = new IntersectionObserver(([entry]) => {
 
 js-opacity-transform — JS-driven opacity/transform (may be browser-driven) (1, all per-frame) · noise: noisy
-  why: Often replaceable by a CSS transition, or needs phase for lifecycle.
-  use: a CSS transition, or useLoop if it needs per-frame JS
+  why: May be browser-driven; inspect whether JavaScript must compute live frames.
+  use: CSS/WAAPI if browser-animatable; useLoop only for required live per-frame JS
   read: references/decision-guide.md#tier-1-browser-driven-css-or-waapi
   src/ticker.ts:4  el.style.transform = `translateX(${width / 10}px)`;
 
@@ -289,8 +289,8 @@ A clean scan means no anti-pattern candidates, not no opportunities: the scanner
 - **Long-running or infinite CSS animations** (spinners, marquees, animated gradients) with no visibility gating. Even with reduced-motion handled, they burn CPU/GPU off-screen and in background tabs. → `useLifecycle` toggling `animation-play-state` (see [decision-guide.md](./decision-guide.md)).
 - **`transitionend`/`animationend` listeners driving unmount or state.** → `Presence` / `Swap`.
 - **Eagerly mounted non-critical UI** (below-fold sections, chat widgets, pickers, heavy modals). → `Defer` (SSR-safe default) or `WhenVisible`/`WhenIdle`, subject to the [Step 2.5](#step-25-verify-the-blast-radius) semantics rules.
-- **`setTimeout`/`setInterval` chains sequencing UI states.** The scanner only flags timers near animation keywords; sequencing timers without them are invisible to it. → CSS/WAAPI keyframes when deterministic; `useLoop` with `frame.elapsed` only when JavaScript must own the steps ([timed-sequences.md](./timed-sequences.md)).
-- **Phase loops replaying a predetermined timeline** (scanner: `phase-loop-browser-keyframes`). Verify that output depends only on elapsed time, can be expressed as keyframes, and requires no per-frame JS side effects. → CSS/WAAPI for playback, with `useLifecycle` as the visibility/reduced-motion gate.
+- **`setTimeout`/`setInterval` chains sequencing UI states.** The scanner only flags timers near animation keywords; sequencing timers without them are invisible to it. → CSS/WAAPI when the sequence is predetermined and keyframe-friendly; `useLoop` with `frame.elapsed` only when JavaScript must own the steps ([timed-sequences.md](./timed-sequences.md)).
+- **Phase loops replaying a predetermined timeline** (scanner: `phase-loop-browser-keyframes`). Verify that output depends only on elapsed time, can be expressed as browser-animatable keyframes, and requires no per-frame JS side effects. → CSS/WAAPI for playback, with `useLifecycle` as the visibility gate. Also verify that first-paint CSS matches keyframe zero and reduced motion renders a meaningful static state instead of pausing there.
 - **Scroll listeners doing position math without layout reads.** The scanner only flags handlers that read layout. → `useScroll`.
 - **A canvas or bitmap sized from `devicePixelRatio` once.** Reading it at mount and never again leaves the surface blurry after a browser zoom or a move to a different-density monitor, which reads as a rendering bug rather than a perf one. → `useDevicePixelRatio` ([use-device-pixel-ratio.md](./use-device-pixel-ratio.md)).
 - **JS still running inside a skipped `content-visibility: auto` subtree.** Containment stops rendering work, not timers, observers, or loops; the subtree keeps computing for content the browser is not painting. → `useRenderState` to observe the skipped state and pause ([use-render-state.md](./use-render-state.md)).
@@ -324,7 +324,7 @@ Browser-driven (CSS / WAAPI)  →  Minimal JS (useTween)  →  phase primitives 
 
 ### Classification questions
 
-1. **Can the browser own playback?** (state toggle, enter/exit, or a deterministic timeline known before playback)
+1. **Can the browser own playback?** (state toggle, enter/exit, or browser-animatable keyframes on a document/scroll/view timeline)
    → Recommend CSS for static keyframes or WAAPI for generated/imperatively controlled keyframes. Remove per-frame JS.
 
 2. **Is it a single numeric value into React render?** (counter, progress bar, opacity from data)
@@ -437,39 +437,39 @@ The scanner encodes this ranking; text output is already grouped by it. When the
 
 ## Common replacements
 
-| Current pattern                                                      | Replace with                                                                                                                                                                           |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Manual `requestAnimationFrame` loop + `cancelAnimationFrame` cleanup | CSS/WAAPI if deterministic; `useLoop` (DOM) or `useCanvas` (canvas) when frames require live JS                                                                                        |
-| `requestAnimationFrame` without `cancelAnimationFrame`               | Same tier decision, plus phase cleanup is automatic when a loop is required                                                                                                            |
-| `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                                                                                                                                           |
-| `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                                                                                                                                                    |
-| `new ResizeObserver` for dimensions                                  | `useSize`                                                                                                                                                                              |
-| Raw `MutationObserver` with reflow reads in callback                 | `useMutation` (rAF-batched, visibility-aware)                                                                                                                                          |
-| `MutationObserver` on `style`/`attributes` to track size or position | `useSize` (ResizeObserver) / `useSight` (IO); reserve MO for `childList`                                                                                                               |
-| Multiple `MutationObserver` on `<html>` for class changes            | Single `useMutation` with coalesced callback                                                                                                                                           |
-| `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)                                                                                                                            |
-| `matchMedia(query)` + change listener                                | `useMediaQuery` (pooled MQL, reactive)                                                                                                                                                 |
-| `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                                                                                                                                             |
-| `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                                                                                                                                        |
-| `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                                                                                                                                           |
-| `getBoundingClientRect()` in a `pointermove` handler                 | `usePointer` (one rAF-batched `getBoundingClientRect` per frame, not per event)                                                                                                        |
-| `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                                                                                                                                          |
-| Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                                                                                                                                            |
-| CSS-only animation that's working fine                               | No change. Don't add JS where it's not needed.                                                                                                                                         |
-| Hand-wired IO + visibilitychange + reduced motion → boolean          | `useLifecycle` (single hook, same signals, pooled IO)                                                                                                                                  |
-| `getBoundingClientRect()` for initial in-view check                  | Trust IO (one-frame delay is invisible) or `rootMargin`                                                                                                                                |
-| Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops                                                                                                                           |
-| Tailwind `transition-all`                                            | Name the transitioned properties: `transition-colors`, `transition-transform`, `transition-[color,box-shadow]`                                                                         |
-| `setTimeout`/`setInterval` for timed animation sequences             | CSS/WAAPI keyframes + `useLifecycle` when deterministic; `useLoop` with elapsed-time steps only when JavaScript must own the timeline (see [timed-sequences.md](./timed-sequences.md)) |
-| `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)                                                                                                                    |
-| `useCallback` with empty deps calling through a ref                  | `useStableCallback(fn)` (dedup, the same idiom in one line)                                                                                                                            |
-| Heavy panel always mounted with `display:none`                       | Conditional rendering + `Presence` + `useWhenIdle` prefetch                                                                                                                            |
-| N components with bare `window.addEventListener('resize', ...)`      | `useSize` or `useMediaQuery` (pooled observers, no raw listeners)                                                                                                                      |
-| `scroll` handler reading `scrollWidth`/`clientWidth`                 | `useScroll` (rAF-batched offset + progress; geometry cached, read only on resize, not per event)                                                                                       |
-| Global `body:has(...)` in stylesheet                                 | Scope with a subtree-scoped `<style>` or data-attribute pattern                                                                                                                        |
-| Large list without `content-visibility`                              | `Defer` with `as` prop for semantic elements                                                                                                                                           |
-| `WhenVisible`/`WhenIdle` with no `fallback`                          | Add a `fallback` sized to the final content height (prevents CLS)                                                                                                                      |
-| `@keyframes` animating `height`/`width`/`top`/`left`                 | Keyframe `transform`/`opacity`; for expand/collapse use `grid-template-rows` transitions or measure once with `useSize`                                                                |
+| Current pattern                                                      | Replace with                                                                                                                                                                                       |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Manual `requestAnimationFrame` loop + `cancelAnimationFrame` cleanup | CSS/WAAPI if browser-animatable; `useLoop` (DOM) or `useCanvas` (canvas) when frames require live JS                                                                                               |
+| `requestAnimationFrame` without `cancelAnimationFrame`               | Same tier decision, plus phase cleanup is automatic when a loop is required                                                                                                                        |
+| `new IntersectionObserver` for visibility                            | `useSight` or `useLifecycle`                                                                                                                                                                       |
+| `new IntersectionObserver` for scroll progress                       | `useScrollProgress`                                                                                                                                                                                |
+| `new ResizeObserver` for dimensions                                  | `useSize`                                                                                                                                                                                          |
+| Raw `MutationObserver` with reflow reads in callback                 | `useMutation` (rAF-batched, visibility-aware)                                                                                                                                                      |
+| `MutationObserver` on `style`/`attributes` to track size or position | `useSize` (ResizeObserver) / `useSight` (IO); reserve MO for `childList`                                                                                                                           |
+| Multiple `MutationObserver` on `<html>` for class changes            | Single `useMutation` with coalesced callback                                                                                                                                                       |
+| `matchMedia('(prefers-reduced-motion: reduce)')`                     | `prefersReducedMotion()` or rely on phase hooks (automatic)                                                                                                                                        |
+| `matchMedia(query)` + change listener                                | `useMediaQuery` (pooled MQL, reactive)                                                                                                                                                             |
+| `useState` + `requestAnimationFrame` for tween                       | `useTween`                                                                                                                                                                                         |
+| `useState` inside rAF for DOM writes                                 | `useLoop` with ref-based writes                                                                                                                                                                    |
+| `getBoundingClientRect()` in animation                               | `useSize` (async, no reflow)                                                                                                                                                                       |
+| `getBoundingClientRect()` in a `pointermove` handler                 | `usePointer` (one rAF-batched `getBoundingClientRect` per frame, not per event)                                                                                                                    |
+| `transitionend` listener for unmount                                 | `<Presence>` or `usePresence`                                                                                                                                                                      |
+| Multiple independent rAF loops                                       | Multiple `useLoop` instances (shared clock)                                                                                                                                                        |
+| CSS-only animation that's working fine                               | No change. Don't add JS where it's not needed.                                                                                                                                                     |
+| Hand-wired IO + visibilitychange + reduced motion → boolean          | `useLifecycle` (single hook, same signals, pooled IO)                                                                                                                                              |
+| `getBoundingClientRect()` for initial in-view check                  | Trust IO (one-frame delay is invisible) or `rootMargin`                                                                                                                                            |
+| Permanent `will-change-transform`                                    | Toggle with animation state; or remove entirely for JS loops                                                                                                                                       |
+| Tailwind `transition-all`                                            | Name the transitioned properties: `transition-colors`, `transition-transform`, `transition-[color,box-shadow]`                                                                                     |
+| `setTimeout`/`setInterval` for timed animation sequences             | CSS/WAAPI + `useLifecycle` when predetermined and keyframe-friendly; `useLoop` with elapsed-time steps only when JavaScript must own the timeline (see [timed-sequences.md](./timed-sequences.md)) |
+| `useRef(v)` + unconditional `ref.current = v` on every render        | `useSyncedRef(v)` (dedup, the raw pattern is correct, only verbose)                                                                                                                                |
+| `useCallback` with empty deps calling through a ref                  | `useStableCallback(fn)` (dedup, the same idiom in one line)                                                                                                                                        |
+| Heavy panel always mounted with `display:none`                       | Conditional rendering + `Presence` + `useWhenIdle` prefetch                                                                                                                                        |
+| N components with bare `window.addEventListener('resize', ...)`      | `useSize` or `useMediaQuery` (pooled observers, no raw listeners)                                                                                                                                  |
+| `scroll` handler reading `scrollWidth`/`clientWidth`                 | `useScroll` (rAF-batched offset + progress; geometry cached, read only on resize, not per event)                                                                                                   |
+| Global `body:has(...)` in stylesheet                                 | Scope with a subtree-scoped `<style>` or data-attribute pattern                                                                                                                                    |
+| Large list without `content-visibility`                              | `Defer` with `as` prop for semantic elements                                                                                                                                                       |
+| `WhenVisible`/`WhenIdle` with no `fallback`                          | Add a `fallback` sized to the final content height (prevents CLS)                                                                                                                                  |
+| `@keyframes` animating `height`/`width`/`top`/`left`                 | Keyframe `transform`/`opacity`; for expand/collapse use `grid-template-rows` transitions or measure once with `useSize`                                                                            |
 
 ### Outside React
 

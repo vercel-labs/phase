@@ -20,14 +20,14 @@ Use CSS when the animation:
 
 Examples: fade in on mount, slide on hover, opacity toggle, cross-fade between routes.
 
-Use WAAPI (`Element.animate`) when the complete timeline is known at start but its keyframes are generated from runtime data or need imperative `play()`, `pause()`, or `currentTime` control. CSS and WAAPI both let the browser sample keyframes without an author-owned per-frame callback. `transform` and `opacity` can then run on the compositor; other properties may still require style, layout, or paint.
+Use WAAPI (`Element.animate`) when the complete, browser-animatable timeline is known at start but its keyframes are generated from runtime data or need imperative `play()`, `pause()`, or `currentTime` control. CSS and WAAPI both let the browser sample keyframes without an author-owned per-frame callback. `transform` and `opacity` can then run on the compositor; other properties may still require style, layout, or paint.
 
 #### Browser-driven timelines: CSS or WAAPI
 
-Before choosing `useLoop`, ask whether the future frames can be described up front:
+Before choosing `useLoop`, ask whether the browser can own the future frames:
 
-- Progress depends only on time, not pointer/scroll input, layout reads, physics, or changing application state.
-- Each target's values can be represented as keyframes, ideally `transform` and `opacity`.
+- Progress comes from a browser-owned document, scroll, or view timeline instead of an author-owned per-frame callback.
+- Each target's values can be represented as CSS-animatable keyframes, ideally `transform` and `opacity`. For a document-time sequence, the targets and keyframes are known when playback starts.
 - No JavaScript side effect is required on every frame.
 
 If all three are true, prefer CSS for static keyframes and WAAPI for generated or imperatively controlled keyframes. Use `useLifecycle` only as the _when_ layer when playback must pause off-screen or for reduced motion. Do not keep `useLoop` merely because the sequence has many steps or depends on elapsed time.
@@ -54,24 +54,24 @@ Use when you need any of:
 - Mount/unmount transitions with exit animations
 - Scroll-driven reveals, element sizing, or media-query reactivity
 
-| Scenario                                        | Primitive                                                              |
-| ----------------------------------------------- | ---------------------------------------------------------------------- |
-| DOM animation loop                              | `useLoop`                                                              |
-| Canvas/WebGL loop                               | `useCanvas`                                                            |
-| Signal for your own renderer                    | `useLifecycle`                                                         |
-| Mount/unmount with exit                         | `Presence`, `usePresence`                                              |
-| Swap between states with exit→enter             | `Swap`                                                                 |
-| Lazy mount on viewport entry                    | `WhenVisible`                                                          |
-| Lazy mount when the browser is idle             | `WhenIdle`, `useIdle`                                                  |
-| Prefetch / side effect when idle                | `useWhenIdle`                                                          |
-| Skip painting off-screen (keep DOM)             | `Defer`                                                                |
-| Pause raw work inside a `Defer`                 | `useRenderState`                                                       |
-| Visibility ratio (reveal effects)               | `useScrollProgress`                                                    |
-| Scroll container offset (scrollbars, carousels) | `useScroll`                                                            |
-| Element dimensions                              | `useSize`, `useContainerQuery`                                         |
-| Media query subscription                        | `useMediaQuery`                                                        |
-| Visibility boolean                              | `useSight`                                                             |
-| Timed multi-step animation sequence             | CSS/WAAPI + `useLifecycle` when deterministic; `useLoop` when JS-owned |
+| Scenario                                        | Primitive                                                                  |
+| ----------------------------------------------- | -------------------------------------------------------------------------- |
+| DOM animation loop                              | `useLoop`                                                                  |
+| Canvas/WebGL loop                               | `useCanvas`                                                                |
+| Signal for your own renderer                    | `useLifecycle`                                                             |
+| Mount/unmount with exit                         | `Presence`, `usePresence`                                                  |
+| Swap between states with exit→enter             | `Swap`                                                                     |
+| Lazy mount on viewport entry                    | `WhenVisible`                                                              |
+| Lazy mount when the browser is idle             | `WhenIdle`, `useIdle`                                                      |
+| Prefetch / side effect when idle                | `useWhenIdle`                                                              |
+| Skip painting off-screen (keep DOM)             | `Defer`                                                                    |
+| Pause raw work inside a `Defer`                 | `useRenderState`                                                           |
+| Visibility ratio (reveal effects)               | `useScrollProgress`                                                        |
+| Scroll container offset (scrollbars, carousels) | `useScroll`                                                                |
+| Element dimensions                              | `useSize`, `useContainerQuery`                                             |
+| Media query subscription                        | `useMediaQuery`                                                            |
+| Visibility boolean                              | `useSight`                                                                 |
+| Timed multi-step animation sequence             | CSS/WAAPI + `useLifecycle` when keyframe-friendly; `useLoop` when JS-owned |
 
 All phase primitives share:
 
@@ -123,7 +123,7 @@ phase does not handle these and will not grow to handle them. These are compleme
 
 ## Quick-decision flowchart
 
-1. Can the browser own playback (CSS for static keyframes, WAAPI for a generated deterministic timeline)? → **Browser-driven.**
+1. Can the browser own playback (CSS for static keyframes, WAAPI for a generated browser-animatable timeline)? → **Browser-driven.**
 2. Is it one value into a cheap render? → **`useTween`** (or still CSS if the value maps to a CSS property).
 3. Do you need live per-frame JS, canvas, or lifecycle signals? → **phase.** (`useLifecycle` can gate Tier 1 playback without moving its frames into JS.)
 4. Do you need springs, gestures, or keyframe orchestration? → **External library** (and phase can still manage the lifecycle around it via `useLifecycle`).
@@ -132,7 +132,7 @@ phase does not handle these and will not grow to handle them. These are compleme
 
 ### phase + WAAPI
 
-Use WAAPI for a deterministic timeline and `useLifecycle` to pause/resume it. Create animations once; lifecycle changes call `play()` or `pause()` rather than rebuilding keyframes. This keeps phase's visibility and reduced-motion decisions while removing the author-owned frame loop. WAAPI is not automatically composited: stay on `transform`/`opacity` where possible and verify in a performance trace. See [timed-sequences.md](./timed-sequences.md) for the pattern.
+Use WAAPI for a browser-animatable timeline and `useLifecycle` to pause/resume it. Create animations once; lifecycle changes call `play()` or `pause()` rather than rebuilding keyframes. This keeps phase's visibility decision while removing the author-owned frame loop. For reduced motion, skip WAAPI setup and render a meaningful static CSS state instead of merely pausing at keyframe zero. WAAPI is not automatically composited: stay on `transform`/`opacity` where possible and verify in a performance trace. See [timed-sequences.md](./timed-sequences.md) for the pattern.
 
 ### phase + external library
 
@@ -231,15 +231,15 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 
 ## When to replace existing code with phase
 
-- Manual `requestAnimationFrame` loops without visibility pausing → CSS/WAAPI if deterministic; `useLoop` / `useCanvas` if frames require live JS
+- Manual `requestAnimationFrame` loops without visibility pausing → CSS/WAAPI when the browser can own animatable keyframes; `useLoop` / `useCanvas` when frames require live JS
 - Raw `IntersectionObserver` for visibility gating → `useSight` / `useLifecycle`
 - Raw `ResizeObserver` for dimensions → `useSize`
 - `setState` inside rAF → `useLoop` with ref-based DOM writes
 - `getBoundingClientRect()` in animation paths → `useSize` (async, no reflow)
 - Animations that keep running in background tabs → `useLoop` (auto-pauses)
-- Missing `prefers-reduced-motion` handling → any phase primitive (automatic)
+- Missing `prefers-reduced-motion` handling → phase pauses automatically; browser-driven playback still needs a meaningful static CSS fallback
 - Manual `transitionend` listeners for unmount → `Presence` / `Swap`
-- `setTimeout`/`setInterval` chains for multi-step animation sequences → CSS/WAAPI keyframes when deterministic; otherwise `useLoop` with elapsed-time step derivation (see [timed-sequences.md](./timed-sequences.md))
+- `setTimeout`/`setInterval` chains for multi-step animation sequences → CSS/WAAPI when the sequence is predetermined and keyframe-friendly; otherwise `useLoop` with elapsed-time step derivation (see [timed-sequences.md](./timed-sequences.md))
 
 ## When NOT to replace with phase
 
@@ -252,18 +252,18 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 
 When converting from framer-motion (or similar), map patterns to the cheapest tier that works. Don't convert every `motion.div` to a phase primitive — many are CSS-only transitions that don't need JS at all.
 
-| framer-motion pattern                                             | phase equivalent                                                                                                                                                     |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<AnimatePresence>` + `exit` prop                                 | `<Presence>` or `<Swap>` with CSS `@starting-style` + `data-[phase=exiting]`                                                                                         |
-| `motion.div` with `initial`/`animate` (opacity, transform)        | CSS `transition` + `@starting-style` (Tier 1). No JS needed for enter/exit.                                                                                          |
-| `animate()` with `delay` chains (do X, wait, do Y)                | Native WAAPI/CSS keyframes when deterministic; `useLoop` only when the steps require live JS (see [timed-sequences.md](./timed-sequences.md))                        |
-| `stagger` children                                                | CSS `animation-delay` or WAAPI `delay` when deterministic; `useLoop` for live per-child logic (see [timed-sequences.md](./timed-sequences.md))                       |
-| `useInView`                                                       | `useSight` (reactive phase) or `useLifecycle` (animation gating)                                                                                                     |
-| `useScroll` (motion's scroll-position hook)                       | phase's `useScroll` for a container's offset (scrollbars/carousels); `useScrollProgress` for viewport reveal ratio; `ScrollTimeline` for CSS scroll-linked animation |
-| `layout` animations (animating between measured positions)        | Keep framer-motion. Phase does not do layout animation.                                                                                                              |
-| Spring physics (`type: 'spring'`)                                 | Keep framer-motion. Phase does not do springs.                                                                                                                       |
-| Gesture-driven (`drag`, `whileTap`)                               | Keep framer-motion or `@use-gesture`. Phase does not handle gestures.                                                                                                |
-| `useMotionValue` + `useTransform` (continuous computed animation) | `useLoop` with `onTick` for per-frame DOM writes, or `useScrollProgress` if scroll-driven                                                                            |
+| framer-motion pattern                                             | phase equivalent                                                                                                                                                          |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<AnimatePresence>` + `exit` prop                                 | `<Presence>` or `<Swap>` with CSS `@starting-style` + `data-[phase=exiting]`                                                                                              |
+| `motion.div` with `initial`/`animate` (opacity, transform)        | CSS `transition` + `@starting-style` (Tier 1). No JS needed for enter/exit.                                                                                               |
+| `animate()` with `delay` chains (do X, wait, do Y)                | Native WAAPI/CSS when the sequence is predetermined and keyframe-friendly; `useLoop` only when the steps require live JS (see [timed-sequences.md](./timed-sequences.md)) |
+| `stagger` children                                                | CSS `animation-delay` or WAAPI `delay` for known keyframes; `useLoop` for live per-child logic (see [timed-sequences.md](./timed-sequences.md))                           |
+| `useInView`                                                       | `useSight` (reactive phase) or `useLifecycle` (animation gating)                                                                                                          |
+| `useScroll` (motion's scroll-position hook)                       | phase's `useScroll` for a container's offset (scrollbars/carousels); `useScrollProgress` for viewport reveal ratio; `ScrollTimeline` for CSS scroll-linked animation      |
+| `layout` animations (animating between measured positions)        | Keep framer-motion. Phase does not do layout animation.                                                                                                                   |
+| Spring physics (`type: 'spring'`)                                 | Keep framer-motion. Phase does not do springs.                                                                                                                            |
+| Gesture-driven (`drag`, `whileTap`)                               | Keep framer-motion or `@use-gesture`. Phase does not handle gestures.                                                                                                     |
+| `useMotionValue` + `useTransform` (continuous computed animation) | `useLoop` with `onTick` for per-frame DOM writes, or `useScrollProgress` if scroll-driven                                                                                 |
 
 ### Reviewing phase code
 
@@ -277,5 +277,5 @@ After any phase work, ask: is it using phase to the best of its ability? Right t
 - **Forgetting that `createLoop` has no `pause()`/`resume()`.** It's signal-driven (visibility, reduced motion, quality). For manual control, use `createLifecycle` which exposes `pause()`/`resume()`, or use the React hook's `enabled` prop.
 - **Reaching for an external library for enter/exit transitions.** `Presence`, `Swap`, and `WhenVisible` handle mount/unmount with CSS `@starting-style` + `transitionend`. You don't need a library for this.
 - **Confusing `useScrollProgress` with `useScroll`.** The first is a viewport visibility ratio (reveals, parallax); the second is a scroll container's own offset (scrollbars, carousels). See the "Which scroll primitive?" table above.
-- **Using `useLifecycle` + `setTimeout`/`setInterval` to build timed animation sequences.** `useLifecycle` only provides visibility signals. Use CSS/WAAPI keyframes when the timeline is deterministic, or `useLoop` with `frame.elapsed` when JavaScript must own the steps. See [timed-sequences.md](./timed-sequences.md).
+- **Using `useLifecycle` + `setTimeout`/`setInterval` to build timed animation sequences.** `useLifecycle` only provides visibility signals. Use CSS/WAAPI when the sequence is predetermined and keyframe-friendly, or `useLoop` with `frame.elapsed` when JavaScript must own the steps. See [timed-sequences.md](./timed-sequences.md).
 - **Using `createLoop` / `createTicker` / `createLifecycle` in React when the hook would work.** Prefer the hook equivalents (`useLoop`, `useCanvas`, `useLifecycle`) — they manage refs, teardown, and `enabled` automatically. Reach for core primitives only when the hook doesn't fit: custom hooks composed from multiple primitives, `AbortController`-based teardown, or imperative managers that own their lifecycle.

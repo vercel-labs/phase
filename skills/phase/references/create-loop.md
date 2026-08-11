@@ -49,7 +49,7 @@ const loop = createLoop(options: LoopOptions): Loop;
 | ------------------------------------------------- | --------------------------------------------------------------------------- |
 | You own the renderer (three.js, Pixi, Web Worker) | `createLifecycle` (gives you active/paused signal without driving the loop) |
 | Single value into React render                    | `useTween` (smaller API surface, calls setState)                            |
-| Deterministic transform/opacity timeline          | CSS/WAAPI + `createLifecycle`                                               |
+| Browser-animatable timeline known at start        | CSS/WAAPI + `createLifecycle`                                               |
 | Need springs or gesture-driven animation          | External library (motion, GSAP)                                             |
 | React component                                   | `useLoop` (same engine with React lifecycle management)                     |
 

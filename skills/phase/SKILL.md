@@ -22,7 +22,7 @@ Always prefer the cheapest tier that satisfies the requirement. Never recommend 
 
 | Tier                 | When                                                                | Tools                                                                                          |
 | -------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **Browser-driven**   | Static transitions or deterministic timelines known before playback | CSS `transition`/`animation`, View Transitions API, WAAPI                                      |
+| **Browser-driven**   | Browser-animatable transitions/timelines the browser can own        | CSS `transition`/`animation`, View Transitions API, WAAPI                                      |
 | **Minimal JS**       | One value into React render, no per-frame DOM writes                | `useTween` (or CSS if render cost is trivial)                                                  |
 | **phase**            | Live per-frame JS, canvas, lifecycle-aware loops, render gating     | `useLoop`, `useCanvas`, `useLifecycle`, `Presence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer` |
 | **External library** | Spring physics, gesture systems, declarative keyframe orchestration | `motion`, GSAP, etc.                                                                           |
@@ -65,7 +65,7 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 | Scroll/size/visibility without re-renders?           | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
 | Reactive reduced-motion check for non-phase code?    | `usePrefersReducedMotion`                                                                   |
 | Need reactive `devicePixelRatio` for buffer sizing?  | `useDevicePixelRatio`                                                                       |
-| Visibility-aware timed sequences (do X, wait, do Y)? | CSS/WAAPI + `useLifecycle` when deterministic; `useLoop` when the steps need live JS        |
+| Visibility-aware timed sequences (do X, wait, do Y)? | CSS/WAAPI + `useLifecycle` when keyframe-friendly; `useLoop` when the steps need live JS    |
 | Rate-limit event-driven work (sockets, workers)?     | `useThrottledCallback`                                                                      |
 | Run once after a burst settles (resize, typing)?     | `useDebouncedCallback`                                                                      |
 

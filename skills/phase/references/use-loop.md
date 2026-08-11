@@ -41,13 +41,13 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 
 ## When not to use
 
-| Instead of this                          | Use                                                            |
-| ---------------------------------------- | -------------------------------------------------------------- |
-| Deterministic transform/opacity timeline | CSS/WAAPI + `useLifecycle`                                     |
-| Canvas/WebGL animation                   | `useCanvas` (adds DPR handling, resize, context loss recovery) |
-| You own the renderer (three.js, Pixi)    | `useLifecycle` (gives active/paused signal)                    |
-| Single numeric value into render         | `useTween`                                                     |
-| No React                                 | `createLoop` (core)                                            |
+| Instead of this                            | Use                                                            |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| Browser-animatable timeline known at start | CSS/WAAPI + `useLifecycle`                                     |
+| Canvas/WebGL animation                     | `useCanvas` (adds DPR handling, resize, context loss recovery) |
+| You own the renderer (three.js, Pixi)      | `useLifecycle` (gives active/paused signal)                    |
+| Single numeric value into render           | `useTween`                                                     |
+| No React                                   | `createLoop` (core)                                            |
 
 ## Do
 

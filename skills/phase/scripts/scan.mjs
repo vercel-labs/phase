@@ -458,7 +458,7 @@ export const SIGNALS = [
   {
     id: 'manual-raf',
     replacement:
-      'CSS/WAAPI if deterministic; otherwise useLoop/useCanvas for lifecycle + cleanup',
+      'CSS/WAAPI if browser-animatable; otherwise useLoop/useCanvas for lifecycle + cleanup',
     label: 'Manual requestAnimationFrame loop',
     severity: 'high',
     noise: 'noisy',
@@ -559,11 +559,12 @@ export const SIGNALS = [
   },
   {
     id: 'js-opacity-transform',
-    replacement: 'a CSS transition, or useLoop if it needs per-frame JS',
+    replacement:
+      'CSS/WAAPI if browser-animatable; useLoop only for required live per-frame JS',
     label: 'JS-driven opacity/transform (may be browser-driven)',
     severity: 'medium',
     noise: 'noisy',
-    why: 'Often replaceable by a CSS transition, or needs phase for lifecycle.',
+    why: 'May be browser-driven; inspect whether JavaScript must compute live frames.',
     fix: 'references/decision-guide.md#tier-1-browser-driven-css-or-waapi',
     pattern: /\.style\.(opacity|transform)\s*=/,
   },
@@ -590,7 +591,7 @@ export const SIGNALS = [
   {
     id: 'background-animation',
     replacement:
-      'CSS/WAAPI keyframes when deterministic; otherwise useLoop with elapsed steps',
+      'CSS/WAAPI when predetermined and keyframe-friendly; otherwise useLoop with elapsed steps',
     label: 'setInterval/setTimeout for animation (no visibility check)',
     severity: 'high',
     noise: 'noisy',
