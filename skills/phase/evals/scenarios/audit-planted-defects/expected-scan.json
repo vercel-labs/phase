@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "skillVersion": "0.0.15",
   "targets": [
-    "skills/phase/evals/scenarios/audit-planted-defects/workspace"
+    "workspace"
   ],
   "summary": {
     "filesScanned": 9,
