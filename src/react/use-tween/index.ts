@@ -1,21 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 
 import { invalidDurationError } from '../../core/_internal/errors';
-import {
-  readMediaQuery,
-  subscribeMediaQuery,
-} from '../../core/_internal/pool/mql-pool';
+import type { ReducedMotionBehavior } from '../../core/loop';
+import { prefersReducedMotion } from '../../core/reduced-motion';
 import { clamp01, easeOutCubic } from '../../ease';
-import { useSyncedRef } from '../use-synced-ref';
-
-/**
- * Behavior under reduced motion. `'complete'` jumps straight to the target
- * (the value still arrives, the animation is skipped); `'ignore'` animates
- * regardless. Tweens have a defined target, so there is no `'pause'`.
- */
-export type TweenReducedMotion = 'complete' | 'ignore';
-
-const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
 export interface UseTweenOptions {
   target: number;
@@ -24,7 +12,7 @@ export interface UseTweenOptions {
   easing?: (progress: number) => number;
   enabled?: boolean;
   /** Default: `'complete'`. Tweens jump to target under reduced motion. */
-  reducedMotion?: TweenReducedMotion;
+  reducedMotion?: ReducedMotionBehavior;
 }
 
 /**
@@ -40,10 +28,6 @@ export interface UseTweenOptions {
  * pause, or delta clamping. Routing it through the shared clock would add bundle
  * weight for no benefit.
  *
- * Active tweens subscribe to reduced motion and complete immediately if the
- * preference changes. The latest `easing` callback is read from a synced ref
- * without restarting the active tween.
- *
  * @example
  * const value = useTween({ target: 100, duration: 500 });
  */
@@ -58,7 +42,6 @@ export function useTween(options: UseTweenOptions): number {
   } = options;
 
   const [value, setValue] = useState(target);
-  const easingRef = useSyncedRef(easing);
 
   const fromRef = useRef(target);
   const currentRef = useRef(target);
@@ -77,10 +60,7 @@ export function useTween(options: UseTweenOptions): number {
     }
 
     // Disabled or reduced motion: jump immediately.
-    if (
-      !enabled ||
-      (reducedMotion !== 'ignore' && readMediaQuery(REDUCED_MOTION_QUERY))
-    ) {
+    if (!enabled || (reducedMotion !== 'ignore' && prefersReducedMotion())) {
       jumpToTarget({ target, fromRef, currentRef, setValue });
       return;
     }
@@ -89,29 +69,10 @@ export function useTween(options: UseTweenOptions): number {
     const from: number = currentRef.current;
     if (from === target) return;
 
-    let rafId = 0;
+    let rafId: number;
     let startTime: number | null = null;
-    let completed = false;
-    let unsubscribeReducedMotion: (() => void) | undefined;
-
-    function complete(): void {
-      if (completed) return;
-      completed = true;
-      if (rafId) cancelAnimationFrame(rafId);
-      unsubscribeReducedMotion?.();
-      unsubscribeReducedMotion = undefined;
-      jumpToTarget({ target, fromRef, currentRef, setValue });
-    }
-
-    unsubscribeReducedMotion =
-      reducedMotion === 'ignore'
-        ? undefined
-        : subscribeMediaQuery(REDUCED_MOTION_QUERY, (matches) => {
-            if (matches) complete();
-          });
 
     function tick(now: number): void {
-      if (completed) return;
       if (startTime === null) startTime = now;
       const elapsed: number = now - startTime - delay;
 
@@ -122,19 +83,13 @@ export function useTween(options: UseTweenOptions): number {
       }
 
       const progress: number = clamp01(elapsed / duration);
-      const current: number =
-        progress === 1
-          ? target
-          : from + (target - from) * easingRef.current(progress);
+      const current: number = from + (target - from) * easing(progress);
       currentRef.current = current;
       setValue(current);
 
       if (progress < 1) {
         rafId = requestAnimationFrame(tick);
       } else {
-        completed = true;
-        unsubscribeReducedMotion?.();
-        unsubscribeReducedMotion = undefined;
         fromRef.current = target;
       }
     }
@@ -142,9 +97,7 @@ export function useTween(options: UseTweenOptions): number {
     rafId = requestAnimationFrame(tick);
 
     return () => {
-      completed = true;
       cancelAnimationFrame(rafId);
-      unsubscribeReducedMotion?.();
       // Preserve where we actually are so the next tween starts from here.
       fromRef.current = currentRef.current;
     };

@@ -21,10 +21,6 @@ async function getHook() {
   return mod.useTween;
 }
 
-const linear = (progress: number): number => progress;
-const complete = (): number => 1;
-const half = (): number => 0.5;
-
 describe('useTween', () => {
   it('returns initial target on first render (no animation)', async () => {
     const useTween = await getHook();
@@ -70,19 +66,6 @@ describe('useTween', () => {
     expect(result.current).toBe(100);
   });
 
-  it('lands exactly on target even when easing does not return one', async () => {
-    const useTween = await getHook();
-    const { result, rerender } = renderHook(
-      ({ target }: { target: number }) =>
-        useTween({ target, duration: 100, easing: half }),
-      { initialProps: { target: 0 } },
-    );
-
-    rerender({ target: 100 });
-    act(() => vi.advanceTimersByTime(200));
-    expect(result.current).toBe(100);
-  });
-
   it('enabled=false jumps to target immediately', async () => {
     const useTween = await getHook();
     const { result, rerender } = renderHook(
@@ -112,29 +95,6 @@ describe('useTween', () => {
     act(() => vi.advanceTimersByTime(16));
     // Value should be moving from midValue toward 200
     expect(result.current).toBeGreaterThanOrEqual(midValue);
-  });
-
-  it('uses the latest easing callback without restarting the tween', async () => {
-    const useTween = await getHook();
-    const { result, rerender } = renderHook(
-      ({
-        target,
-        easing,
-      }: {
-        target: number;
-        easing: (progress: number) => number;
-      }) => useTween({ target, duration: 300, easing }),
-      { initialProps: { target: 0, easing: linear } },
-    );
-
-    rerender({ target: 100, easing: linear });
-    act(() => vi.advanceTimersByTime(100));
-    expect(result.current).toBeGreaterThan(0);
-    expect(result.current).toBeLessThan(100);
-
-    rerender({ target: 100, easing: complete });
-    act(() => vi.advanceTimersByTime(16));
-    expect(result.current).toBe(100);
   });
 
   it('delay keeps value at start before animating', async () => {
@@ -184,23 +144,5 @@ describe('useTween', () => {
     // Should be animating, not jumped
     expect(result.current).toBeGreaterThan(0);
     expect(result.current).toBeLessThan(100);
-  });
-
-  it('completes an active tween when reduced motion turns on', async () => {
-    const useTween = await getHook();
-    const { result, rerender } = renderHook(
-      ({ target }: { target: number }) =>
-        useTween({ target, duration: 1000, reducedMotion: 'complete' }),
-      { initialProps: { target: 0 } },
-    );
-    rerender({ target: 100 });
-    act(() => vi.advanceTimersByTime(100));
-    expect(result.current).toBeGreaterThan(0);
-    expect(result.current).toBeLessThan(100);
-
-    act(() => {
-      mockMM.setMatches('(prefers-reduced-motion: reduce)', true);
-    });
-    expect(result.current).toBe(100);
   });
 });

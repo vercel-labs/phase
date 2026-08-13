@@ -1,6 +1,6 @@
 # phase
 
-## 0.0.10
+## 0.0.11
 
 ### Patch Changes
 
@@ -9,12 +9,10 @@
 - **Changed:** `createLoop` keeps one persistent ticker and uses one display-cadence-aware shared frame-pressure monitor.
 - **Changed (breaking):** Replaced `degraded` and `degradedFps` with `unfocused`, `slowFrames`, and `throttleFps`.
 - **Changed (breaking):** Loop reduced motion now accepts `'pause' | 'ignore'` through `LoopReducedMotion`.
-- **Changed (breaking):** Tween reduced motion now accepts `'complete' | 'ignore'` through `TweenReducedMotion`.
 - **Removed (breaking):** Removed `ReducedMotionBehavior`.
 - **Changed (breaking):** Replaced singular quality reason/behavior fields with an immutable `LoopQuality` snapshot containing all active signals and the resolved `QualityAction`.
 - **Changed:** `useLoop` and `useCanvas` expose reactive quality by default and transient `qualityRef` mode with `onQualityChange`.
 - **Changed:** `useCanvas` separates adaptive pixel ratio from focus throttling, defers hidden buffers, and repaints visible paused buffers safely.
-- **Changed:** `useTween` completes when reduced motion changes and always lands exactly on its target.
 - **Fixed:** Observer pools support multiple same-element subscribers, distinct custom roots, and independent ResizeObserver box options.
 - **Fixed:** Terminal and construction callbacks cannot leave live tickers, observers, or listeners behind.
 - **Fixed:** Invalid FPS values throw `invalid_fps`; only `undefined` means uncapped.

@@ -12,14 +12,14 @@ const value: number = useTween(options);
 
 ### Options
 
-| Option          | Type                           | Default        | Description                   |
-| --------------- | ------------------------------ | -------------- | ----------------------------- |
-| `target`        | `number`                       | required       | Value to animate toward       |
-| `duration`      | `number`                       | `300`          | Animation duration in ms      |
-| `delay`         | `number`                       | `0`            | Delay before starting in ms   |
-| `easing`        | `(progress: number) => number` | `easeOutCubic` | Easing function               |
-| `enabled`       | `boolean`                      | `true`         | When `false`, jumps to target |
-| `reducedMotion` | `'complete' \| 'ignore'`       | `'complete'`   | Behavior under reduced motion |
+| Option          | Type                                | Default        | Description                   |
+| --------------- | ----------------------------------- | -------------- | ----------------------------- |
+| `target`        | `number`                            | required       | Value to animate toward       |
+| `duration`      | `number`                            | `300`          | Animation duration in ms      |
+| `delay`         | `number`                            | `0`            | Delay before starting in ms   |
+| `easing`        | `(progress: number) => number`      | `easeOutCubic` | Easing function               |
+| `enabled`       | `boolean`                           | `true`         | When `false`, jumps to target |
+| `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'complete'`   | Behavior under reduced motion |
 
 ### Return
 
@@ -58,13 +58,7 @@ Returns the current animated `number`.
 
 ## Reduced motion
 
-Default `'complete'`: jumps to target instantly. The value still arrives at its destination. The animation is skipped. This is the right default for tweens that must reach their final state. There is no `'pause'` for tweens because a value frozen mid-flight reads as a stuck UI. The type is `TweenReducedMotion` (`'complete' | 'ignore'`).
-
-## Timing model
-
-`useTween` is a finite React-state tween with its own rAF. It does not use the shared ticker clock, `FrameState`, visibility pausing, focus quality, slow-frame throttling, or delta clamping. Active tweens subscribe to reduced motion and complete immediately if the preference changes. Completion always lands exactly on `target`, even when a custom easing function does not return `1`. Use `useLoop` / `useCanvas` when loop lifecycle guarantees are required.
-
-The reduced-motion preference is read when the tween effect starts; it is not subscribed mid-tween. Use `usePrefersReducedMotion` when other UI must react immediately to preference changes. The latest `easing` callback is read through a synced ref without restarting the tween.
+Default `'complete'`: jumps to target instantly. The value still arrives at its destination. The animation is skipped. This is the right default for tweens that must reach their final state.
 
 ## See also
 

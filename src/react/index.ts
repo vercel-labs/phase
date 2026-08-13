@@ -114,7 +114,7 @@ export type {
   DebouncedFunction,
   UseDebouncedCallbackOptions,
 } from './use-debounced-callback';
-export type { TweenReducedMotion, UseTweenOptions } from './use-tween';
+export type { UseTweenOptions } from './use-tween';
 export type {
   PresenceMode,
   PresencePhase,
