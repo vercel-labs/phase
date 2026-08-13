@@ -8,6 +8,11 @@
           "signal": "phase-loop-browser-keyframes",
           "file": "src/logo-editor.tsx",
           "count": 1
+        },
+        {
+          "signal": "js-layout-write",
+          "file": "src/logo-editor.tsx",
+          "count": 1
         }
       ],
       "requiredAbsent": []
@@ -19,6 +24,7 @@
     "Recommends CSS keyframes or WAAPI for playback instead of useLoop; prefers WAAPI when the runtime-generated multi-target timeline needs imperative control",
     "Requires first-paint CSS to match keyframe zero so WAAPI does not snap after hydration",
     "Keeps phase as the lifecycle layer via useLifecycle so visibility changes call play/pause without rebuilding keyframes, while reduced motion skips setup and renders a meaningful static state",
-    "Does not claim WAAPI is always off-main-thread; limits compositor expectations to suitable transform/opacity animation and asks for trace verification"
+    "Does not claim WAAPI is always off-main-thread; limits compositor expectations to suitable transform/opacity animation and asks for trace verification",
+    "Flags the SVG transform-list write independently of timeline ownership and recommends moving compositor-friendly transform/opacity animation to an HTML wrapper when possible"
   ]
 }

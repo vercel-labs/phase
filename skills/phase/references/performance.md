@@ -4,7 +4,7 @@ Impact-ranked do's and don'ts for writing performant animation code with phase. 
 
 ## Contents
 
-- **Critical.** Zero per-frame allocations | Never setState in onTick | No forced reflows
+- **Critical.** Zero per-frame allocations | Never setState in onTick | No forced reflows | No layout-inducing writes
 - **High.** Strong pause | Reduced motion by default | Stable function references
 - **Medium.** Frame-locked shared clock | Delta clamping | Observer pooling | Never drive layout from a MutationObserver | will-change lifecycle | No getBoundingClientRect for visibility
 - **Low.** Don't store FrameState refs | No try/catch in onTick | No debug logging in hot path
@@ -87,6 +87,27 @@ onTick: () => {
   el.style.transform = `translateX(${rect.width}px)`;
 };
 ```
+
+### No layout-inducing writes in animation paths
+
+Avoiding layout reads is only half the contract. Repeated writes to geometry or SVG transform attributes invalidate layout or paint, so the browser must redo that work while the animation runs. This remains true when WAAPI or CSS owns other parts of the timeline.
+
+**Do:** Animate `transform` or `opacity` on an HTML wrapper. A CSS transform directly on an SVG element can also work when its browser support and `transform-box` behavior are verified.
+
+```ts
+wrapper.style.transform = `translate(${x}px, ${y}px) rotate(${angle}deg)`;
+```
+
+**Don't:** Mutate SVG transform lists or geometry every frame.
+
+```ts
+onTick: () => {
+  svgTransform.setTranslate(x, y);
+  path.setAttribute('d', nextPath);
+};
+```
+
+The same rule applies to repeated CSS layout writes such as `width`, `height`, inset positions, margins, and padding. A one-time write for sizing or layout is legitimate; the costly pattern is writing these properties repeatedly in an animation, pointer-move, or observer path.
 
 ## High (lifecycle violations waste CPU or break guarantees)
 

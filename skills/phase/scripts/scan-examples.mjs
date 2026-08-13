@@ -145,6 +145,59 @@ export const SIGNAL_EXAMPLES = {
       },
     ],
   },
+  'js-layout-write': {
+    match: [
+      {
+        file: 'src/vector-editor.tsx',
+        content:
+          'useLoop({\n  onTick: () => {\n    segmentTransform.setTranslate(x, y);\n    segmentTransform.setRotate(angle, 0, 0);\n  },\n});\n',
+      },
+      {
+        file: 'src/vector-path.ts',
+        content:
+          "function tick() {\n  path.setAttribute('d', nextPath);\n  requestAnimationFrame(tick);\n}\n",
+      },
+      {
+        file: 'src/vector-transform.ts',
+        content:
+          "function tick() {\n  group.setAttribute(\n    'transform',\n    `translate(${x} ${y})`,\n  );\n  requestAnimationFrame(tick);\n}\n",
+      },
+      {
+        file: 'src/position.ts',
+        content:
+          'function tick() {\n  element.style.left = `${x}px`;\n  requestAnimationFrame(tick);\n}\n',
+      },
+      {
+        file: 'src/size.ts',
+        content:
+          "useLoop({ onTick: () => element.style.setProperty('width', `${width}px`) });\n",
+      },
+    ],
+    noMatch: [
+      {
+        file: 'src/composited.ts',
+        content:
+          "element.style.transform = 'translateX(10px)';\nelement.style.opacity = '0.5';\n",
+      },
+      {
+        file: 'src/custom-property.ts',
+        content: "element.style.setProperty('--x', `${x}px`);\n",
+      },
+      {
+        file: 'src/meter.ts',
+        content: "element.setAttribute('aria-valuenow', String(value));\n",
+      },
+      {
+        file: 'src/canvas.ts',
+        content: 'context.setTransform(a, b, c, d, e, f);\n',
+      },
+      {
+        file: 'src/notes.ts',
+        content:
+          '// element.style.left = "10px";\nconst note = "path.setAttribute(\'d\', nextPath)";\n',
+      },
+    ],
+  },
   'raw-io': {
     match: [
       {
