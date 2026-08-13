@@ -33,16 +33,28 @@ function dispatchFrame(time: number): void {
   rafId = requestAnimationFrame(dispatchFrame);
 
   let deliveries = 0;
+  let firstError: unknown;
+  let hasError = false;
   for (const subscription of subscriptions) {
     // Set iteration is live. A subscription added or re-added during this
     // dispatch must wait until the next browser frame.
     if (subscription.joinedFrame >= frameNumber) continue;
-    if (subscription.callback(time)) deliveries++;
+    // One failing subscriber must not starve the rest of the frame. Errors are
+    // collected and the first is rethrown, so the page still reports it.
+    try {
+      if (subscription.callback(time)) deliveries++;
+    } catch (error) {
+      if (!hasError) {
+        firstError = error;
+        hasError = true;
+      }
+    }
   }
 
   if (monitor !== null) {
     monitor(time, gap, performance.now() - time, deliveries);
   }
+  if (hasError) throw firstError;
 }
 
 export function createFrameSubscription(

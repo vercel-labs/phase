@@ -7,6 +7,7 @@ const LEARNING_FRAMES = 8;
 const SHIFT_FRAMES = 4;
 const PRESSURE_FRAMES = 3;
 const PROBE_HEALTHY_FRAMES = 30;
+const PROBE_PATIENCE_FRAMES = 120;
 const PROBE_MIN_DELIVERIES = 3;
 const RETRY_MS = 2000;
 
@@ -22,6 +23,7 @@ let shiftMin = Infinity;
 let shiftMax = 0;
 let pressureCount = 0;
 let probeHealthyCount = 0;
+let probeFrames = 0;
 let probeDeliveries = 0;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 const callbacks = new Set<FramePressureCallback>();
@@ -41,7 +43,12 @@ function resetMeasurements(): void {
   learningMax = 0;
   resetShift();
   pressureCount = 0;
+  resetProbe();
+}
+
+function resetProbe(): void {
   probeHealthyCount = 0;
+  probeFrames = 0;
   probeDeliveries = 0;
 }
 
@@ -71,18 +78,21 @@ function scheduleProbe(): void {
   retryTimer = setTimeout(() => {
     retryTimer = null;
     pressureCount = 0;
-    probeHealthyCount = 0;
-    probeDeliveries = 0;
+    resetProbe();
     notify('probing');
   }, RETRY_MS);
 }
 
 function enterDegraded(): void {
   pressureCount = 0;
-  probeHealthyCount = 0;
-  probeDeliveries = 0;
-  notify('degraded');
-  scheduleProbe();
+  resetProbe();
+  // A throwing consumer callback must not cancel our own recovery: without the
+  // retry timer nothing can leave 'degraded' for the life of the page.
+  try {
+    notify('degraded');
+  } finally {
+    scheduleProbe();
+  }
 }
 
 function learnCadence(gap: number): boolean {
@@ -154,22 +164,29 @@ function observeFrame(
   probeDeliveries += deliveries;
   if (overloaded) {
     probeHealthyCount = 0;
+    probeFrames = 0;
     pressureCount++;
     if (pressureCount >= PRESSURE_FRAMES) enterDegraded();
     return;
   }
 
   pressureCount = 0;
+  probeFrames++;
   if (occupied <= cadence * 0.7) {
     probeHealthyCount++;
-    if (
-      probeHealthyCount >= PROBE_HEALTHY_FRAMES &&
-      probeDeliveries >= PROBE_MIN_DELIVERIES
-    ) {
-      notify('full');
-    }
   } else {
     probeHealthyCount = 0;
+  }
+
+  // Two ways to earn recovery: a short clearly-idle stretch, or a much longer
+  // stretch that never showed pressure. Without the second, occupancy parked
+  // between the healthy and overload thresholds holds probation open forever.
+  if (
+    probeDeliveries >= PROBE_MIN_DELIVERIES &&
+    (probeHealthyCount >= PROBE_HEALTHY_FRAMES ||
+      probeFrames >= PROBE_PATIENCE_FRAMES)
+  ) {
+    notify('full');
   }
 }
 

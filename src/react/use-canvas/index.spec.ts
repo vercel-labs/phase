@@ -1,9 +1,14 @@
 import { act, renderHook } from '@testing-library/react';
 
+import type { Size } from '.';
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 import { createMockMatchMedia } from '../../__mocks__/match-media';
 import { createMockResizeObserver } from '../../__mocks__/resize-observer';
+import type { LoopQuality } from '../../core/loop';
 import type { FrameState } from '../../core/tick';
+
+type MutableFrame = { -readonly [K in keyof FrameState]: FrameState[K] };
+type MutableSizeArg = { -readonly [K in keyof Size]: Size[K] };
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 let mockMM: ReturnType<typeof createMockMatchMedia>;
@@ -382,6 +387,153 @@ describe('quality observation', () => {
 
     expect(result.current.qualityRef.current.status).toBe('degraded');
     expect(widths.at(-1)).toBe(375);
+    clock.restore();
+  });
+
+  it('stays reactive after onQualityChange is dropped', async () => {
+    const useCanvas = await getHook();
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+    const onQualityChange = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ transient }: { transient: boolean }) =>
+        useCanvas({
+          containerRef,
+          canvasRef,
+          draw: vi.fn(),
+          unfocused: 'ignore',
+          ...(transient ? { onQualityChange } : {}),
+        }) as ReturnType<typeof useCanvas> & { quality?: LoopQuality },
+      { initialProps: { transient: true } },
+    );
+    act(() => mockIO.trigger(container, true));
+
+    // No loop dependency changes, so the effect and its callbacks persist.
+    rerender({ transient: false });
+    act(() => {
+      hasFocus.mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+    });
+
+    expect(result.current.quality?.status).toBe('degraded');
+    expect(result.current.qualityRef.current.status).toBe('degraded');
+    expect(onQualityChange).not.toHaveBeenCalled();
+  });
+
+  it('stops rendering on quality once onQualityChange is added', async () => {
+    const useCanvas = await getHook();
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+    const onQualityChange = vi.fn();
+    let renders = 0;
+    const { result, rerender } = renderHook(
+      ({ transient }: { transient: boolean }) => {
+        renders++;
+        return useCanvas({
+          containerRef,
+          canvasRef,
+          draw: vi.fn(),
+          unfocused: 'ignore',
+          ...(transient ? { onQualityChange } : {}),
+        });
+      },
+      { initialProps: { transient: false } },
+    );
+    act(() => mockIO.trigger(container, true));
+
+    rerender({ transient: true });
+    const rendersBeforeBlur = renders;
+    act(() => {
+      hasFocus.mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+    });
+
+    expect(onQualityChange).toHaveBeenCalledTimes(1);
+    expect(renders).toBe(rendersBeforeBlur);
+    expect(result.current.qualityRef.current.status).toBe('degraded');
+  });
+});
+
+describe('teardown', () => {
+  it('does not size or draw a buffer while unmounting off screen', async () => {
+    const clock = setupManualRaf();
+    const useCanvas = await getHook();
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+    const draw = vi.fn();
+    const { unmount } = renderHook(() =>
+      useCanvas({ containerRef, canvasRef, draw }),
+    );
+
+    act(() => mockIO.trigger(container, true));
+    act(() => mockRO.trigger(container, 400, 300));
+    act(() => clock.step(16));
+    const drawsWhileVisible: number = draw.mock.calls.length;
+    expect(drawsWhileVisible).toBeGreaterThan(0);
+
+    // Scrolled away, then relaid out while hidden: the buffer stays cached.
+    act(() => mockIO.trigger(container, false));
+    act(() => mockRO.trigger(container, 800, 600));
+    expect(canvas.width).toBe(400);
+    expect(draw).toHaveBeenCalledTimes(drawsWhileVisible);
+
+    // Teardown must not cash in that pending buffer.
+    unmount();
+    expect(canvas.width).toBe(400);
+    expect(draw).toHaveBeenCalledTimes(drawsWhileVisible);
+    clock.restore();
+  });
+});
+
+describe('draw argument integrity', () => {
+  it('a consumer writing through a repaint frame cannot corrupt later repaints', async () => {
+    const clock = setupManualRaf();
+    const useCanvas = await getHook();
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+
+    const seen: Array<{ elapsed: number; frame: number; width: number }> = [];
+    let scribble = false;
+    const draw = vi.fn((_ctx, frame: FrameState, size: Size) => {
+      seen.push({
+        elapsed: frame.elapsed,
+        frame: frame.frame,
+        width: size.width,
+      });
+      if (!scribble) return;
+      (frame as MutableFrame).elapsed = -999;
+      (frame as MutableFrame).frame = -1;
+      (size as MutableSizeArg).width = -1;
+    });
+
+    renderHook(() => useCanvas({ containerRef, canvasRef, draw }));
+    act(() => mockIO.trigger(container, true));
+    act(() => mockRO.trigger(container, 400, 300));
+    act(() => clock.step(16));
+    act(() => clock.step(16));
+    const live = seen.at(-1);
+
+    hasFocus.mockReturnValue(false);
+    act(() => window.dispatchEvent(new Event('blur')));
+
+    scribble = true;
+    act(() => mockRO.trigger(container, 500, 400));
+    scribble = false;
+    act(() => mockRO.trigger(container, 600, 500));
+
+    expect(live).toEqual({ elapsed: 32, frame: 2, width: 400 });
+    expect(seen.at(-1)).toEqual({ elapsed: 32, frame: 2, width: 600 });
     clock.restore();
   });
 });

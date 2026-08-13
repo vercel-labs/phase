@@ -180,6 +180,15 @@ export function useCanvas(
     let appliedScaleX = -1;
     let appliedScaleY = -1;
 
+    // `lastTick` is private. `size` and `repaintFrame` are handed to the
+    // consumer, so both are restamped from private state before every draw:
+    // a consumer that writes through them cannot corrupt a later repaint.
+    const lastTick: MutableFrameState = {
+      time: 0,
+      delta: 0,
+      elapsed: 0,
+      frame: 0,
+    };
     const size: MutableSize = { width: 0, height: 0 };
     const repaintFrame: MutableFrameState = {
       time: 0,
@@ -187,8 +196,22 @@ export function useCanvas(
       elapsed: 0,
       frame: 0,
     };
+    Object.seal(lastTick);
     Object.seal(size);
     Object.seal(repaintFrame);
+
+    function stampSize(): void {
+      size.width = cssWidth;
+      size.height = cssHeight;
+    }
+
+    function stampRepaintFrame(): void {
+      stampSize();
+      repaintFrame.time = lastTick.time;
+      repaintFrame.delta = lastTick.delta;
+      repaintFrame.elapsed = lastTick.elapsed;
+      repaintFrame.frame = lastTick.frame;
+    }
 
     function adaptiveResolution(): boolean {
       return (
@@ -209,18 +232,16 @@ export function useCanvas(
         return;
       }
 
-      if (!hasDrawnFrame) {
-        repaintFrame.time = 0;
-        repaintFrame.delta = 0;
-        repaintFrame.elapsed = 0;
-        repaintFrame.frame = 0;
-      }
+      // `lastTick` holds zeros until the first delivered frame, so this is the
+      // one zero-timeline frame for a never-started animation.
+      stampRepaintFrame();
       drawRef.current(context, repaintFrame, size);
     }
 
     function paintRecreatedBuffer(): void {
       if (!visible || contextLost || !context) return;
       if (hasDrawnFrame) {
+        stampRepaintFrame();
         drawRef.current(context, repaintFrame, size);
         return;
       }
@@ -228,8 +249,7 @@ export function useCanvas(
     }
 
     function applySize(force = false): void {
-      size.width = cssWidth;
-      size.height = cssHeight;
+      stampSize();
 
       if (!visible) {
         pendingBuffer = true;
@@ -339,17 +359,20 @@ export function useCanvas(
         intersectionOptions,
         onTick: (frame) => {
           if (contextLost || !context) return;
-          repaintFrame.time = frame.time;
-          repaintFrame.delta = frame.delta;
-          repaintFrame.elapsed = frame.elapsed;
-          repaintFrame.frame = frame.frame;
+          lastTick.time = frame.time;
+          lastTick.delta = frame.delta;
+          lastTick.elapsed = frame.elapsed;
+          lastTick.frame = frame.frame;
           hasDrawnFrame = true;
+          stampSize();
           drawRef.current(context, frame, size);
         },
         onPhaseChange: (phase, reason) => {
           currentPhase = phase;
           currentReason = reason;
-          visible = reason !== 'sight';
+          // 'disposed' carries no visibility information. Treating it as
+          // visible would allocate a buffer and draw during teardown.
+          visible = phase !== 'stopped' && reason !== 'sight';
           setState({ phase, phaseReason: reason });
           const hadPendingBuffer: boolean = pendingBuffer;
           if (visible && hadPendingBuffer) applySize();
@@ -359,9 +382,14 @@ export function useCanvas(
         },
         onQualityChange: (nextQuality) => {
           qualityRef.current = nextQuality;
-          if (!transientQuality) setQuality(nextQuality);
           applySize();
-          onQualityChangeRef.current?.(nextQuality);
+          // Read the ref, not a captured boolean: the effect does not re-run
+          // when the consumer adds or drops `onQualityChange`.
+          if (onQualityChangeRef.current) {
+            onQualityChangeRef.current(nextQuality);
+          } else {
+            setQuality(nextQuality);
+          }
         },
       });
     } catch (error) {

@@ -386,6 +386,29 @@ describe('setFps', () => {
     ticker.stop();
     expect(() => ticker.setFps(30)).toThrow();
   });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejecting fps %s leaves the previous cap in force',
+    async (fps) => {
+      const { createTicker } = await getModule();
+      const callback = vi.fn();
+      const ticker = createTicker({ fps: 30, onTick: callback });
+      ticker.start();
+      advanceFrame(16);
+      expect(callback).toHaveBeenCalledTimes(1);
+
+      expect(() => ticker.setFps(fps)).toThrow();
+
+      // Still gated at 30fps: the rejected call changed neither the interval
+      // nor the pending deadline of 16ms + 33.3ms.
+      advanceFrame(16);
+      advanceFrame(16);
+      expect(callback).toHaveBeenCalledTimes(1);
+      advanceFrame(16);
+      expect(callback).toHaveBeenCalledTimes(2);
+      ticker.stop();
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -484,9 +507,35 @@ describe('shared clock', () => {
     first.start();
     second.start();
 
+    // The error still surfaces to the page, and the sibling is delivered on the
+    // same frame rather than losing it.
     expect(() => advanceFrame(16)).toThrow('consumer failure');
-    advanceFrame(16);
     expect(secondTick).toHaveBeenCalledTimes(1);
+    advanceFrame(16);
+    expect(secondTick).toHaveBeenCalledTimes(2);
+
+    first.stop();
+    second.stop();
+  });
+
+  it('a permanently throwing ticker cannot starve a sibling', async () => {
+    const { createTicker } = await getModule();
+    const firstTick = vi.fn(() => {
+      throw new Error('consumer failure');
+    });
+    const secondTick = vi.fn();
+    // Registered first, so an unisolated dispatch would never reach the second.
+    const first = createTicker({ onTick: firstTick });
+    const second = createTicker({ onTick: secondTick });
+    first.start();
+    second.start();
+
+    for (let index = 0; index < 20; index++) {
+      expect(() => advanceFrame(16)).toThrow('consumer failure');
+    }
+
+    expect(firstTick).toHaveBeenCalledTimes(20);
+    expect(secondTick).toHaveBeenCalledTimes(20);
 
     first.stop();
     second.stop();

@@ -404,6 +404,61 @@ describe('shared frame pressure', () => {
     clock.restore();
   });
 
+  it('still arms recovery when a quality callback throws', async () => {
+    const clock = setupManualRaf();
+    const { createLoop } = await getModule();
+    const element = createVisibleElement();
+    const loop = createLoop({
+      element,
+      onTick: vi.fn(),
+      onQualityChange: (quality) => {
+        if (quality.signals.slowFrames === 'degraded') {
+          throw new Error('consumer failure');
+        }
+      },
+    });
+    visible(element);
+    learnCadence(clock);
+
+    clock.step(16, 16);
+    clock.step(16, 16);
+    // The consumer error reaches the page, exactly as an uncaught rAF error.
+    expect(() => clock.step(16, 16)).toThrow('consumer failure');
+    expect(loop.quality.signals.slowFrames).toBe('degraded');
+
+    // Recovery is our own state machine, so a consumer fault cannot disable it.
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(loop.quality.signals.slowFrames).toBe('probing');
+    clock.restore();
+  });
+
+  it('ends probation when occupancy sits between the two thresholds', async () => {
+    const clock = setupManualRaf();
+    const { createLoop } = await getModule();
+    const element = createVisibleElement();
+    const loop = createLoop({ element, onTick: vi.fn() });
+    visible(element);
+    learnCadence(clock);
+
+    clock.step(16, 16);
+    clock.step(16, 16);
+    clock.step(16, 16);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(loop.quality.signals.slowFrames).toBe('probing');
+
+    // 13ms of a 16ms cadence: never idle enough to look healthy, never busy
+    // enough to look overloaded. Probation must still terminate.
+    for (let index = 0; index < 119; index++) clock.step(16, 13);
+    expect(loop.quality.signals.slowFrames).toBe('probing');
+    clock.step(16, 13);
+    expect(loop.quality.status).toBe('full');
+
+    // And it stays recovered: this occupancy is not pressure.
+    for (let index = 0; index < 30; index++) clock.step(16, 13);
+    expect(loop.quality.status).toBe('full');
+    clock.restore();
+  });
+
   it('unregisters hidden loops and cancels their pending recovery work', async () => {
     const clock = setupManualRaf();
     const { createLoop } = await getModule();

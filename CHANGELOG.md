@@ -18,6 +18,9 @@
 - **Fixed:** Observer pools support multiple same-element subscribers, distinct custom roots, and independent ResizeObserver box options.
 - **Fixed:** Terminal and construction callbacks cannot leave live tickers, observers, or listeners behind.
 - **Fixed:** Invalid FPS values throw `invalid_fps`; only `undefined` means uncapped.
+- **Fixed:** One throwing `onTick` no longer starves the other loops on the shared clock. The error still reaches the page.
+- **Fixed:** Frame-pressure recovery is armed even when a consumer quality callback throws, and probation always terminates instead of parking at `'probing'` when page occupancy sits between the healthy and overload thresholds.
+- **Fixed:** `useCanvas` no longer sizes a buffer or draws while unmounting off screen, tracks quality mode when `onQualityChange` is added or dropped without a remount, and restamps the `size` and repaint `FrameState` it hands out so consumer writes cannot corrupt a later repaint.
 
 ## 0.0.9
 
