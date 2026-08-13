@@ -181,7 +181,7 @@ describe('useLoop', () => {
     const { result, rerender } = renderHook(
       ({ fps }: { fps?: number }) =>
         useLoop({ ref, fps, onTick: vi.fn(), unfocused: 'ignore' }),
-      { initialProps: { fps: undefined } },
+      { initialProps: { fps: undefined as number | undefined } },
     );
     act(() => {
       mockIO.trigger(el, true);

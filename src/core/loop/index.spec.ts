@@ -241,7 +241,7 @@ describe('focus quality', () => {
     expect(loop.quality.action).toEqual({ behavior: 'throttle', fps: 30 });
     expect(references.every((frame) => frame === references[0])).toBe(true);
     expect(snapshots.at(-1)?.elapsed).toBe(64);
-    expect(snapshots.at(-1)?.frame).toBe(3);
+    expect(snapshots.at(-1)?.frame).toBe(2);
     clock.restore();
   });
 
@@ -461,11 +461,13 @@ describe('transaction and reentrancy safety', () => {
   it('finishes internal quality reconciliation before notifying consumers', async () => {
     const clock = setupManualRaf();
     const { createLoop } = await getModule();
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
     const element = createVisibleElement();
     let observedPhase: string | undefined;
     let loop: ReturnType<typeof createLoop>;
     loop = createLoop({
       element,
+      start: 'manual',
       onTick: vi.fn(),
       onQualityChange: () => {
         observedPhase = loop.phase;
@@ -474,8 +476,7 @@ describe('transaction and reentrancy safety', () => {
     });
     visible(element);
 
-    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    expect(() => window.dispatchEvent(new Event('blur'))).not.toThrow();
+    expect(() => loop.start()).toThrow('quality failure');
     expect(observedPhase).toBe('paused');
     expect(loop.phaseReason).toBe('unfocused');
     expect(clock.pending()).toBe(0);

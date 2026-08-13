@@ -233,10 +233,12 @@ describe('buffer sizing', () => {
     act(() => mockIO.trigger(container, true));
     mockRO.triggerWithPhysicalSize(container, 375, 667, 750, 1334);
 
-    for (let index = 0; index < 9; index++) clock.step();
-    clock.step(16, 16);
-    clock.step(16, 16);
-    clock.step(16, 16);
+    act(() => {
+      for (let index = 0; index < 9; index++) clock.step();
+      clock.step(16, 16);
+      clock.step(16, 16);
+      clock.step(16, 16);
+    });
     expect(canvas.width).toBe(375);
 
     await act(async () => {
@@ -245,7 +247,9 @@ describe('buffer sizing', () => {
     expect(result.current.quality.signals.slowFrames).toBe('probing');
     expect(canvas.width).toBe(375);
 
-    for (let index = 0; index < 30; index++) clock.step(16, 1);
+    act(() => {
+      for (let index = 0; index < 30; index++) clock.step(16, 1);
+    });
     expect(result.current.quality.status).toBe('full');
     expect(canvas.width).toBe(750);
     clock.restore();

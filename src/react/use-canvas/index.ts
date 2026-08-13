@@ -157,7 +157,9 @@ export function useCanvas(
       return;
     }
 
-    let context: CanvasRenderingContext2D | null = canvas.getContext('2d');
+    const mountedCanvas: HTMLCanvasElement = canvas;
+    let context: CanvasRenderingContext2D | null =
+      mountedCanvas.getContext('2d');
     if (!context) return;
 
     let dpr: number = readDpr();
@@ -216,11 +218,24 @@ export function useCanvas(
       drawRef.current(context, repaintFrame, size);
     }
 
+    function paintRecreatedBuffer(): void {
+      if (!visible || contextLost || !context) return;
+      if (hasDrawnFrame) {
+        drawRef.current(context, repaintFrame, size);
+        return;
+      }
+      paintPausedBuffer(currentReason);
+    }
+
     function applySize(force = false): void {
       size.width = cssWidth;
       size.height = cssHeight;
 
       if (!visible) {
+        pendingBuffer = true;
+        return;
+      }
+      if (!context || contextLost) {
         pendingBuffer = true;
         return;
       }
@@ -260,12 +275,12 @@ export function useCanvas(
       appliedScaleX = scaleX;
       appliedScaleY = scaleY;
 
-      canvas.width = nextWidth;
-      canvas.height = nextHeight;
-      canvas.style.width = `${cssWidth}px`;
-      canvas.style.height = `${cssHeight}px`;
+      mountedCanvas.width = nextWidth;
+      mountedCanvas.height = nextHeight;
+      mountedCanvas.style.width = `${cssWidth}px`;
+      mountedCanvas.style.height = `${cssHeight}px`;
       context.setTransform(scaleX, 0, 0, scaleY, 0, 0);
-      paintPausedBuffer(currentReason);
+      paintRecreatedBuffer();
     }
 
     const unsubDpr: () => void = subscribeDpr((nextDpr) => {
@@ -293,14 +308,14 @@ export function useCanvas(
     }
 
     function onContextRestored(): void {
-      context = canvas.getContext('2d');
+      context = mountedCanvas.getContext('2d');
       if (!context) return;
       contextLost = false;
       applySize(true);
     }
 
-    canvas.addEventListener('contextlost', onContextLost);
-    canvas.addEventListener('contextrestored', onContextRestored);
+    mountedCanvas.addEventListener('contextlost', onContextLost);
+    mountedCanvas.addEventListener('contextrestored', onContextRestored);
 
     let loop: ReturnType<typeof createLoop> | null = null;
 
@@ -309,8 +324,8 @@ export function useCanvas(
       loop = null;
       unobserve();
       unsubDpr();
-      canvas.removeEventListener('contextlost', onContextLost);
-      canvas.removeEventListener('contextrestored', onContextRestored);
+      mountedCanvas.removeEventListener('contextlost', onContextLost);
+      mountedCanvas.removeEventListener('contextrestored', onContextRestored);
     }
 
     try {

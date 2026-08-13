@@ -290,7 +290,11 @@ export function createLoop(options: LoopOptions): Loop {
     // Internal execution is coherent before either external callback runs.
     applyEffectiveFps(behavior);
     reconcile();
-    if (changed && _phase !== 'stopped') onQualityChange?.(nextQuality);
+    if (changed && !isStopped()) onQualityChange?.(nextQuality);
+  }
+
+  function isStopped(): boolean {
+    return _phase === 'stopped';
   }
 
   function onFocusChange(focused: boolean): void {
