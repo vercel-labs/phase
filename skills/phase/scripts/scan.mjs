@@ -927,7 +927,9 @@ function matchesPhaseLoopBrowserKeyframes(lines, i) {
   }
 
   const source = lines.join('\n');
-  const derivesFromElapsed = /\bframe\.elapsed\b/.test(source);
+  const derivesFromElapsed =
+    /[A-Za-z_$][\w$]*\.elapsed\b/.test(source) ||
+    /\(\s*\{[^}]*\belapsed\b[^}]*\}\s*(?::[^)]*)?\)\s*(?:=>|\{)/.test(source);
   const writesKeyframeFriendlyOutput =
     /\.style\.(?:opacity|transform)\s*=|\.style\.setProperty\(\s*['"](?:opacity|transform)['"]|\.setAttribute\(\s*['"](?:opacity|transform)['"]|\.set(?:Translate|Scale|Rotate|SkewX|SkewY)\s*\(/.test(
       source,

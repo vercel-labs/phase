@@ -53,16 +53,22 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 
 - Cleanup is automatic. The effect teardown calls `stop()` on unmount. No manual cleanup needed.
 - Attach the returned `ref` to the element you're animating:
+
   ```tsx
-  let x = 0;
+  const xRef = useRef(0);
+  const velocityRef = useRef(0.1); // pixels per millisecond
   const { ref } = useLoop({
     onTick: (frame) => {
-      x += velocityRef.current * frame.delta;
-      ref.current.style.transform = `translateX(${x}px)`;
+      const element = ref.current;
+      if (!element) return;
+
+      xRef.current += velocityRef.current * frame.delta;
+      element.style.transform = `translateX(${xRef.current}px)`;
     },
   });
   return <div ref={ref} />;
   ```
+
 - Use `enabled` to conditionally tear down and restart the loop:
   ```tsx
   useLoop({ onTick: draw, enabled: isAnimating });

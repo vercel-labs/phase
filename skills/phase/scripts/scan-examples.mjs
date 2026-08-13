@@ -674,6 +674,16 @@ export const SIGNAL_EXAMPLES = {
         content:
           'const tick = (frame) => {\n  const p = frame.elapsed / 1000;\n  transform.setTranslate(p * 10, 0);\n  rotation.setRotate(p * 20, 0, 0);\n};\nconst { ref } = useLoop<SVGSVGElement>({ onTick: tick });\n',
       },
+      {
+        file: 'src/aliased-frame.tsx',
+        content:
+          'const tick = (f) => {\n  const p = f.elapsed / 800;\n  segment.style.transform = `translateX(${p * 20}px)`;\n};\nuseLoop({ onTick: tick });\n',
+      },
+      {
+        file: 'src/destructured-frame.tsx',
+        content:
+          'useLoop({\n  onTick: ({ elapsed }) => {\n    const p = elapsed / 800;\n    segment.style.transform = `translateX(${p * 20}px)`;\n  },\n});\n',
+      },
     ],
     noMatch: [
       {
