@@ -99,7 +99,7 @@ With `reducedMotion: 'ignore'`: lifecycle stays `active` regardless. Use only fo
 
 ## See also
 
-- [createLoop](./create-loop.md). Builds on createLifecycle; adds ticker, quality, frame budget
+- [createLoop](./create-loop.md). Builds on createLifecycle; adds ticker, focus quality, and shared frame pressure
 - [createSight](./create-sight.md). Pure visibility (no reduced motion handling)
 - [useLifecycle](./use-lifecycle.md). React hook wrapping createLifecycle
 - [abort-signals](./abort-signals.md). Stop this lifecycle via the `signal` option

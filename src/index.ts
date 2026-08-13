@@ -53,14 +53,15 @@ export type {
 } from './core/lifecycle';
 export type {
   DegradedBehavior,
-  DegradedReason,
   Loop,
   LoopOptions,
   LoopPhase,
+  LoopQuality,
   LoopReason,
   LoopReducedMotion,
-  Quality,
+  QualityAction,
   QualityChangeCallback,
+  SlowFrameState,
 } from './core/loop';
 export type {
   ScrollProgress,

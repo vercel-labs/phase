@@ -1,6 +1,6 @@
 # `useSize`
 
-Element dimensions via the shared ResizeObserver singleton. Never calls `getBoundingClientRect()`.
+Element dimensions via the shared ResizeObserver pool. Subscribers with the same box type share an observer; different box types stay independent. Never calls `getBoundingClientRect()`.
 
 ## Signature
 

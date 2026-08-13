@@ -106,14 +106,14 @@ describe('createLifecycle', () => {
       lifecycle.stop();
     });
 
-    it('reduced motion takes priority over sight', async () => {
+    it('sight takes priority so hidden reduced-motion work stays deferred', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
       const lifecycle = createLifecycle({ element: el });
       makeVisible(el);
       enableReducedMotion();
       makeHidden(el);
-      expect(lifecycle.phaseReason).toBe('reduced-motion');
+      expect(lifecycle.phaseReason).toBe('sight');
       lifecycle.stop();
     });
 

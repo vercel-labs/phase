@@ -2,6 +2,7 @@ export type PhaseErrorCode =
   | 'server_context'
   | 'no_element'
   | 'invalid_duration'
+  | 'invalid_fps'
   | 'ticker_stopped'
   | 'missing_context';
 
@@ -58,11 +59,20 @@ export function invalidDurationError(fn: string, value: number): never {
   });
 }
 
+export function invalidFpsError(fn: string, value: number): never {
+  throw new PhaseError(`${fn}() received an invalid fps: ${value}`, {
+    code: 'invalid_fps',
+    reason: 'FPS must be a finite positive number.',
+    fix: 'Pass a positive number, or undefined for display refresh rate.',
+  });
+}
+
 export function tickerStoppedError(): never {
-  throw new PhaseError('Cannot resume a stopped ticker.', {
+  throw new PhaseError('Cannot change a stopped ticker.', {
     code: 'ticker_stopped',
-    reason: 'stop() is terminal, so a stopped ticker cannot be resumed.',
-    fix: 'Create a new ticker instance instead of resuming a stopped one.',
+    reason:
+      'stop() is terminal, so a stopped ticker cannot be restarted or updated.',
+    fix: 'Create a new ticker instance.',
   });
 }
 

@@ -10,10 +10,12 @@ export interface ObserveIntersectionOptions {
 
 interface IOPoolEntry {
   observer: IntersectionObserver;
-  callbacks: Map<Element, IOCallback>;
+  callbacks: Map<Element, Set<IOCallback>>;
 }
 
 const pool = new Map<string, IOPoolEntry>();
+const rootIds = new WeakMap<object, number>();
+let nextRootId = 1;
 
 /**
  * Observe an element via a shared IntersectionObserver pool.
@@ -30,8 +32,14 @@ export function observeIntersection(
   const key: string = getPoolKey(ioInit);
   const entry: IOPoolEntry = getOrCreatePoolEntry(key, ioInit);
 
-  entry.callbacks.set(element, onIntersect);
-  entry.observer.observe(element);
+  let elementCallbacks: Set<IOCallback> | undefined =
+    entry.callbacks.get(element);
+  if (!elementCallbacks) {
+    elementCallbacks = new Set();
+    entry.callbacks.set(element, elementCallbacks);
+    entry.observer.observe(element);
+  }
+  elementCallbacks.add(onIntersect);
 
   let disposed = false;
 
@@ -42,9 +50,12 @@ export function observeIntersection(
     const poolEntry: IOPoolEntry | undefined = pool.get(key);
     if (!poolEntry) return;
 
-    // Only unobserve if our callback is still the registered one.
-    // A later subscription on the same element would have overwritten it.
-    if (poolEntry.callbacks.get(element) === onIntersect) {
+    const callbacks: Set<IOCallback> | undefined =
+      poolEntry.callbacks.get(element);
+    if (callbacks) {
+      callbacks.delete(onIntersect);
+    }
+    if (callbacks?.size === 0) {
       poolEntry.observer.unobserve(element);
       poolEntry.callbacks.delete(element);
     }
@@ -65,13 +76,23 @@ export function observeIntersection(
  * IO options are immutable after construction, so identical options can share.
  */
 function getPoolKey(opts: IntersectionObserverInit): string {
-  const root = opts.root ? 'custom' : 'null';
+  const root = getRootKey(opts.root);
   const margin = opts.rootMargin ?? '0px';
   const threshold = Array.isArray(opts.threshold)
-    ? opts.threshold.join(',')
+    ? [...new Set(opts.threshold)].toSorted((a, b) => a - b).join(',')
     : String(opts.threshold ?? 0);
 
   return `${root}|${margin}|${threshold}`;
+}
+
+function getRootKey(root: Element | Document | null | undefined): string {
+  if (!root) return 'null';
+  let id: number | undefined = rootIds.get(root);
+  if (id === undefined) {
+    id = nextRootId++;
+    rootIds.set(root, id);
+  }
+  return String(id);
 }
 
 /** Return an existing pool entry for this key, or create and register a new one. */
@@ -90,11 +111,29 @@ function getOrCreatePoolEntry(
 
 /** Create a new pool entry for the given options. */
 const createPoolEntry = (options: IntersectionObserverInit): IOPoolEntry => {
-  const callbacks = new Map<Element, IOCallback>();
+  const callbacks = new Map<Element, Set<IOCallback>>();
   const observer = new IntersectionObserver((entries) => {
     for (const ioEntry of entries) {
-      const cb: IOCallback | undefined = callbacks.get(ioEntry.target);
-      if (cb) cb(ioEntry);
+      const elementCallbacks: Set<IOCallback> | undefined = callbacks.get(
+        ioEntry.target,
+      );
+      if (!elementCallbacks) continue;
+
+      let firstError: unknown;
+      let hasError = false;
+      const currentCallbacks = Array.from(elementCallbacks);
+      for (const callback of currentCallbacks) {
+        if (!elementCallbacks.has(callback)) continue;
+        try {
+          callback(ioEntry);
+        } catch (error) {
+          if (!hasError) {
+            firstError = error;
+            hasError = true;
+          }
+        }
+      }
+      if (hasError) throw firstError;
     }
   }, options);
 

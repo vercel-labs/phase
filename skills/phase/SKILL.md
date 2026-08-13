@@ -14,7 +14,7 @@ Before recommending phase imports, check the **consumer project's** `package.jso
 
 # phase
 
-This skill teaches you to implement phase primitives correctly, preserve performance guarantees, and audit animation code. Phase is the lifecycle-aware performance layer for the web: it composes visibility, reduced motion, and frame budget signals so animations pause when unseen, respect user preferences, and never force a reflow.
+This skill teaches you to implement phase primitives correctly, preserve performance guarantees, and audit animation code. Phase is the lifecycle-aware performance layer for the web: it composes visibility, reduced motion, focus, and shared frame-pressure signals so animations pause when unseen, respect user preferences, and never force a reflow.
 
 ## The animation ladder
 
@@ -84,7 +84,7 @@ Tests enforce these guarantees for animation hot paths. Violating them in consum
 3. **No forced reflows.** Never call `getBoundingClientRect()`, `offsetWidth`, `getComputedStyle()` in animation paths. Use `useSize` / ResizeObserver.
 4. **Strong pause.** `cancelAnimationFrame()` stops scheduling entirely. Zero callbacks, zero CPU when paused.
 5. **Reduced motion by default.** Animation and lifecycle primitives respect `prefers-reduced-motion: reduce` automatically. Bypassing requires explicit `reducedMotion: 'ignore'`.
-6. **Frame-locked shared clock.** `createTicker`, `createLoop`, `useLoop`, and `useCanvas` share one `performance.now()` per rAF frame. `useTween` is finite React-state animation and intentionally uses its own rAF.
+6. **Frame-locked shared clock.** `createTicker`, `createLoop`, `useLoop`, and `useCanvas` receive one shared browser rAF timestamp. Frame-pressure observation adds one post-dispatch `performance.now()` read regardless of loop count. `useTween` is finite React-state animation and intentionally uses its own rAF.
 
 For the full performance ruleset, read [references/performance.md](references/performance.md).
 

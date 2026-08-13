@@ -4,20 +4,20 @@
 
 ### Patch Changes
 
-- **Added:** Added `Ticker.setFps` for in-place FPS cap changes with a continuous timeline.
-- **Changed:** `createLoop` keeps one persistent ticker; quality-driven FPS changes never reset `frame.elapsed`, `frame.delta`, `frame.frame`, or `FrameState` identity.
-- **Changed (breaking):** Replaced `degraded` and `degradedFps` with `unfocused`, `frameBudget`, and `throttleFps`.
+- **Added:** Added `Ticker.setFps` for validated in-place FPS cap changes with a continuous timeline.
+- **Changed:** Hardened the shared ticker against reentrant subscription changes, callback failures, cadence drift, and mutable frame counters.
+- **Changed:** `createLoop` keeps one persistent ticker and uses one display-cadence-aware shared frame-pressure monitor.
+- **Changed (breaking):** Replaced `degraded` and `degradedFps` with `unfocused`, `slowFrames`, and `throttleFps`.
 - **Changed (breaking):** Loop reduced motion now accepts `'pause' | 'ignore'` through `LoopReducedMotion`.
 - **Changed (breaking):** Tween reduced motion now accepts `'complete' | 'ignore'` through `TweenReducedMotion`.
 - **Removed (breaking):** Removed `ReducedMotionBehavior`.
-- **Added:** Added `qualityBehavior`, `QualityChangeCallback`, and `onQualityChange`.
-- **Changed:** Frame-budget detection measures raw frame gaps and recovers via a 2s optimistic re-measure for all behaviors.
-- **Changed:** Reduced-motion pause delivers zero frames; `useCanvas` paints one static frame per buffer creation or resize.
-- **Changed:** `useCanvas` applies 1x DPR only while throttling, skips redundant buffer reallocation, and keeps the exact physical pixel box across quality transitions.
-- **Changed:** `useTween` reads updated easing callbacks without restarting.
-- **Fixed:** Reentrant `stop()` from `onTick` or `onQualityChange` halts delivery, timers, and teardown-time ticker resurrection.
-- **Fixed:** A non-positive or non-finite `fps` no longer disables frame-budget detection or trips it on every frame.
-- **Fixed:** Frame-budget detection restarts at fps changes and pauses, so a cross-cadence gap or a stale partial count cannot trigger a false degrade.
+- **Changed (breaking):** Replaced singular quality reason/behavior fields with an immutable `LoopQuality` snapshot containing all active signals and the resolved `QualityAction`.
+- **Changed:** `useLoop` and `useCanvas` expose reactive quality by default and transient `qualityRef` mode with `onQualityChange`.
+- **Changed:** `useCanvas` separates adaptive pixel ratio from focus throttling, defers hidden buffers, and repaints visible paused buffers safely.
+- **Changed:** `useTween` completes when reduced motion changes and always lands exactly on its target.
+- **Fixed:** Observer pools support multiple same-element subscribers, distinct custom roots, and independent ResizeObserver box options.
+- **Fixed:** Terminal and construction callbacks cannot leave live tickers, observers, or listeners behind.
+- **Fixed:** Invalid FPS values throw `invalid_fps`; only `undefined` means uncapped.
 
 ## 0.0.9
 

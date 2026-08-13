@@ -37,13 +37,13 @@ function createRefWithElement() {
 }
 
 describe('useLoop', () => {
-  it('returns initial state { phase: idle, quality: full }', async () => {
+  it('returns initial state with full quality', async () => {
     const useLoop = await getHook();
     const { ref } = createRefWithElement();
     const { result } = renderHook(() => useLoop({ ref, onTick: vi.fn() }));
     // Before sight reports, loop is paused
-    expect(result.current.quality).toBe('full');
-    expect(result.current.qualityReason).toBeUndefined();
+    expect(result.current.quality.status).toBe('full');
+    expect(result.current.qualityRef.current).toBe(result.current.quality);
   });
 
   it('returns a ref when none is provided', async () => {
@@ -119,7 +119,7 @@ describe('useLoop', () => {
     expect(mockIO.instances.at(-1)?.options?.threshold).toBe(0.75);
   });
 
-  it('quality stays current without re-rendering when phase is unchanged', async () => {
+  it('transient quality stays current without rendering', async () => {
     const useLoop = await getHook();
     const { ref, el } = createRefWithElement();
     const onQualityChange = vi.fn();
@@ -137,7 +137,7 @@ describe('useLoop', () => {
       mockIO.trigger(el, true);
     });
     expect(result.current.phase).toBe('running');
-    expect(result.current.quality).toBe('full');
+    expect(result.current.qualityRef.current.status).toBe('full');
     const rendersBeforeBlur = renders;
 
     act(() => {
@@ -146,14 +146,69 @@ describe('useLoop', () => {
     });
 
     expect(result.current.phase).toBe('running');
-    expect(result.current.quality).toBe('degraded');
-    expect(result.current.qualityReason).toBe('unfocused');
-    expect(result.current.qualityBehavior).toBe('throttle');
+    expect(result.current.qualityRef.current).toMatchObject({
+      status: 'degraded',
+      signals: { unfocused: true },
+      action: { behavior: 'throttle', fps: 30 },
+    });
     expect(onQualityChange).toHaveBeenCalledWith(
-      'degraded',
-      'unfocused',
-      'throttle',
+      result.current.qualityRef.current,
     );
     expect(renders).toBe(rendersBeforeBlur);
+  });
+
+  it('reactive quality renders by default', async () => {
+    const useLoop = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() =>
+      useLoop({ ref, onTick: vi.fn(), unfocused: 'ignore' }),
+    );
+    act(() => {
+      mockIO.trigger(el, true);
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+    });
+
+    expect(result.current.quality.status).toBe('degraded');
+    expect(result.current.quality.signals.unfocused).toBe(true);
+    expect(result.current.qualityRef.current).toBe(result.current.quality);
+  });
+
+  it('resets quality when options reconstruct the core loop', async () => {
+    const useLoop = await getHook();
+    const { ref, el } = createRefWithElement();
+    const hasFocus = vi.spyOn(document, 'hasFocus');
+    const { result, rerender } = renderHook(
+      ({ fps }: { fps?: number }) =>
+        useLoop({ ref, fps, onTick: vi.fn(), unfocused: 'ignore' }),
+      { initialProps: { fps: undefined } },
+    );
+    act(() => {
+      mockIO.trigger(el, true);
+      hasFocus.mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+    });
+    expect(result.current.quality.status).toBe('degraded');
+
+    hasFocus.mockReturnValue(true);
+    rerender({ fps: 30 });
+    expect(result.current.quality.status).toBe('full');
+  });
+
+  it('attaches when an object ref receives a node after mount', async () => {
+    const useLoop = await getHook();
+    const ref: { current: HTMLDivElement | null } = { current: null };
+    const { result, rerender } = renderHook(() =>
+      useLoop({ ref, onTick: vi.fn() }),
+    );
+    expect(result.current.phase).toBe('idle');
+
+    const element = document.createElement('div');
+    ref.current = element;
+    rerender();
+    act(() => {
+      mockIO.trigger(element, true);
+    });
+    expect(result.current.phase).toBe('running');
   });
 });

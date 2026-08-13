@@ -80,12 +80,16 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
 
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
+  const [element, setElement] = useState<T | null>(() => ref.current);
 
   const [state, setState] = useState<LifecycleState>(INITIAL_STATE);
   const lifecycleRef = useRef<Lifecycle | null>(null);
 
   useEffect(() => {
-    const element: Element | null = ref.current;
+    if (element !== ref.current) setElement(ref.current);
+  });
+
+  useEffect(() => {
     if (!element || !enabled) {
       setState(INITIAL_STATE);
       return;
@@ -111,6 +115,7 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    element,
     enabled,
     reducedMotion,
     intersectionRoot,

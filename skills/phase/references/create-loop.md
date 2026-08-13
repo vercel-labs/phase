@@ -1,104 +1,117 @@
 # `createLoop`
 
-The main primitive. Composes a ticker, visibility observer, reduced-motion listener, and quality signals into a lifecycle-aware animation loop.
+The main core primitive. It combines a persistent ticker, visibility, reduced motion, focus, and shared frame-pressure state.
 
 ## Signature
 
 ```ts
 import { createLoop } from 'phase';
 
-const loop = createLoop(options: LoopOptions): Loop;
+const loop = createLoop(options);
 ```
 
 ### Options
 
-| Option                | Type                                | Default      | Description                                                     |
-| --------------------- | ----------------------------------- | ------------ | --------------------------------------------------------------- |
-| `element`             | `Element`                           | required     | Element to observe for visibility                               |
-| `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running                                 |
-| `fps`                 | `number`                            | none         | Base FPS cap; uncapped uses display refresh                     |
-| `reducedMotion`       | `'pause' \| 'ignore'`               | `'pause'`    | Behavior when user prefers reduced motion                       |
-| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'` | `'pause'`    | Behavior while the window is unfocused                          |
-| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'` | `'throttle'` | Behavior after 3 raw frame gaps exceed 1.5x the target interval |
-| `throttleFps`         | `number`                            | `30`         | Shared throttle cap; never raises a lower `fps`                 |
-| `intersectionOptions` | `IntersectionObserverInit`          | none         | Forwarded to the underlying IO                                  |
-| `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately                                    |
-| `onPhaseChange`       | `(phase, reason) => void`           | none         | Called on every phase transition                                |
-| `onQualityChange`     | `QualityChangeCallback`             | none         | Called when quality, reason, or resolved behavior changes       |
-| `signal`              | `AbortSignal`                       | none         | Stops the loop when the signal is aborted                       |
+| Option                | Type                          | Default      | Description                                       |
+| --------------------- | ----------------------------- | ------------ | ------------------------------------------------- |
+| `element`             | `Element`                     | required     | Element observed for visibility                   |
+| `onTick`              | `(frame: FrameState) => void` | required     | Called for each delivered frame                   |
+| `fps`                 | `number`                      | none         | Finite positive cap; `undefined` uses display rAF |
+| `reducedMotion`       | `LoopReducedMotion`           | `'pause'`    | `'pause' \| 'ignore'`                             |
+| `unfocused`           | `DegradedBehavior`            | `'pause'`    | Behavior while `document.hasFocus()` is false     |
+| `slowFrames`          | `DegradedBehavior`            | `'throttle'` | Behavior under shared frame pressure              |
+| `throttleFps`         | `number`                      | `30`         | Finite positive cap for a throttle action         |
+| `intersectionOptions` | `IntersectionObserverInit`    | none         | Forwarded to the pooled visibility observer       |
+| `start`               | `'auto' \| 'manual'`          | `'auto'`     | Whether signal reconciliation starts immediately  |
+| `onPhaseChange`       | `(phase, reason) => void`     | none         | Called after a completed phase transition         |
+| `onQualityChange`     | `QualityChangeCallback`       | none         | Called after a completed quality transition       |
+| `signal`              | `AbortSignal`                 | none         | Stops the loop when aborted                       |
 
-### Return (Loop)
+`DegradedBehavior` is `'pause' | 'throttle' | 'ignore'`. Pause wins over throttle, which wins over ignore.
 
-| Property          | Type                            | Description                                                                                      |
-| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `start()`         | `() => void`                    | Begin the loop (no-op if already running)                                                        |
-| `stop()`          | `() => void`                    | Terminal (disposes everything)                                                                   |
-| `phase`           | `LoopPhase`                     | `'idle' \| 'running' \| 'paused' \| 'stopped'`                                                   |
-| `phaseReason`     | `LoopReason`                    | `'initial' \| 'started' \| 'resumed' \| 'sight' \| 'reduced-motion' \| 'degraded' \| 'disposed'` |
-| `quality`         | `Quality`                       | Signal state, independent of configured behavior                                                 |
-| `qualityReason`   | `DegradedReason \| undefined`   | `'unfocused' \| 'frame-budget'`; unfocused reports first when both are active                    |
-| `qualityBehavior` | `DegradedBehavior \| undefined` | Resolved behavior after `pause` > `throttle` > `ignore` precedence                               |
+### Return
 
-## When to use
+| Property      | Type          | Description                                                                   |
+| ------------- | ------------- | ----------------------------------------------------------------------------- |
+| `start()`     | `() => void`  | Start once; repeated calls are no-ops                                         |
+| `stop()`      | `() => void`  | Terminal teardown                                                             |
+| `phase`       | `LoopPhase`   | `'idle' \| 'running' \| 'paused' \| 'stopped'`                                |
+| `phaseReason` | `LoopReason`  | Includes `'sight'`, `'reduced-motion'`, `'unfocused'`, and `'slow-frames'`    |
+| `quality`     | `LoopQuality` | One immutable snapshot containing every active signal and the resolved action |
 
-- You need a per-frame animation loop with two independent pause paths: sight always pauses for offscreen elements or background tabs, while the configurable `unfocused` quality signal handles window blur.
-- You want zero CPU when the element isn't visible (strong pause via `cancelAnimationFrame`).
-- You need per-signal quality behavior (pause on blur, FPS throttle on frame budget overflow).
-- You're animating DOM elements (transforms, opacity, positions) in a frame loop.
+## Quality state
 
-## When not to use
+`LoopQuality` is a discriminated snapshot:
 
-| Instead of this                                   | Use                                                                         |
-| ------------------------------------------------- | --------------------------------------------------------------------------- |
-| You own the renderer (three.js, Pixi, Web Worker) | `createLifecycle` (gives you active/paused signal without driving the loop) |
-| Single value into React render                    | `useTween` (smaller API surface, calls setState)                            |
-| Pure CSS can do it                                | CSS `transition` / `animation` / `@starting-style`                          |
-| Need springs or gesture-driven animation          | External library (motion, GSAP)                                             |
-| React component                                   | `useLoop` (same engine with React lifecycle management)                     |
+```ts
+type LoopQuality =
+  | {
+      status: 'full';
+      signals: { unfocused: false; slowFrames: undefined };
+      action: undefined;
+    }
+  | {
+      status: 'degraded';
+      signals: {
+        unfocused: boolean;
+        slowFrames: 'degraded' | 'probing' | undefined;
+      };
+      action: QualityAction;
+    };
+```
 
-## Do
+`QualityAction` is `{ behavior: 'pause' }`, `{ behavior: 'ignore' }`, or `{ behavior: 'throttle'; fps: number }`. This preserves overlapping causes instead of selecting one misleading reason.
 
-- Write to DOM directly inside `onTick`:
-  ```ts
-  onTick: (frame) => {
-    el.style.transform = `translateX(${frame.elapsed * 0.1}px)`;
-  };
-  ```
-- Call `stop()` when the animation is permanently done (e.g. component unmounts, page navigates away).
-- Read `phase` and `phaseReason` to debug unexpected pauses. `qualityReason` names the reporting-priority signal, while `qualityBehavior` names the independently resolved action. Quality remains observable under `'ignore'`.
-- Rely on the defaults: window blur pauses (the timeline freezes and resumes in place on refocus), frame-budget pressure throttles to `throttleFps`. When both are active, `pause` wins over `throttle` wins over `ignore`.
-- Remember that `throttleFps` cannot raise a lower base `fps` cap.
-- Use `frameBudget: 'pause'` for heavy canvas/WebGL that can't gracefully degrade.
+### Shared frame pressure
 
-### Frame-budget recovery
+`slowFrames` is page-level rAF pressure, not per-loop GPU attribution. The shared clock:
 
-A frame-budget degrade cannot clear itself: pause stops measuring entirely, and throttle widens the delivered gaps to match the cap. Every degrade therefore schedules the same 2-second optimistic re-measure, regardless of behavior: the loop restores full speed (or resumes) and re-measures; sustained jank re-trips the threshold within a few frames and reschedules. Under `'ignore'` quality is observable but phase, FPS, and canvas DPR never change.
+1. Learns the source display cadence before classifying pressure.
+2. Distinguishes stable low-work cadence shifts (30 Hz displays, monitor changes, VRR) from irregular missed opportunities.
+3. Samples aggregate main-thread occupancy once after shared callback dispatch.
+4. Requires sustained pressure before degrading.
+5. Uses one detector and one retry timer for every loop.
 
-Detection uses the raw gap between delivered frames, not the 40ms-clamped `frame.delta`, so degrades still trigger at low fps caps where the clamped value could never cross the threshold.
+The browser does not expose portable per-loop GPU, layout, or paint timing. Do not interpret this signal as proof that one callback caused a slow frame.
 
-Quality-driven FPS changes mutate the ticker's scheduling gate in place: `frame.elapsed`, `frame.delta`, `frame.frame`, and `FrameState` identity are continuous through every throttle transition, and the new cap applies from the very next frame.
+After two seconds, quality enters `'probing'`, remains degraded, and temporarily removes slow-frame mitigation. Thirty healthy frames confirm recovery. A failed probe returns directly to `'degraded'` without publishing a false `'full'` transition.
 
-## Don't
+## Timeline guarantees
 
-- **Never call React `setState` inside `onTick`.** It fires 60 times/sec. Write to refs or DOM directly.
-- **Never allocate intermediate objects inside `onTick`.** No objects, arrays, closures, maps, filters, or spreads. `FrameState` is mutated in place; reuse external variables. A final string assigned directly to a DOM style is the unavoidable output boundary.
-- **Never store a reference to `frame`.** It's the same object every tick, mutated in place. Read values immediately.
-- **Don't reference the loop instance inside `onPhaseChange` / `onQualityChange` without a guard.** With `start: 'auto'` (or an already-unfocused window) the first callback fires synchronously during `createLoop`, before the instance exists.
-- **Don't call `pause()` / `resume()` on a loop.** Suspension is signal-driven. Use `createLifecycle` / `useLifecycle` for manual pause, or `useLoop({ enabled })` in React.
-- **Don't call `start()` after `stop()`.** `stop()` is terminal. Create a new loop instance.
-- **Don't use `createLoop` without an element.** Throws `PhaseError` with code `no_element`.
+One ticker owns `FrameState` for the loop's entire life. `setFps()` mutates its deadline gate without rebuilding:
+
+- `elapsed` excludes strong pauses and never catches up after blur/offscreen time.
+- `delta` includes skipped running frames and is clamped to 40 ms.
+- `frame` and object identity continue through throttle changes.
+- The first frame after start or resume is immediate with a clean default delta.
+
+## Callback and teardown guarantees
+
+Internal phase, FPS, and quality state is coherent before consumer callbacks run. Teardown completes before the stopped callback. If an automatic construction callback throws, all observers, listeners, and ticker subscriptions are disposed before the error escapes.
+
+Callbacks may run synchronously with `start: 'auto'`, so do not reference an unassigned loop variable without a guard.
 
 ## Reduced motion
 
-Default: `'pause'`. The loop pauses entirely when reduced motion is enabled (`phaseReason` is `'reduced-motion'`): a strong pause, with zero scheduling and zero callbacks. Author the reduced-motion state in markup or CSS (`motion-reduce:`); for canvas, `useCanvas` paints one static frame per buffer creation so the surface is never blank.
+The default `'pause'` is a strong pause: zero scheduling and zero loop callbacks. Sight outranks reduced motion while an element is hidden, so static canvas work is deferred until the element becomes visible. Open-ended loops have no `'complete'` state; use `useTween` for a finite target.
 
-- `'ignore'`: Keep running regardless. Use only for non-decorative motion (e.g. a data visualization that conveys information via movement).
-- There is no `'complete'` for loops: an open-ended loop has no end state the library can know. Use `useTween` for a value with a defined target.
+## Do
+
+- Write directly to refs, DOM, or a canvas inside `onTick`.
+- Read `loop.quality.signals` to identify all active adaptive signals.
+- Read `loop.quality.action` to understand actual execution.
+- Call `stop()` for terminal cleanup.
+
+## Don't
+
+- Do not allocate intermediate objects or call React `setState` in `onTick`.
+- Do not store `FrameState`; it is a readonly view of one reused object.
+- Do not pass zero, negative, `NaN`, or infinite FPS values. They throw `PhaseError` with `invalid_fps`.
+- Do not call `start()` after `stop()`.
 
 ## See also
 
-- [createTicker](./create-ticker.md). The low-level rAF clock underneath createLoop; use when you don't need visibility management
-- [createLifecycle](./create-lifecycle.md). The activation signal without the ticker; use when you own the render loop
-- [useLoop](./use-loop.md). React hook wrapping createLoop with ref management
-- [useCanvas](./use-canvas.md). React hook for canvas/WebGL with DPR handling on top of createLoop
-- [abort-signals](./abort-signals.md). Stop this loop via the `signal` option
+- [createTicker](./create-ticker.md)
+- [createLifecycle](./create-lifecycle.md)
+- [useLoop](./use-loop.md)
+- [useCanvas](./use-canvas.md)

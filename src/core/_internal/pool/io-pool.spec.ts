@@ -171,7 +171,7 @@ describe('cleanup', () => {
 // ---------------------------------------------------------------------------
 
 describe('ownership safety', () => {
-  it('second subscription on same element overwrites callback', async () => {
+  it('multiple subscriptions on the same element all receive entries', async () => {
     const { observeIntersection } = await getModule();
     const el = document.createElement('div');
     const cb1 = vi.fn();
@@ -182,34 +182,43 @@ describe('ownership safety', () => {
 
     mockIO.trigger(el, true);
 
-    expect(cb1).not.toHaveBeenCalled();
+    expect(cb1).toHaveBeenCalledTimes(1);
     expect(cb2).toHaveBeenCalledTimes(1);
   });
 
-  it('first cleanup does NOT unobserve if second subscription replaced it', async () => {
+  it('subscriptions clean up independently', async () => {
     const { observeIntersection } = await getModule();
     const el = document.createElement('div');
-    const cleanup1 = observeIntersection({ element: el, onIntersect: vi.fn() });
+    const cb1 = vi.fn();
+    const cleanup1 = observeIntersection({ element: el, onIntersect: cb1 });
     const cb2 = vi.fn();
-    observeIntersection({ element: el, onIntersect: cb2 });
+    const cleanup2 = observeIntersection({ element: el, onIntersect: cb2 });
 
     cleanup1();
-
-    // el should still be observed (owned by second subscription)
     expect(firstInstance().observed.has(el)).toBe(true);
 
     mockIO.trigger(el, true);
+    expect(cb1).not.toHaveBeenCalled();
     expect(cb2).toHaveBeenCalledTimes(1);
-  });
-
-  it('second cleanup correctly unobserves', async () => {
-    const { observeIntersection } = await getModule();
-    const el = document.createElement('div');
-    observeIntersection({ element: el, onIntersect: vi.fn() });
-    const cleanup2 = observeIntersection({ element: el, onIntersect: vi.fn() });
 
     cleanup2();
     expect(firstInstance().observed.has(el)).toBe(false);
+  });
+
+  it('one throwing subscriber does not starve another subscriber', async () => {
+    const { observeIntersection } = await getModule();
+    const el = document.createElement('div');
+    const second = vi.fn();
+    observeIntersection({
+      element: el,
+      onIntersect: () => {
+        throw new Error('consumer failure');
+      },
+    });
+    observeIntersection({ element: el, onIntersect: second });
+
+    expect(() => mockIO.trigger(el, true)).toThrow('consumer failure');
+    expect(second).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -231,6 +240,55 @@ describe('pool key stability', () => {
     observeIntersection({ element: el2, onIntersect: vi.fn(), threshold: 0.5 });
 
     expect(mockIO.instances).toHaveLength(2);
+  });
+
+  it('equivalent threshold arrays share an observer', async () => {
+    const { observeIntersection } = await getModule();
+    observeIntersection({
+      element: document.createElement('div'),
+      onIntersect: vi.fn(),
+      threshold: [1, 0.5, 0, 0.5],
+    });
+    observeIntersection({
+      element: document.createElement('div'),
+      onIntersect: vi.fn(),
+      threshold: [0, 0.5, 1],
+    });
+
+    expect(mockIO.instances).toHaveLength(1);
+  });
+
+  it('different custom roots never share an observer', async () => {
+    const { observeIntersection } = await getModule();
+    observeIntersection({
+      element: document.createElement('div'),
+      root: document.createElement('section'),
+      onIntersect: vi.fn(),
+    });
+    observeIntersection({
+      element: document.createElement('div'),
+      root: document.createElement('section'),
+      onIntersect: vi.fn(),
+    });
+
+    expect(mockIO.instances).toHaveLength(2);
+  });
+
+  it('the same custom root shares an observer', async () => {
+    const { observeIntersection } = await getModule();
+    const root = document.createElement('section');
+    observeIntersection({
+      element: document.createElement('div'),
+      root,
+      onIntersect: vi.fn(),
+    });
+    observeIntersection({
+      element: document.createElement('div'),
+      root,
+      onIntersect: vi.fn(),
+    });
+
+    expect(mockIO.instances).toHaveLength(1);
   });
 });
 

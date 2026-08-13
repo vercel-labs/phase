@@ -48,7 +48,7 @@ function Sidebar() {
 }
 ```
 
-**Why this works:** `useSize` reads from the shared `ResizeObserver` singleton: async, compositor-aligned, no `getBoundingClientRect`. Twenty components share one observer. A bare `window` resize listener with a layout read forces a synchronous reflow on every resize event, once per component, and fires even when the element's own size did not change.
+**Why this works:** `useSize` reads from the shared per-box `ResizeObserver` pool: async, compositor-aligned, no `getBoundingClientRect`. Twenty content-box components share one observer, while incompatible box options remain independent. A bare `window` resize listener with a layout read forces a synchronous reflow on every resize event, once per component, and fires even when the element's own size did not change.
 
 **What it replaces:** N components each calling `window.addEventListener('resize', ...)` with a `getBoundingClientRect`/`offset*` read in the handler. For viewport-level breakpoints (not element size), use `useMediaQuery` instead. For scroll position (custom scrollbars, carousels), use `useScroll`, not a bare `scroll` listener that reads `scrollWidth`/`clientWidth`.
 

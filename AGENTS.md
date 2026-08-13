@@ -75,7 +75,7 @@ Every module must satisfy these performance contracts without exception.
 ### Lifecycle rules
 
 - **Strong pause.** `cancelAnimationFrame()` stops scheduling entirely. Zero callbacks fire, and the loop fully halts (no rAF + early return).
-- **Frame-locked shared clock.** One `performance.now()` read per rAF frame. All tickers read from this shared value. No visual desync.
+- **Frame-locked shared clock.** All tickers receive the same browser rAF timestamp. Shared frame-pressure observation may make one post-dispatch `performance.now()` read per frame regardless of loop count. No visual desync.
 - **Delta clamped at 40ms.** Prevents teleport on resume after long pause.
 - **Pause-aware elapsed.** `frame.elapsed` freezes during pause, resumes from where it left off.
 
@@ -145,7 +145,7 @@ Minimal footprint is a core promise of phase. Every public export is individuall
 4. **React is optional.** Peer dep marked optional; core works without React.
 5. **No circular imports.** `ease/` has no deps, `core/` depends on `ease/` and `_internal/`, `react/` depends on `core/`. Never import upward.
 6. **Co-located tests.** Every module has a sibling `.spec.ts(x)` file.
-7. **Observer pooling.** IO keyed by serialized options, RO is a singleton, MQL keyed by query string. Never create raw observers outside the pool.
+7. **Observer pooling.** IO is keyed by root identity and normalized options, RO is pooled by box type, and MQL is keyed by query string. Multiple subscriptions on one element must coexist. Never create raw observers outside the pool.
 8. **Phases + reasons.** Every state machine exposes both. Phase describes _what_ state; reason describes _why_. Core primitives with phases must expose an `onPhaseChange` callback so React hooks can subscribe without polling. React hooks must use `useState` for phase/reason (reactive by default) and provide a transient (zero-re-render) escape hatch via a callback option, matching the `useSight` dual-mode pattern.
 
 ## Admission criteria

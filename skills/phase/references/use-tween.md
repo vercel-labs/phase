@@ -62,7 +62,7 @@ Default `'complete'`: jumps to target instantly. The value still arrives at its 
 
 ## Timing model
 
-`useTween` is a finite React-state tween with its own rAF. It does not use the shared ticker clock, `FrameState`, visibility pausing, focus quality, frame-budget throttling, or delta clamping. Use `useLoop` / `useCanvas` when those lifecycle guarantees are required.
+`useTween` is a finite React-state tween with its own rAF. It does not use the shared ticker clock, `FrameState`, visibility pausing, focus quality, slow-frame throttling, or delta clamping. Active tweens subscribe to reduced motion and complete immediately if the preference changes. Completion always lands exactly on `target`, even when a custom easing function does not return `1`. Use `useLoop` / `useCanvas` when loop lifecycle guarantees are required.
 
 The reduced-motion preference is read when the tween effect starts; it is not subscribed mid-tween. Use `usePrefersReducedMotion` when other UI must react immediately to preference changes. The latest `easing` callback is read through a synced ref without restarting the tween.
 

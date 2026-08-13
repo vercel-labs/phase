@@ -1,36 +1,38 @@
 import {
-  useState,
+  useCallback,
   useEffect,
   useRef,
-  useCallback,
+  useState,
   type RefObject,
 } from 'react';
 
-import { subscribeDpr, readDpr } from '../../core/_internal/pool/dpr';
+import { readDpr, subscribeDpr } from '../../core/_internal/pool/dpr';
 import { observeResize } from '../../core/_internal/pool/ro-pool';
 import {
   createLoop,
+  type DegradedBehavior,
   type LoopPhase,
+  type LoopQuality,
   type LoopReason,
   type LoopReducedMotion,
-  type Quality,
-  type DegradedBehavior,
-  type DegradedReason,
   type QualityChangeCallback,
 } from '../../core/loop';
 import type { FrameState } from '../../core/tick';
 import { useSyncedRef } from '../use-synced-ref';
 
 export interface Size {
-  width: number;
-  height: number;
+  readonly width: number;
+  readonly height: number;
 }
 
-/**
- * Per-frame canvas draw callback. Receives the 2D context, frame state, and
- * current element size. Draw directly to the canvas. Never call React
- * `setState` here.
- */
+type MutableSize = {
+  -readonly [Key in keyof Size]: Size[Key];
+};
+
+type MutableFrameState = {
+  -readonly [Key in keyof FrameState]: FrameState[Key];
+};
+
 export type CanvasDrawFn = (
   ctx: CanvasRenderingContext2D,
   frame: FrameState,
@@ -40,79 +42,69 @@ export type CanvasDrawFn = (
 export interface UseCanvasOptions {
   containerRef: RefObject<Element | null>;
   canvasRef: RefObject<HTMLCanvasElement | null>;
-  /**
-   * Called every frame with the 2D context, frame state, and current element size.
-   * Draw directly to the canvas. Never call React `setState` here.
-   */
   draw: CanvasDrawFn;
-  /** Base FPS cap. Default: uncapped (display refresh rate). */
   fps?: number;
-  /** When `false`, tears down the canvas lifecycle and reports `idle`. Default `true`. */
   enabled?: boolean;
-  /** Behavior when the user prefers reduced motion. Default `'pause'` (one static frame per buffer creation). */
   reducedMotion?: LoopReducedMotion;
-  /**
-   * Behavior while `document.hasFocus()` is false. Default `'pause'`.
-   * Offscreen/background-tab visibility is separate and always pauses.
-   */
   unfocused?: DegradedBehavior;
-  /**
-   * Behavior after three consecutive frames exceed 1.5x the current target
-   * interval. Default `'throttle'`. For heavy GPU work, `'pause'` is often right.
-   */
-  frameBudget?: DegradedBehavior;
-  /** Shared throttle cap; never raises a lower `fps` cap. Default `30`. */
+  slowFrames?: DegradedBehavior;
   throttleFps?: number;
-  /** Options forwarded to the pooled visibility observer. Value changes rebuild the loop. */
   intersectionOptions?: IntersectionObserverInit;
-  /** Transient quality notification. Does not trigger a React render. */
+  /**
+   * `'adaptive'` uses 1x while slow-frame pressure is active. Focus throttling
+   * never changes resolution. Default `'adaptive'`.
+   */
+  pixelRatio?: 'adaptive' | 'device';
+  /**
+   * Transient quality notification. When supplied, quality transitions do not
+   * trigger React renders; read `qualityRef.current`.
+   */
   onQualityChange?: QualityChangeCallback;
 }
 
-export interface UseCanvasResult {
+interface UseCanvasBaseResult {
   restart: () => void;
   phase: LoopPhase;
   phaseReason: LoopReason;
-  /**
-   * Always-current quality state, read through a getter: access it where you
-   * need it (`result.quality`) rather than destructuring, which snapshots the
-   * value. Quality changes never trigger a render; use `onQualityChange` to be
-   * notified.
-   */
-  quality: Quality;
-  /** Active signal; `'unfocused'` has reporting priority when both are active. */
-  qualityReason: DegradedReason | undefined;
-  /** Resolved behavior after applying pause > throttle > ignore precedence. */
-  qualityBehavior: DegradedBehavior | undefined;
+  qualityRef: RefObject<LoopQuality>;
 }
 
-type CanvasState = Pick<UseCanvasResult, 'phase' | 'phaseReason'>;
+export interface UseCanvasReactiveResult extends UseCanvasBaseResult {
+  quality: LoopQuality;
+}
+
+export type UseCanvasTransientResult = UseCanvasBaseResult;
+
+/** @deprecated Use `UseCanvasReactiveResult` or `UseCanvasTransientResult`. */
+export type UseCanvasResult = UseCanvasReactiveResult;
+
+type CanvasState = Pick<UseCanvasBaseResult, 'phase' | 'phaseReason'>;
 
 const INITIAL_STATE: CanvasState = {
   phase: 'idle',
   phaseReason: 'initial',
 };
 
+const INITIAL_QUALITY: LoopQuality = Object.freeze({
+  status: 'full',
+  signals: Object.freeze({
+    unfocused: false,
+    slowFrames: undefined,
+  }),
+  action: undefined,
+});
+
 /**
- * Canvas-specific animation with DPR-aware sizing, ResizeObserver coalescing,
- * context management, and GPU context loss recovery.
- *
- * Under reduced motion the loop delivers no frames; the canvas paints one
- * static frame (zero timeline) each time its buffer is created or resized, so
- * it is never left blank.
- *
- * @example
- * const { qualityReason, qualityBehavior } = useCanvas({
- *   containerRef,
- *   canvasRef,
- *   draw: (ctx, frame, size) => {
- *     ctx.clearRect(0, 0, size.width, size.height);
- *     // render...
- *   },
- * });
- * // A throttling quality signal also lowers the canvas buffer to 1x DPR.
+ * Canvas animation with lifecycle gating, exact buffer sizing, adaptive pixel
+ * ratio, context recovery, and repaint-safe strong pauses.
  */
-export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
+export function useCanvas(
+  options: UseCanvasOptions & { onQualityChange: QualityChangeCallback },
+): UseCanvasTransientResult;
+export function useCanvas(options: UseCanvasOptions): UseCanvasReactiveResult;
+export function useCanvas(
+  options: UseCanvasOptions,
+): UseCanvasReactiveResult | UseCanvasTransientResult {
   const {
     containerRef,
     canvasRef,
@@ -120,12 +112,14 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
     enabled = true,
     reducedMotion,
     unfocused,
-    frameBudget,
+    slowFrames,
     throttleFps,
     intersectionOptions,
+    pixelRatio = 'adaptive',
   } = options;
   const drawRef = useSyncedRef(options.draw);
   const onQualityChangeRef = useSyncedRef(options.onQualityChange);
+  const transientQuality = options.onQualityChange !== undefined;
   const intersectionRoot = intersectionOptions?.root;
   const intersectionRootMargin = intersectionOptions?.rootMargin;
   const intersectionThreshold = intersectionOptions?.threshold;
@@ -133,128 +127,165 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
     ? intersectionThreshold.join(',')
     : intersectionThreshold;
 
+  const [container, setContainer] = useState<Element | null>(
+    () => containerRef.current,
+  );
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(
+    () => canvasRef.current,
+  );
   const [state, setState] = useState<CanvasState>(INITIAL_STATE);
+  const [quality, setQuality] = useState<LoopQuality>(INITIAL_QUALITY);
   const [restartNonce, setRestartNonce] = useState(0);
-
-  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
-  const sizeRef = useRef<Size>({ width: 0, height: 0 });
-  const qualityRef = useRef<Quality>('full');
-  const qualityReasonRef = useRef<DegradedReason | undefined>(undefined);
-  const qualityBehaviorRef = useRef<DegradedBehavior | undefined>(undefined);
+  const qualityRef = useRef<LoopQuality>(INITIAL_QUALITY);
 
   useEffect(() => {
-    const container: Element | null = containerRef.current;
-    const canvasEl: HTMLCanvasElement | null = canvasRef.current;
-    if (!container || !canvasEl || !enabled) {
+    if (container !== containerRef.current) setContainer(containerRef.current);
+    if (canvas !== canvasRef.current) setCanvas(canvasRef.current);
+  });
+
+  useEffect(() => {
+    if (transientQuality) return;
+    setQuality(qualityRef.current);
+  }, [transientQuality]);
+
+  useEffect(() => {
+    qualityRef.current = INITIAL_QUALITY;
+    if (!transientQuality) setQuality(INITIAL_QUALITY);
+
+    if (!container || !canvas || !enabled) {
       setState(INITIAL_STATE);
-      qualityRef.current = 'full';
-      qualityReasonRef.current = undefined;
-      qualityBehaviorRef.current = undefined;
       return;
     }
-    const canvas: HTMLCanvasElement = canvasEl;
 
-    const initialCtx: CanvasRenderingContext2D | null = canvas.getContext('2d');
-    if (!initialCtx) return;
-    ctxRef.current = initialCtx;
+    let context: CanvasRenderingContext2D | null = canvas.getContext('2d');
+    if (!context) return;
 
     let dpr: number = readDpr();
     let contextLost = false;
-    let loopInstance: ReturnType<typeof createLoop> | null = null;
-
-    // A paused loop delivers no frames, so the reduced-motion paint supplies a
-    // zero timeline. Owned per instance: a consumer that mutates the frame it
-    // receives cannot corrupt another canvas.
-    const staticFrame: FrameState = { time: 0, delta: 0, elapsed: 0, frame: 0 };
-
-    // --- Canvas buffer sizing ---
-
-    // Last applied buffer state. Assigning canvas.width/height clears the
-    // bitmap and resets context state even with the same value, so redundant
-    // re-applies (phase flips, repeated quality events) must be skipped.
-    let bufferWidth = 0;
-    let bufferHeight = 0;
-    let appliedDpr = 0;
-    // Last exact physical box from ResizeObserver, preserved across quality
-    // transitions so full-resolution restores don't fall back to width * dpr.
+    let visible = false;
+    let pendingBuffer = false;
+    let hasDrawnFrame = false;
+    let currentPhase: LoopPhase = 'idle';
+    let currentReason: LoopReason = 'initial';
+    let cssWidth = 0;
+    let cssHeight = 0;
     let physicalWidth = 0;
     let physicalHeight = 0;
+    let bufferWidth = -1;
+    let bufferHeight = -1;
+    let appliedCssWidth = -1;
+    let appliedCssHeight = -1;
+    let appliedScaleX = -1;
+    let appliedScaleY = -1;
 
-    // The loop delivers zero frames while paused for reduced motion, so paint
-    // the initial state once per buffer (re)creation: never a blank canvas,
-    // and a resize while paused repaints at the new size.
-    function drawStaticFrame(): void {
-      if (loopInstance?.phaseReason !== 'reduced-motion') return;
-      if (loopInstance.phase !== 'paused') return;
-      if (contextLost || !ctxRef.current) return;
-      drawRef.current(ctxRef.current, staticFrame, sizeRef.current);
+    const size: MutableSize = { width: 0, height: 0 };
+    const repaintFrame: MutableFrameState = {
+      time: 0,
+      delta: 0,
+      elapsed: 0,
+      frame: 0,
+    };
+    Object.seal(size);
+    Object.seal(repaintFrame);
+
+    function adaptiveResolution(): boolean {
+      return (
+        pixelRatio === 'adaptive' &&
+        qualityRef.current.signals.slowFrames !== undefined
+      );
     }
 
-    function applySize(width: number, height: number): void {
-      sizeRef.current.width = width;
-      sizeRef.current.height = height;
-
-      // Downscale to 1x only while the resolved behavior is throttling.
-      // Paused and ignored signals keep full resolution.
-      const throttled: boolean = loopInstance?.qualityBehavior === 'throttle';
-
-      let nextWidth: number;
-      let nextHeight: number;
-      if (throttled) {
-        nextWidth = width;
-        nextHeight = height;
-      } else if (physicalWidth > 0) {
-        nextWidth = physicalWidth;
-        nextHeight = physicalHeight;
-      } else {
-        nextWidth = width * dpr;
-        nextHeight = height * dpr;
+    function paintPausedBuffer(reason: LoopReason): void {
+      if (currentPhase !== 'paused' || !visible || contextLost || !context) {
+        return;
       }
-      const nextDpr: number = throttled ? 1 : dpr;
-
       if (
-        nextWidth === bufferWidth &&
-        nextHeight === bufferHeight &&
-        nextDpr === appliedDpr
+        reason !== 'reduced-motion' &&
+        reason !== 'unfocused' &&
+        reason !== 'slow-frames'
       ) {
         return;
       }
+
+      if (!hasDrawnFrame) {
+        repaintFrame.time = 0;
+        repaintFrame.delta = 0;
+        repaintFrame.elapsed = 0;
+        repaintFrame.frame = 0;
+      }
+      drawRef.current(context, repaintFrame, size);
+    }
+
+    function applySize(force = false): void {
+      size.width = cssWidth;
+      size.height = cssHeight;
+
+      if (!visible) {
+        pendingBuffer = true;
+        return;
+      }
+
+      const adaptive: boolean = adaptiveResolution();
+      const nextWidth: number = adaptive
+        ? Math.round(cssWidth)
+        : physicalWidth > 0
+          ? physicalWidth
+          : Math.round(cssWidth * dpr);
+      const nextHeight: number = adaptive
+        ? Math.round(cssHeight)
+        : physicalHeight > 0
+          ? physicalHeight
+          : Math.round(cssHeight * dpr);
+      const scaleX: number = cssWidth > 0 ? nextWidth / cssWidth : 1;
+      const scaleY: number = cssHeight > 0 ? nextHeight / cssHeight : 1;
+
+      if (
+        !force &&
+        nextWidth === bufferWidth &&
+        nextHeight === bufferHeight &&
+        cssWidth === appliedCssWidth &&
+        cssHeight === appliedCssHeight &&
+        scaleX === appliedScaleX &&
+        scaleY === appliedScaleY
+      ) {
+        pendingBuffer = false;
+        return;
+      }
+
+      pendingBuffer = false;
       bufferWidth = nextWidth;
       bufferHeight = nextHeight;
-      appliedDpr = nextDpr;
+      appliedCssWidth = cssWidth;
+      appliedCssHeight = cssHeight;
+      appliedScaleX = scaleX;
+      appliedScaleY = scaleY;
 
       canvas.width = nextWidth;
       canvas.height = nextHeight;
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      ctxRef.current?.setTransform(nextDpr, 0, 0, nextDpr, 0, 0);
-      drawStaticFrame();
+      canvas.style.width = `${cssWidth}px`;
+      canvas.style.height = `${cssHeight}px`;
+      context.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+      paintPausedBuffer(currentReason);
     }
 
-    // --- DPR monitoring (e.g. user drags window between monitors) ---
-
-    const unsubDpr: () => void = subscribeDpr((newDpr) => {
-      dpr = newDpr;
-      // The cached physical box belongs to the previous density; fall back to
-      // width * dpr until ResizeObserver reports fresh physical pixels.
+    const unsubDpr: () => void = subscribeDpr((nextDpr) => {
+      dpr = nextDpr;
       physicalWidth = 0;
       physicalHeight = 0;
-      applySize(sizeRef.current.width, sizeRef.current.height);
+      applySize();
     });
 
-    // --- Resize via shared RO pool ---
-
     const unobserve: () => void = observeResize(container, (entry) => {
-      const box = entry.contentBoxSize[0];
+      const box: ResizeObserverSize | undefined = entry.contentBoxSize[0];
       if (!box) return;
       const physicalBox: ResizeObserverSize | undefined =
         entry.devicePixelContentBoxSize?.[0];
+      cssWidth = box.inlineSize;
+      cssHeight = box.blockSize;
       physicalWidth = physicalBox ? physicalBox.inlineSize : 0;
       physicalHeight = physicalBox ? physicalBox.blockSize : 0;
-      applySize(box.inlineSize, box.blockSize);
+      applySize();
     });
-
-    // --- GPU context loss recovery ---
 
     function onContextLost(event: Event): void {
       event.preventDefault();
@@ -262,93 +293,93 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
     }
 
     function onContextRestored(): void {
-      const restoredCtx: CanvasRenderingContext2D | null =
-        canvas.getContext('2d');
-      if (!restoredCtx) return;
-      ctxRef.current = restoredCtx;
+      context = canvas.getContext('2d');
+      if (!context) return;
       contextLost = false;
-      // The bitmap and context state were lost; force a full re-apply even
-      // when the computed dimensions are unchanged.
-      bufferWidth = 0;
-      bufferHeight = 0;
-      appliedDpr = 0;
-      applySize(sizeRef.current.width, sizeRef.current.height);
+      applySize(true);
     }
 
     canvas.addEventListener('contextlost', onContextLost);
     canvas.addEventListener('contextrestored', onContextRestored);
 
-    // --- Animation loop ---
+    let loop: ReturnType<typeof createLoop> | null = null;
 
-    const loop = createLoop({
-      element: container,
-      fps,
-      reducedMotion,
-      unfocused,
-      frameBudget,
-      throttleFps,
-      intersectionOptions,
-      onTick: (frame) => {
-        if (contextLost || !ctxRef.current) return;
-        drawRef.current(ctxRef.current, frame, sizeRef.current);
-      },
-      onPhaseChange: (phase, reason) => {
-        setState({ phase, phaseReason: reason });
-      },
-      onQualityChange: (quality, qualityReason, qualityBehavior) => {
-        qualityRef.current = quality;
-        qualityReasonRef.current = qualityReason;
-        qualityBehaviorRef.current = qualityBehavior;
-        onQualityChangeRef.current?.(quality, qualityReason, qualityBehavior);
-        // Buffer resolution follows the resolved behavior (throttle = 1x).
-        applySize(sizeRef.current.width, sizeRef.current.height);
-      },
-    });
-    loopInstance = loop;
-
-    // --- Teardown ---
-
-    function teardown(): void {
-      loop.stop();
-      loopInstance = null;
+    function cleanupResources(): void {
+      loop?.stop();
+      loop = null;
       unobserve();
       unsubDpr();
       canvas.removeEventListener('contextlost', onContextLost);
       canvas.removeEventListener('contextrestored', onContextRestored);
     }
 
-    return teardown;
+    try {
+      loop = createLoop({
+        element: container,
+        fps,
+        reducedMotion,
+        unfocused,
+        slowFrames,
+        throttleFps,
+        intersectionOptions,
+        onTick: (frame) => {
+          if (contextLost || !context) return;
+          repaintFrame.time = frame.time;
+          repaintFrame.delta = frame.delta;
+          repaintFrame.elapsed = frame.elapsed;
+          repaintFrame.frame = frame.frame;
+          hasDrawnFrame = true;
+          drawRef.current(context, frame, size);
+        },
+        onPhaseChange: (phase, reason) => {
+          currentPhase = phase;
+          currentReason = reason;
+          visible = reason !== 'sight';
+          setState({ phase, phaseReason: reason });
+          const hadPendingBuffer: boolean = pendingBuffer;
+          if (visible && hadPendingBuffer) applySize();
+          if (phase === 'paused' && !hadPendingBuffer) {
+            paintPausedBuffer(reason);
+          }
+        },
+        onQualityChange: (nextQuality) => {
+          qualityRef.current = nextQuality;
+          if (!transientQuality) setQuality(nextQuality);
+          applySize();
+          onQualityChangeRef.current?.(nextQuality);
+        },
+      });
+    } catch (error) {
+      cleanupResources();
+      throw error;
+    }
+
+    return cleanupResources;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    container,
+    canvas,
     enabled,
     fps,
     reducedMotion,
     unfocused,
-    frameBudget,
+    slowFrames,
     throttleFps,
     intersectionRoot,
     intersectionRootMargin,
     intersectionThresholdKey,
+    pixelRatio,
     restartNonce,
   ]);
 
-  // Restart bumps a nonce so the effect re-runs: it tears down the current
-  // loop + observers and rebuilds them on the next cycle.
   const restart = useCallback(() => {
-    setRestartNonce((n) => n + 1);
+    setRestartNonce((nonce) => nonce + 1);
   }, []);
 
-  return {
+  const base: UseCanvasBaseResult = {
     restart,
     ...state,
-    get quality() {
-      return qualityRef.current;
-    },
-    get qualityReason() {
-      return qualityReasonRef.current;
-    },
-    get qualityBehavior() {
-      return qualityBehaviorRef.current;
-    },
+    qualityRef,
   };
+  return transientQuality ? base : { ...base, quality };
 }

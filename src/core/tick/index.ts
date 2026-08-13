@@ -1,5 +1,15 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { serverContextError, tickerStoppedError } from '../_internal/errors';
+import {
+  invalidFpsError,
+  serverContextError,
+  tickerStoppedError,
+} from '../_internal/errors';
+import {
+  createFrameSubscription,
+  joinSharedFrame,
+  leaveSharedFrame,
+} from '../_internal/frame-clock';
+import type { FrameSubscription } from '../_internal/frame-clock';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -7,14 +17,18 @@ import { serverContextError, tickerStoppedError } from '../_internal/errors';
 
 export interface FrameState {
   /** Current timestamp from performance.now(). */
-  time: number;
+  readonly time: number;
   /** Milliseconds since last tick, clamped to 40ms. */
-  delta: number;
+  readonly delta: number;
   /** Milliseconds since start, excluding paused time. */
-  elapsed: number;
+  readonly elapsed: number;
   /** Frame count since start. */
-  frame: number;
+  readonly frame: number;
 }
+
+type MutableFrameState = {
+  -readonly [Key in keyof FrameState]: FrameState[Key];
+};
 
 export type TickerPhase = 'idle' | 'running' | 'paused' | 'stopped';
 export type TickerReason =
@@ -62,53 +76,20 @@ const MAX_DELTA_MS = 40;
 const DEFAULT_FIRST_DELTA_MS = 16.67;
 
 // ---------------------------------------------------------------------------
-// Shared frame-locked clock
-//
-// All ticker instances subscribe to a single rAF loop so they read the same
-// timestamp each frame. This prevents visual desync between multiple loops
-// on the same page. The clock starts when the first subscriber joins and
-// stops when the last one leaves.
-// ---------------------------------------------------------------------------
-
-let sharedTime = 0;
-let sharedRafId = 0;
-const sharedSubscribers = new Set<() => void>();
-
-function sharedTick(): void {
-  sharedTime = performance.now();
-  for (const callback of sharedSubscribers) callback();
-  if (sharedSubscribers.size > 0) {
-    sharedRafId = requestAnimationFrame(sharedTick);
-  }
-}
-
-function joinSharedClock(callback: () => void): () => void {
-  const wasEmpty: boolean = sharedSubscribers.size === 0;
-  sharedSubscribers.add(callback);
-
-  if (wasEmpty) {
-    sharedTime = performance.now();
-    sharedRafId = requestAnimationFrame(sharedTick);
-  }
-
-  return () => {
-    sharedSubscribers.delete(callback);
-    if (sharedSubscribers.size === 0 && sharedRafId) {
-      cancelAnimationFrame(sharedRafId);
-      sharedRafId = 0;
-    }
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function resetFrameState(state: FrameState): void {
+function resetFrameState(state: MutableFrameState): void {
   state.time = 0;
   state.delta = 0;
   state.elapsed = 0;
   state.frame = 0;
+}
+
+function getMinFrameTime(fn: string, fps: number | undefined): number {
+  if (fps === undefined) return 0;
+  if (!Number.isFinite(fps) || fps <= 0) invalidFpsError(fn, fps);
+  return 1000 / fps;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,37 +109,57 @@ export function createTicker(options: TickerOptions): Ticker {
   }
 
   const { onTick, fps, signal } = options;
-  let minFrameTime: number = fps ? 1000 / fps : 0;
+  let minFrameTime: number = getMinFrameTime('createTicker', fps);
 
   let _phase: TickerPhase = 'idle';
   let _reason: TickerReason = 'initial';
-  let leaveSharedClock: (() => void) | null = null;
 
   let lastTickTime = 0;
+  let nextTickTime = 0;
+  let hasTickTime = false;
+  let frameCount = 0;
   let pauseStartTime = 0;
   let totalPausedTime = 0;
   let startTime = 0;
 
   // Pre-allocated, mutated in place each frame — zero allocations per tick.
-  const frame: FrameState = { time: 0, delta: 0, elapsed: 0, frame: 0 };
+  const frame: MutableFrameState = {
+    time: 0,
+    delta: 0,
+    elapsed: 0,
+    frame: 0,
+  };
+  Object.seal(frame);
 
-  function tick(): void {
-    const now: number = sharedTime;
+  function tick(now: number): boolean {
+    if (hasTickTime && minFrameTime > 0 && now < nextTickTime) return false;
 
-    // FPS throttle: skip this frame if we're ahead of the target interval.
-    if (minFrameTime > 0 && now - lastTickTime < minFrameTime) return;
-
-    const rawDelta: number =
-      lastTickTime === 0 ? DEFAULT_FIRST_DELTA_MS : now - lastTickTime;
+    const rawDelta: number = hasTickTime
+      ? now - lastTickTime
+      : DEFAULT_FIRST_DELTA_MS;
+    hasTickTime = true;
     lastTickTime = now;
+
+    if (minFrameTime > 0) {
+      if (nextTickTime === 0) {
+        nextTickTime = now + minFrameTime;
+      } else {
+        const intervals: number =
+          Math.floor((now - nextTickTime) / minFrameTime) + 1;
+        nextTickTime += intervals * minFrameTime;
+      }
+    }
 
     frame.time = now;
     frame.delta = rawDelta > MAX_DELTA_MS ? MAX_DELTA_MS : rawDelta;
     frame.elapsed = now - startTime - totalPausedTime;
-    frame.frame++;
+    frame.frame = ++frameCount;
 
     onTick(frame);
+    return true;
   }
+
+  const subscription: FrameSubscription = createFrameSubscription(tick);
 
   function start(): void {
     if (_phase === 'running') return;
@@ -172,10 +173,13 @@ export function createTicker(options: TickerOptions): Ticker {
     _reason = 'started';
     startTime = performance.now();
     lastTickTime = 0;
+    nextTickTime = 0;
+    hasTickTime = false;
+    frameCount = 0;
     totalPausedTime = 0;
     resetFrameState(frame);
 
-    leaveSharedClock = joinSharedClock(tick);
+    joinSharedFrame(subscription);
   }
 
   function pause(): void {
@@ -186,8 +190,7 @@ export function createTicker(options: TickerOptions): Ticker {
     pauseStartTime = performance.now();
 
     // Strong pause: cancel rAF subscription entirely — zero CPU while paused.
-    leaveSharedClock?.();
-    leaveSharedClock = null;
+    leaveSharedFrame(subscription);
   }
 
   function resume(): void {
@@ -197,10 +200,12 @@ export function createTicker(options: TickerOptions): Ticker {
     totalPausedTime += performance.now() - pauseStartTime;
     // Reset so the first resumed tick gets a clean delta (not the pause gap).
     lastTickTime = 0;
+    nextTickTime = 0;
+    hasTickTime = false;
 
     _phase = 'running';
     _reason = 'resumed';
-    leaveSharedClock = joinSharedClock(tick);
+    joinSharedFrame(subscription);
   }
 
   function stop(): void {
@@ -209,12 +214,14 @@ export function createTicker(options: TickerOptions): Ticker {
     _phase = 'stopped';
     _reason = _reason === 'initial' ? 'disposed' : 'manual';
     unlinkAbort?.();
-    leaveSharedClock?.();
-    leaveSharedClock = null;
+    leaveSharedFrame(subscription);
   }
 
   function setFps(nextFps?: number): void {
-    minFrameTime = nextFps ? 1000 / nextFps : 0;
+    if (_phase === 'stopped') tickerStoppedError();
+    minFrameTime = getMinFrameTime('setFps', nextFps);
+    nextTickTime =
+      hasTickTime && minFrameTime > 0 ? lastTickTime + minFrameTime : 0;
   }
 
   // Declared before assignment because an already-aborted signal makes

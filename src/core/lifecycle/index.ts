@@ -110,9 +110,9 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
 
   /** Highest-priority active pause signal, or null when nothing should pause. */
   function pauseReason(): LifecycleReason | null {
+    if (!sightVisible) return 'sight';
     if (reducedMotionActive && reducedMotion === 'pause')
       return 'reduced-motion';
-    if (!sightVisible) return 'sight';
     if (manualPaused) return 'manual';
     return null;
   }
@@ -162,18 +162,25 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
   // --- Public API ---
 
   function start(): void {
-    if (_phase === 'stopped') return;
+    if (_phase === 'stopped' || intentStarted) return;
     intentStarted = true;
     reconcile();
   }
 
-  function stop(): void {
+  function dispose(notify: boolean): void {
     if (_phase === 'stopped') return;
+    _phase = 'stopped';
+    _reason = 'disposed';
+    intentStarted = false;
     unlinkAbort?.();
     sight.stop();
     unsubReducedMotion?.();
     unsubReducedMotion = null;
-    setPhase('stopped', 'disposed');
+    if (notify) onPhaseChange?.('stopped', 'disposed');
+  }
+
+  function stop(): void {
+    dispose(true);
   }
 
   function pause(): void {
@@ -189,10 +196,14 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
   }
 
   let unlinkAbort: (() => void) | undefined;
-  unlinkAbort = linkAbortSignal(signal, stop);
-
-  if (startMode === 'auto') {
-    start();
+  try {
+    unlinkAbort = linkAbortSignal(signal, stop);
+    if (startMode === 'auto') {
+      start();
+    }
+  } catch (error) {
+    dispose(false);
+    throw error;
   }
 
   return {

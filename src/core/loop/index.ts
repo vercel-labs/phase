@@ -1,28 +1,21 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { noElementError, serverContextError } from '../_internal/errors';
+import {
+  invalidFpsError,
+  noElementError,
+  serverContextError,
+} from '../_internal/errors';
+import {
+  readFramePressure,
+  subscribeFramePressure,
+} from '../_internal/frame-pressure';
+import type { FramePressureState } from '../_internal/frame-pressure';
+import { readFocus, subscribeFocus } from '../_internal/pool/focus';
 import { createLifecycle } from '../lifecycle';
+import type { Lifecycle } from '../lifecycle';
 import { createTicker } from '../tick';
 import type { FrameState, Ticker } from '../tick';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/**
- * Behavior under reduced motion. `'pause'` stops the loop entirely;
- * `'ignore'` keeps running. Loops have no defined end state, so there is no
- * `'complete'`; jump-to-target lives on `useTween`.
- */
 export type LoopReducedMotion = 'pause' | 'ignore';
-
-/**
- * Per-signal behavior when a quality signal is active.
- *
- * `'pause'` strongly pauses scheduling, `'throttle'` caps the ticker at
- * `throttleFps`, and `'ignore'` reports quality without changing execution.
- * When signals overlap, pause takes precedence over throttle, which takes
- * precedence over ignore.
- */
 export type DegradedBehavior = 'throttle' | 'pause' | 'ignore';
 
 export type LoopPhase = 'idle' | 'running' | 'paused' | 'stopped';
@@ -32,68 +25,70 @@ export type LoopReason =
   | 'resumed'
   | 'sight'
   | 'reduced-motion'
-  | 'degraded'
+  | 'unfocused'
+  | 'slow-frames'
   | 'disposed';
 
-/** Whether any quality signal is active, independent of its configured behavior. */
-export type Quality = 'full' | 'degraded';
-/** Active quality signal. Unfocused takes reporting priority when both are active. */
-export type DegradedReason = 'unfocused' | 'frame-budget';
+export type SlowFrameState = Exclude<FramePressureState, 'full'>;
 
-/** Called when quality, reporting-priority reason, or resolved behavior changes. */
-export type QualityChangeCallback = (
-  quality: Quality,
-  reason: DegradedReason | undefined,
-  behavior: DegradedBehavior | undefined,
-) => void;
+export type QualityAction =
+  | { readonly behavior: 'pause' }
+  | { readonly behavior: 'ignore' }
+  | { readonly behavior: 'throttle'; readonly fps: number };
+
+interface FullQualitySignals {
+  readonly unfocused: false;
+  readonly slowFrames: undefined;
+}
+
+type ActiveQualitySignals =
+  | { readonly unfocused: true; readonly slowFrames: undefined }
+  | { readonly unfocused: false; readonly slowFrames: SlowFrameState }
+  | { readonly unfocused: true; readonly slowFrames: SlowFrameState };
+
+export type LoopQuality =
+  | {
+      readonly status: 'full';
+      readonly signals: FullQualitySignals;
+      readonly action: undefined;
+    }
+  | {
+      readonly status: 'degraded';
+      readonly signals: ActiveQualitySignals;
+      readonly action: QualityAction;
+    };
+
+export type QualityChangeCallback = (quality: LoopQuality) => void;
 
 export interface LoopOptions {
   element: Element;
   /**
-   * Called every frame. Write to refs or DOM directly. Never call React
-   * `setState` here (60 calls/sec = 60 re-renders/sec).
+   * Called every delivered frame. Write to refs or DOM directly. Never call
+   * React `setState` here.
    */
   onTick: (frame: FrameState) => void;
-  /**
-   * Base FPS cap. Default: uncapped (display refresh rate). Values that are
-   * not positive and finite are treated as uncapped.
-   */
+  /** Base FPS cap. Must be finite and positive. Default: display refresh rate. */
   fps?: number;
   /** Behavior when the user prefers reduced motion. Default `'pause'`. */
   reducedMotion?: LoopReducedMotion;
-  /**
-   * Behavior while `document.hasFocus()` is false. Default `'pause'`.
-   * Document/viewport visibility is separate and always strongly pauses.
-   */
+  /** Behavior while `document.hasFocus()` is false. Default `'pause'`. */
   unfocused?: DegradedBehavior;
   /**
-   * Behavior after three consecutive delivered frames arrive more than 1.5x
-   * the current target interval apart (25ms at 60fps). Default `'throttle'`.
+   * Behavior when the shared rAF clock detects sustained frame pressure.
+   * Default `'throttle'`.
    */
-  frameBudget?: DegradedBehavior;
-  /**
-   * Shared FPS cap while any active signal resolves to `'throttle'`.
-   * Never raises a lower `fps` cap. Default `30`.
-   */
+  slowFrames?: DegradedBehavior;
+  /** FPS cap used by a resolved throttle action. Default `30`. */
   throttleFps?: number;
   /** Options forwarded to the pooled visibility observer. */
   intersectionOptions?: IntersectionObserverInit;
   /** Whether to start honoring signals immediately. Default `'auto'`. */
   start?: 'auto' | 'manual';
-  /**
-   * Called on every loop phase or phase-reason transition. With the default
-   * `start: 'auto'` the first transition fires synchronously during
-   * `createLoop`, before it returns, so do not reference the loop instance
-   * from this callback without guarding for it.
-   */
+  /** Called after every completed phase transition. */
   onPhaseChange?: (phase: LoopPhase, reason: LoopReason) => void;
-  /**
-   * Called when quality, reporting-priority reason, or resolved behavior
-   * changes. Fires synchronously during `createLoop` when the window is
-   * already unfocused (see `onPhaseChange` for the instance caveat).
-   */
+  /** Called after every completed quality transition. */
   onQualityChange?: QualityChangeCallback;
-  /** Abort signal that stops the loop when aborted. */
+  /** Abort signal that stops the loop. */
   signal?: AbortSignal;
 }
 
@@ -102,59 +97,37 @@ export interface Loop {
   stop(): void;
   readonly phase: LoopPhase;
   readonly phaseReason: LoopReason;
-  /** Current quality signal state, independent of pause/throttle/ignore behavior. */
-  readonly quality: Quality;
-  /** Active signal; `'unfocused'` has reporting priority when both are active. */
-  readonly qualityReason: DegradedReason | undefined;
-  /** Resolved behavior after applying pause > throttle > ignore precedence. */
-  readonly qualityBehavior: DegradedBehavior | undefined;
+  readonly quality: LoopQuality;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/** How many consecutive over-budget frames before degrading quality. */
-const OVER_BUDGET_THRESHOLD = 3;
-
-/** Default FPS cap while a quality signal resolves to `'throttle'`. */
 const DEFAULT_THROTTLE_FPS = 30;
 
-/**
- * A frame-budget degrade cannot clear itself: pause stops measuring entirely,
- * and throttle widens the delivered gaps to match the cap. After this delay
- * the loop optimistically restores full speed and re-measures; sustained jank
- * re-trips the threshold within a few frames and reschedules.
- */
-const RECOVERY_RETRY_MS = 2000;
+const FULL_SIGNALS: FullQualitySignals = Object.freeze({
+  unfocused: false,
+  slowFrames: undefined,
+});
 
-// ---------------------------------------------------------------------------
-// createLoop
-// ---------------------------------------------------------------------------
+const FULL_QUALITY: LoopQuality = Object.freeze({
+  status: 'full',
+  signals: FULL_SIGNALS,
+  action: undefined,
+});
+
+function validateFps(
+  fn: string,
+  value: number | undefined,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value <= 0) invalidFpsError(fn, value);
+  return value;
+}
 
 /**
- * Lifecycle-aware animation loop composing ticker, visibility, and reduced motion.
+ * Lifecycle-aware animation loop with one persistent, pause-aware ticker.
  *
- * Pass an element and get a loop that pauses when the element leaves the
- * viewport or the tab is backgrounded (always), applies configurable behavior
- * when the window loses focus (`unfocused`, default pause: blur freezes the
- * timeline, refocus resumes in place) or frames exceed budget (`frameBudget`,
- * default throttle), and cleans up with `stop()`.
- *
- * @remarks
- * The loop is signal-driven and exposes only `start()` and `stop()`. There is no
- * imperative `pause()`/`resume()`. Pausing is decided by visibility, reduced
- * motion, and quality, so an imperative pause would compete with those signals.
- * For manual control, use `useLoop`'s `enabled` option (React) or `createLifecycle`,
- * which exposes `pause()`/`resume()` for loops you drive yourself.
- *
- * @example
- * const loop = createLoop({
- *   element: el,
- *   onTick: (frame) => draw(ctx, frame),
- * });
- * // cleanup:
- * loop.stop();
+ * Visibility and reduced motion are lifecycle signals. Window focus and shared
+ * frame pressure are independent quality signals whose actions compose with
+ * pause > throttle > ignore precedence.
  */
 export function createLoop(options: LoopOptions): Loop {
   if (typeof requestAnimationFrame === 'undefined') {
@@ -164,11 +137,9 @@ export function createLoop(options: LoopOptions): Loop {
   const {
     element,
     onTick,
-    fps: baseFps,
     reducedMotion = 'pause',
     unfocused = 'pause',
-    frameBudget = 'throttle',
-    throttleFps = DEFAULT_THROTTLE_FPS,
+    slowFrames = 'throttle',
     intersectionOptions,
     start: startMode = 'auto',
     onPhaseChange,
@@ -178,47 +149,25 @@ export function createLoop(options: LoopOptions): Loop {
 
   if (!element) noElementError('createLoop');
 
-  // --- State ---
+  const baseFps: number | undefined = validateFps('createLoop', options.fps);
+  const throttleFps: number = validateFps(
+    'createLoop',
+    options.throttleFps ?? DEFAULT_THROTTLE_FPS,
+  ) as number;
 
   let _phase: LoopPhase = 'idle';
   let _reason: LoopReason = 'initial';
-  let _quality: Quality = 'full';
-  let _qualityReason: DegradedReason | undefined;
-  let _qualityBehavior: DegradedBehavior | undefined;
-
+  let _quality: LoopQuality = FULL_QUALITY;
   let intentStarted = false;
-
-  // One persistent ticker owns the timeline (FrameState, elapsed, delta
-  // clamping, pause exclusion). Quality changes mutate its FPS gate in place
-  // via setFps, so the consumer timeline never resets or skews.
+  let focusDegraded = !readFocus();
+  let pressureState: FramePressureState = readFramePressure();
   let ticker: Ticker | null = null;
-
-  // --- Quality signals ---
-  //
-  // Each signal is explicit state resolved through its configured behavior.
-  // Quality, reporting-priority reason, and resolved behavior stay observable
-  // (even for 'ignore') so consumers can adapt.
-
-  let focusDegraded = false;
-  let budgetDegraded = false;
-  let overBudgetCount = 0;
-
-  // Frame-budget measurement: raw gap between delivered frames against 1.5x
-  // the current target interval. 0 = no previous frame (start, resume, or an
-  // fps change), so pause gaps and cross-cadence gaps never count as jank.
-  let lastBudgetTime = 0;
-  let budgetThreshold = 0;
-
-  // The fps currently applied to the ticker, tracked so an unchanged value
-  // skips the (measurement-resetting) re-apply. `undefined` is a real value
-  // here (uncapped), so a separate flag marks "never applied".
+  let lifecycle: Lifecycle | null = null;
   let appliedFps: number | undefined;
   let hasAppliedFps = false;
-
-  // Pending optimistic frame-budget recovery timer (see RECOVERY_RETRY_MS).
-  let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // --- State transitions ---
+  let unlinkAbort: (() => void) | undefined;
+  let unsubFocus: (() => void) | null = null;
+  let unsubPressure: (() => void) | null = null;
 
   function setPhase(phase: LoopPhase, reason: LoopReason): void {
     if (_phase === phase && _reason === reason) return;
@@ -227,230 +176,181 @@ export function createLoop(options: LoopOptions): Loop {
     onPhaseChange?.(phase, reason);
   }
 
-  function setQuality(
-    quality: Quality,
-    reason: DegradedReason | undefined,
-    behavior: DegradedBehavior | undefined,
-  ): void {
-    if (
-      _quality === quality &&
-      _qualityReason === reason &&
-      _qualityBehavior === behavior
-    ) {
-      return;
-    }
-    _quality = quality;
-    _qualityReason = reason;
-    _qualityBehavior = behavior;
-    onQualityChange?.(quality, reason, behavior);
-  }
-
-  function getQualityBehavior(): DegradedBehavior | undefined {
-    const focusBehavior: DegradedBehavior | undefined = focusDegraded
-      ? unfocused
-      : undefined;
-    const budgetBehavior: DegradedBehavior | undefined = budgetDegraded
-      ? frameBudget
-      : undefined;
-    if (focusBehavior === 'pause' || budgetBehavior === 'pause') return 'pause';
-    if (focusBehavior === 'throttle' || budgetBehavior === 'throttle') {
-      return 'throttle';
-    }
-    if (focusBehavior === 'ignore' || budgetBehavior === 'ignore')
-      return 'ignore';
+  function getSlowFrameBehavior(): DegradedBehavior | undefined {
+    if (pressureState === 'degraded') return slowFrames;
+    if (pressureState === 'probing') return 'ignore';
     return undefined;
   }
 
-  /**
-   * Re-evaluate quality signals, then reconcile phase and ticker fps. Pause
-   * wins over throttle wins over ignore when multiple signals are active.
-   */
-  function reconcileQuality(): void {
-    if (_phase === 'stopped') return;
+  function getResolvedBehavior(): DegradedBehavior | undefined {
+    const focusBehavior: DegradedBehavior | undefined = focusDegraded
+      ? unfocused
+      : undefined;
+    const pressureBehavior: DegradedBehavior | undefined =
+      getSlowFrameBehavior();
 
-    if (focusDegraded) {
-      setQuality('degraded', 'unfocused', getQualityBehavior());
-    } else if (budgetDegraded) {
-      setQuality('degraded', 'frame-budget', getQualityBehavior());
-    } else {
-      setQuality('full', undefined, undefined);
+    if (focusBehavior === 'pause' || pressureBehavior === 'pause')
+      return 'pause';
+    if (focusBehavior === 'throttle' || pressureBehavior === 'throttle') {
+      return 'throttle';
     }
-
-    reconcile();
-    applyEffectiveFps();
+    if (focusBehavior === 'ignore' || pressureBehavior === 'ignore') {
+      return 'ignore';
+    }
+    return undefined;
   }
 
-  /**
-   * Optimistically clear a frame-budget degrade and re-measure at full speed.
-   * If frames are still over budget, the next degrade reschedules this.
-   */
-  function scheduleBudgetRecovery(): void {
-    if (recoveryTimer !== null || _phase === 'stopped') return;
-    recoveryTimer = setTimeout(() => {
-      recoveryTimer = null;
-      budgetDegraded = false;
-      overBudgetCount = 0;
-      reconcileQuality();
-    }, RECOVERY_RETRY_MS);
+  function getEffectiveFps(
+    behavior: DegradedBehavior | undefined,
+  ): number | undefined {
+    if (behavior !== 'throttle') return baseFps;
+    return baseFps === undefined ? throttleFps : Math.min(baseFps, throttleFps);
   }
 
-  function clearBudgetRecovery(): void {
-    if (recoveryTimer === null) return;
-    clearTimeout(recoveryTimer);
-    recoveryTimer = null;
+  function createQuality(behavior: DegradedBehavior | undefined): LoopQuality {
+    const slowFrameState: SlowFrameState | undefined =
+      pressureState === 'full' ? undefined : pressureState;
+    if (!focusDegraded && slowFrameState === undefined) return FULL_QUALITY;
+
+    const signals: ActiveQualitySignals = Object.freeze({
+      unfocused: focusDegraded,
+      slowFrames: slowFrameState,
+    }) as ActiveQualitySignals;
+    const action: QualityAction =
+      behavior === 'throttle'
+        ? Object.freeze({
+            behavior,
+            fps: getEffectiveFps(behavior) as number,
+          })
+        : Object.freeze({ behavior: behavior as 'pause' | 'ignore' });
+
+    return Object.freeze({ status: 'degraded', signals, action });
   }
 
-  // --- Ticker control ---
-
-  function getEffectiveFps(): number | undefined {
-    if (_qualityBehavior !== 'throttle') return baseFps;
-    if (baseFps === undefined) return throttleFps;
-    return Math.min(baseFps, throttleFps);
+  function qualityChanged(next: LoopQuality): boolean {
+    return (
+      _quality.status !== next.status ||
+      _quality.signals.unfocused !== next.signals.unfocused ||
+      _quality.signals.slowFrames !== next.signals.slowFrames ||
+      _quality.action?.behavior !== next.action?.behavior ||
+      (_quality.action?.behavior === 'throttle' &&
+        next.action?.behavior === 'throttle' &&
+        _quality.action.fps !== next.action.fps)
+    );
   }
 
-  /**
-   * Sync the ticker's FPS gate and the budget threshold to the resolved fps.
-   * A non-positive or non-finite `fps` leaves the ticker uncapped, so the
-   * threshold falls back to the 60fps budget rather than becoming Infinity,
-   * negative, or NaN (which would disable or constantly trip detection).
-   */
-  function applyEffectiveFps(): void {
-    const fps: number | undefined = getEffectiveFps();
+  function applyEffectiveFps(behavior: DegradedBehavior | undefined): void {
+    const fps: number | undefined = getEffectiveFps(behavior);
     if (hasAppliedFps && fps === appliedFps) return;
     hasAppliedFps = true;
     appliedFps = fps;
-
-    budgetThreshold = 1500 / (fps !== undefined && fps > 0 ? fps : 60);
-    // A gap produced under the previous cadence must not be measured against
-    // the new threshold; start measuring fresh from the next delivered frame.
-    lastBudgetTime = 0;
-    overBudgetCount = 0;
     ticker?.setFps(fps);
   }
 
-  function checkFrameBudget(now: number): void {
-    const last: number = lastBudgetTime;
-    lastBudgetTime = now;
-    if (last === 0) return; // first delivered frame since start/resume
-
-    if (now - last <= budgetThreshold) {
-      overBudgetCount = 0;
-      return;
-    }
-
-    overBudgetCount++;
-    if (budgetDegraded || overBudgetCount < OVER_BUDGET_THRESHOLD) return;
-
-    budgetDegraded = true;
-    reconcileQuality();
-    scheduleBudgetRecovery();
-  }
-
-  // The one frame callback, created once for the life of the loop. Forwards
-  // the ticker-owned frame after measuring the budget from raw frame gaps
-  // (the clamped delta would hide jank at low fps caps).
-  function loopTick(frame: FrameState): void {
-    checkFrameBudget(frame.time);
-    // A budget degrade may have paused or stopped the loop synchronously.
-    if (_phase !== 'running') return;
-    onTick(frame);
-  }
-
-  // --- Reconcile ---
-
-  /** Check if any signal requires the loop to be paused. */
-  function shouldPause(): LoopReason | null {
-    // Visibility + reduced motion are owned by the lifecycle; its paused reasons
-    // ('sight' | 'reduced-motion') are a subset of LoopReason.
-    if (lifecycle.phase === 'paused')
+  function pauseReason(): LoopReason | null {
+    if (lifecycle?.phase === 'paused') {
       return lifecycle.phaseReason as LoopReason;
-    // Quality-driven pause stays here — it needs the ticker's frame timing.
-    if (_qualityBehavior === 'pause') return 'degraded';
-    return null;
+    }
+    if (_quality.action?.behavior !== 'pause') return null;
+    if (focusDegraded && unfocused === 'pause') return 'unfocused';
+    return 'slow-frames';
   }
 
-  /** Evaluate all signals and transition to the correct phase. */
   function reconcile(): void {
-    if (_phase === 'stopped' || !intentStarted) return;
+    if (_phase === 'stopped' || !intentStarted || lifecycle === null) return;
 
-    const pauseReason = shouldPause();
-
-    if (pauseReason) {
-      if (ticker && _phase === 'running') ticker.pause();
-      setPhase('paused', pauseReason);
+    const reason: LoopReason | null = pauseReason();
+    if (reason !== null) {
+      if (ticker !== null && _phase === 'running') ticker.pause();
+      setPhase('paused', reason);
       return;
     }
 
-    if (!ticker) {
-      // First activation: stop() is terminal, so this runs once per loop.
-      applyEffectiveFps(); // resolves appliedFps + budget threshold
-      ticker = createTicker({ fps: appliedFps, onTick: loopTick });
+    if (ticker === null) {
+      ticker = createTicker({ fps: appliedFps, onTick });
       ticker.start();
       setPhase('running', _reason === 'initial' ? 'started' : 'resumed');
-    } else if (_phase === 'paused') {
-      // The ticker excludes paused time and resets its own delta; the budget
-      // measurement starts fresh so neither the pause gap nor a stale
-      // consecutive count carries across the pause.
-      lastBudgetTime = 0;
-      overBudgetCount = 0;
+      return;
+    }
+
+    if (_phase === 'paused') {
       ticker.resume();
       setPhase('running', 'resumed');
     }
   }
 
-  // --- Signal handlers ---
+  function reconcileQuality(): void {
+    if (_phase === 'stopped') return;
 
-  function onFocusChange(): void {
-    focusDegraded = !document.hasFocus();
-    reconcileQuality();
+    const behavior: DegradedBehavior | undefined = getResolvedBehavior();
+    const nextQuality: LoopQuality = createQuality(behavior);
+    const changed: boolean = qualityChanged(nextQuality);
+    if (changed) _quality = nextQuality;
+
+    // Internal execution is coherent before either external callback runs.
+    applyEffectiveFps(behavior);
+    reconcile();
+    if (changed && _phase !== 'stopped') onQualityChange?.(nextQuality);
   }
 
-  // --- Init subsystems ---
+  function onFocusChange(focused: boolean): void {
+    focusDegraded = !focused;
+    if (intentStarted) reconcileQuality();
+  }
 
-  // Lifecycle owns the visibility + reduced-motion decision. The loop layers
-  // the ticker and quality (frame-budget / focus) on top. Driven manually so
-  // it only activates once the loop itself starts.
-  const lifecycle = createLifecycle({
-    element,
-    reducedMotion,
-    intersectionOptions,
-    start: 'manual',
-    onPhaseChange: reconcile,
-  });
-
-  const unsubFocus: () => void = subscribeFocusTracking(onFocusChange);
-  focusDegraded = !document.hasFocus();
-  if (focusDegraded) reconcileQuality();
-
-  // --- Public API ---
+  function onPressureChange(next: FramePressureState): void {
+    pressureState = next;
+    if (intentStarted) reconcileQuality();
+  }
 
   function start(): void {
-    if (_phase === 'stopped') return;
+    if (_phase === 'stopped' || intentStarted) return;
     intentStarted = true;
-    lifecycle.start();
+    reconcileQuality();
+    lifecycle?.start();
     reconcile();
   }
 
-  function stop(): void {
+  function dispose(notify: boolean): void {
     if (_phase === 'stopped') return;
+
+    _phase = 'stopped';
+    _reason = 'disposed';
+    intentStarted = false;
     unlinkAbort?.();
-    clearBudgetRecovery();
-    // Transition first: teardown below fires callbacks (lifecycle onPhaseChange
-    // re-enters reconcile), and the stopped guard must already hold.
-    setPhase('stopped', 'disposed');
+    unlinkAbort = undefined;
     ticker?.stop();
     ticker = null;
-    lifecycle.stop();
-    unsubFocus();
+    lifecycle?.stop();
+    unsubFocus?.();
+    unsubFocus = null;
+    unsubPressure?.();
+    unsubPressure = null;
+
+    if (notify) onPhaseChange?.('stopped', 'disposed');
   }
 
-  // Declared before assignment because an already-aborted signal makes
-  // linkAbortSignal call stop() synchronously, which reads unlinkAbort.
-  let unlinkAbort: (() => void) | undefined;
-  unlinkAbort = linkAbortSignal(signal, stop);
+  function stop(): void {
+    dispose(true);
+  }
 
-  if (startMode === 'auto') {
-    start();
+  try {
+    lifecycle = createLifecycle({
+      element,
+      reducedMotion,
+      intersectionOptions,
+      start: 'manual',
+      onPhaseChange: reconcile,
+    });
+    unsubFocus = subscribeFocus(onFocusChange);
+    unsubPressure = subscribeFramePressure(onPressureChange);
+    pressureState = readFramePressure();
+    unlinkAbort = linkAbortSignal(signal, stop);
+
+    if (startMode === 'auto') start();
+  } catch (error) {
+    dispose(false);
+    throw error;
   }
 
   return {
@@ -465,24 +365,5 @@ export function createLoop(options: LoopOptions): Loop {
     get quality() {
       return _quality;
     },
-    get qualityReason() {
-      return _qualityReason;
-    },
-    get qualityBehavior() {
-      return _qualityBehavior;
-    },
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-function subscribeFocusTracking(onChange: () => void): () => void {
-  window.addEventListener('focus', onChange);
-  window.addEventListener('blur', onChange);
-  return () => {
-    window.removeEventListener('focus', onChange);
-    window.removeEventListener('blur', onChange);
   };
 }

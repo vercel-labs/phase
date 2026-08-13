@@ -32,15 +32,22 @@ export { Defer } from './defer';
 export { Swap } from './swap';
 
 // Types
-export type { LoopTickFn, UseLoopOptions, UseLoopResult } from './use-loop';
+export type {
+  LoopTickFn,
+  UseLoopOptions,
+  UseLoopReactiveResult,
+  UseLoopResult,
+  UseLoopTransientResult,
+} from './use-loop';
 export type {
   DegradedBehavior,
-  DegradedReason,
   LoopPhase,
+  LoopQuality,
   LoopReason,
   LoopReducedMotion,
-  Quality,
+  QualityAction,
   QualityChangeCallback,
+  SlowFrameState,
 } from '../core/loop';
 export type { UseLifecycleOptions, UseLifecycleResult } from './use-lifecycle';
 export type {
@@ -80,7 +87,9 @@ export type { IdleOptions } from './use-idle';
 export type {
   CanvasDrawFn,
   UseCanvasOptions,
+  UseCanvasReactiveResult,
   UseCanvasResult,
+  UseCanvasTransientResult,
 } from './use-canvas';
 export type {
   MutationRecordsCallback,

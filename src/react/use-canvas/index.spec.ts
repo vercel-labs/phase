@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 import { createMockMatchMedia } from '../../__mocks__/match-media';
 import { createMockResizeObserver } from '../../__mocks__/resize-observer';
+import type { FrameState } from '../../core/tick';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 let mockMM: ReturnType<typeof createMockMatchMedia>;
@@ -31,73 +32,79 @@ afterEach(() => {
 });
 
 async function getHook() {
-  const mod = await import('.');
-  return mod.useCanvas;
+  return (await import('.')).useCanvas;
 }
 
 function createCanvasWithMockContext() {
   const canvas = document.createElement('canvas');
-  const mockCtx = {
+  const context = {
     setTransform: vi.fn(),
     clearRect: vi.fn(),
   } as unknown as CanvasRenderingContext2D;
-  vi.spyOn(canvas, 'getContext').mockReturnValue(mockCtx);
-  return { canvas, mockCtx };
+  vi.spyOn(canvas, 'getContext').mockReturnValue(context);
+  return { canvas, context };
 }
 
-describe('useCanvas', () => {
-  it('returns initial state with restart function', async () => {
+function setupManualRaf() {
+  let time = 0;
+  let offset = 0;
+  let nextId = 1;
+  const callbacks = new Map<number, FrameRequestCallback>();
+  const nowSpy = vi
+    .spyOn(performance, 'now')
+    .mockImplementation(() => time + offset);
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    vi.fn((callback: FrameRequestCallback): number => {
+      const id = nextId++;
+      callbacks.set(id, callback);
+      return id;
+    }),
+  );
+  vi.stubGlobal(
+    'cancelAnimationFrame',
+    vi.fn((id: number): void => {
+      callbacks.delete(id);
+    }),
+  );
+  return {
+    step(gap = 16, occupied = 0): void {
+      time += gap;
+      offset = occupied;
+      const current = Array.from(callbacks.values());
+      callbacks.clear();
+      for (const callback of current) callback(time);
+      offset = 0;
+    },
+    restore(): void {
+      nowSpy.mockRestore();
+    },
+  };
+}
+
+describe('useCanvas lifecycle', () => {
+  it('starts when late object refs receive their nodes', async () => {
     const useCanvas = await getHook();
-    const containerRef = { current: document.createElement('div') };
-    const { canvas } = createCanvasWithMockContext();
-    const canvasRef = { current: canvas };
-    const { result } = renderHook(() =>
+    const containerRef: { current: Element | null } = { current: null };
+    const canvasRef: { current: HTMLCanvasElement | null } = { current: null };
+    const { result, rerender } = renderHook(() =>
       useCanvas({ containerRef, canvasRef, draw: vi.fn() }),
     );
-    expect(result.current.phase).toBeDefined();
-    expect(typeof result.current.restart).toBe('function');
-  });
+    expect(result.current.phase).toBe('idle');
 
-  it('enabled=false does not throw', async () => {
-    const useCanvas = await getHook();
-    const containerRef = { current: document.createElement('div') };
-    const { canvas } = createCanvasWithMockContext();
-    const canvasRef = { current: canvas };
-    expect(() => {
-      renderHook(() =>
-        useCanvas({
-          containerRef,
-          canvasRef,
-          draw: vi.fn(),
-          enabled: false,
-        }),
-      );
-    }).not.toThrow();
-  });
-
-  it('null containerRef does not throw', async () => {
-    const useCanvas = await getHook();
-    const containerRef = { current: null };
-    const { canvas } = createCanvasWithMockContext();
-    const canvasRef = { current: canvas };
-    expect(() => {
-      renderHook(() => useCanvas({ containerRef, canvasRef, draw: vi.fn() }));
-    }).not.toThrow();
-  });
-
-  it('null canvasRef does not throw', async () => {
-    const useCanvas = await getHook();
-    const containerRef = { current: document.createElement('div') };
-    const canvasRef = { current: null };
-    expect(() => {
-      renderHook(() => useCanvas({ containerRef, canvasRef, draw: vi.fn() }));
-    }).not.toThrow();
-  });
-
-  it('recreates visibility observation when intersection values change', async () => {
-    const useCanvas = await getHook();
     const container = document.createElement('div');
-    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    containerRef.current = container;
+    canvasRef.current = canvas;
+    rerender();
+    act(() => mockIO.trigger(container, true));
+
+    expect(result.current.phase).toBe('running');
+  });
+
+  it('recreates visibility observation when option values change', async () => {
+    const useCanvas = await getHook();
+    const containerRef = { current: document.createElement('div') };
     const { canvas } = createCanvasWithMockContext();
     const canvasRef = { current: canvas };
     const { rerender } = renderHook(
@@ -110,61 +117,143 @@ describe('useCanvas', () => {
         }),
       { initialProps: { rootMargin: '10px' } },
     );
-    expect(mockIO.instances.at(-1)?.options?.rootMargin).toBe('10px');
 
     rerender({ rootMargin: '20px' });
     expect(mockIO.instances.at(-1)?.options?.rootMargin).toBe('20px');
   });
+
+  it('resets quality when restart creates a fresh loop', async () => {
+    const useCanvas = await getHook();
+    const hasFocus = vi.spyOn(document, 'hasFocus');
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+    const { result } = renderHook(() =>
+      useCanvas({
+        containerRef,
+        canvasRef,
+        draw: vi.fn(),
+        unfocused: 'ignore',
+      }),
+    );
+    act(() => {
+      mockIO.trigger(container, true);
+      hasFocus.mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+    });
+    expect(result.current.quality.status).toBe('degraded');
+
+    hasFocus.mockReturnValue(true);
+    act(() => result.current.restart());
+    expect(result.current.quality.status).toBe('full');
+  });
 });
 
-// ---------------------------------------------------------------------------
-// devicePixelContentBoxSize progressive enhancement
-// ---------------------------------------------------------------------------
-
-describe('devicePixelContentBoxSize', () => {
-  it('uses physical pixel dimensions when devicePixelContentBoxSize is available', async () => {
+describe('buffer sizing', () => {
+  it('uses exact physical pixels and axis-specific transforms', async () => {
     const useCanvas = await getHook();
     const container = document.createElement('div');
     const containerRef = { current: container };
-    const { canvas, mockCtx: _mockCtx } = createCanvasWithMockContext();
+    const { canvas, context } = createCanvasWithMockContext();
     const canvasRef = { current: canvas };
-
-    vi.stubGlobal('devicePixelRatio', 2);
-
     renderHook(() => useCanvas({ containerRef, canvasRef, draw: vi.fn() }));
+    act(() => mockIO.trigger(container, true));
 
-    // Trigger RO with physical size: CSS 375x667, physical 750x1334
+    mockRO.triggerWithPhysicalSize(container, 375, 667, 751, 1335);
+
+    expect(canvas.width).toBe(751);
+    expect(canvas.height).toBe(1335);
+    expect(context.setTransform).toHaveBeenLastCalledWith(
+      751 / 375,
+      0,
+      0,
+      1335 / 667,
+      0,
+      0,
+    );
+  });
+
+  it('rounds DPR fallback dimensions and skips identical writes', async () => {
+    const useCanvas = await getHook();
+    vi.stubGlobal('devicePixelRatio', 1.5);
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+    renderHook(() => useCanvas({ containerRef, canvasRef, draw: vi.fn() }));
+    act(() => mockIO.trigger(container, true));
+    const widthWrites = vi.spyOn(canvas, 'width', 'set');
+
+    mockRO.triggerWithoutPhysicalSize(container, 101, 50);
+    mockRO.triggerWithoutPhysicalSize(container, 101, 50);
+
+    expect(canvas.width).toBe(152);
+    expect(canvas.height).toBe(75);
+    expect(widthWrites).toHaveBeenCalledTimes(1);
+  });
+
+  it('focus throttling never implicitly lowers pixel ratio', async () => {
+    const useCanvas = await getHook();
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+    const { result } = renderHook(() =>
+      useCanvas({
+        containerRef,
+        canvasRef,
+        draw: vi.fn(),
+        unfocused: 'throttle',
+      }),
+    );
+    act(() => mockIO.trigger(container, true));
     mockRO.triggerWithPhysicalSize(container, 375, 667, 750, 1334);
 
+    act(() => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+    });
+
+    expect(result.current.quality.action?.behavior).toBe('throttle');
     expect(canvas.width).toBe(750);
     expect(canvas.height).toBe(1334);
   });
 
-  it('falls back to contentBoxSize * dpr when devicePixelContentBoxSize is absent', async () => {
+  it('adaptive mode stays low-resolution through probation', async () => {
+    const clock = setupManualRaf();
     const useCanvas = await getHook();
     const container = document.createElement('div');
     const containerRef = { current: container };
-    const { canvas, mockCtx: _mockCtx } = createCanvasWithMockContext();
+    const { canvas } = createCanvasWithMockContext();
     const canvasRef = { current: canvas };
+    const { result } = renderHook(() =>
+      useCanvas({ containerRef, canvasRef, draw: vi.fn() }),
+    );
+    act(() => mockIO.trigger(container, true));
+    mockRO.triggerWithPhysicalSize(container, 375, 667, 750, 1334);
 
-    vi.stubGlobal('devicePixelRatio', 2);
+    for (let index = 0; index < 9; index++) clock.step();
+    clock.step(16, 16);
+    clock.step(16, 16);
+    clock.step(16, 16);
+    expect(canvas.width).toBe(375);
 
-    renderHook(() => useCanvas({ containerRef, canvasRef, draw: vi.fn() }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(result.current.quality.signals.slowFrames).toBe('probing');
+    expect(canvas.width).toBe(375);
 
-    // Trigger RO without physical size (Safari path)
-    mockRO.triggerWithoutPhysicalSize(container, 375, 667);
-
+    for (let index = 0; index < 30; index++) clock.step(16, 1);
+    expect(result.current.quality.status).toBe('full');
     expect(canvas.width).toBe(750);
-    expect(canvas.height).toBe(1334);
+    clock.restore();
   });
 });
 
-// ---------------------------------------------------------------------------
-// Reduced-motion static paint
-// ---------------------------------------------------------------------------
-
-describe('reduced-motion static paint', () => {
-  it('paints one static frame per buffer creation instead of staying blank', async () => {
+describe('paused repaint behavior', () => {
+  it('defers reduced-motion static drawing until visible', async () => {
     const useCanvas = await getHook();
     mockMM.setMatches('(prefers-reduced-motion: reduce)', true);
     const container = document.createElement('div');
@@ -172,215 +261,80 @@ describe('reduced-motion static paint', () => {
     const { canvas } = createCanvasWithMockContext();
     const canvasRef = { current: canvas };
     const draw = vi.fn();
-
     const { result } = renderHook(() =>
       useCanvas({ containerRef, canvasRef, draw }),
     );
-    expect(result.current.phase).toBe('paused');
-    expect(result.current.phaseReason).toBe('reduced-motion');
+
+    mockRO.trigger(container, 300, 200);
+    expect(result.current.phaseReason).toBe('sight');
     expect(draw).not.toHaveBeenCalled();
 
-    // The first size delivery creates the buffer and paints the static frame.
-    mockRO.trigger(container, 300, 200);
+    act(() => mockIO.trigger(container, true));
+    expect(result.current.phaseReason).toBe('reduced-motion');
     expect(draw).toHaveBeenCalledTimes(1);
-    const [, frame, size] = draw.mock.calls[0] as [
-      unknown,
-      { elapsed: number; frame: number },
-      { width: number; height: number },
-    ];
-    expect(frame.elapsed).toBe(0);
-    expect(frame.frame).toBe(0);
-    expect(size).toEqual({ width: 300, height: 200 });
-
-    // The loop is strongly paused: time passing draws nothing.
-    act(() => {
-      vi.advanceTimersByTime(64);
-    });
-    expect(draw).toHaveBeenCalledTimes(1);
-
-    // A resize clears the bitmap, so the static frame repaints at the new
-    // size (previously this left the canvas blank).
-    mockRO.trigger(container, 400, 300);
-    expect(draw).toHaveBeenCalledTimes(2);
-    expect(draw.mock.calls[1]?.[2]).toEqual({ width: 400, height: 300 });
-
-    // A same-size report does not touch the buffer or repaint.
-    mockRO.trigger(container, 400, 300);
-    expect(draw).toHaveBeenCalledTimes(2);
+    expect(draw.mock.calls[0]?.[1]).toMatchObject({ elapsed: 0, frame: 0 });
   });
 
-  it('does not static-paint when reduced motion is inactive', async () => {
+  it('repaints the cached frame after resize while focus-paused', async () => {
+    const clock = setupManualRaf();
     const useCanvas = await getHook();
     const container = document.createElement('div');
     const containerRef = { current: container };
     const { canvas } = createCanvasWithMockContext();
     const canvasRef = { current: canvas };
     const draw = vi.fn();
-
     renderHook(() => useCanvas({ containerRef, canvasRef, draw }));
+    act(() => mockIO.trigger(container, true));
     mockRO.trigger(container, 300, 200);
-    expect(draw).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Buffer reallocation guards
-// ---------------------------------------------------------------------------
-
-describe('buffer reallocation', () => {
-  it('skips redundant buffer writes for unchanged dimensions', async () => {
-    const useCanvas = await getHook();
-    const container = document.createElement('div');
-    const containerRef = { current: container };
-    const { canvas } = createCanvasWithMockContext();
-    const canvasRef = { current: canvas };
-
-    vi.stubGlobal('devicePixelRatio', 1);
-
-    const { result } = renderHook(() =>
-      useCanvas({ containerRef, canvasRef, draw: vi.fn() }),
-    );
-    const widthSets = vi.spyOn(canvas, 'width', 'set');
-
-    mockRO.trigger(container, 100, 50);
-    expect(widthSets).toHaveBeenCalledTimes(1);
-
-    // Same dimensions again: assigning canvas.width clears the bitmap, so
-    // the write must be skipped entirely.
-    mockRO.trigger(container, 100, 50);
-    expect(widthSets).toHaveBeenCalledTimes(1);
-
-    // Phase transitions do not touch the buffer either.
-    act(() => {
-      mockIO.trigger(container, true);
-    });
-    expect(result.current.phase).toBe('running');
-    expect(widthSets).toHaveBeenCalledTimes(1);
-  });
-
-  it('preserves exact physical sizing across quality transitions', async () => {
-    const useCanvas = await getHook();
-    const container = document.createElement('div');
-    const containerRef = { current: container };
-    const { canvas } = createCanvasWithMockContext();
-    const canvasRef = { current: canvas };
-
-    vi.stubGlobal('devicePixelRatio', 2);
-
-    renderHook(() =>
-      useCanvas({
-        containerRef,
-        canvasRef,
-        draw: vi.fn(),
-        unfocused: 'throttle',
-      }),
-    );
-    act(() => {
-      mockIO.trigger(container, true);
-    });
-    // Physical box intentionally differs from width * dpr (751 vs 750).
-    mockRO.triggerWithPhysicalSize(container, 375, 667, 751, 1335);
-    expect(canvas.width).toBe(751);
-
-    const hasFocusSpy = vi.spyOn(document, 'hasFocus');
-    act(() => {
-      hasFocusSpy.mockReturnValue(false);
-      window.dispatchEvent(new Event('blur'));
-    });
-    expect(canvas.width).toBe(375); // throttled: 1x CSS pixels
-
-    act(() => {
-      hasFocusSpy.mockReturnValue(true);
-      window.dispatchEvent(new Event('focus'));
-    });
-    // Restores the cached exact physical size, not width * dpr.
-    expect(canvas.width).toBe(751);
-    expect(canvas.height).toBe(1335);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Degraded buffer scaling
-// ---------------------------------------------------------------------------
-
-describe('degraded buffer scaling', () => {
-  it('paused-degraded (blur, default) keeps the full-res buffer', async () => {
-    const useCanvas = await getHook();
-    const container = document.createElement('div');
-    const containerRef = { current: container };
-    const { canvas } = createCanvasWithMockContext();
-    const canvasRef = { current: canvas };
-
-    vi.stubGlobal('devicePixelRatio', 2);
-
-    const { result } = renderHook(() =>
-      useCanvas({ containerRef, canvasRef, draw: vi.fn() }),
-    );
-    act(() => {
-      mockIO.trigger(container, true);
-    });
-    expect(result.current.phase).toBe('running');
-
-    // Blur pauses by default; quality reads degraded while paused.
-    act(() => {
-      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-      window.dispatchEvent(new Event('blur'));
-    });
-    expect(result.current.phase).toBe('paused');
-    expect(result.current.quality).toBe('degraded');
-    expect(result.current.qualityBehavior).toBe('pause');
-
-    // A resize during the pause must not downscale the buffer.
-    mockRO.triggerWithPhysicalSize(container, 375, 667, 750, 1334);
-    expect(canvas.width).toBe(750);
-    expect(canvas.height).toBe(1334);
-  });
-
-  it('running-degraded (throttle) downscales the buffer', async () => {
-    const useCanvas = await getHook();
-    const container = document.createElement('div');
-    const containerRef = { current: container };
-    const { canvas } = createCanvasWithMockContext();
-    const canvasRef = { current: canvas };
-
-    vi.stubGlobal('devicePixelRatio', 2);
-
-    const { result } = renderHook(() =>
-      useCanvas({
-        containerRef,
-        canvasRef,
-        draw: vi.fn(),
-        unfocused: 'throttle',
-      }),
-    );
-    act(() => {
-      mockIO.trigger(container, true);
-    });
+    clock.step();
+    const deliveredFrame = draw.mock.calls.at(-1)?.[1] as FrameState;
 
     act(() => {
       vi.spyOn(document, 'hasFocus').mockReturnValue(false);
       window.dispatchEvent(new Event('blur'));
     });
-    expect(result.current.phase).toBe('running');
-    expect(result.current.quality).toBe('degraded');
-    expect(result.current.qualityReason).toBe('unfocused');
-    expect(result.current.qualityBehavior).toBe('throttle');
+    const callsBeforeResize = draw.mock.calls.length;
+    mockRO.trigger(container, 400, 300);
 
-    // Degraded output at low fps: render into a CSS-pixel buffer.
-    mockRO.triggerWithPhysicalSize(container, 375, 667, 750, 1334);
-    expect(canvas.width).toBe(375);
-    expect(canvas.height).toBe(667);
+    expect(draw).toHaveBeenCalledTimes(callsBeforeResize + 1);
+    expect(draw.mock.calls.at(-1)?.[1]).toMatchObject({
+      elapsed: deliveredFrame.elapsed,
+      frame: deliveredFrame.frame,
+    });
+    clock.restore();
   });
 
-  it("running-degraded with 'ignore' keeps the full-res buffer", async () => {
+  it('repaints after context restoration while paused', async () => {
+    const clock = setupManualRaf();
     const useCanvas = await getHook();
     const container = document.createElement('div');
     const containerRef = { current: container };
     const { canvas } = createCanvasWithMockContext();
     const canvasRef = { current: canvas };
+    const draw = vi.fn();
+    renderHook(() => useCanvas({ containerRef, canvasRef, draw }));
+    act(() => mockIO.trigger(container, true));
+    mockRO.trigger(container, 300, 200);
+    clock.step();
+    act(() => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+    });
+    const callsBeforeRestore = draw.mock.calls.length;
 
-    vi.stubGlobal('devicePixelRatio', 2);
+    canvas.dispatchEvent(new Event('contextrestored'));
+    expect(draw).toHaveBeenCalledTimes(callsBeforeRestore + 1);
+    clock.restore();
+  });
+});
 
+describe('quality observation', () => {
+  it('is reactive by default', async () => {
+    const useCanvas = await getHook();
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
     const { result } = renderHook(() =>
       useCanvas({
         containerRef,
@@ -395,71 +349,35 @@ describe('degraded buffer scaling', () => {
       window.dispatchEvent(new Event('blur'));
     });
 
-    expect(result.current.phase).toBe('running');
-    expect(result.current.quality).toBe('degraded');
-    expect(result.current.qualityReason).toBe('unfocused');
-    expect(result.current.qualityBehavior).toBe('ignore');
+    expect(result.current.quality.status).toBe('degraded');
+    expect(result.current.qualityRef.current).toBe(result.current.quality);
+  });
 
+  it('updates buffers before transient notifications', async () => {
+    const clock = setupManualRaf();
+    const useCanvas = await getHook();
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+    const widths: number[] = [];
+    const { result } = renderHook(() =>
+      useCanvas({
+        containerRef,
+        canvasRef,
+        draw: vi.fn(),
+        onQualityChange: () => widths.push(canvas.width),
+      }),
+    );
+    act(() => mockIO.trigger(container, true));
     mockRO.triggerWithPhysicalSize(container, 375, 667, 750, 1334);
-    expect(canvas.width).toBe(750);
-    expect(canvas.height).toBe(1334);
-  });
-});
+    for (let index = 0; index < 9; index++) clock.step();
+    clock.step(16, 16);
+    clock.step(16, 16);
+    clock.step(16, 16);
 
-// ---------------------------------------------------------------------------
-// restart
-// ---------------------------------------------------------------------------
-
-describe('restart', () => {
-  it('re-establishes resize observation after restart', async () => {
-    const useCanvas = await getHook();
-    const container = document.createElement('div');
-    const containerRef = { current: container };
-    const { canvas } = createCanvasWithMockContext();
-    const canvasRef = { current: canvas };
-
-    vi.stubGlobal('devicePixelRatio', 1);
-
-    const { result } = renderHook(() =>
-      useCanvas({ containerRef, canvasRef, draw: vi.fn() }),
-    );
-
-    mockRO.trigger(container, 100, 50);
-    expect(canvas.width).toBe(100);
-
-    act(() => {
-      result.current.restart();
-    });
-
-    // After restart the container must still be observed and resizes applied.
-    expect(mockRO.instances.some((i) => i.observed.has(container))).toBe(true);
-    mockRO.trigger(container, 200, 80);
-    expect(canvas.width).toBe(200);
-    expect(canvas.height).toBe(80);
-  });
-
-  it('keeps the loop running after restart', async () => {
-    const useCanvas = await getHook();
-    const container = document.createElement('div');
-    const containerRef = { current: container };
-    const { canvas } = createCanvasWithMockContext();
-    const canvasRef = { current: canvas };
-
-    const { result } = renderHook(() =>
-      useCanvas({ containerRef, canvasRef, draw: vi.fn() }),
-    );
-    act(() => {
-      mockIO.trigger(container, true);
-    });
-    expect(result.current.phase).toBe('running');
-
-    act(() => {
-      result.current.restart();
-    });
-    act(() => {
-      mockIO.trigger(container, true);
-    });
-
-    expect(result.current.phase).toBe('running');
+    expect(result.current.qualityRef.current.status).toBe('degraded');
+    expect(widths.at(-1)).toBe(375);
+    clock.restore();
   });
 });

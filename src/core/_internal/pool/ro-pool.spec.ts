@@ -121,7 +121,7 @@ describe('cleanup', () => {
 // ---------------------------------------------------------------------------
 
 describe('ownership safety', () => {
-  it('second subscription on same element overwrites callback', async () => {
+  it('multiple subscriptions on the same element all receive entries', async () => {
     const { observeResize } = await getModule();
     const el = document.createElement('div');
     const cb1 = vi.fn();
@@ -130,30 +130,57 @@ describe('ownership safety', () => {
     observeResize(el, cb2);
 
     mockRO.trigger(el, 100, 50);
-    expect(cb1).not.toHaveBeenCalled();
+    expect(cb1).toHaveBeenCalledTimes(1);
     expect(cb2).toHaveBeenCalledTimes(1);
   });
 
-  it('first cleanup does NOT unobserve if second subscription replaced it', async () => {
+  it('subscriptions clean up independently', async () => {
     const { observeResize } = await getModule();
     const el = document.createElement('div');
-    const cleanup1 = observeResize(el, vi.fn());
+    const cb1 = vi.fn();
+    const cleanup1 = observeResize(el, cb1);
     const cb2 = vi.fn();
-    observeResize(el, cb2);
+    const cleanup2 = observeResize(el, cb2);
 
     cleanup1();
     expect(firstInstance().observed.has(el)).toBe(true);
 
     mockRO.trigger(el, 100, 50);
+    expect(cb1).not.toHaveBeenCalled();
     expect(cb2).toHaveBeenCalledTimes(1);
-  });
 
-  it('second cleanup correctly unobserves', async () => {
-    const { observeResize } = await getModule();
-    const el = document.createElement('div');
-    observeResize(el, vi.fn());
-    const cleanup2 = observeResize(el, vi.fn());
     cleanup2();
     expect(firstInstance().observed.has(el)).toBe(false);
+  });
+
+  it('one throwing subscriber does not starve another subscriber', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    const second = vi.fn();
+    observeResize(el, () => {
+      throw new Error('consumer failure');
+    });
+    observeResize(el, second);
+
+    expect(() => mockRO.trigger(el, 100, 50)).toThrow('consumer failure');
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('box ownership', () => {
+  it('same box type shares one observer', async () => {
+    const { observeResize } = await getModule();
+    observeResize(document.createElement('div'), vi.fn(), 'border-box');
+    observeResize(document.createElement('div'), vi.fn(), 'border-box');
+    expect(mockRO.instances).toHaveLength(1);
+  });
+
+  it('different box types use independent observers', async () => {
+    const { observeResize } = await getModule();
+    const element = document.createElement('div');
+    observeResize(element, vi.fn(), 'content-box');
+    observeResize(element, vi.fn(), 'border-box');
+    observeResize(element, vi.fn(), 'device-pixel-content-box');
+    expect(mockRO.instances).toHaveLength(3);
   });
 });

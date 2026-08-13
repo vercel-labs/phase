@@ -1,102 +1,81 @@
 # `useCanvas`
 
-Everything `useLoop` provides, plus DPR-aware buffer sizing, ResizeObserver coalescing, and GPU context loss recovery.
+Canvas binding for `createLoop` with exact physical sizing, adaptive resolution, ResizeObserver pooling, paused repainting, and context-loss recovery.
 
-## Signature
+## Usage
 
-```ts
-import { useCanvas } from 'phase/react';
-
-const { restart, phase, phaseReason, quality, qualityReason, qualityBehavior } =
-  useCanvas(options);
+```tsx
+const result = useCanvas({
+  containerRef,
+  canvasRef,
+  draw: (ctx, frame, size) => {
+    ctx.clearRect(0, 0, size.width, size.height);
+  },
+});
 ```
 
 ### Options
 
-| Option                | Type                                   | Default      | Description                                                     |
-| --------------------- | -------------------------------------- | ------------ | --------------------------------------------------------------- |
-| `containerRef`        | `RefObject<Element \| null>`           | required     | Element that determines canvas size                             |
-| `canvasRef`           | `RefObject<HTMLCanvasElement \| null>` | required     | The `<canvas>` element                                          |
-| `draw`                | `CanvasDrawFn`                         | required     | Called every frame                                              |
-| `fps`                 | `number`                               | none         | Base FPS cap; uncapped uses display refresh                     |
-| `enabled`             | `boolean`                              | `true`       | When `false`, tears down everything                             |
-| `reducedMotion`       | `'pause' \| 'ignore'`                  | `'pause'`    | Behavior under reduced motion                                   |
-| `unfocused`           | `'pause' \| 'throttle' \| 'ignore'`    | `'pause'`    | Behavior while the window is unfocused                          |
-| `frameBudget`         | `'pause' \| 'throttle' \| 'ignore'`    | `'throttle'` | Behavior after 3 raw frame gaps exceed 1.5x the target interval |
-| `throttleFps`         | `number`                               | `30`         | Shared throttle cap; never raises a lower `fps`                 |
-| `intersectionOptions` | `IntersectionObserverInit`             | none         | Forwarded to visibility; value changes rebuild the loop         |
-| `onQualityChange`     | `QualityChangeCallback`                | none         | Transient notification; does not trigger a render               |
+| Option                | Type                                   | Default      | Description                                  |
+| --------------------- | -------------------------------------- | ------------ | -------------------------------------------- |
+| `containerRef`        | `RefObject<Element \| null>`           | required     | Visibility and sizing element                |
+| `canvasRef`           | `RefObject<HTMLCanvasElement \| null>` | required     | Managed canvas                               |
+| `draw`                | `CanvasDrawFn`                         | required     | Receives context, readonly frame, and `Size` |
+| `fps`                 | `number`                               | none         | Finite positive FPS cap                      |
+| `enabled`             | `boolean`                              | `true`       | Tear down while false                        |
+| `reducedMotion`       | `LoopReducedMotion`                    | `'pause'`    | `'pause' \| 'ignore'`                        |
+| `unfocused`           | `DegradedBehavior`                     | `'pause'`    | Focus policy                                 |
+| `slowFrames`          | `DegradedBehavior`                     | `'throttle'` | Shared frame-pressure policy                 |
+| `throttleFps`         | `number`                               | `30`         | Throttle action cap                          |
+| `intersectionOptions` | `IntersectionObserverInit`             | none         | Visibility observer options                  |
+| `pixelRatio`          | `'adaptive' \| 'device'`               | `'adaptive'` | Slow-frame resolution policy                 |
+| `onQualityChange`     | `QualityChangeCallback`                | none         | Selects transient quality mode when supplied |
 
-### Return
+### Results
 
-| Property          | Type                            | Description                                                                                      |
-| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `restart`         | `() => void`                    | Tear down and rebuild (e.g. after config change)                                                 |
-| `phase`           | `LoopPhase`                     | Current loop phase                                                                               |
-| `phaseReason`     | `LoopReason`                    | `'initial' \| 'started' \| 'resumed' \| 'sight' \| 'reduced-motion' \| 'degraded' \| 'disposed'` |
-| `quality`         | `Quality`                       | Always-current signal state (getter; do not destructure); no quality-only render                 |
-| `qualityReason`   | `DegradedReason \| undefined`   | Always-current reason; unfocused reports first when both are active                              |
-| `qualityBehavior` | `DegradedBehavior \| undefined` | Always-current resolved behavior after precedence                                                |
+`UseCanvasReactiveResult` contains `restart`, reactive phase state, reactive `quality`, and always-current `qualityRef`.
 
-## When to use
+Supplying `onQualityChange` returns `UseCanvasTransientResult`: `quality` is omitted and only `qualityRef` updates. `UseCanvasResult` is a deprecated alias for the reactive result.
 
-- 2D canvas animations (particles, data viz, generative art).
-- You need DPR-aware sizing (retina displays, multi-monitor drag).
-- You want GPU context loss handled automatically (mobile tab eviction).
-- Container-driven sizing (canvas fills its parent, not the viewport).
+## Buffer sizing
 
-## When not to use
+- Uses `devicePixelContentBoxSize` when available.
+- Falls back to rounded CSS size multiplied by device DPR.
+- Scales each axis by actual physical pixels divided by CSS pixels, covering fractional layout exactly.
+- Skips identical width/height writes because every assignment clears the bitmap.
+- Tracks committed ref identity, including late mounts and replacement nodes.
 
-| Instead of this                        | Use                                   |
-| -------------------------------------- | ------------------------------------- |
-| DOM transforms (not canvas)            | `useLoop` (no canvas concerns)        |
-| WebGL via three.js/Pixi (own renderer) | `useLifecycle` + your renderer's loop |
-| Static canvas (draw once)              | One-shot `useEffect` with canvas API  |
+## Adaptive resolution
 
-## Do
+`pixelRatio: 'adaptive'` uses a 1x backing buffer while `quality.signals.slowFrames` is `'degraded'` or `'probing'`. It restores device resolution only after healthy recovery is confirmed.
 
-- Cleanup is automatic. The effect teardown stops the loop, unobserves resize, and removes context-loss listeners on unmount.
-- Pass two refs (container + canvas):
-  ```tsx
-  const containerRef = useRef(null);
-  const canvasRef = useRef(null);
-  useCanvas({ containerRef, canvasRef, draw });
-  return (
-    <div ref={containerRef}>
-      <canvas ref={canvasRef} />
-    </div>
-  );
-  ```
-- Extract `draw` to a named function using the exported `CanvasDrawFn` type: `const draw: CanvasDrawFn = (ctx, frame, size) => { ... }`.
-- Draw in CSS pixels. `ctx` is already scaled for `devicePixelRatio`. DPR changes (e.g. dragging between monitors) are tracked reactively, including chained switches (A -> B -> C).
-- Use `frameBudget: 'pause'` for heavy GPU work that can't gracefully degrade.
-- Read always-current `quality`/`qualityReason`/`qualityBehavior` to adapt rendering (fewer particles, simpler shaders), including under `'ignore'`. They do not cause quality-only React renders; use `onQualityChange` for transient notification. The buffer drops to 1x DPR only while `qualityBehavior` is `'throttle'`. Paused and ignored signals keep full resolution.
-- Every frame-budget degrade schedules a 2-second optimistic re-measure that restores full speed and re-degrades if jank persists. See [createLoop](./create-loop.md#frame-budget-recovery).
-- For 3D overlays on DOM elements, pair with `useSize({ box: 'border-box' })` for the target element's dimensions. Use a separate container for the canvas (the RO pool allows one observer per element, so sharing a ref between `useSize` and `useCanvas` would clobber one subscription). If you also need viewport-relative position (DOM-to-WebGL coordinate mapping), that requires `getBoundingClientRect()` on scroll/resize in a custom hook, since no async observer exists for element position:
+Focus throttling never changes resolution. FPS policy and image resolution are separate decisions. Use `'device'` when exact resolution must never adapt.
 
-  ```tsx
-  const targetRef = useRef(null);
-  const canvasContainerRef = useRef(null);
-  const canvasRef = useRef(null);
-  const { size } = useSize({ ref: targetRef, box: 'border-box' });
-  useCanvas({ containerRef: canvasContainerRef, canvasRef, draw });
-  ```
+## Paused repainting
 
-## Don't
+Canvas width/height writes and context restoration clear the bitmap. `useCanvas` copies the four frame scalars into a preallocated repaint frame after each delivered tick, then redraws that state when a visible paused canvas buffer is recreated.
 
-- **Never call `setState` inside `draw`.** Same rule as `onTick`.
-- **Never allocate inside `draw`.** Zero-allocation contract applies.
-- **Don't call `canvas.getContext('2d')` yourself.** `useCanvas` manages the context.
-- **Don't manually set `canvas.width`/`canvas.height`.** Handled by the resize system.
-- **Don't use `getBoundingClientRect()` for sizing.** Uses ResizeObserver (async, no reflow).
+If reduced motion is active before any frame:
 
-## Reduced motion
+1. Offscreen sizing is cached without allocating or drawing.
+2. Visibility creates the buffer.
+3. One zero-timeline static frame is drawn.
 
-Default `'pause'`: the loop delivers no frames, and the canvas paints one static frame (zero timeline: `elapsed: 0`) each time its buffer is created or resized, so it is never left blank even when a resize clears the bitmap. There is no `'complete'` for canvas loops; draw your reduced-motion state on that static frame.
+This prevents blank canvases without doing hidden work. `draw` can therefore run outside rAF after resize, context restoration, or a visibility transition.
+
+## Observer composition
+
+The ResizeObserver pool supports multiple subscriptions on the same element and keeps different box options on independent native observers. Sharing a container with `useSize` no longer clobbers either subscription.
+
+## Rules
+
+- Draw in CSS pixels; the context transform already maps to the exact buffer.
+- Never call React `setState` or allocate intermediate objects in `draw`.
+- Do not assign canvas width/height or call `getBoundingClientRect()` yourself.
+- Give the canvas fallback text or an accessible name when it conveys information.
 
 ## See also
 
-- [useLoop](./use-loop.md). DOM animation variant (no canvas concerns)
-- [useLifecycle](./use-lifecycle.md). Use with three.js/Pixi where you own the renderer
-- [useDevicePixelRatio](./use-device-pixel-ratio.md). Reactive DPR for renderers outside `useCanvas`
-- [createLoop](./create-loop.md). Framework-agnostic core
+- [useLoop](./use-loop.md)
+- [createLoop](./create-loop.md)
+- [useDevicePixelRatio](./use-device-pixel-ratio.md)

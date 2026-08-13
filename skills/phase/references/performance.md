@@ -160,7 +160,7 @@ return <Anim onTick={(frame) => draw(frame, props)} />;
 
 ### Frame-locked shared clock
 
-All tickers share one `requestAnimationFrame` loop with a single `performance.now()` read per frame. This covers `createTicker`, `createLoop`, `useLoop`, and `useCanvas`. `useTween` is a finite React-state tween and intentionally uses its own rAF.
+All tickers share one `requestAnimationFrame` loop and receive the same browser rAF timestamp. When at least one loop subscribes to shared frame pressure, the dispatcher makes one `performance.now()` read after callbacks to estimate aggregate main-thread occupancy; plain tickers make no per-frame clock read. This covers `createTicker`, `createLoop`, `useLoop`, and `useCanvas`. `useTween` is a finite React-state tween and intentionally uses its own rAF.
 
 **Don't:**
 

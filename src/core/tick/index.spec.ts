@@ -371,6 +371,21 @@ describe('setFps', () => {
     expect(last.frame).toBe(framesAt30 + 6);
     ticker.stop();
   });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects invalid fps %s',
+    async (fps) => {
+      const { createTicker } = await getModule();
+      expect(() => createTicker({ fps, onTick: vi.fn() })).toThrow();
+    },
+  );
+
+  it('rejects mutation after stop', async () => {
+    const { createTicker } = await getModule();
+    const ticker = createTicker({ onTick: vi.fn() });
+    ticker.stop();
+    expect(() => ticker.setFps(30)).toThrow();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -414,6 +429,109 @@ describe('shared clock', () => {
     advanceFrame(16);
     expect(cb2.mock.calls.length).toBeGreaterThan(cb1.mock.calls.length);
     t2.stop();
+  });
+
+  it('defers a ticker started during dispatch until the next frame', async () => {
+    const { createTicker } = await getModule();
+    const secondTick = vi.fn();
+    const second = createTicker({ onTick: secondTick });
+    const first = createTicker({
+      onTick: () => {
+        second.start();
+      },
+    });
+    first.start();
+
+    advanceFrame(16);
+    expect(secondTick).not.toHaveBeenCalled();
+    advanceFrame(16);
+    expect(secondTick).toHaveBeenCalledTimes(1);
+
+    first.stop();
+    second.stop();
+  });
+
+  it('pause and resume inside onTick cannot run twice in one frame', async () => {
+    const { createTicker } = await getModule();
+    let ticker: ReturnType<typeof createTicker>;
+    const callback = vi.fn(() => {
+      ticker.pause();
+      ticker.resume();
+    });
+    ticker = createTicker({ onTick: callback });
+    ticker.start();
+
+    advanceFrame(16);
+    expect(callback).toHaveBeenCalledTimes(1);
+    advanceFrame(16);
+    expect(callback).toHaveBeenCalledTimes(2);
+    ticker.stop();
+  });
+
+  it('a thrown callback does not permanently wedge the shared clock', async () => {
+    const { createTicker } = await getModule();
+    let shouldThrow = true;
+    const first = createTicker({
+      onTick: () => {
+        if (shouldThrow) {
+          shouldThrow = false;
+          throw new Error('consumer failure');
+        }
+      },
+    });
+    const secondTick = vi.fn();
+    const second = createTicker({ onTick: secondTick });
+    first.start();
+    second.start();
+
+    expect(() => advanceFrame(16)).toThrow('consumer failure');
+    advanceFrame(16);
+    expect(secondTick).toHaveBeenCalledTimes(1);
+
+    first.stop();
+    second.stop();
+  });
+});
+
+describe('scheduler cadence', () => {
+  it('delivers the first capped frame immediately after start', async () => {
+    const { createTicker } = await getModule();
+    const callback = vi.fn();
+    const ticker = createTicker({ fps: 1, onTick: callback });
+    ticker.start();
+
+    advanceFrame(16);
+    expect(callback).toHaveBeenCalledTimes(1);
+    ticker.stop();
+  });
+
+  it('carries lateness forward instead of drifting to 20fps at a 30fps cap', async () => {
+    const { createTicker } = await getModule();
+    const callback = vi.fn();
+    const ticker = createTicker({ fps: 30, onTick: callback });
+    ticker.start();
+
+    for (let index = 0; index < 60; index++) advanceFrame(16);
+    expect(callback.mock.calls.length).toBeGreaterThanOrEqual(28);
+    expect(callback.mock.calls.length).toBeLessThanOrEqual(30);
+    ticker.stop();
+  });
+
+  it('consumer mutation cannot corrupt the private frame count', async () => {
+    const { createTicker } = await getModule();
+    const counts: number[] = [];
+    const ticker = createTicker({
+      onTick: (frame) => {
+        counts.push(frame.frame);
+        (frame as { frame: number }).frame = 1000;
+      },
+    });
+    ticker.start();
+
+    advanceFrame(16);
+    advanceFrame(16);
+    expect(counts).toEqual([1, 2]);
+    ticker.stop();
   });
 });
 
