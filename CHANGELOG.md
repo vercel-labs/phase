@@ -20,6 +20,16 @@
 - **Fixed:** Frame-pressure recovery is armed even when a consumer quality callback throws, and probation always terminates instead of parking at `'probing'` when page occupancy sits between the healthy and overload thresholds.
 - **Fixed:** `useCanvas` no longer sizes a buffer or draws while unmounting off screen, tracks quality mode when `onQualityChange` is added or dropped without a remount, and restamps the `size` and repaint `FrameState` it hands out so consumer writes cannot corrupt a later repaint.
 
+## 0.0.10
+
+### Patch Changes
+
+- **Changed (breaking):** Tween reduced motion now accepts `'complete' | 'ignore'` through the new `TweenReducedMotion` type. `'pause'` is gone: a value frozen mid-flight reads as a stuck UI, and a tween has a defined target to land on.
+- **Changed:** A running `useTween` now subscribes to the reduced-motion preference and completes immediately when it turns on, instead of only reading the preference at the start of the tween.
+- **Changed:** `useTween` always lands exactly on `target`, even when a custom easing function does not return `1`.
+- **Changed:** `useTween` reads the latest `easing` callback through a synced ref, so changing it no longer restarts an active tween.
+- **Changed:** `useTween` reads the reduced-motion preference through the shared media-query pool rather than its own `matchMedia` call, and no longer depends on a type from `core/loop`.
+
 ## 0.0.9
 
 ### Patch Changes
