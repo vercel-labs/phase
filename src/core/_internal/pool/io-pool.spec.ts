@@ -148,6 +148,12 @@ describe('cleanup', () => {
     cleanup();
 
     expect(firstInstance().observed.size).toBe(0);
+
+    observeIntersection({
+      element: document.createElement('div'),
+      onIntersect: vi.fn(),
+    });
+    expect(mockIO.instances).toHaveLength(2);
   });
 
   it('removing one of two elements does NOT disconnect the IO', async () => {
@@ -186,6 +192,27 @@ describe('ownership safety', () => {
     expect(cb2).toHaveBeenCalledTimes(1);
   });
 
+  it('same callback identity remains independently disposable', async () => {
+    const { observeIntersection } = await getModule();
+    const el = document.createElement('div');
+    const callback = vi.fn();
+    const disposeFirst = observeIntersection({
+      element: el,
+      onIntersect: callback,
+    });
+    const disposeSecond = observeIntersection({
+      element: el,
+      onIntersect: callback,
+    });
+
+    disposeFirst();
+    mockIO.trigger(el, true);
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    disposeSecond();
+    expect(firstInstance().observed.has(el)).toBe(false);
+  });
+
   it('subscriptions clean up independently', async () => {
     const { observeIntersection } = await getModule();
     const el = document.createElement('div');
@@ -220,6 +247,37 @@ describe('ownership safety', () => {
     expect(() => mockIO.trigger(el, true)).toThrow('consumer failure');
     expect(second).toHaveBeenCalledTimes(1);
   });
+
+  it('defers reentrant additions and honors reentrant cleanup', async () => {
+    const { observeIntersection } = await getModule();
+    const el = document.createElement('div');
+    const calls: string[] = [];
+    let disposeSecond: () => void;
+    let added = false;
+    observeIntersection({
+      element: el,
+      onIntersect: () => {
+        calls.push('first');
+        disposeSecond();
+        if (!added) {
+          added = true;
+          observeIntersection({
+            element: el,
+            onIntersect: () => calls.push('third'),
+          });
+        }
+      },
+    });
+    disposeSecond = observeIntersection({
+      element: el,
+      onIntersect: () => calls.push('second'),
+    });
+
+    mockIO.trigger(el, true);
+    expect(calls).toEqual(['first']);
+    mockIO.trigger(el, true);
+    expect(calls).toEqual(['first', 'first', 'third']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -244,10 +302,11 @@ describe('pool key stability', () => {
 
   it('equivalent threshold arrays share an observer', async () => {
     const { observeIntersection } = await getModule();
+    const unsorted = [1, 0.5, 0, 0.5];
     observeIntersection({
       element: document.createElement('div'),
       onIntersect: vi.fn(),
-      threshold: [1, 0.5, 0, 0.5],
+      threshold: unsorted,
     });
     observeIntersection({
       element: document.createElement('div'),
@@ -256,6 +315,29 @@ describe('pool key stability', () => {
     });
 
     expect(mockIO.instances).toHaveLength(1);
+    expect(mockIO.instances[0]?.options?.threshold).toEqual([0, 0.5, 1]);
+    expect(unsorted).toEqual([1, 0.5, 0, 0.5]);
+  });
+
+  it('normalizes omitted, scalar zero, array zero, and empty thresholds', async () => {
+    const { observeIntersection } = await getModule();
+    const thresholds: Array<number | number[] | undefined> = [
+      undefined,
+      0,
+      [0],
+      [],
+    ];
+
+    for (const threshold of thresholds) {
+      observeIntersection({
+        element: document.createElement('div'),
+        onIntersect: vi.fn(),
+        threshold,
+      });
+    }
+
+    expect(mockIO.instances).toHaveLength(1);
+    expect(mockIO.instances[0]?.options?.threshold).toEqual([0]);
   });
 
   it('different custom roots never share an observer', async () => {

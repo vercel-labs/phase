@@ -99,20 +99,16 @@ describe('cleanup', () => {
     expect(() => cleanup()).not.toThrow();
   });
 
-  it('RO persists after all elements removed (singleton)', async () => {
+  it('releases an empty box pool and recreates it on demand', async () => {
     const { observeResize } = await getModule();
     const el = document.createElement('div');
     const cleanup = observeResize(el, vi.fn());
     cleanup();
 
-    // RO instance still exists — singleton is not destroyed
-    expect(mockRO.instances).toHaveLength(1);
-
-    // Can still observe new elements
     const el2 = document.createElement('div');
     observeResize(el2, vi.fn());
-    expect(mockRO.instances).toHaveLength(1);
-    expect(firstInstance().observed.has(el2)).toBe(true);
+    expect(mockRO.instances).toHaveLength(2);
+    expect(mockRO.instances[1]?.observed.has(el2)).toBe(true);
   });
 });
 
@@ -132,6 +128,21 @@ describe('ownership safety', () => {
     mockRO.trigger(el, 100, 50);
     expect(cb1).toHaveBeenCalledTimes(1);
     expect(cb2).toHaveBeenCalledTimes(1);
+  });
+
+  it('same callback identity remains independently disposable', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    const callback = vi.fn();
+    const disposeFirst = observeResize(el, callback);
+    const disposeSecond = observeResize(el, callback);
+
+    disposeFirst();
+    mockRO.trigger(el, 100, 50);
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    disposeSecond();
+    expect(firstInstance().observed.has(el)).toBe(false);
   });
 
   it('subscriptions clean up independently', async () => {
@@ -165,6 +176,28 @@ describe('ownership safety', () => {
     expect(() => mockRO.trigger(el, 100, 50)).toThrow('consumer failure');
     expect(second).toHaveBeenCalledTimes(1);
   });
+
+  it('defers reentrant additions and honors reentrant cleanup', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    const calls: string[] = [];
+    let disposeSecond: () => void;
+    let added = false;
+    observeResize(el, () => {
+      calls.push('first');
+      disposeSecond();
+      if (!added) {
+        added = true;
+        observeResize(el, () => calls.push('third'));
+      }
+    });
+    disposeSecond = observeResize(el, () => calls.push('second'));
+
+    mockRO.trigger(el, 100, 50);
+    expect(calls).toEqual(['first']);
+    mockRO.trigger(el, 100, 50);
+    expect(calls).toEqual(['first', 'first', 'third']);
+  });
 });
 
 describe('box ownership', () => {
@@ -178,9 +211,17 @@ describe('box ownership', () => {
   it('different box types use independent observers', async () => {
     const { observeResize } = await getModule();
     const element = document.createElement('div');
-    observeResize(element, vi.fn(), 'content-box');
-    observeResize(element, vi.fn(), 'border-box');
-    observeResize(element, vi.fn(), 'device-pixel-content-box');
+    const content = vi.fn();
+    const border = vi.fn();
+    const physical = vi.fn();
+    observeResize(element, content, 'content-box');
+    observeResize(element, border, 'border-box');
+    observeResize(element, physical, 'device-pixel-content-box');
     expect(mockRO.instances).toHaveLength(3);
+
+    mockRO.triggerBox(element, 'border-box', 100, 50);
+    expect(content).not.toHaveBeenCalled();
+    expect(border).toHaveBeenCalledTimes(1);
+    expect(physical).not.toHaveBeenCalled();
   });
 });

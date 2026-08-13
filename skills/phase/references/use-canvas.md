@@ -65,7 +65,7 @@ This prevents blank canvases without doing hidden work. `draw` can therefore run
 
 ## Observer composition
 
-The ResizeObserver pool supports multiple subscriptions on the same element and keeps different box options on independent native observers. Sharing a container with `useSize` no longer clobbers either subscription.
+The ResizeObserver pool supports duplicate callback identities as independent subscriptions, releases empty entries, and keeps different box options on independent native observers. Sharing a container with `useSize` no longer clobbers either subscription.
 
 ## Rules
 

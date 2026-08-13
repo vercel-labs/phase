@@ -1317,12 +1317,12 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `createTicker`            |           1.11 kB |
 | `createSight`             |            1.1 kB |
 | `createLifecycle`         |           1.65 kB |
-| `createLoop`              |           3.82 kB |
-| `createScrollProgress`    |           1.02 kB |
+| `createLoop`              |           3.88 kB |
+| `createScrollProgress`    |            1.0 kB |
 | `createRenderState`       |             495 B |
 | `createDevicePixelRatio`  |             545 B |
 | `createMutation`          |           1.31 kB |
-| `createPointer`           |           1.41 kB |
+| `createPointer`           |            1.4 kB |
 | `createScroll`            |           1.66 kB |
 | `createThrottle`          |             658 B |
 | `createDebounce`          |             559 B |
@@ -1331,20 +1331,20 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           4.14 kB |
+| `useLoop`                 |            4.2 kB |
 | `useLifecycle`            |           1.91 kB |
 | `useSight`                |           1.32 kB |
-| `useCanvas`               |           5.12 kB |
-| `useMutation`             |           1.51 kB |
-| `usePointer`              |           1.62 kB |
+| `useCanvas`               |           5.21 kB |
+| `useMutation`             |            1.5 kB |
+| `usePointer`              |           1.61 kB |
 | `useScroll`               |           1.92 kB |
 | `useThrottledCallback`    |             796 B |
 | `useDebouncedCallback`    |             687 B |
 | `useTween`                |             872 B |
 | `usePresence`             |             594 B |
-| `useScrollProgress`       |           1.13 kB |
-| `useSize`                 |             506 B |
-| `useContainerQuery`       |             476 B |
+| `useScrollProgress`       |           1.14 kB |
+| `useSize`                 |             536 B |
+| `useContainerQuery`       |             515 B |
 | `useMediaQuery`           |             245 B |
 | `usePrefersReducedMotion` |             275 B |
 | `useDevicePixelRatio`     |             230 B |

@@ -1,5 +1,5 @@
 interface MockROInstance {
-  readonly observed: Set<Element>;
+  readonly observed: Map<Element, ResizeObserverBoxOptions>;
   disconnect: () => void;
 }
 
@@ -7,6 +7,12 @@ export interface MockResizeObserverResult {
   MockClass: typeof ResizeObserver;
   instances: MockROInstance[];
   trigger: (element: Element, width: number, height: number) => void;
+  triggerBox: (
+    element: Element,
+    box: ResizeObserverBoxOptions,
+    width: number,
+    height: number,
+  ) => void;
   triggerWithBorderBox: (
     element: Element,
     contentWidth: number,
@@ -33,7 +39,7 @@ export function createMockResizeObserver(): MockResizeObserverResult {
   const callbacksByInstance = new Map<MockROInstance, ResizeObserverCallback>();
 
   class MockRO {
-    readonly observed = new Set<Element>();
+    readonly observed = new Map<Element, ResizeObserverBoxOptions>();
 
     constructor(callback: ResizeObserverCallback) {
       const inst = this as unknown as MockROInstance;
@@ -41,8 +47,8 @@ export function createMockResizeObserver(): MockResizeObserverResult {
       callbacksByInstance.set(inst, callback);
     }
 
-    observe(el: Element): void {
-      this.observed.add(el);
+    observe(el: Element, options?: ResizeObserverOptions): void {
+      this.observed.set(el, options?.box ?? 'content-box');
     }
 
     unobserve(el: Element): void {
@@ -80,6 +86,37 @@ export function createMockResizeObserver(): MockResizeObserverResult {
           cb([entry], inst as unknown as ResizeObserver);
         }
       }
+    }
+  }
+
+  function triggerBox(
+    element: Element,
+    box: ResizeObserverBoxOptions,
+    width: number,
+    height: number,
+  ): void {
+    for (const inst of instances) {
+      if (inst.observed.get(element) !== box) continue;
+      const cb = callbacksByInstance.get(inst);
+      if (!cb) continue;
+
+      const entry = {
+        target: element,
+        contentBoxSize: [{ inlineSize: width, blockSize: height }],
+        borderBoxSize: [{ inlineSize: width, blockSize: height }],
+        devicePixelContentBoxSize: [{ inlineSize: width, blockSize: height }],
+        contentRect: {
+          width,
+          height,
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          bottom: height,
+          right: width,
+        } as DOMRectReadOnly,
+      } as ResizeObserverEntry;
+      cb([entry], inst as unknown as ResizeObserver);
     }
   }
 
@@ -191,6 +228,7 @@ export function createMockResizeObserver(): MockResizeObserverResult {
     MockClass: MockRO as unknown as typeof ResizeObserver,
     instances,
     trigger,
+    triggerBox,
     triggerWithBorderBox,
     triggerWithPhysicalSize,
     triggerWithoutPhysicalSize,

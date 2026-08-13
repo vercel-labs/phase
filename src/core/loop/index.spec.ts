@@ -41,6 +41,10 @@ function visible(element: Element): void {
   mockIO.trigger(element, true);
 }
 
+function hidden(element: Element): void {
+  mockIO.trigger(element, false);
+}
+
 interface ManualRaf {
   pending(): number;
   step(gap?: number, occupied?: number): void;
@@ -397,6 +401,34 @@ describe('shared frame pressure', () => {
     expect(loopB.quality.signals.slowFrames).toBe('degraded');
     expect(loopA.quality.action?.behavior).toBe('throttle');
     expect(loopB.quality.action?.behavior).toBe('ignore');
+    clock.restore();
+  });
+
+  it('unregisters hidden loops and cancels their pending recovery work', async () => {
+    const clock = setupManualRaf();
+    const { createLoop } = await getModule();
+    const element = createVisibleElement();
+    const changes: string[] = [];
+    const loop = createLoop({
+      element,
+      onTick: vi.fn(),
+      onQualityChange: (quality) => {
+        changes.push(quality.signals.slowFrames ?? quality.status);
+      },
+    });
+    visible(element);
+    learnCadence(clock);
+    clock.step(16, 16);
+    clock.step(16, 16);
+    clock.step(16, 16);
+    expect(loop.quality.signals.slowFrames).toBe('degraded');
+
+    hidden(element);
+    expect(loop.phaseReason).toBe('sight');
+    expect(loop.quality.signals.slowFrames).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(changes).toEqual(['degraded', 'full']);
+    expect(clock.pending()).toBe(0);
     clock.restore();
   });
 });

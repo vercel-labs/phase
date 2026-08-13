@@ -1,8 +1,12 @@
 type ROCallback = (entry: ResizeObserverEntry) => void;
 
+interface ROSubscription {
+  readonly callback: ROCallback;
+}
+
 interface ROPoolEntry {
-  observer: ResizeObserver;
-  callbacks: Map<Element, Set<ROCallback>>;
+  readonly observer: ResizeObserver;
+  readonly targets: Map<Element, Set<ROSubscription>>;
 }
 
 const pool = new Map<ResizeObserverBoxOptions, ROPoolEntry>();
@@ -17,28 +21,35 @@ export function observeResize(
   box: ResizeObserverBoxOptions = 'content-box',
 ): () => void {
   const entry: ROPoolEntry = getPoolEntry(box);
-  let elementCallbacks: Set<ROCallback> | undefined =
-    entry.callbacks.get(element);
+  let subscriptions: Set<ROSubscription> | undefined =
+    entry.targets.get(element);
 
-  if (!elementCallbacks) {
-    elementCallbacks = new Set();
-    entry.callbacks.set(element, elementCallbacks);
+  if (!subscriptions) {
+    subscriptions = new Set();
+    entry.targets.set(element, subscriptions);
     entry.observer.observe(element, { box });
   }
-  elementCallbacks.add(callback);
+
+  const subscription: ROSubscription = { callback };
+  subscriptions.add(subscription);
 
   let disposed = false;
   return () => {
     if (disposed) return;
     disposed = true;
 
-    const callbacks: Set<ROCallback> | undefined = entry.callbacks.get(element);
-    if (!callbacks) return;
-    callbacks.delete(callback);
-    if (callbacks.size > 0) return;
+    const current: Set<ROSubscription> | undefined = entry.targets.get(element);
+    if (!current) return;
 
-    entry.callbacks.delete(element);
+    current.delete(subscription);
+    if (current.size > 0) return;
+
+    entry.targets.delete(element);
     entry.observer.unobserve(element);
+    if (entry.targets.size === 0) {
+      entry.observer.disconnect();
+      pool.delete(box);
+    }
   };
 }
 
@@ -46,21 +57,22 @@ function getPoolEntry(box: ResizeObserverBoxOptions): ROPoolEntry {
   const existing: ROPoolEntry | undefined = pool.get(box);
   if (existing) return existing;
 
-  const callbacks = new Map<Element, Set<ROCallback>>();
+  const targets = new Map<Element, Set<ROSubscription>>();
   const observer = new ResizeObserver((entries) => {
+    let firstError: unknown;
+    let hasError = false;
+
     for (const resizeEntry of entries) {
-      const elementCallbacks: Set<ROCallback> | undefined = callbacks.get(
+      const subscriptions: Set<ROSubscription> | undefined = targets.get(
         resizeEntry.target,
       );
-      if (!elementCallbacks) continue;
+      if (!subscriptions) continue;
 
-      let firstError: unknown;
-      let hasError = false;
-      const currentCallbacks = Array.from(elementCallbacks);
-      for (const callback of currentCallbacks) {
-        if (!elementCallbacks.has(callback)) continue;
+      const current = Array.from(subscriptions);
+      for (const subscription of current) {
+        if (!subscriptions.has(subscription)) continue;
         try {
-          callback(resizeEntry);
+          subscription.callback(resizeEntry);
         } catch (error) {
           if (!hasError) {
             firstError = error;
@@ -68,11 +80,12 @@ function getPoolEntry(box: ResizeObserverBoxOptions): ROPoolEntry {
           }
         }
       }
-      if (hasError) throw firstError;
     }
+
+    if (hasError) throw firstError;
   });
 
-  const entry: ROPoolEntry = { observer, callbacks };
+  const entry: ROPoolEntry = { observer, targets };
   pool.set(box, entry);
   return entry;
 }

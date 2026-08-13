@@ -160,7 +160,7 @@ export function createLoop(options: LoopOptions): Loop {
   let _quality: LoopQuality = FULL_QUALITY;
   let intentStarted = false;
   let focusDegraded = !readFocus();
-  let pressureState: FramePressureState = readFramePressure();
+  let pressureState: FramePressureState = 'full';
   let ticker: Ticker | null = null;
   let lifecycle: Lifecycle | null = null;
   let appliedFps: number | undefined;
@@ -299,7 +299,9 @@ export function createLoop(options: LoopOptions): Loop {
 
   function onFocusChange(focused: boolean): void {
     focusDegraded = !focused;
-    if (intentStarted) reconcileQuality();
+    if (!intentStarted) return;
+    syncPressureSubscription();
+    reconcileQuality();
   }
 
   function onPressureChange(next: FramePressureState): void {
@@ -307,11 +309,37 @@ export function createLoop(options: LoopOptions): Loop {
     if (intentStarted) reconcileQuality();
   }
 
+  function shouldObservePressure(): boolean {
+    if (!intentStarted || lifecycle?.phase !== 'active') return false;
+    return !focusDegraded || unfocused !== 'pause';
+  }
+
+  function syncPressureSubscription(): void {
+    const shouldObserve: boolean = shouldObservePressure();
+    if (shouldObserve && unsubPressure === null) {
+      unsubPressure = subscribeFramePressure(onPressureChange);
+      pressureState = readFramePressure();
+      return;
+    }
+    if (!shouldObserve && unsubPressure !== null) {
+      unsubPressure();
+      unsubPressure = null;
+      pressureState = 'full';
+    }
+  }
+
+  function onLifecycleChange(): void {
+    if (!intentStarted) return;
+    syncPressureSubscription();
+    reconcileQuality();
+  }
+
   function start(): void {
     if (_phase === 'stopped' || intentStarted) return;
     intentStarted = true;
-    reconcileQuality();
     lifecycle?.start();
+    syncPressureSubscription();
+    reconcileQuality();
     reconcile();
   }
 
@@ -344,11 +372,9 @@ export function createLoop(options: LoopOptions): Loop {
       reducedMotion,
       intersectionOptions,
       start: 'manual',
-      onPhaseChange: reconcile,
+      onPhaseChange: onLifecycleChange,
     });
     unsubFocus = subscribeFocus(onFocusChange);
-    unsubPressure = subscribeFramePressure(onPressureChange);
-    pressureState = readFramePressure();
     unlinkAbort = linkAbortSignal(signal, stop);
 
     if (startMode === 'auto') start();

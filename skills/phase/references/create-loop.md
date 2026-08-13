@@ -76,6 +76,8 @@ The browser does not expose portable per-loop GPU, layout, or paint timing. Do n
 
 After two seconds, quality enters `'probing'`, remains degraded, and temporarily removes slow-frame mitigation. Thirty healthy frames confirm recovery. A failed probe returns directly to `'degraded'` without publishing a false `'full'` transition.
 
+Only started loops eligible to execute register for pressure. Sight, reduced-motion pause, and focus pause unregister before strong pause; the final unregister cancels recovery and discards stale cadence. A loop paused by pressure stays registered so its shared recovery probe can resume it.
+
 ## Timeline guarantees
 
 One ticker owns `FrameState` for the loop's entire life. `setFps()` mutates its deadline gate without rebuilding:

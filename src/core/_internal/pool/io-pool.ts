@@ -1,131 +1,125 @@
 type IOCallback = (entry: IntersectionObserverEntry) => void;
 
-export interface ObserveIntersectionOptions {
-  element: Element;
-  onIntersect: IOCallback;
-  root?: Element | Document | null;
-  rootMargin?: string;
-  threshold?: number | number[];
+interface IOSubscription {
+  readonly callback: IOCallback;
 }
 
 interface IOPoolEntry {
-  observer: IntersectionObserver;
-  callbacks: Map<Element, Set<IOCallback>>;
+  readonly observer: IntersectionObserver;
+  readonly targets: Map<Element, Set<IOSubscription>>;
 }
 
-const pool = new Map<string, IOPoolEntry>();
-const rootIds = new WeakMap<object, number>();
-let nextRootId = 1;
+interface NormalizedIntersectionOptions extends IntersectionObserverInit {
+  threshold: number[];
+}
+
+const viewportPool = new Map<string, IOPoolEntry>();
+const rootedPools = new WeakMap<Element | Document, Map<string, IOPoolEntry>>();
+
+export interface ObserveIntersectionOptions extends IntersectionObserverInit {
+  element: Element;
+  onIntersect: IOCallback;
+}
 
 /**
- * Observe an element via a shared IntersectionObserver pool.
- * Elements with identical options share one IO instance.
- *
- * @returns Cleanup function that unobserves the element and removes the IO if empty.
+ * Observe an element through an IO shared by root identity and normalized
+ * options. Same-element subscriptions coexist and clean up independently.
  */
 export function observeIntersection(
   options: ObserveIntersectionOptions,
 ): () => void {
-  const { element, onIntersect, root, rootMargin, threshold } = options;
-  const ioInit: IntersectionObserverInit = { root, rootMargin, threshold };
+  const { element, onIntersect, ...ioOptions } = options;
+  const normalized: NormalizedIntersectionOptions = normalizeOptions(ioOptions);
+  const bucket: Map<string, IOPoolEntry> = getBucket(normalized.root);
+  const key: string = getPoolKey(normalized);
+  let entry: IOPoolEntry | undefined = bucket.get(key);
 
-  const key: string = getPoolKey(ioInit);
-  const entry: IOPoolEntry = getOrCreatePoolEntry(key, ioInit);
+  if (!entry) {
+    entry = createPoolEntry(normalized);
+    bucket.set(key, entry);
+  }
 
-  let elementCallbacks: Set<IOCallback> | undefined =
-    entry.callbacks.get(element);
-  if (!elementCallbacks) {
-    elementCallbacks = new Set();
-    entry.callbacks.set(element, elementCallbacks);
+  let subscriptions: Set<IOSubscription> | undefined =
+    entry.targets.get(element);
+  if (!subscriptions) {
+    subscriptions = new Set();
+    entry.targets.set(element, subscriptions);
     entry.observer.observe(element);
   }
-  elementCallbacks.add(onIntersect);
+
+  const subscription: IOSubscription = { callback: onIntersect };
+  subscriptions.add(subscription);
 
   let disposed = false;
-
   return () => {
     if (disposed) return;
     disposed = true;
 
-    const poolEntry: IOPoolEntry | undefined = pool.get(key);
-    if (!poolEntry) return;
+    const poolEntry: IOPoolEntry | undefined = bucket.get(key);
+    const current: Set<IOSubscription> | undefined =
+      poolEntry?.targets.get(element);
+    if (!poolEntry || !current) return;
 
-    const callbacks: Set<IOCallback> | undefined =
-      poolEntry.callbacks.get(element);
-    if (callbacks) {
-      callbacks.delete(onIntersect);
-    }
-    if (callbacks?.size === 0) {
-      poolEntry.observer.unobserve(element);
-      poolEntry.callbacks.delete(element);
-    }
+    current.delete(subscription);
+    if (current.size > 0) return;
 
-    if (poolEntry.callbacks.size === 0) {
+    poolEntry.observer.unobserve(element);
+    poolEntry.targets.delete(element);
+    if (poolEntry.targets.size === 0) {
       poolEntry.observer.disconnect();
-      pool.delete(key);
+      bucket.delete(key);
     }
   };
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
+function getBucket(
+  root: Element | Document | null | undefined,
+): Map<string, IOPoolEntry> {
+  if (!root) return viewportPool;
 
-/**
- * Produces a stable string key from IO options to group observers in the pool.
- * IO options are immutable after construction, so identical options can share.
- */
-function getPoolKey(opts: IntersectionObserverInit): string {
-  const root = getRootKey(opts.root);
-  const margin = opts.rootMargin ?? '0px';
-  const threshold = Array.isArray(opts.threshold)
-    ? [...new Set(opts.threshold)].toSorted((a, b) => a - b).join(',')
-    : String(opts.threshold ?? 0);
-
-  return `${root}|${margin}|${threshold}`;
-}
-
-function getRootKey(root: Element | Document | null | undefined): string {
-  if (!root) return 'null';
-  let id: number | undefined = rootIds.get(root);
-  if (id === undefined) {
-    id = nextRootId++;
-    rootIds.set(root, id);
+  let bucket: Map<string, IOPoolEntry> | undefined = rootedPools.get(root);
+  if (!bucket) {
+    bucket = new Map();
+    rootedPools.set(root, bucket);
   }
-  return String(id);
+  return bucket;
 }
 
-/** Return an existing pool entry for this key, or create and register a new one. */
-function getOrCreatePoolEntry(
-  key: string,
+function normalizeOptions(
   options: IntersectionObserverInit,
-): IOPoolEntry {
-  const existing: IOPoolEntry | undefined = pool.get(key);
-  if (existing) return existing;
+): NormalizedIntersectionOptions {
+  const input: number[] = Array.isArray(options.threshold)
+    ? options.threshold
+    : [options.threshold ?? 0];
+  const threshold: number[] =
+    input.length === 0
+      ? [0]
+      : [...new Set(input)].toSorted((first, second) => first - second);
 
-  const entry = createPoolEntry(options);
-
-  pool.set(key, entry);
-  return entry;
+  return { ...options, threshold };
 }
 
-/** Create a new pool entry for the given options. */
-const createPoolEntry = (options: IntersectionObserverInit): IOPoolEntry => {
-  const callbacks = new Map<Element, Set<IOCallback>>();
+function getPoolKey(options: NormalizedIntersectionOptions): string {
+  return `${options.rootMargin ?? '0px'}|${options.scrollMargin ?? '0px'}|${options.threshold.join(',')}`;
+}
+
+function createPoolEntry(options: NormalizedIntersectionOptions): IOPoolEntry {
+  const targets = new Map<Element, Set<IOSubscription>>();
   const observer = new IntersectionObserver((entries) => {
+    let firstError: unknown;
+    let hasError = false;
+
     for (const ioEntry of entries) {
-      const elementCallbacks: Set<IOCallback> | undefined = callbacks.get(
+      const subscriptions: Set<IOSubscription> | undefined = targets.get(
         ioEntry.target,
       );
-      if (!elementCallbacks) continue;
+      if (!subscriptions) continue;
 
-      let firstError: unknown;
-      let hasError = false;
-      const currentCallbacks = Array.from(elementCallbacks);
-      for (const callback of currentCallbacks) {
-        if (!elementCallbacks.has(callback)) continue;
+      const current = Array.from(subscriptions);
+      for (const subscription of current) {
+        if (!subscriptions.has(subscription)) continue;
         try {
-          callback(ioEntry);
+          subscription.callback(ioEntry);
         } catch (error) {
           if (!hasError) {
             firstError = error;
@@ -133,9 +127,10 @@ const createPoolEntry = (options: IntersectionObserverInit): IOPoolEntry => {
           }
         }
       }
-      if (hasError) throw firstError;
     }
+
+    if (hasError) throw firstError;
   }, options);
 
-  return { observer, callbacks };
-};
+  return { observer, targets };
+}
