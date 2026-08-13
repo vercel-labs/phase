@@ -511,6 +511,16 @@ export const SIGNALS = [
       /getBoundingClientRect|offsetWidth|offsetHeight|offsetTop|offsetLeft|getComputedStyle|scrollWidth|scrollHeight|clientWidth|clientHeight/,
   },
   {
+    id: 'js-layout-write',
+    replacement: 'animate transform/opacity on an HTML wrapper when possible',
+    label: 'Potential layout-inducing JavaScript write',
+    severity: 'high',
+    noise: 'noisy',
+    why: 'Repeated SVG or CSS layout writes can cause layout and paint.',
+    fix: 'references/performance.md#no-layout-inducing-writes-in-animation-paths',
+    matcher: matchesLayoutWrite,
+  },
+  {
     id: 'raw-io',
     replacement: 'useSight or useLifecycle (pooled IntersectionObserver)',
     label: 'Raw IntersectionObserver (not pooled)',
@@ -804,12 +814,63 @@ const FRAME_DRIVER =
   /requestAnimationFrame|\bonTick\b|\bonDraw\b|\bdraw\s*:|use(?:Loop|Canvas|Tween|Pointer|Scroll)\s*\(|create(?:Loop|Ticker|Pointer|Scroll)\s*\(|addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove|scroll|resize|wheel|drag)|new\s+(?:Intersection|Resize|Mutation)Observer|setInterval\s*\(/;
 
 const FRAME_DRIVER_WINDOW = 6;
+
+const STYLE_LAYOUT_PROPERTY =
+  /^(?:width|height|minWidth|maxWidth|minHeight|maxHeight|inlineSize|minInlineSize|maxInlineSize|blockSize|minBlockSize|maxBlockSize|top|right|bottom|left|inset|insetBlock|insetBlockStart|insetBlockEnd|insetInline|insetInlineStart|insetInlineEnd|margin|marginTop|marginRight|marginBottom|marginLeft|marginBlock|marginBlockStart|marginBlockEnd|marginInline|marginInlineStart|marginInlineEnd|padding|paddingTop|paddingRight|paddingBottom|paddingLeft|paddingBlock|paddingBlockStart|paddingBlockEnd|paddingInline|paddingInlineStart|paddingInlineEnd)$/;
+const CSS_LAYOUT_PROPERTY =
+  /^(?:width|height|min-width|max-width|min-height|max-height|inline-size|min-inline-size|max-inline-size|block-size|min-block-size|max-block-size|top|right|bottom|left|inset|inset-block|inset-block-start|inset-block-end|inset-inline|inset-inline-start|inset-inline-end|margin|margin-top|margin-right|margin-bottom|margin-left|margin-block|margin-block-start|margin-block-end|margin-inline|margin-inline-start|margin-inline-end|padding|padding-top|padding-right|padding-bottom|padding-left|padding-block|padding-block-start|padding-block-end|padding-inline|padding-inline-start|padding-inline-end)$/;
+const SVG_LAYOUT_ATTRIBUTE =
+  /^(?:x|y|width|height|cx|cy|r|d|points|x1|y1|x2|y2|transform)$/;
 //
 // Custom matchers: `(lines: string[], i: number) => boolean`.
 // Called once per line per signal. Return true if line i should be reported.
 // Must be pure (no side effects, no mutation of lines). Declared before
 // SIGNALS because the catalog references them; grouped here with other
 // detection-support constants for locality.
+
+/** JavaScript writes that may invalidate layout or paint when repeated. */
+function matchesLayoutWrite(lines, i) {
+  const line = lines[i];
+  const code = maskStrings([line])[0];
+  const callSource = lines.slice(i, i + 3).join('\n');
+
+  if (/\.set(?:Translate|Scale|Rotate|SkewX|SkewY|Matrix)\s*\(/.test(code)) {
+    return true;
+  }
+
+  const directStyle = /\.style\.([A-Za-z_$][\w$]*)\s*=/.exec(code);
+  if (directStyle && STYLE_LAYOUT_PROPERTY.test(directStyle[1])) return true;
+
+  return (
+    hasLayoutPropertyCall(
+      callSource,
+      code,
+      '.style.setProperty',
+      CSS_LAYOUT_PROPERTY,
+    ) ||
+    hasLayoutPropertyCall(
+      callSource,
+      code,
+      '.setAttribute',
+      SVG_LAYOUT_ATTRIBUTE,
+    )
+  );
+}
+
+/** Matches a quoted first argument only when the method itself is real code. */
+function hasLayoutPropertyCall(source, code, method, properties) {
+  let from = 0;
+  while (from < code.length) {
+    const index = code.indexOf(method, from);
+    if (index === -1) return false;
+
+    const args = source.slice(index + method.length);
+    const property = /^\s*\(\s*(['"])([^'"]+)\1/.exec(args)?.[2];
+    if (property && properties.test(property)) return true;
+    from = index + method.length;
+  }
+  return false;
+}
 
 /**
  * Flags the manual synced-ref idiom that useSyncedRef shortens:

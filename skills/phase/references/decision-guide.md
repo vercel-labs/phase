@@ -132,7 +132,7 @@ phase does not handle these and will not grow to handle them. These are compleme
 
 ### phase + WAAPI
 
-Use WAAPI for a browser-animatable timeline and `useLifecycle` to pause/resume it. Create animations once; lifecycle changes call `play()` or `pause()` rather than rebuilding keyframes. This keeps phase's visibility decision while removing the author-owned frame loop. For reduced motion, skip WAAPI setup and render a meaningful static CSS state instead of merely pausing at keyframe zero. WAAPI is not automatically composited: stay on `transform`/`opacity` where possible and verify in a performance trace. See [timed-sequences.md](./timed-sequences.md) for the pattern.
+Use WAAPI for a browser-animatable timeline and `useLifecycle` to pause/resume it. Create animations once; lifecycle changes call `play()` or `pause()` rather than rebuilding keyframes. This keeps phase's visibility decision while removing the author-owned frame loop. For reduced motion, skip WAAPI setup and render a meaningful static CSS state instead of merely pausing at keyframe zero. WAAPI is not automatically composited: stay on `transform`/`opacity` where possible and verify in a performance trace. In particular, repeated SVG transform-list or geometry-attribute writes can still require layout or paint; prefer a CSS transform on an HTML wrapper when possible. See [timed-sequences.md](./timed-sequences.md) for the pattern.
 
 ### phase + external library
 

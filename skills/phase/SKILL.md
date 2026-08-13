@@ -4,7 +4,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.17'
+  version: '0.0.18'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library.'
 ---
 
@@ -81,7 +81,7 @@ Tests enforce these guarantees for animation hot paths. Violating them in consum
 
 1. **Zero per-frame allocations.** No objects, arrays, closures, template literals, or spreads in `onTick`/`draw`.
 2. **Never `setState` inside `onTick`.** Write to refs or the DOM directly. Only phase changes trigger re-renders.
-3. **No forced reflows.** Never call `getBoundingClientRect()`, `offsetWidth`, `getComputedStyle()` in animation paths. Use `useSize` / ResizeObserver.
+3. **No layout thrash.** Never read layout synchronously or repeatedly write SVG geometry, SVG transform lists, or CSS layout properties in animation paths. Use `useSize` for reads and animate `transform`/`opacity` on a wrapper when possible.
 4. **Strong pause.** `cancelAnimationFrame()` stops scheduling entirely. Zero callbacks, zero CPU when paused.
 5. **Reduced motion by default.** All primitives respect `prefers-reduced-motion: reduce` automatically. Bypassing requires explicit `reducedMotion: 'ignore'`.
 6. **Frame-locked shared clock.** One `performance.now()` per rAF frame. Multiple animations stay in sync.
