@@ -41,7 +41,7 @@ const loop = createLoop(options: LoopOptions): Loop;
 - You need a per-frame animation loop that automatically pauses when off-screen or in a background tab.
 - You want zero CPU when the element isn't visible (strong pause via `cancelAnimationFrame`).
 - You need quality degradation signals (FPS throttle on window blur or frame budget overflow).
-- You're animating DOM elements (transforms, opacity, positions) in a frame loop.
+- You're animating DOM elements from live input or simulation state in a frame loop.
 
 ## When not to use
 
@@ -49,7 +49,7 @@ const loop = createLoop(options: LoopOptions): Loop;
 | ------------------------------------------------- | --------------------------------------------------------------------------- |
 | You own the renderer (three.js, Pixi, Web Worker) | `createLifecycle` (gives you active/paused signal without driving the loop) |
 | Single value into React render                    | `useTween` (smaller API surface, calls setState)                            |
-| Pure CSS can do it                                | CSS `transition` / `animation` / `@starting-style`                          |
+| Browser-animatable timeline known at start        | CSS/WAAPI + `createLifecycle`                                               |
 | Need springs or gesture-driven animation          | External library (motion, GSAP)                                             |
 | React component                                   | `useLoop` (same engine with React lifecycle management)                     |
 
@@ -57,8 +57,10 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 - Write to DOM directly inside `onTick`:
   ```ts
+  let x = 0;
   onTick: (frame) => {
-    el.style.transform = `translateX(${frame.elapsed * 0.1}px)`;
+    x += velocity * frame.delta;
+    el.style.transform = `translateX(${x}px)`;
   };
   ```
 - Call `stop()` when the animation is permanently done (e.g. component unmounts, page navigates away).

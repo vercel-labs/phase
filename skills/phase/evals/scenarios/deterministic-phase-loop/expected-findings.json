@@ -1,0 +1,24 @@
+{
+  "description": "Regression guard for a confirmed miss: an audit kept a deterministic elapsed-time logo sequence in useLoop even though the browser could own its transform/opacity keyframes.",
+  "scan": {
+    "command": "node <skill-dir>/scripts/scan.mjs --json workspace",
+    "assertions": {
+      "required": [
+        {
+          "signal": "phase-loop-browser-keyframes",
+          "file": "src/logo-editor.tsx",
+          "count": 1
+        }
+      ],
+      "requiredAbsent": []
+    }
+  },
+  "expectedBehavior": [
+    "Runs the bundled scanner and treats phase-loop-browser-keyframes as a candidate that needs source inspection, not proof",
+    "Notices that every visible value is a deterministic function of frame.elapsed and expressible as browser-animatable keyframes, with no live input, physics, layout reads, canvas, or required per-frame side effects",
+    "Recommends CSS keyframes or WAAPI for playback instead of useLoop; prefers WAAPI when the runtime-generated multi-target timeline needs imperative control",
+    "Requires first-paint CSS to match keyframe zero so WAAPI does not snap after hydration",
+    "Keeps phase as the lifecycle layer via useLifecycle so visibility changes call play/pause without rebuilding keyframes, while reduced motion skips setup and renders a meaningful static state",
+    "Does not claim WAAPI is always off-main-thread; limits compositor expectations to suitable transform/opacity animation and asks for trace verification"
+  ]
+}

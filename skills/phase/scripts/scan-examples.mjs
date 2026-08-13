@@ -660,6 +660,53 @@ export const SIGNAL_EXAMPLES = {
       },
     ],
   },
+  'phase-loop-browser-keyframes': {
+    match: [
+      {
+        file: 'src/logo-editor.tsx',
+        content:
+          'const tick = (frame) => {\n  const p = clamp01(frame.elapsed / 800);\n  segment.style.transform = `translateX(${p * 20}px)`;\n  cursor.style.opacity = String(p);\n};\nuseLoop({ onTick: tick });\n',
+      },
+      {
+        // SVGTransform writes were the confirmed real-world miss: the
+        // deterministic logo timeline was sampled in JS every frame.
+        file: 'src/vector-editor.tsx',
+        content:
+          'const tick = (frame) => {\n  const p = frame.elapsed / 1000;\n  transform.setTranslate(p * 10, 0);\n  rotation.setRotate(p * 20, 0, 0);\n};\nconst { ref } = useLoop<SVGSVGElement>({ onTick: tick });\n',
+      },
+      {
+        file: 'src/aliased-frame.tsx',
+        content:
+          'const tick = (f) => {\n  const p = f.elapsed / 800;\n  segment.style.transform = `translateX(${p * 20}px)`;\n};\nuseLoop({ onTick: tick });\n',
+      },
+      {
+        file: 'src/destructured-frame.tsx',
+        content:
+          'useLoop({\n  onTick: ({ elapsed }) => {\n    const p = elapsed / 800;\n    segment.style.transform = `translateX(${p * 20}px)`;\n  },\n});\n',
+      },
+    ],
+    noMatch: [
+      {
+        // Delta integration suggests simulation/physics, not a timeline that
+        // can be completely described before playback.
+        file: 'src/particles.tsx',
+        content:
+          'useLoop({\n  onTick: (frame) => {\n    velocity += gravity * frame.delta;\n    position += velocity * frame.delta;\n    particle.style.transform = `translateY(${position}px)`;\n  },\n});\n',
+      },
+      {
+        // Elapsed time alone is not enough; there must also be visible output
+        // that browser keyframes plausibly own.
+        file: 'src/clock.tsx',
+        content:
+          "useLoop({\n  onTick: (frame) => label.setAttribute('aria-valuenow', String(frame.elapsed)),\n});\n",
+      },
+      {
+        file: 'src/css-gate.tsx',
+        content:
+          "const { ref, isActive } = useLifecycle();\nreturn <div ref={ref} style={{ animationPlayState: isActive ? 'running' : 'paused' }} />;\n",
+      },
+    ],
+  },
   'when-visible-no-fallback': {
     match: [
       {

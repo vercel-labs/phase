@@ -1,6 +1,6 @@
 # Timed sequence animations
 
-How to build visibility-aware, multi-step animation sequences (do X, wait, do Y, wait, do Z) with phase. This is the most common marketing animation pattern and the one most likely to be built incorrectly.
+How to build visibility-aware, multi-step animation sequences (do X, wait, do Y, wait, do Z) with browser keyframes or a phase-owned loop. This is the most common marketing animation pattern and the one most likely to be built at the wrong tier.
 
 ## Why `useLifecycle` + `setTimeout` fails
 
@@ -29,9 +29,71 @@ This fails in three ways:
 2. **Timers don't participate in phase's lifecycle.** If the cleanup races or `isActive` flips rapidly, timers can fire out of order or after unmount.
 3. **Each step triggers a React re-render.** `setStep` causes reconciliation for what should be a DOM-only operation.
 
-## The correct pattern: `useLoop` with `frame.elapsed`
+## First choose who owns the timeline
 
-Derive which animation step you're in from `frame.elapsed` thresholds. The loop auto-pauses off-screen, `elapsed` freezes during pause, and the sequence resumes exactly where it left off.
+Prefer browser keyframes when the whole timeline can be described before playback:
+
+- Values depend only on time.
+- Targets and CSS-animatable keyframes are known when the sequence starts.
+- No JavaScript side effect is required on every frame.
+
+Use CSS for static keyframes and WAAPI when keyframes are generated from runtime data or need imperative control. Add `useLifecycle` only to pause/resume playback off-screen and for reduced motion. Use `useLoop` when frames depend on live pointer/scroll data, layout, simulation state, canvas/WebGL, or JS work that keyframes cannot represent.
+
+## Keyframe-friendly sequence: browser keyframes + `useLifecycle`
+
+Create animations once, pause them immediately, then let lifecycle changes control playback. The browser samples the timeline; React and phase do no per-frame work.
+
+First paint and reduced motion are separate visual requirements. Render the normal CSS state to match keyframe zero so WAAPI does not snap after hydration. In a `prefers-reduced-motion: reduce` rule, render a meaningful static state (usually the final frame) and skip WAAPI setup. `useLifecycle` pauses work; it does not choose that static fallback for you.
+
+```tsx
+const animationsRef = useRef<Animation[]>([]);
+const { ref, isActive } = useLifecycle<HTMLDivElement>();
+const shouldReduceMotion = usePrefersReducedMotion();
+
+useEffect(() => {
+  const root = ref.current;
+  // The synchronous check also covers the initial hydration render, where
+  // usePrefersReducedMotion intentionally still returns false.
+  if (!root || shouldReduceMotion || prefersReducedMotion()) return;
+
+  const bars = root.querySelectorAll<HTMLElement>('[data-bar]');
+  const animations = Array.from(bars, (bar, index) =>
+    bar.animate([{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], {
+      duration: 600,
+      delay: index * 500,
+      fill: 'both',
+      easing: 'ease-out',
+    }),
+  );
+  for (const animation of animations) animation.pause();
+  animationsRef.current = animations;
+
+  return () => {
+    for (const animation of animations) animation.cancel();
+    animationsRef.current = [];
+  };
+}, [ref, shouldReduceMotion]);
+
+useEffect(() => {
+  for (const animation of animationsRef.current) {
+    if (isActive) animation.play();
+    else animation.pause();
+  }
+}, [isActive, shouldReduceMotion]);
+
+return (
+  <div ref={ref}>
+    {/* CSS: keyframe-zero state normally; final static state under reduce */}
+    {/* bars */}
+  </div>
+);
+```
+
+WAAPI is not a blanket compositor guarantee. Prefer `transform`/`opacity`, avoid layout-dependent keyframes, and confirm main-thread, layout, and paint cost in a performance trace.
+
+## JS-owned sequence: `useLoop` with `frame.elapsed`
+
+When JavaScript genuinely must own each frame, derive the step from `frame.elapsed` thresholds. The loop auto-pauses off-screen, `elapsed` freezes during pause, and the sequence resumes exactly where it left off.
 
 The loop doesn't fire until the element enters the viewport, so there's a gap between the browser's first paint and the first `onTick` call. If an element's CSS renders it at full width but the animation starts from zero, the user sees a flash: full width → snap to zero → animate back. Set each element's CSS to its animation start state (e.g., `scaleX(0)`, `opacity: 0`) so the browser paints the pre-animation state from the start:
 
@@ -72,11 +134,11 @@ return (
 - **Zero re-renders.** `onTick` writes to the DOM directly via refs. React never reconciles.
 - **Visibility-aware by default.** The loop pauses off-screen and under reduced motion. No manual `IntersectionObserver` needed.
 
-## How to build a timed sequence
+## How to build a JS-owned timed sequence
 
 1. **Identify the sequence steps.** Each step has a start time (ms from the beginning) and a duration.
 2. **Set CSS initial state.** Each animated element should render in its animation start state via CSS (e.g., `scaleX(0)`, `opacity: 0`, `translateY(20px)`). Otherwise, the element flashes at its natural size before the loop's first tick overrides it.
-3. **Use `useLoop` with a low `fps`.** `fps: 1` or `fps: 2` is enough for step-based sequences. Use higher FPS only if you need smooth interpolation between steps.
+3. **Use `useLoop` with a low `fps` for discrete steps.** `fps: 1` or `fps: 2` is enough for state transitions. Smooth visual interpolation needs a higher rate, but first re-check whether CSS/WAAPI can own it.
 4. **Derive step state from `frame.elapsed` in `onTick`.** Compare against your timing thresholds. Write to DOM directly.
 5. **Use `clamp01` for progress within each step.** `clamp01((elapsed - stepStart) / stepDuration)` gives you a 0–1 progress for each step.
 6. **Apply easing if needed.** Pipe the clamped progress through an easing function: `easeOutCubic(clamp01((e - start) / duration))`.
@@ -150,7 +212,7 @@ return (
 
 `setDone(true)` fires once, not per frame. This is a phase transition (one re-render), not a hot-path allocation.
 
-### CSS-only sequences that need lifecycle gating
+### Static CSS sequences that need lifecycle gating
 
 If the sequence is pure CSS (`@keyframes` with `animation-delay`), use `useLifecycle` to toggle `animation-play-state` instead:
 
@@ -177,16 +239,17 @@ This is the right choice when CSS handles the timing and interpolation and you o
 
 ## When to use each
 
-| Timing driven by          | Use                                                   |
-| ------------------------- | ----------------------------------------------------- |
-| JS (`frame.elapsed`)      | `useLoop` with `fps: 1–2` and elapsed-time thresholds |
-| CSS (`@keyframes`, delay) | `useLifecycle` toggling `animation-play-state`        |
-| Neither (enter/exit only) | `Presence` / `WhenVisible` with CSS transitions       |
+| Timeline needs                                                | Use                                                        |
+| ------------------------------------------------------------- | ---------------------------------------------------------- |
+| Static keyframes                                              | CSS + `useLifecycle` toggling `animation-play-state`       |
+| Generated, browser-animatable keyframes / imperative playback | WAAPI + `useLifecycle` calling `play()` / `pause()`        |
+| Live per-frame JS, simulation, canvas, or changing input      | `useLoop` with `frame.elapsed` / `frame.delta` as required |
+| Enter/exit only                                               | `Presence` / `WhenVisible` with CSS transitions            |
 
 ## See also
 
-- [use-loop](./use-loop.md). The hook that drives the sequence
-- [use-lifecycle](./use-lifecycle.md). For CSS-driven sequences that need visibility gating
+- [use-loop](./use-loop.md). For sequences that genuinely need a JS-owned frame loop
+- [use-lifecycle](./use-lifecycle.md). For browser-driven sequences that need visibility gating
 - [ease](./ease.md). Easing functions for smooth step transitions
 - [decision-guide](./decision-guide.md). Choosing between CSS, phase, and external libraries
 - [performance](./performance.md). Rules for `onTick` (zero allocations, no setState)

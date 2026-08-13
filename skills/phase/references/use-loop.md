@@ -35,31 +35,40 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 
 ## When to use
 
-- Animating DOM elements in a per-frame loop (transforms, positions, colors).
+- Animating DOM elements whose frames depend on live JS input or simulation state.
 - You need visibility-aware pausing (zero CPU off-screen).
 - You want phase/quality signals exposed as React state for conditional rendering.
 
 ## When not to use
 
-| Instead of this                       | Use                                                            |
-| ------------------------------------- | -------------------------------------------------------------- |
-| Canvas/WebGL animation                | `useCanvas` (adds DPR handling, resize, context loss recovery) |
-| You own the renderer (three.js, Pixi) | `useLifecycle` (gives active/paused signal)                    |
-| Single numeric value into render      | `useTween`                                                     |
-| No React                              | `createLoop` (core)                                            |
+| Instead of this                            | Use                                                            |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| Browser-animatable timeline known at start | CSS/WAAPI + `useLifecycle`                                     |
+| Canvas/WebGL animation                     | `useCanvas` (adds DPR handling, resize, context loss recovery) |
+| You own the renderer (three.js, Pixi)      | `useLifecycle` (gives active/paused signal)                    |
+| Single numeric value into render           | `useTween`                                                     |
+| No React                                   | `createLoop` (core)                                            |
 
 ## Do
 
 - Cleanup is automatic. The effect teardown calls `stop()` on unmount. No manual cleanup needed.
 - Attach the returned `ref` to the element you're animating:
+
   ```tsx
+  const xRef = useRef(0);
+  const velocityRef = useRef(0.1); // pixels per millisecond
   const { ref } = useLoop({
     onTick: (frame) => {
-      ref.current.style.transform = `translateX(${frame.elapsed * 0.1}px)`;
+      const element = ref.current;
+      if (!element) return;
+
+      xRef.current += velocityRef.current * frame.delta;
+      element.style.transform = `translateX(${xRef.current}px)`;
     },
   });
   return <div ref={ref} />;
   ```
+
 - Use `enabled` to conditionally tear down and restart the loop:
   ```tsx
   useLoop({ onTick: draw, enabled: isAnimating });
