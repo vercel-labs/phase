@@ -113,10 +113,10 @@ describe('useLoop', () => {
         }),
       { initialProps: { threshold: 0.25 } },
     );
-    expect(mockIO.instances.at(-1)?.options?.threshold).toBe(0.25);
+    expect(mockIO.instances.at(-1)?.options?.threshold).toEqual([0.25]);
 
     rerender({ threshold: 0.75 });
-    expect(mockIO.instances.at(-1)?.options?.threshold).toBe(0.75);
+    expect(mockIO.instances.at(-1)?.options?.threshold).toEqual([0.75]);
   });
 
   it('transient quality stays current without rendering', async () => {

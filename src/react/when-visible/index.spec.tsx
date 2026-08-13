@@ -226,7 +226,7 @@ describe('options', () => {
     );
 
     const instance = mockIO.instances[mockIO.instances.length - 1];
-    expect(instance?.options?.threshold).toBe(0.5);
+    expect(instance?.options?.threshold).toEqual([0.5]);
   });
 });
 
