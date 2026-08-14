@@ -4,6 +4,7 @@ import { invalidDurationError } from '../../core/_internal/errors';
 import type { ReducedMotionBehavior } from '../../core/loop';
 import { prefersReducedMotion } from '../../core/reduced-motion';
 import { clamp01, easeOutCubic } from '../../ease';
+import { useSyncedRef } from '../use-synced-ref';
 
 export interface UseTweenOptions {
   target: number;
@@ -42,6 +43,7 @@ export function useTween(options: UseTweenOptions): number {
   } = options;
 
   const [value, setValue] = useState(target);
+  const easingRef = useSyncedRef(easing);
 
   const fromRef = useRef(target);
   const currentRef = useRef(target);
@@ -84,7 +86,9 @@ export function useTween(options: UseTweenOptions): number {
 
       const progress: number = clamp01(elapsed / duration);
       const current: number =
-        progress === 1 ? target : from + (target - from) * easing(progress);
+        progress === 1
+          ? target
+          : from + (target - from) * easingRef.current(progress);
       currentRef.current = current;
       setValue(current);
 
