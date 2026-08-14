@@ -1,5 +1,11 @@
 # phase
 
+## 0.0.13
+
+### Patch Changes
+
+- Complete active `useTween` animations when reduced motion turns on and remove the unsupported `'pause'` mode.
+
 ## 0.0.12
 
 ### Patch Changes
