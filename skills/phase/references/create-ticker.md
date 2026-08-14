@@ -33,7 +33,7 @@ const ticker = createTicker(options: TickerOptions): Ticker;
 
 | Field     | Type     | Description                              |
 | --------- | -------- | ---------------------------------------- |
-| `time`    | `number` | Current `performance.now()`              |
+| `time`    | `number` | Current browser rAF timestamp            |
 | `delta`   | `number` | ms since last tick (clamped to 40ms max) |
 | `elapsed` | `number` | ms since start, excluding paused time    |
 | `frame`   | `number` | Frame count since start                  |
@@ -55,7 +55,7 @@ const ticker = createTicker(options: TickerOptions): Ticker;
 ## Do
 
 - Use `pause()` / `resume()` for intentional suspension (e.g. user pauses a game).
-- Rely on the shared clock: all tickers read the same `performance.now()` per frame, so multiple animations stay in sync.
+- Rely on the shared clock: all tickers receive the same browser rAF timestamp, so multiple animations stay in sync.
 - Trust delta clamping: after a long pause, `frame.delta` is clamped to 40ms. No teleporting.
 
 ## Don't

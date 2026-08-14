@@ -4,7 +4,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.21'
+  version: '0.0.22'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library.'
 ---
 
@@ -84,7 +84,7 @@ Tests enforce these guarantees for animation hot paths. Violating them in consum
 3. **No layout thrash.** Never read layout synchronously or repeatedly write SVG geometry, SVG transform lists, or CSS layout properties in animation paths. Use `useSize` for reads and animate `transform`/`opacity` on a wrapper when possible.
 4. **Strong pause.** `cancelAnimationFrame()` stops scheduling entirely. Zero callbacks, zero CPU when paused.
 5. **Reduced motion by default.** All primitives respect `prefers-reduced-motion: reduce` automatically. Bypassing requires explicit `reducedMotion: 'ignore'`.
-6. **Frame-locked shared clock.** One `performance.now()` per rAF frame. Multiple animations stay in sync.
+6. **Frame-locked shared clock.** Every animation receives the same browser rAF timestamp. No per-frame `performance.now()` read.
 
 For the full performance ruleset, read [references/performance.md](references/performance.md).
 

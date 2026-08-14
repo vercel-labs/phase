@@ -170,7 +170,7 @@ return <Anim onTick={(frame) => draw(frame, props)} />;
 
 ### Frame-locked shared clock
 
-All tickers share one `requestAnimationFrame` loop with a single `performance.now()` read per frame.
+All tickers share one `requestAnimationFrame` loop and receive the same browser-supplied timestamp each frame.
 
 **Don't:**
 
