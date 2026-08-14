@@ -1,5 +1,11 @@
 # phase
 
+## 0.0.10
+
+### Patch Changes
+
+- Make completed `useTween` animations land exactly on their target with custom easing.
+
 ## 0.0.9
 
 ### Patch Changes

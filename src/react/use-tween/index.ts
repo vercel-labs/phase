@@ -83,7 +83,8 @@ export function useTween(options: UseTweenOptions): number {
       }
 
       const progress: number = clamp01(elapsed / duration);
-      const current: number = from + (target - from) * easing(progress);
+      const current: number =
+        progress === 1 ? target : from + (target - from) * easing(progress);
       currentRef.current = current;
       setValue(current);
 
