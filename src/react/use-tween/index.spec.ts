@@ -66,6 +66,30 @@ describe('useTween', () => {
     expect(result.current).toBe(100);
   });
 
+  it.each([
+    { from: 0, target: 100 },
+    { from: 100, target: 0 },
+  ])(
+    'uses custom easing before landing exactly from $from to $target',
+    async ({ from, target }) => {
+      const useTween = await getHook();
+      const easing = vi.fn(() => 0.5);
+      const { result, rerender } = renderHook(
+        ({ value }: { value: number }) =>
+          useTween({ target: value, duration: 100, easing }),
+        { initialProps: { value: from } },
+      );
+
+      rerender({ value: target });
+      act(() => vi.advanceTimersByTime(50));
+      expect(result.current).toBe((from + target) / 2);
+
+      act(() => vi.advanceTimersByTime(100));
+      expect(result.current).toBe(target);
+      expect(easing).not.toHaveBeenCalledWith(1);
+    },
+  );
+
   it('enabled=false jumps to target immediately', async () => {
     const useTween = await getHook();
     const { result, rerender } = renderHook(
