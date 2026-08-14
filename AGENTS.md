@@ -75,7 +75,7 @@ Every module must satisfy these performance contracts without exception.
 ### Lifecycle rules
 
 - **Strong pause.** `cancelAnimationFrame()` stops scheduling entirely. Zero callbacks fire, and the loop fully halts (no rAF + early return).
-- **Frame-locked shared clock.** One `performance.now()` read per rAF frame. All tickers read from this shared value. No visual desync.
+- **Frame-locked shared clock.** All tickers receive the same browser rAF timestamp. No per-frame `performance.now()` read and no visual desync.
 - **Delta clamped at 40ms.** Prevents teleport on resume after long pause.
 - **Pause-aware elapsed.** `frame.elapsed` freezes during pause, resumes from where it left off.
 

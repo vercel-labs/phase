@@ -178,7 +178,7 @@ import { createLoop } from 'phase';
 const loop = createLoop({
   element: el,
   onTick: (frame) => {
-    // frame.time    — performance.now()
+    // frame.time    — browser rAF timestamp
     // frame.delta   — ms since last tick (clamped to 40ms)
     // frame.elapsed — ms since start (paused time excluded)
     // frame.frame   — frame count
@@ -264,7 +264,7 @@ const ticker = createTicker({
 ticker.start();
 ```
 
-All tickers share a single `requestAnimationFrame` loop. Every subscriber reads the same `performance.now()` value each frame, so independent animations stay in visual sync.
+All tickers share a single `requestAnimationFrame` loop. Every subscriber receives the same browser-supplied timestamp each frame, so independent animations stay in visual sync.
 
 #### Ticker phases
 
@@ -1195,7 +1195,7 @@ The rAF loop never triggers a React re-render. All per-frame state lives in refs
 
 ### Frame-locked shared clock
 
-All tickers share one `requestAnimationFrame` loop with a single `performance.now()` read per frame, keeping multiple animations on the same page in visual sync.
+All tickers share one `requestAnimationFrame` loop and receive the same browser-supplied timestamp each frame, keeping multiple animations on the same page in visual sync.
 
 ### Delta clamping
 
@@ -1232,10 +1232,10 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |             834 B |
+| `createTicker`            |             846 B |
 | `createSight`             |             967 B |
 | `createLifecycle`         |           1.48 kB |
-| `createLoop`              |           2.59 kB |
+| `createLoop`              |           2.62 kB |
 | `createScrollProgress`    |             866 B |
 | `createRenderState`       |             495 B |
 | `createDevicePixelRatio`  |             544 B |
@@ -1249,10 +1249,10 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           2.82 kB |
+| `useLoop`                 |           2.85 kB |
 | `useLifecycle`            |           1.68 kB |
 | `useSight`                |           1.18 kB |
-| `useCanvas`               |           3.44 kB |
+| `useCanvas`               |           3.47 kB |
 | `useMutation`             |           1.36 kB |
 | `usePointer`              |           1.47 kB |
 | `useScroll`               |           1.72 kB |

@@ -6,7 +6,7 @@ import { serverContextError, tickerStoppedError } from '../_internal/errors';
 // ---------------------------------------------------------------------------
 
 export interface FrameState {
-  /** Current timestamp from performance.now(). */
+  /** Current browser requestAnimationFrame timestamp. */
   time: number;
   /** Milliseconds since last tick, clamped to 40ms. */
   delta: number;
@@ -64,34 +64,46 @@ const DEFAULT_FIRST_DELTA_MS = 16.67;
 // stops when the last one leaves.
 // ---------------------------------------------------------------------------
 
-let sharedTime = 0;
-let sharedRafId = 0;
-const sharedSubscribers = new Set<() => void>();
+interface SharedSubscription {
+  callback: (time: number) => void;
+  joinedFrame: number;
+}
 
-function sharedTick(): void {
-  sharedTime = performance.now();
-  for (const callback of sharedSubscribers) callback();
-  if (sharedSubscribers.size > 0) {
+let sharedRafId: number | null = null;
+let sharedFrame = 0;
+let sharedTime = 0;
+const sharedSubscribers = new Set<SharedSubscription>();
+
+function dispatchSharedSubscription(subscription: SharedSubscription): void {
+  if (subscription.joinedFrame < sharedFrame) {
+    subscription.callback(sharedTime);
+  }
+}
+
+function sharedTick(time: number): void {
+  sharedTime = time;
+  sharedFrame++;
+  sharedRafId = requestAnimationFrame(sharedTick);
+  // eslint-disable-next-line unicorn/no-array-for-each -- Set#forEach avoids a per-frame iterator.
+  sharedSubscribers.forEach(dispatchSharedSubscription);
+}
+
+function joinSharedClock(subscription: SharedSubscription): void {
+  const wasEmpty: boolean = sharedSubscribers.size === 0;
+  subscription.joinedFrame = sharedFrame;
+  sharedSubscribers.add(subscription);
+
+  if (wasEmpty) {
     sharedRafId = requestAnimationFrame(sharedTick);
   }
 }
 
-function joinSharedClock(callback: () => void): () => void {
-  const wasEmpty: boolean = sharedSubscribers.size === 0;
-  sharedSubscribers.add(callback);
-
-  if (wasEmpty) {
-    sharedTime = performance.now();
-    sharedRafId = requestAnimationFrame(sharedTick);
+function leaveSharedClock(subscription: SharedSubscription): void {
+  sharedSubscribers.delete(subscription);
+  if (sharedSubscribers.size === 0 && sharedRafId !== null) {
+    cancelAnimationFrame(sharedRafId);
+    sharedRafId = null;
   }
-
-  return () => {
-    sharedSubscribers.delete(callback);
-    if (sharedSubscribers.size === 0 && sharedRafId) {
-      cancelAnimationFrame(sharedRafId);
-      sharedRafId = 0;
-    }
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -126,7 +138,6 @@ export function createTicker(options: TickerOptions): Ticker {
 
   let _phase: TickerPhase = 'idle';
   let _reason: TickerReason = 'initial';
-  let leaveSharedClock: (() => void) | null = null;
 
   let lastTickTime = 0;
   let pauseStartTime = 0;
@@ -136,9 +147,7 @@ export function createTicker(options: TickerOptions): Ticker {
   // Pre-allocated, mutated in place each frame — zero allocations per tick.
   const frame: FrameState = { time: 0, delta: 0, elapsed: 0, frame: 0 };
 
-  function tick(): void {
-    const now: number = sharedTime;
-
+  function tick(now: number): void {
     // FPS throttle: skip this frame if we're ahead of the target interval.
     if (minFrameTime > 0 && now - lastTickTime < minFrameTime) return;
 
@@ -153,6 +162,8 @@ export function createTicker(options: TickerOptions): Ticker {
 
     onTick(frame);
   }
+
+  const subscription: SharedSubscription = { callback: tick, joinedFrame: 0 };
 
   function start(): void {
     if (_phase === 'running') return;
@@ -169,7 +180,7 @@ export function createTicker(options: TickerOptions): Ticker {
     totalPausedTime = 0;
     resetFrameState(frame);
 
-    leaveSharedClock = joinSharedClock(tick);
+    joinSharedClock(subscription);
   }
 
   function pause(): void {
@@ -180,8 +191,7 @@ export function createTicker(options: TickerOptions): Ticker {
     pauseStartTime = performance.now();
 
     // Strong pause: cancel rAF subscription entirely — zero CPU while paused.
-    leaveSharedClock?.();
-    leaveSharedClock = null;
+    leaveSharedClock(subscription);
   }
 
   function resume(): void {
@@ -194,7 +204,7 @@ export function createTicker(options: TickerOptions): Ticker {
 
     _phase = 'running';
     _reason = 'resumed';
-    leaveSharedClock = joinSharedClock(tick);
+    joinSharedClock(subscription);
   }
 
   function stop(): void {
@@ -203,8 +213,7 @@ export function createTicker(options: TickerOptions): Ticker {
     _phase = 'stopped';
     _reason = _reason === 'initial' ? 'disposed' : 'manual';
     unlinkAbort?.();
-    leaveSharedClock?.();
-    leaveSharedClock = null;
+    leaveSharedClock(subscription);
   }
 
   // Declared before assignment because an already-aborted signal makes

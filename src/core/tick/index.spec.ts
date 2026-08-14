@@ -15,6 +15,28 @@ function advanceFrame(ms = 16): void {
   vi.advanceTimersByTime(ms);
 }
 
+function createRafDriver(firstId = 1, idStep = 1) {
+  let nextId = firstId;
+  const pending = new Map<number, FrameRequestCallback>();
+  const request = vi.fn((callback: FrameRequestCallback): number => {
+    const id = nextId;
+    nextId += idStep;
+    pending.set(id, callback);
+    return id;
+  });
+  const cancel = vi.fn((id: number): void => {
+    pending.delete(id);
+  });
+
+  function frame(timestamp: number): void {
+    const callbacks = Array.from(pending.values());
+    pending.clear();
+    for (const callback of callbacks) callback(timestamp);
+  }
+
+  return { request, cancel, frame, pending };
+}
+
 // ---------------------------------------------------------------------------
 // Phase transitions
 // ---------------------------------------------------------------------------
@@ -354,6 +376,138 @@ describe('shared clock', () => {
     advanceFrame(16);
     expect(cb2.mock.calls.length).toBeGreaterThan(cb1.mock.calls.length);
     t2.stop();
+  });
+
+  it('distributes the exact browser timestamp without a per-frame clock read', async () => {
+    const raf = createRafDriver();
+    vi.stubGlobal('requestAnimationFrame', raf.request);
+    vi.stubGlobal('cancelAnimationFrame', raf.cancel);
+    const now = vi.spyOn(performance, 'now');
+    const { createTicker } = await getModule();
+    const times: number[] = [];
+    const first = createTicker({ onTick: (frame) => times.push(frame.time) });
+    const second = createTicker({ onTick: (frame) => times.push(frame.time) });
+    first.start();
+    second.start();
+    now.mockClear();
+
+    raf.frame(123.456);
+
+    expect(times).toEqual([123.456, 123.456]);
+    expect(now).not.toHaveBeenCalled();
+    first.stop();
+    second.stop();
+  });
+
+  it('defers a ticker started during dispatch until the next browser frame', async () => {
+    const raf = createRafDriver();
+    vi.stubGlobal('requestAnimationFrame', raf.request);
+    vi.stubGlobal('cancelAnimationFrame', raf.cancel);
+    const { createTicker } = await getModule();
+    const secondTick = vi.fn();
+    const second = createTicker({ onTick: secondTick });
+    const first = createTicker({ onTick: () => second.start() });
+    first.start();
+
+    raf.frame(10);
+    expect(secondTick).not.toHaveBeenCalled();
+    raf.frame(20);
+    expect(secondTick).toHaveBeenCalledTimes(1);
+
+    first.stop();
+    second.stop();
+  });
+
+  it('does not redeliver a ticker paused and resumed during dispatch', async () => {
+    const raf = createRafDriver();
+    vi.stubGlobal('requestAnimationFrame', raf.request);
+    vi.stubGlobal('cancelAnimationFrame', raf.cancel);
+    const { createTicker } = await getModule();
+    let ticker: ReturnType<typeof createTicker>;
+    let reenter = true;
+    const callback = vi.fn(() => {
+      if (!reenter) return;
+      reenter = false;
+      ticker.pause();
+      ticker.resume();
+    });
+    ticker = createTicker({ onTick: callback });
+    ticker.start();
+
+    raf.frame(10);
+    expect(callback).toHaveBeenCalledTimes(1);
+    raf.frame(20);
+    expect(callback).toHaveBeenCalledTimes(2);
+    ticker.stop();
+  });
+
+  it('suppresses a later subscriber removed during dispatch', async () => {
+    const raf = createRafDriver();
+    vi.stubGlobal('requestAnimationFrame', raf.request);
+    vi.stubGlobal('cancelAnimationFrame', raf.cancel);
+    const { createTicker } = await getModule();
+    const secondTick = vi.fn();
+    const second = createTicker({ onTick: secondTick });
+    const first = createTicker({ onTick: () => second.pause() });
+    first.start();
+    second.start();
+
+    raf.frame(10);
+
+    expect(secondTick).not.toHaveBeenCalled();
+    first.stop();
+    second.stop();
+  });
+
+  it('cancels a pending frame whose request ID is zero', async () => {
+    const raf = createRafDriver(0);
+    vi.stubGlobal('requestAnimationFrame', raf.request);
+    vi.stubGlobal('cancelAnimationFrame', raf.cancel);
+    const { createTicker } = await getModule();
+    const ticker = createTicker({ onTick: vi.fn() });
+    ticker.start();
+
+    ticker.stop();
+
+    expect(raf.cancel).toHaveBeenCalledWith(0);
+    expect(raf.pending.size).toBe(0);
+  });
+
+  it('cancels the already scheduled next frame when the last ticker stops during dispatch', async () => {
+    const raf = createRafDriver(0, 0);
+    vi.stubGlobal('requestAnimationFrame', raf.request);
+    vi.stubGlobal('cancelAnimationFrame', raf.cancel);
+    const { createTicker } = await getModule();
+    let ticker: ReturnType<typeof createTicker>;
+    ticker = createTicker({ onTick: () => ticker.stop() });
+    ticker.start();
+
+    raf.frame(10);
+
+    expect(raf.cancel).toHaveBeenCalledWith(0);
+    expect(raf.pending.size).toBe(0);
+  });
+
+  it('keeps the next frame scheduled after a one-time callback error', async () => {
+    const raf = createRafDriver();
+    vi.stubGlobal('requestAnimationFrame', raf.request);
+    vi.stubGlobal('cancelAnimationFrame', raf.cancel);
+    const { createTicker } = await getModule();
+    let shouldThrow = true;
+    const callback = vi.fn(() => {
+      if (shouldThrow) {
+        shouldThrow = false;
+        throw new Error('consumer failure');
+      }
+    });
+    const ticker = createTicker({ onTick: callback });
+    ticker.start();
+
+    expect(() => raf.frame(10)).toThrow('consumer failure');
+    expect(raf.pending.size).toBe(1);
+    raf.frame(20);
+    expect(callback).toHaveBeenCalledTimes(2);
+    ticker.stop();
   });
 });
 
