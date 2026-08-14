@@ -87,8 +87,6 @@ The report opens with **hotspots**: the files carrying the most candidates. Work
        setstate-in-raf ×2, missing-reduced-motion
     3  src/phases/progress-meter.ts
        manual-raf ×2, missing-reduced-motion
-    2  src/suppressed-banner.ts
-       forced-reflow, missing-reduced-motion
 
 ## critical
 
@@ -99,14 +97,16 @@ setstate-in-raf — setState/dispatch inside rAF callback (2, all per-frame) · 
   src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
   src/hero-animation.tsx:13  frame = requestAnimationFrame(loop);
 
-forced-reflow — Forced reflow (getBoundingClientRect, offsetWidth, etc.) (2, all per-frame) · noise: noisy
+forced-reflow — Forced reflow (getBoundingClientRect, offsetWidth, etc.) (2) · noise: noisy
   why: Synchronous layout; in a hot path it thrashes every frame.
   use: useSize (ResizeObserver, async) or cache the geometry and re-read on resize
   read: references/performance.md#no-forced-reflows-in-animation-paths
+  ↑ in a per-frame path:
   src/ticker.ts:3  const width = el.getBoundingClientRect().width;
-  src/suppressed-banner.ts:6  const width = el.offsetWidth;
+  · elsewhere:
+  src/suppressed-banner.ts:5  const width = el.offsetWidth;
 
-missing-reduced-motion — Animation without reduced-motion check (5) · noise: noisy
+missing-reduced-motion — Animation without reduced-motion check (4) · noise: noisy
   why: Accessibility gap: motion plays for users who asked for none.
   use: a prefers-reduced-motion media query, or a phase hook (handles it automatically)
   read: references/performance.md#reduced-motion-by-default
@@ -114,7 +114,6 @@ missing-reduced-motion — Animation without reduced-motion check (5) · noise: 
   src/ticker.ts:5  requestAnimationFrame(tick);
   src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
   src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
-  src/suppressed-banner.ts:3  requestAnimationFrame(() => el.classList.add('banner-in'));
   · in a stylesheet:
   styles/globals.css:16  @keyframes float {
 
@@ -183,8 +182,8 @@ manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand)
 
 ─────────────────────────────────────────
 Scanned 9 files.
-Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup, 1 suppressed.
-21 findings on 18 distinct lines; 15 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
+Total: 19 actionable (8 critical, 7 high, 4 medium), 1 dedup.
+20 findings on 17 distinct lines; 13 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
 Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
 
@@ -196,7 +195,7 @@ Run the manual and opportunity passes (references/audit.md Step 1.5) before conc
 
 <!-- scan-golden:end -->
 
-Findings are not problems: one rAF loop reports twice (the call and the recursive call), and one line can carry two signals, so the summary states findings and distinct lines separately. Count distinct lines when you report progress.
+Findings are not problems: a recurring rAF loop may report both its kickoff and recursive scheduling sites, and one line can carry two signals, so the summary states findings and distinct lines separately. One-shot rAF callbacks and type-only references are not loop ownership. Count distinct lines when you report progress.
 
 `Scanned N files` counts files the scanner actually analyzed, never files it merely opened, so a clean result cannot cover code that was skipped. When something could not be read — an unreadable directory, a file the process lacks permission for, a generated line past the length limit — the report ends with an `⚠ Incomplete coverage:` line. Treat that as a hole in the audit and say so in your report; `--json` carries the same information in `summary.filesSkipped` and `summary.linesSkipped`.
 
@@ -206,7 +205,7 @@ Three orthogonal ratings guide how to act on each block:
 
 - **Severity** ranks how bad the issue is when real: `critical` (jank or accessibility failures), `high` (always-on CPU/GPU waste), `medium` (leaks, redundancy, cheaper-tier candidates). `dedup` findings are correct code with a phase shorthand, reported separately and excluded from the actionable count.
 - **Noise** ranks how much to trust the detection itself: `precise` means the match is the issue, `normal` means verify quickly, `noisy` means inspect the site before recommending anything.
-- **Execution** ranks what it costs right now. Listings put `↑ in a per-frame path` first: a frame loop, observer callback, or move handler runs those lines, so the same layout read that is free in a click handler stalls every frame there. Severity cannot see this — on one canvas app, 181 of 182 `forced-reflow` candidates were incidental and every one of them ranked critical. Detection is a nearby-code heuristic, so it only orders the list: a line called indirectly from a loop reads as incidental and is still reported, below the ones that are visibly per-frame.
+- **Execution** ranks what it costs right now. Listings put `↑ in a per-frame path` first: a proven recurring frame callback, observer callback, or move handler runs those lines, so the same layout read that is free near a one-shot rAF stalls every frame there. Severity cannot see this — on one canvas app, 181 of 182 `forced-reflow` candidates were incidental and every one of them ranked critical. Detection combines local rAF callback cycles with a nearby-code heuristic for other drivers, so it only orders the list: a line called indirectly from a loop reads as incidental and is still reported, below the ones that are visibly per-frame.
 
 A triage pass on a large report is usually `--noise precise --noise normal` (drop the tier that needs a site visit) plus `--exclude` for demo or vendored directories. Narrow, then read.
 
@@ -226,35 +225,35 @@ The directive is the only sanctioned way to silence a finding, but it is not the
 
 Severity and noise mirror the scanner's catalog; a repo check fails CI when this table drifts from `scan.mjs`. Signals marked **(CSS)** run only on stylesheet files (`.css`/`.scss`/`.sass`/`.less`); **(JSX)** only on `.tsx`/`.jsx`; the rest on all JS/TS files. `missing-reduced-motion` reports once per file.
 
-| Signal                           | Severity | Noise   | Detects                                                                              | Fix reference                                                                                                              |
-| -------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `setstate-in-raf`                | critical | normal  | State update inside a rAF callback (60 re-renders/sec)                               | [performance.md](./performance.md#never-setstate-inside-ontick--draw)                                                      |
-| `forced-reflow`                  | critical | noisy   | Layout read: `getBoundingClientRect`, `offset*`, `scroll*`, `client*`                | [performance.md](./performance.md#no-forced-reflows-in-animation-paths)                                                    |
-| `mutationobserver-layout`        | critical | normal  | MutationObserver watching inline styles or reading layout in its callback            | [performance.md](./performance.md#never-drive-layout-from-a-mutationobserver)                                              |
-| `missing-reduced-motion`         | critical | noisy   | Animation (rAF, `@keyframes`, `animation:`) with no reduced-motion handling          | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
-| `setstate-in-ontick`             | critical | normal  | State update inside a phase `onTick`/`onDraw`/`draw` callback                        | [performance.md](./performance.md#never-setstate-inside-ontick--draw)                                                      |
-| `bare-window-listener`           | critical | normal  | resize/scroll listener with a layout read in the handler                             | [performance-recipes.md](./performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer) |
-| `pointer-listener-layout-read`   | critical | normal  | pointermove/mousemove/touchmove listener with a layout read per event                | [use-pointer.md](./use-pointer.md)                                                                                         |
-| `js-layout-write`                | high     | noisy   | JavaScript write to SVG geometry/transforms or CSS layout properties                 | [performance.md](./performance.md#no-layout-inducing-writes-in-animation-paths)                                            |
-| `manual-raf`                     | high     | noisy   | Raw rAF loop: no visibility pause, no shared clock, no cleanup                       | [audit.md](#common-replacements)                                                                                           |
-| `background-animation`           | high     | noisy   | `setInterval`/`setTimeout` driving transform/opacity work                            | [timed-sequences.md](./timed-sequences.md)                                                                                 |
-| `global-has-selector`            | high     | precise | `body:has`/`html:has`/`:root:has`/`*:has` in a stylesheet **(CSS)**                  | [performance-recipes.md](./performance-recipes.md#recipe-delete-a-global-has-rule)                                         |
-| `non-compositor-animation`       | high     | normal  | `transition: all`, layout properties, or bare-duration shorthand **(CSS)**           | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                     |
-| `tailwind-transition-all`        | high     | noisy   | `transition-all` utility class, in JSX or a variant module                           | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                     |
-| `keyframes-layout-animation`     | high     | normal  | Layout property (`width`/`height`/`top`/`left`) inside `@keyframes` **(CSS)**        | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                     |
-| `when-visible-no-fallback`       | high     | noisy   | `WhenVisible`/`WhenIdle` without a sized `fallback` (layout shift) **(JSX)**         | [rendering-recipes.md](./rendering-recipes.md)                                                                             |
-| `raw-io`                         | medium   | normal  | `new IntersectionObserver` outside the pool                                          | [performance.md](./performance.md#observer-pooling)                                                                        |
-| `raw-ro`                         | medium   | normal  | `new ResizeObserver` outside the pool                                                | [performance.md](./performance.md#observer-pooling)                                                                        |
-| `raw-matchmedia`                 | medium   | normal  | `matchMedia(` outside the pool                                                       | [use-media-query.md](./use-media-query.md)                                                                                 |
-| `js-opacity-transform`           | medium   | noisy   | `style.opacity`/`style.transform` writes (browser-driven candidate)                  | [decision-guide.md](./decision-guide.md#tier-1-browser-driven-css-or-waapi)                                                |
-| `permanent-will-change`          | medium   | normal  | `will-change` never toggled with animation state **(CSS)**                           | [performance.md](./performance.md#will-change-only-while-animating)                                                        |
-| `redundant-mutation-observers`   | medium   | normal  | MutationObserver on `<html>`/`documentElement`                                       | [performance-recipes.md](./performance-recipes.md#recipe-collapse-an-observer-storm-on-html)                               |
-| `tailwind-permanent-will-change` | medium   | noisy   | `will-change-transform` class not toggled with state                                 | [performance.md](./performance.md#will-change-only-while-animating)                                                        |
-| `reduced-motion-ignored`         | medium   | precise | `reducedMotion: 'ignore'` (bypasses the user preference)                             | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
-| `core-primitive-in-component`    | medium   | noisy   | `createLoop`/`createTicker`/`createLifecycle`/`createSight` in a component **(JSX)** | [decision-guide.md](./decision-guide.md#common-mistakes)                                                                   |
-| `phase-loop-browser-keyframes`   | medium   | noisy   | Phase loop combining `frame.elapsed` with transform/opacity-style writes             | [decision-guide.md](./decision-guide.md#browser-driven-timelines-css-or-waapi)                                             |
-| `manual-synced-ref`              | dedup    | precise | `useRef(v)` + unconditional `ref.current = v` (shorthand exists)                     | [use-synced-ref.md](./use-synced-ref.md)                                                                                   |
-| `manual-stable-callback`         | dedup    | precise | `useCallback` with empty deps calling through a ref **(JSX)**                        | [use-stable-callback.md](./use-stable-callback.md)                                                                         |
+| Signal                           | Severity | Noise   | Detects                                                                               | Fix reference                                                                                                              |
+| -------------------------------- | -------- | ------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `setstate-in-raf`                | critical | normal  | State update inside a recurring rAF callback (60 re-renders/sec)                      | [performance.md](./performance.md#never-setstate-inside-ontick--draw)                                                      |
+| `forced-reflow`                  | critical | noisy   | Layout read: `getBoundingClientRect`, `offset*`, `scroll*`, `client*`                 | [performance.md](./performance.md#no-forced-reflows-in-animation-paths)                                                    |
+| `mutationobserver-layout`        | critical | normal  | MutationObserver watching inline styles or reading layout in its callback             | [performance.md](./performance.md#never-drive-layout-from-a-mutationobserver)                                              |
+| `missing-reduced-motion`         | critical | noisy   | Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
+| `setstate-in-ontick`             | critical | normal  | State update inside a phase `onTick`/`onDraw`/`draw` callback                         | [performance.md](./performance.md#never-setstate-inside-ontick--draw)                                                      |
+| `bare-window-listener`           | critical | normal  | resize/scroll listener with a layout read in the handler                              | [performance-recipes.md](./performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer) |
+| `pointer-listener-layout-read`   | critical | normal  | pointermove/mousemove/touchmove listener with a layout read per event                 | [use-pointer.md](./use-pointer.md)                                                                                         |
+| `js-layout-write`                | high     | noisy   | JavaScript write to SVG geometry/transforms or CSS layout properties                  | [performance.md](./performance.md#no-layout-inducing-writes-in-animation-paths)                                            |
+| `manual-raf`                     | high     | noisy   | Proven raw rAF callback cycle: no visibility pause, shared clock, or cleanup          | [audit.md](#common-replacements)                                                                                           |
+| `background-animation`           | high     | noisy   | `setInterval`/`setTimeout` driving transform/opacity work                             | [timed-sequences.md](./timed-sequences.md)                                                                                 |
+| `global-has-selector`            | high     | precise | `body:has`/`html:has`/`:root:has`/`*:has` in a stylesheet **(CSS)**                   | [performance-recipes.md](./performance-recipes.md#recipe-delete-a-global-has-rule)                                         |
+| `non-compositor-animation`       | high     | normal  | `transition: all`, layout properties, or bare-duration shorthand **(CSS)**            | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                     |
+| `tailwind-transition-all`        | high     | noisy   | `transition-all` utility class, in JSX or a variant module                            | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                     |
+| `keyframes-layout-animation`     | high     | normal  | Layout property (`width`/`height`/`top`/`left`) inside `@keyframes` **(CSS)**         | [audit.md](#step-15-css-loading-and-architecture-pass)                                                                     |
+| `when-visible-no-fallback`       | high     | noisy   | `WhenVisible`/`WhenIdle` without a sized `fallback` (layout shift) **(JSX)**          | [rendering-recipes.md](./rendering-recipes.md)                                                                             |
+| `raw-io`                         | medium   | normal  | `new IntersectionObserver` outside the pool                                           | [performance.md](./performance.md#observer-pooling)                                                                        |
+| `raw-ro`                         | medium   | normal  | `new ResizeObserver` outside the pool                                                 | [performance.md](./performance.md#observer-pooling)                                                                        |
+| `raw-matchmedia`                 | medium   | normal  | `matchMedia(` outside the pool                                                        | [use-media-query.md](./use-media-query.md)                                                                                 |
+| `js-opacity-transform`           | medium   | noisy   | `style.opacity`/`style.transform` writes (browser-driven candidate)                   | [decision-guide.md](./decision-guide.md#tier-1-browser-driven-css-or-waapi)                                                |
+| `permanent-will-change`          | medium   | normal  | `will-change` never toggled with animation state **(CSS)**                            | [performance.md](./performance.md#will-change-only-while-animating)                                                        |
+| `redundant-mutation-observers`   | medium   | normal  | MutationObserver on `<html>`/`documentElement`                                        | [performance-recipes.md](./performance-recipes.md#recipe-collapse-an-observer-storm-on-html)                               |
+| `tailwind-permanent-will-change` | medium   | noisy   | `will-change-transform` class not toggled with state                                  | [performance.md](./performance.md#will-change-only-while-animating)                                                        |
+| `reduced-motion-ignored`         | medium   | precise | `reducedMotion: 'ignore'` (bypasses the user preference)                              | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
+| `core-primitive-in-component`    | medium   | noisy   | `createLoop`/`createTicker`/`createLifecycle`/`createSight` in a component **(JSX)**  | [decision-guide.md](./decision-guide.md#common-mistakes)                                                                   |
+| `phase-loop-browser-keyframes`   | medium   | noisy   | Phase loop combining `frame.elapsed` with transform/opacity-style writes              | [decision-guide.md](./decision-guide.md#browser-driven-timelines-css-or-waapi)                                             |
+| `manual-synced-ref`              | dedup    | precise | `useRef(v)` + unconditional `ref.current = v` (shorthand exists)                      | [use-synced-ref.md](./use-synced-ref.md)                                                                                   |
+| `manual-stable-callback`         | dedup    | precise | `useCallback` with empty deps calling through a ref **(JSX)**                         | [use-stable-callback.md](./use-stable-callback.md)                                                                         |
 
 > Manual heuristics the scanner cannot see: CSS-in-JS (styled-components, emotion, vanilla-extract) hides the CSS signals entirely (JS signals still fire); Vue/Svelte/Astro single-file components are not scanned at all; in React Native code, `missing-reduced-motion` findings need judgment (the fix is the platform's reduced-motion API, not a CSS media query); `getBoundingClientRect()` used only for an initial in-view check; and hand-wired "IO + visibilitychange + reduced motion → boolean" gates. See [Common replacements](#common-replacements).
 

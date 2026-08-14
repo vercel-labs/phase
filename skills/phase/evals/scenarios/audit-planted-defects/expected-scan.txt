@@ -8,8 +8,6 @@
        setstate-in-raf ×2, missing-reduced-motion
     3  src/phases/progress-meter.ts
        manual-raf ×2, missing-reduced-motion
-    2  src/suppressed-banner.ts
-       forced-reflow, missing-reduced-motion
 
 ## critical
 
@@ -20,14 +18,16 @@ setstate-in-raf — setState/dispatch inside rAF callback (2, all per-frame) · 
   src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
   src/hero-animation.tsx:13  frame = requestAnimationFrame(loop);
 
-forced-reflow — Forced reflow (getBoundingClientRect, offsetWidth, etc.) (2, all per-frame) · noise: noisy
+forced-reflow — Forced reflow (getBoundingClientRect, offsetWidth, etc.) (2) · noise: noisy
   why: Synchronous layout; in a hot path it thrashes every frame.
   use: useSize (ResizeObserver, async) or cache the geometry and re-read on resize
   read: references/performance.md#no-forced-reflows-in-animation-paths
+  ↑ in a per-frame path:
   src/ticker.ts:3  const width = el.getBoundingClientRect().width;
-  src/suppressed-banner.ts:6  const width = el.offsetWidth;
+  · elsewhere:
+  src/suppressed-banner.ts:5  const width = el.offsetWidth;
 
-missing-reduced-motion — Animation without reduced-motion check (5) · noise: noisy
+missing-reduced-motion — Animation without reduced-motion check (4) · noise: noisy
   why: Accessibility gap: motion plays for users who asked for none.
   use: a prefers-reduced-motion media query, or a phase hook (handles it automatically)
   read: references/performance.md#reduced-motion-by-default
@@ -35,7 +35,6 @@ missing-reduced-motion — Animation without reduced-motion check (5) · noise: 
   src/ticker.ts:5  requestAnimationFrame(tick);
   src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
   src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
-  src/suppressed-banner.ts:3  requestAnimationFrame(() => el.classList.add('banner-in'));
   · in a stylesheet:
   styles/globals.css:16  @keyframes float {
 
@@ -104,8 +103,8 @@ manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand)
 
 ─────────────────────────────────────────
 Scanned 9 files.
-Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup, 1 suppressed.
-21 findings on 18 distinct lines; 15 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
+Total: 19 actionable (8 critical, 7 high, 4 medium), 1 dedup.
+20 findings on 17 distinct lines; 13 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
 Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
 

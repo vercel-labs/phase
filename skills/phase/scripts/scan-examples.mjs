@@ -18,7 +18,23 @@ export const SIGNAL_EXAMPLES = {
         // Regression: a consumer path containing the substring "phase" must
         // still be scanned (an old exclude silently skipped it).
         file: 'src/phases/timeline.ts',
-        content: 'requestAnimationFrame(step);\n',
+        content:
+          'const step = () => {\n  draw();\n  requestAnimationFrame(step);\n};\nrequestAnimationFrame(step);\n',
+      },
+      {
+        file: 'src/worker.ts',
+        content:
+          'const tick = function () {\n  renderFrame();\n  self.requestAnimationFrame(tick);\n};\nself.requestAnimationFrame(tick);\n',
+      },
+      {
+        file: 'src/shared-clock.ts',
+        content:
+          'function first() {\n  requestAnimationFrame(second);\n}\nfunction second() {\n  requestAnimationFrame(first);\n}\nrequestAnimationFrame(first);\nrequestAnimationFrame(second);\n',
+      },
+      {
+        file: 'src/concise.ts',
+        content:
+          'const tick = () => requestAnimationFrame(tick);\nrequestAnimationFrame(tick);\n',
       },
     ],
     noMatch: [
@@ -32,10 +48,19 @@ export const SIGNAL_EXAMPLES = {
           "import { useLoop } from 'phase/react';\nuseLoop({ onTick: draw });\n",
       },
       {
-        // A rAF line already reported as setstate-in-raf is not
-        // double-counted as a manual loop (supersedes).
+        // One-shot frame scheduling does not own a recurring loop.
         file: 'src/counter.tsx',
         content: 'requestAnimationFrame(() => setCount((c) => c + 1));\n',
+      },
+      {
+        file: 'src/scope.ts',
+        content:
+          'type Scope = {\n  requestAnimationFrame?: (callback: FrameRequestCallback) => number;\n};\n',
+      },
+      {
+        file: 'src/initialize.ts',
+        content:
+          'function initialize() {\n  measure();\n}\nrequestAnimationFrame(initialize);\n',
       },
       {
         file: 'src/notes.ts',
@@ -53,13 +78,14 @@ export const SIGNAL_EXAMPLES = {
       },
       {
         file: 'src/store.ts',
-        content: "requestAnimationFrame(() => dispatch({ type: 'tick' }));\n",
+        content:
+          "const tick = () => {\n  dispatch({ type: 'tick' });\n  requestAnimationFrame(tick);\n};\nrequestAnimationFrame(tick);\n",
       },
       {
         // Real callbacks routinely exceed the old fixed ±5-line window.
         file: 'src/long-progress.tsx',
         content:
-          'requestAnimationFrame(() => {\n  measure();\n  normalize();\n  clampValue();\n  interpolate();\n  applyEasing();\n  writeFrame();\n  setProgress(next);\n});\n',
+          'function tick() {\n  measure();\n  normalize();\n  clampValue();\n  interpolate();\n  applyEasing();\n  writeFrame();\n  setProgress(next);\n  requestAnimationFrame(tick);\n}\nrequestAnimationFrame(tick);\n',
       },
     ],
     noMatch: [
@@ -87,6 +113,11 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/removed-state.tsx',
         content:
           "requestAnimationFrame(() => {\n  // setCount((c) => c + 1);\n  log('setCount(1)');\n  ref.current.textContent = String(n);\n});\n",
+      },
+      {
+        file: 'src/ready.tsx',
+        content:
+          'useEffect(() => {\n  const id = requestAnimationFrame(() => setReady(true));\n  return () => cancelAnimationFrame(id);\n}, []);\n',
       },
       {
         file: 'src/unrelated-state.tsx',
@@ -302,7 +333,8 @@ export const SIGNAL_EXAMPLES = {
     match: [
       {
         file: 'src/spin.ts',
-        content: 'requestAnimationFrame(spin);\n',
+        content:
+          'function spin() {\n  requestAnimationFrame(spin);\n}\nrequestAnimationFrame(spin);\n',
       },
       {
         // Regression: CSS animations without reduced-motion handling were
@@ -315,7 +347,7 @@ export const SIGNAL_EXAMPLES = {
         // An unrelated phase import does not make a raw rAF respect motion.
         file: 'src/eased-spin.ts',
         content:
-          "import { clamp } from 'phase';\nrequestAnimationFrame(spin);\n",
+          "import { clamp } from 'phase';\nfunction spin() {\n  requestAnimationFrame(spin);\n}\nrequestAnimationFrame(spin);\n",
       },
     ],
     noMatch: [
@@ -323,6 +355,11 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/spin.ts',
         content:
           "import { useLoop } from 'phase/react';\nuseLoop({ onTick: spin });\n",
+      },
+      {
+        file: 'src/ready.tsx',
+        content:
+          'useEffect(() => {\n  const id = requestAnimationFrame(() => setReady(true));\n  return () => cancelAnimationFrame(id);\n}, []);\n',
       },
       {
         file: 'src/styles.css',
