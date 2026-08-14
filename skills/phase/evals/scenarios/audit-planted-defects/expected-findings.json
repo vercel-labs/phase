@@ -13,7 +13,7 @@
     "src/card.tsx: recommends naming the transitioned properties (transition-colors or similar) instead of transition-all",
     "src/use-latest.ts: classifies the manual synced ref as correct code with an optional useSyncedRef shorthand, not a defect",
     "src/phases/progress-meter.ts: recommends useLoop; does NOT claim the setAttribute/setProperty writes are setState-in-rAF",
-    "src/suppressed-banner.ts: respects the existing manual-raf suppression and reports the reason-less forced-reflow directive to the user without silently fixing it",
+    "src/suppressed-banner.ts: treats the one-shot rAF and nearby layout read as incidental, while reporting the reason-less forced-reflow directive without silently fixing it",
     "styles/globals.css: scopes or replaces the body:has rule, restricts the transition to transform/opacity, toggles will-change with animation state, and adds reduced-motion handling for the keyframes",
     "Every recommendation that keeps an animation addresses prefers-reduced-motion",
     "Findings are presented grouped by impact with a closing summary (audit.md output format)"

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "skillVersion": "0.0.20",
+  "skillVersion": "0.0.21",
   "targets": [
     "workspace"
   ],
@@ -14,15 +14,15 @@
       "unreadableDirs": 0
     },
     "linesSkipped": 0,
-    "total": 21,
-    "sites": 18,
-    "returned": 21,
-    "actionable": 20,
+    "total": 20,
+    "sites": 17,
+    "returned": 20,
+    "actionable": 19,
     "dedup": 1,
-    "perFrame": 15,
-    "suppressed": 1,
+    "perFrame": 13,
+    "suppressed": 0,
     "bySeverity": {
-      "critical": 9,
+      "critical": 8,
       "high": 7,
       "medium": 4
     }
@@ -43,10 +43,6 @@
     {
       "file": "src/phases/progress-meter.ts",
       "count": 3
-    },
-    {
-      "file": "src/suppressed-banner.ts",
-      "count": 2
     }
   ],
   "context": {
@@ -57,7 +53,7 @@
     "evidence": []
   },
   "warnings": [
-    "src/suppressed-banner.ts:5  phase-scan-ignore is missing a reason (use: phase-scan-ignore <signal-id> -- <reason>); directive ignored"
+    "src/suppressed-banner.ts:4  phase-scan-ignore is missing a reason (use: phase-scan-ignore <signal-id> -- <reason>); directive ignored"
   ],
   "findings": [
     {
@@ -144,21 +140,11 @@
       "signal": "forced-reflow",
       "severity": "critical",
       "noise": "noisy",
-      "execution": "per-frame",
+      "execution": "incidental",
       "file": "src/suppressed-banner.ts",
-      "line": 6,
+      "line": 5,
       "text": "const width = el.offsetWidth;",
       "fix": "references/performance.md#no-forced-reflows-in-animation-paths"
-    },
-    {
-      "signal": "missing-reduced-motion",
-      "severity": "critical",
-      "noise": "noisy",
-      "execution": "per-frame",
-      "file": "src/suppressed-banner.ts",
-      "line": 3,
-      "text": "requestAnimationFrame(() => el.classList.add('banner-in'));",
-      "fix": "references/performance.md#reduced-motion-by-default"
     },
     {
       "signal": "redundant-mutation-observers",

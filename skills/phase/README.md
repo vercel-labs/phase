@@ -65,7 +65,7 @@ git diff --name-only --diff-filter=ACMR -z | node <skill-dir>/scripts/scan.mjs -
 
 Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit, `2` usage error. A clean scan reports how many files it scanned; zero scannable files prints a warning instead of a green result. Requires Node 20 or newer.
 
-The report opens with the files carrying the most candidates, and within each signal it lists the lines a frame loop, observer, or move handler actually runs before the incidental ones — the same layout read costs nothing in a click handler and stalls every frame inside a `pointermove`. Every block names why it matters and what to use instead, so you can act without opening the reference.
+The report opens with the files carrying the most candidates, and within each signal it lists the lines a proven recurring frame callback, observer, or move handler runs before the incidental ones. A one-shot rAF does not make nearby work per-frame. Every block names why it matters and what to use instead, so you can act without opening the reference.
 
 Text output caps each signal's listing, and caps again per file, so one noisy pattern or one busy file cannot bury the rest. On a big report, narrow before reading:
 

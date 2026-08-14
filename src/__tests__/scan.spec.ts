@@ -176,13 +176,13 @@ describe('output', () => {
   }
 
   it('caps per-signal listings and points at the scoped drill-down', () => {
-    const content = Array.from(
+    const content = `function step() {\n${Array.from(
       { length: 25 },
-      () => 'requestAnimationFrame(step);',
-    ).join('\n');
+      () => '  requestAnimationFrame(step);',
+    ).join('\n')}\n}`;
     const text = render(scanFile('src/storm.ts', content));
     // One file may fill only part of a signal's listing.
-    expect(text).toContain('src/storm.ts:1');
+    expect(text).toContain('src/storm.ts:2');
     expect(text).not.toContain('src/storm.ts:20');
     // Bare --json on a storm is tens of thousands of tokens; the hint must
     // send the reader to the scoped form instead.
@@ -280,7 +280,7 @@ describe('output', () => {
   it('truncates the quoted source line', () => {
     const findings = scanFile(
       'src/wide.ts',
-      `const x = requestAnimationFrame(step); // ${'y'.repeat(900)}\n`,
+      `function step() { requestAnimationFrame(step); } // ${'y'.repeat(900)}\n`,
     );
     expect(findings.length).toBeGreaterThan(0);
     for (const finding of findings) {
@@ -318,9 +318,64 @@ describe('execution context', () => {
     expect(finding?.execution).toBe('incidental');
   });
 
+  it('does not heat nearby work around a one-shot frame callback', () => {
+    const finding = scanFile(
+      'src/a.ts',
+      'requestAnimationFrame(() => initialize());\nconst width = el.offsetWidth;\n',
+    ).find((f) => f.signal === 'forced-reflow');
+    expect(finding?.execution).toBe('incidental');
+  });
+
+  it('marks an entire recurring callback as per-frame', () => {
+    const finding = scanFile(
+      'src/a.ts',
+      'function tick() {\n  const width = el.offsetWidth;\n  step1();\n  step2();\n  step3();\n  step4();\n  step5();\n  step6();\n  step7();\n  requestAnimationFrame(tick);\n}\nrequestAnimationFrame(tick);\n',
+    ).find((f) => f.signal === 'forced-reflow');
+    expect(finding?.execution).toBe('per-frame');
+  });
+
   it('leaves stylesheet findings unclassified', () => {
     const [finding] = scanFile('src/a.css', '.x { transition: all 0.3s; }\n');
     expect(finding?.execution).toBe(null);
+  });
+});
+
+describe('recurring rAF ownership', () => {
+  const RAF_SIGNALS = new Set([
+    'manual-raf',
+    'missing-reduced-motion',
+    'setstate-in-raf',
+  ]);
+
+  function rafSignals(content: string) {
+    return new Set(
+      scanFile('src/a.tsx', content)
+        .filter((finding) => RAF_SIGNALS.has(finding.signal))
+        .map((finding) => finding.signal),
+    );
+  }
+
+  it('reports manual ownership and missing reduced motion for a loop', () => {
+    expect(
+      rafSignals(
+        'function tick() {\n  renderFrame();\n  requestAnimationFrame(tick);\n}\nrequestAnimationFrame(tick);\n',
+      ),
+    ).toEqual(new Set(['manual-raf', 'missing-reduced-motion']));
+  });
+
+  it('reports state updates reached through recurring frame work', () => {
+    expect(
+      rafSignals(
+        'function tick() {\n  setReady(true);\n  requestAnimationFrame(tick);\n}\nrequestAnimationFrame(tick);\n',
+      ).has('setstate-in-raf'),
+    ).toBe(true);
+  });
+
+  it.each([
+    'requestAnimationFrame(() => setReady(true));\n',
+    'type Scope = { requestAnimationFrame?: (callback: FrameRequestCallback) => number };\n',
+  ])('forbids rAF signals without recurring ownership', (content) => {
+    expect(rafSignals(content)).toEqual(new Set());
   });
 });
 
@@ -336,7 +391,7 @@ describe('coverage accounting', () => {
     // An average-line-length heuristic dropped the whole file — findings and
     // all — over one inlined data URI.
     const content = [
-      'requestAnimationFrame(step);',
+      'function step() { requestAnimationFrame(step); }',
       `const LOGO = 'data:image/png;base64,${'A'.repeat(20000)}';`,
     ].join('\n');
     const diag = newDiag();
@@ -435,8 +490,10 @@ describe('environment context', () => {
 
 describe('suppression directive', () => {
   const RAF_WITH_DIRECTIVE =
-    '// phase-scan-ignore manual-raf -- accepted: replaced next sprint\n' +
-    'requestAnimationFrame(step);\n';
+    'function step() {\n' +
+    '  // phase-scan-ignore manual-raf -- accepted: replaced next sprint\n' +
+    '  requestAnimationFrame(step);\n' +
+    '}\n';
 
   it('suppresses the named signal on the next line and counts it', () => {
     const diag = newDiag();
@@ -458,7 +515,7 @@ describe('suppression directive', () => {
     const diag = newDiag();
     const findings = scanFile(
       'src/anim.ts',
-      '// phase-scan-ignore manual-raf\nrequestAnimationFrame(step);\n',
+      'function step() {\n// phase-scan-ignore manual-raf\nrequestAnimationFrame(step);\n}\n',
       diag,
     );
     expect(findings.some((f) => f.signal === 'manual-raf')).toBe(true);
@@ -471,7 +528,7 @@ describe('suppression directive', () => {
     const diag = newDiag();
     const findings = scanFile(
       'src/anim.ts',
-      '// phase-scan-ignore manual-raff -- typo\nrequestAnimationFrame(step);\n',
+      'function step() {\n// phase-scan-ignore manual-raff -- typo\nrequestAnimationFrame(step);\n}\n',
       diag,
     );
     expect(findings.some((f) => f.signal === 'manual-raf')).toBe(true);
@@ -484,7 +541,7 @@ describe('suppression directive', () => {
     const diag = newDiag();
     const findings = scanFile(
       'src/anim.ts',
-      '// phase-scan-ignore missing-reduced-motion -- decorative, owner approved\nrequestAnimationFrame(a);\nrequestAnimationFrame(b);\n',
+      '// phase-scan-ignore missing-reduced-motion -- decorative, owner approved\nfunction a() { requestAnimationFrame(a); }\nfunction b() { requestAnimationFrame(b); }\n',
       diag,
     );
     expect(
@@ -507,7 +564,7 @@ describe('suppression directive', () => {
     const diag = newDiag();
     const findings = scanFile(
       'src/anim.ts',
-      '// phase-scan-ignore: manual-raf -- accepted one-shot\nrequestAnimationFrame(step);\n',
+      'function step() {\n// phase-scan-ignore: manual-raf -- accepted loop\nrequestAnimationFrame(step);\n}\n',
       diag,
     );
     expect(findings.filter((f) => f.signal === 'manual-raf')).toEqual([]);
@@ -518,7 +575,7 @@ describe('suppression directive', () => {
     const diag = newDiag();
     const findings = scanFile(
       'src/anim.ts',
-      'const help = "phase-scan-ignore manual-raf -- example";\nrequestAnimationFrame(step);\n',
+      'const help = "phase-scan-ignore manual-raf -- example";\nfunction step() { requestAnimationFrame(step); }\n',
       diag,
     );
     expect(findings.some((f) => f.signal === 'manual-raf')).toBe(true);

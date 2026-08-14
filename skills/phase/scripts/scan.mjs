@@ -146,6 +146,7 @@ export function scanFile(relPath, content, diag = null) {
   const codeLines = maskStrings(uncommentedLines);
   const uncommentedContent = uncommentedLines.join('\n');
   const codeContent = codeLines.join('\n');
+  const rafAnalysis = analyzeRafScheduling(codeLines);
 
   if (diag) diag.analyzed++;
 
@@ -183,6 +184,7 @@ export function scanFile(relPath, content, diag = null) {
       overlong,
       type,
       diag,
+      rafAnalysis,
     );
 
     // A per-file finding needs a file-level suppression: a directive naming
@@ -466,6 +468,7 @@ export const SIGNALS = [
     fix: 'references/audit.md#common-replacements',
     pattern: /requestAnimationFrame/,
     codeOnly: true,
+    recurringRafOnly: true,
   },
   {
     id: 'setstate-in-raf',
@@ -478,10 +481,8 @@ export const SIGNALS = [
     fix: 'references/performance.md#never-setstate-inside-ontick--draw',
     supersedes: 'manual-raf',
     pattern: /requestAnimationFrame/,
-    contextPattern: STATE_UPDATE_CONTEXT,
     codeOnly: true,
-    contextLines: 30,
-    contextScope: 'block',
+    recurringRafStateOnly: true,
   },
   {
     id: 'setstate-in-ontick',
@@ -595,6 +596,7 @@ export const SIGNALS = [
     negativeCodeOnly: true,
     fileTypes: ['js', 'css'],
     codeOnly: true,
+    recurringRafBranch: true,
     // The gap is a property of the whole file, not of each animating line.
     perFile: true,
   },
@@ -811,7 +813,7 @@ const BLOCK_SCAN_LINES = 20;
 // incidental here and is still reported, just below the ones that are
 // visibly per-frame — a heuristic may reorder findings, never hide them.
 const FRAME_DRIVER =
-  /requestAnimationFrame|\bonTick\b|\bonDraw\b|\bdraw\s*:|use(?:Loop|Canvas|Tween|Pointer|Scroll)\s*\(|create(?:Loop|Ticker|Pointer|Scroll)\s*\(|addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove|scroll|resize|wheel|drag)|new\s+(?:Intersection|Resize|Mutation)Observer|setInterval\s*\(/;
+  /\bonTick\b|\bonDraw\b|\bdraw\s*:|use(?:Loop|Canvas|Tween|Pointer|Scroll)\s*\(|create(?:Loop|Ticker|Pointer|Scroll)\s*\(|addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove|scroll|resize|wheel|drag)|new\s+(?:Intersection|Resize|Mutation)Observer|setInterval\s*\(/;
 
 const FRAME_DRIVER_WINDOW = 6;
 
@@ -1308,6 +1310,230 @@ function suppressedAnywhere(suppressions, signalId) {
   return false;
 }
 
+/** Builds the local rAF callback graph once for every scanned file. */
+function analyzeRafScheduling(lines) {
+  const sourceIndex = buildSourceIndex(lines);
+  const { callbacks, callbacksByName } = collectCallbacks(sourceIndex);
+  const calls = collectRafCalls(sourceIndex.source, callbacks, callbacksByName);
+  const graph = buildCallbackGraph(callbacks, calls);
+  const recurringCallbacks = cyclicCallbacks(graph);
+  return summarizeRafOwnership(sourceIndex, calls, recurringCallbacks);
+}
+
+function buildSourceIndex(lines) {
+  const source = lines.join('\n');
+  const lineStarts = [0];
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) === 10) lineStarts.push(i + 1);
+  }
+  return { source, lineStarts, bracePairs: pairedBraces(source) };
+}
+
+function collectCallbacks(sourceIndex) {
+  const { source, bracePairs } = sourceIndex;
+  const callbacks = [];
+  const callbacksByRange = new Map();
+  const callbacksByName = new Map();
+
+  function registerCallback(name, start, end) {
+    const key = `${start}:${end}`;
+    let callback = callbacksByRange.get(key);
+    if (!callback) {
+      callback = { start, end };
+      callbacksByRange.set(key, callback);
+      callbacks.push(callback);
+    }
+    callbacksByName.set(name, callback);
+  }
+
+  const declarations = [
+    /\bfunction\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::\s*[^={]+)?\s*\{/g,
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?(?:function(?:\s+[A-Za-z_$][\w$]*)?\s*\([^)]*\)|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*(?::\s*[^=]+)?=>)\s*\{/g,
+  ];
+
+  for (const pattern of declarations) {
+    for (const match of source.matchAll(pattern)) {
+      const open = match.index + match[0].lastIndexOf('{');
+      const end = bracePairs.get(open);
+      if (end === undefined) continue;
+      registerCallback(match[1], open, end);
+    }
+  }
+
+  const conciseArrow =
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>(?!\s*\{)\s*/g;
+  for (const match of source.matchAll(conciseArrow)) {
+    const start = match.index + match[0].length;
+    const semicolon = source.indexOf(';', start);
+    const newline = source.indexOf('\n', start);
+    const candidates = [semicolon, newline].filter((offset) => offset >= 0);
+    const end = candidates.length > 0 ? Math.min(...candidates) : source.length;
+    registerCallback(match[1], start, end);
+  }
+
+  return { callbacks, callbacksByName };
+}
+
+function collectRafCalls(source, callbacks, callbacksByName) {
+  const calls = [];
+  const callPattern = /\brequestAnimationFrame\s*(?:\?\.)?\s*\(/g;
+  for (const match of source.matchAll(callPattern)) {
+    const open = match.index + match[0].lastIndexOf('(');
+    const callbackName = firstArgumentIdentifier(source, open + 1);
+    const target = callbackName ? callbacksByName.get(callbackName) : null;
+    calls.push({ offset: match.index, owner: null, target });
+  }
+  assignCallbackOwners(callbacks, calls);
+  return calls;
+}
+
+function buildCallbackGraph(callbacks, calls) {
+  const edges = new Map(callbacks.map((callback) => [callback, new Set()]));
+  for (const call of calls) {
+    if (call.owner && call.target) edges.get(call.owner).add(call.target);
+  }
+  return edges;
+}
+
+function summarizeRafOwnership(sourceIndex, calls, recurringCallbacks) {
+  const { source, lineStarts } = sourceIndex;
+  const recurringScheduleLines = new Set();
+  const stateScheduleLines = new Set();
+  const recurringCallbackLines = new Set();
+
+  for (const callback of recurringCallbacks) {
+    const start = lineAtOffset(lineStarts, callback.start);
+    const end = lineAtOffset(lineStarts, callback.end);
+    for (let line = start; line <= end; line++) {
+      recurringCallbackLines.add(line);
+    }
+  }
+
+  for (const call of calls) {
+    if (!call.target || !recurringCallbacks.has(call.target)) continue;
+    const line = lineAtOffset(lineStarts, call.offset);
+    recurringScheduleLines.add(line);
+    if (
+      STATE_UPDATE_CONTEXT.test(
+        source.slice(call.target.start, call.target.end),
+      )
+    ) {
+      stateScheduleLines.add(line);
+    }
+  }
+
+  return {
+    recurringScheduleLines,
+    stateScheduleLines,
+    recurringCallbackLines,
+  };
+}
+
+function pairedBraces(source) {
+  const pairs = new Map();
+  const stack = [];
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === '{') stack.push(i);
+    if (source[i] === '}' && stack.length > 0) pairs.set(stack.pop(), i);
+  }
+  return pairs;
+}
+
+function firstArgumentIdentifier(source, offset) {
+  const rest = source.slice(offset);
+  const match = /^\s*([A-Za-z_$][\w$]*)/.exec(rest);
+  return match?.[1] ?? null;
+}
+
+function assignCallbackOwners(callbacks, calls) {
+  const sorted = [...callbacks].toSorted(
+    (a, b) => a.start - b.start || b.end - a.end,
+  );
+  const stack = [];
+  let next = 0;
+
+  for (const call of calls) {
+    while (next < sorted.length && sorted[next].start <= call.offset) {
+      const callback = sorted[next++];
+      while (stack.length > 0 && stack.at(-1).end <= callback.start) {
+        stack.pop();
+      }
+      stack.push(callback);
+    }
+    while (stack.length > 0 && stack.at(-1).end <= call.offset) stack.pop();
+    call.owner = stack.at(-1) ?? null;
+  }
+}
+
+function cyclicCallbacks(edges) {
+  const seen = new Set();
+  const order = [];
+
+  for (const start of edges.keys()) {
+    if (seen.has(start)) continue;
+    seen.add(start);
+    const stack = [
+      { callback: start, next: 0, targets: [...edges.get(start)] },
+    ];
+    while (stack.length > 0) {
+      const frame = stack.at(-1);
+      if (frame.next < frame.targets.length) {
+        const target = frame.targets[frame.next++];
+        if (seen.has(target)) continue;
+        seen.add(target);
+        stack.push({
+          callback: target,
+          next: 0,
+          targets: [...edges.get(target)],
+        });
+      } else {
+        order.push(frame.callback);
+        stack.pop();
+      }
+    }
+  }
+
+  const reverse = new Map([...edges.keys()].map((callback) => [callback, []]));
+  for (const [callback, targets] of edges) {
+    for (const target of targets) reverse.get(target).push(callback);
+  }
+
+  const assigned = new Set();
+  const recurring = new Set();
+  for (let i = order.length - 1; i >= 0; i--) {
+    const start = order[i];
+    if (assigned.has(start)) continue;
+    const component = [];
+    const pending = [start];
+    assigned.add(start);
+    while (pending.length > 0) {
+      const callback = pending.pop();
+      component.push(callback);
+      for (const source of reverse.get(callback)) {
+        if (assigned.has(source)) continue;
+        assigned.add(source);
+        pending.push(source);
+      }
+    }
+    if (component.length > 1 || edges.get(start).has(start)) {
+      for (const callback of component) recurring.add(callback);
+    }
+  }
+
+  return recurring;
+}
+
+function lineAtOffset(lineStarts, offset) {
+  let low = 0;
+  let high = lineStarts.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (lineStarts[middle] <= offset) low = middle + 1;
+    else high = middle;
+  }
+  return low - 1;
+}
+
 const braceRangeCache = new WeakMap();
 
 /** Smallest lexical brace block containing a line, with strings/comments gone. */
@@ -1352,6 +1578,7 @@ function scanSignal(
   overlong,
   type,
   diag,
+  rafAnalysis,
 ) {
   const findings = [];
   const matchLines = signal.codeOnly ? codeLines : uncommentedLines;
@@ -1368,18 +1595,9 @@ function scanSignal(
       if (!match) continue;
       matchIndex = match.index;
 
-      if (signal.contextPattern) {
-        const contextLines = signal.codeOnly ? codeLines : uncommentedLines;
-        const radius = signal.contextLines ?? 5;
-        const block =
-          signal.contextScope === 'block'
-            ? enclosingBlock(contextLines, i)
-            : null;
-        const from = block?.start ?? Math.max(0, i - radius);
-        const to = block ? block.end + 1 : i + radius + 1;
-        const context = contextLines.slice(from, to).join('\n');
-        if (!signal.contextPattern.test(context)) continue;
-      }
+      if (!matchesRafPolicy(signal, match[0], i, rafAnalysis)) continue;
+      if (!matchesSignalContext(signal, codeLines, uncommentedLines, i))
+        continue;
     }
 
     // Per-file signals are suppressed at the file level (see scanFile), not
@@ -1397,13 +1615,44 @@ function scanSignal(
         i + 1,
         line,
         matchIndex,
-        executionOf(uncommentedLines, i, type),
+        executionOf(codeLines, i, type, rafAnalysis),
       ),
     );
 
     if (signal.perFile) break;
   }
   return findings;
+}
+
+function matchesRafPolicy(signal, match, line, rafAnalysis) {
+  const recurring = rafAnalysis.recurringScheduleLines.has(line);
+  if (signal.recurringRafOnly && !recurring) return false;
+  if (
+    signal.recurringRafStateOnly &&
+    !rafAnalysis.stateScheduleLines.has(line)
+  ) {
+    return false;
+  }
+  if (
+    signal.recurringRafBranch &&
+    /requestAnimationFrame/.test(match) &&
+    !recurring
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function matchesSignalContext(signal, codeLines, uncommentedLines, line) {
+  if (!signal.contextPattern) return true;
+  const contextLines = signal.codeOnly ? codeLines : uncommentedLines;
+  const radius = signal.contextLines ?? 5;
+  const block =
+    signal.contextScope === 'block' ? enclosingBlock(contextLines, line) : null;
+  const from = block?.start ?? Math.max(0, line - radius);
+  const to = block ? block.end + 1 : line + radius + 1;
+  const context = contextLines.slice(from, to).join('\n');
+  return signal.contextPattern.test(context);
 }
 
 function toPosix(path) {
@@ -1582,8 +1831,14 @@ function makeFinding(signal, file, line, text, matchIndex, execution) {
  * Whether a frame driver runs this line. Meaningless for stylesheets, which
  * report null.
  */
-function executionOf(lines, i, type) {
+function executionOf(lines, i, type, rafAnalysis) {
   if (type !== 'js') return null;
+  if (
+    rafAnalysis.recurringCallbackLines.has(i) ||
+    rafAnalysis.recurringScheduleLines.has(i)
+  ) {
+    return 'per-frame';
+  }
   const from = Math.max(0, i - FRAME_DRIVER_WINDOW);
   const window = lines.slice(from, i + FRAME_DRIVER_WINDOW + 1).join('\n');
   return FRAME_DRIVER.test(window) ? 'per-frame' : 'incidental';
