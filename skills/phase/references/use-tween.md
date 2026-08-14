@@ -49,6 +49,7 @@ Returns the current animated `number`.
   ```
 - Change `target` to interrupt and re-animate from current position (smooth interruption).
 - Custom easing controls intermediate values; completed tweens land exactly on `target`.
+- Replacing `easing` updates future frames without restarting the active tween.
 - Use `delay` for staggered animations across multiple elements.
 
 ## Don't

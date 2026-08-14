@@ -90,6 +90,28 @@ describe('useTween', () => {
     },
   );
 
+  it('uses the latest easing without restarting the active tween', async () => {
+    const useTween = await getHook();
+    const firstEasing = vi.fn(() => 0.25);
+    const nextEasing = vi.fn(() => 0.75);
+    const { result, rerender } = renderHook(
+      ({ target, easing }: { target: number; easing: () => number }) =>
+        useTween({ target, duration: 300, easing }),
+      { initialProps: { target: 0, easing: firstEasing } },
+    );
+
+    rerender({ target: 100, easing: firstEasing });
+    act(() => vi.advanceTimersByTime(150));
+    expect(result.current).toBe(25);
+
+    rerender({ target: 100, easing: nextEasing });
+    act(() => vi.advanceTimersByTime(16));
+    expect(result.current).toBe(75);
+
+    act(() => vi.advanceTimersByTime(200));
+    expect(result.current).toBe(100);
+  });
+
   it('enabled=false jumps to target immediately', async () => {
     const useTween = await getHook();
     const { result, rerender } = renderHook(
