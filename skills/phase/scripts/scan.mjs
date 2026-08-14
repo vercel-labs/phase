@@ -1312,12 +1312,25 @@ function suppressedAnywhere(suppressions, signalId) {
 
 /** Builds the local rAF callback graph once for every scanned file. */
 function analyzeRafScheduling(lines) {
+  const sourceIndex = buildSourceIndex(lines);
+  const { callbacks, callbacksByName } = collectCallbacks(sourceIndex);
+  const calls = collectRafCalls(sourceIndex.source, callbacks, callbacksByName);
+  const graph = buildCallbackGraph(callbacks, calls);
+  const recurringCallbacks = cyclicCallbacks(graph);
+  return summarizeRafOwnership(sourceIndex, calls, recurringCallbacks);
+}
+
+function buildSourceIndex(lines) {
   const source = lines.join('\n');
   const lineStarts = [0];
   for (let i = 0; i < source.length; i++) {
     if (source.charCodeAt(i) === 10) lineStarts.push(i + 1);
   }
-  const bracePairs = pairedBraces(source);
+  return { source, lineStarts, bracePairs: pairedBraces(source) };
+}
+
+function collectCallbacks(sourceIndex) {
+  const { source, bracePairs } = sourceIndex;
   const callbacks = [];
   const callbacksByRange = new Map();
   const callbacksByName = new Map();
@@ -1358,6 +1371,10 @@ function analyzeRafScheduling(lines) {
     registerCallback(match[1], start, end);
   }
 
+  return { callbacks, callbacksByName };
+}
+
+function collectRafCalls(source, callbacks, callbacksByName) {
   const calls = [];
   const callPattern = /\brequestAnimationFrame\s*(?:\?\.)?\s*\(/g;
   for (const match of source.matchAll(callPattern)) {
@@ -1367,13 +1384,19 @@ function analyzeRafScheduling(lines) {
     calls.push({ offset: match.index, owner: null, target });
   }
   assignCallbackOwners(callbacks, calls);
+  return calls;
+}
 
+function buildCallbackGraph(callbacks, calls) {
   const edges = new Map(callbacks.map((callback) => [callback, new Set()]));
   for (const call of calls) {
     if (call.owner && call.target) edges.get(call.owner).add(call.target);
   }
+  return edges;
+}
 
-  const recurringCallbacks = cyclicCallbacks(edges);
+function summarizeRafOwnership(sourceIndex, calls, recurringCallbacks) {
+  const { source, lineStarts } = sourceIndex;
   const recurringScheduleLines = new Set();
   const stateScheduleLines = new Set();
   const recurringCallbackLines = new Set();
