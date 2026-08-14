@@ -156,7 +156,7 @@
     "path": "src/react/index.ts",
     "import": "{ useTween }",
     "ignore": ["react"],
-    "limit": "720 B"
+    "limit": "1 kB"
   },
   {
     "name": "usePresence",

@@ -748,7 +748,7 @@ const opacity = useTween({ to: isVisible ? 1 : 0, duration: 300 });
 
 Use `useTween` for single values where the render is cheap (counters, progress bars, opacity). Use `useLoop` when animating many elements or doing canvas work, since per-frame `setState` doesn't scale.
 
-Reduced motion default: `'complete'` (jumps to the destination instantly). The value still reaches its destination; it skips the animation.
+Reduced motion default: `'complete'` (jumps to the destination instantly). Active tweens also complete if reduced motion turns on. Set `reducedMotion: 'ignore'` to skip the preference read and subscription; the exported `TweenReducedMotion` type is `'complete' | 'ignore'`.
 
 ### usePresence
 
@@ -1248,7 +1248,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `createThrottle`          |             660 B |
 | `createDebounce`          |             558 B |
 | `whenIdle`                |             409 B |
-| `prefersReducedMotion`    |             101 B |
+| `prefersReducedMotion`    |             102 B |
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
@@ -1259,26 +1259,26 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useMutation`             |           1.39 kB |
 | `usePointer`              |           1.51 kB |
 | `useScroll`               |           1.96 kB |
-| `useThrottledCallback`    |             804 B |
-| `useDebouncedCallback`    |             696 B |
-| `useTween`                |             680 B |
-| `usePresence`             |             591 B |
+| `useThrottledCallback`    |             795 B |
+| `useDebouncedCallback`    |             686 B |
+| `useTween`                |             905 B |
+| `usePresence`             |             595 B |
 | `useScrollProgress`       |           1.03 kB |
-| `useSize`                 |             418 B |
+| `useSize`                 |             430 B |
 | `useContainerQuery`       |             389 B |
 | `useMediaQuery`           |             246 B |
-| `usePrefersReducedMotion` |             272 B |
-| `useDevicePixelRatio`     |             231 B |
+| `usePrefersReducedMotion` |             274 B |
+| `useDevicePixelRatio`     |             230 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             741 B |
-| `WhenVisible`             |           1.61 kB |
+| `Presence`                |             743 B |
+| `WhenVisible`             |            1.6 kB |
 | `WhenIdle`                |             596 B |
-| `Defer`                   |              86 B |
-| `useIdle`                 |             414 B |
+| `Defer`                   |              85 B |
+| `useIdle`                 |             413 B |
 | `useWhenIdle`             |             445 B |
 | `useRenderState`          |             515 B |
-| `Swap`                    |           1.12 kB |
+| `Swap`                    |           1.13 kB |
 
 <!-- SIZE-TABLE:END -->
 

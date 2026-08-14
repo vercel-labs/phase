@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 
 import { invalidDurationError } from '../../core/_internal/errors';
-import type { ReducedMotionBehavior } from '../../core/loop';
-import { prefersReducedMotion } from '../../core/reduced-motion';
+import {
+  prefersReducedMotion,
+  subscribeReducedMotion,
+} from '../../core/reduced-motion';
 import { clamp01, easeOutCubic } from '../../ease';
 import { useSyncedRef } from '../use-synced-ref';
+
+/** Behavior under reduced motion. Default `'complete'`. */
+export type TweenReducedMotion = 'complete' | 'ignore';
 
 export interface UseTweenOptions {
   to: number;
@@ -13,7 +18,7 @@ export interface UseTweenOptions {
   easing?: (progress: number) => number;
   enabled?: boolean;
   /** Default: `'complete'`. Tweens jump straight to the destination under reduced motion. */
-  reducedMotion?: ReducedMotionBehavior;
+  reducedMotion?: TweenReducedMotion;
 }
 
 /**
@@ -71,10 +76,32 @@ export function useTween(options: UseTweenOptions): number {
     const from: number = currentRef.current;
     if (from === to) return;
 
-    let rafId: number;
+    let rafId: number | null = null;
     let startTime: number | null = null;
+    let completed = false;
+    let unsubscribeReducedMotion: (() => void) | null = null;
+
+    function complete(): void {
+      if (completed) return;
+      completed = true;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = null;
+      unsubscribeReducedMotion?.();
+      unsubscribeReducedMotion = null;
+      jumpToTarget({ to, fromRef, currentRef, setValue });
+    }
+
+    function onReducedMotionChange(matches: boolean): void {
+      if (matches) complete();
+    }
+
+    if (reducedMotion === 'complete') {
+      unsubscribeReducedMotion = subscribeReducedMotion(onReducedMotionChange);
+    }
 
     function tick(now: number): void {
+      if (completed) return;
+      rafId = null;
       if (startTime === null) startTime = now;
       const elapsed: number = now - startTime - delay;
 
@@ -93,6 +120,9 @@ export function useTween(options: UseTweenOptions): number {
       if (progress < 1) {
         rafId = requestAnimationFrame(tick);
       } else {
+        completed = true;
+        unsubscribeReducedMotion?.();
+        unsubscribeReducedMotion = null;
         fromRef.current = to;
       }
     }
@@ -100,7 +130,11 @@ export function useTween(options: UseTweenOptions): number {
     rafId = requestAnimationFrame(tick);
 
     return () => {
-      cancelAnimationFrame(rafId);
+      completed = true;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = null;
+      unsubscribeReducedMotion?.();
+      unsubscribeReducedMotion = null;
       // Preserve where we actually are so the next tween starts from here.
       fromRef.current = currentRef.current;
     };
