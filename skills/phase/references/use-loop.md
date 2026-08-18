@@ -12,17 +12,17 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 
 ### Options
 
-| Option                | Type                                | Default      | Description                                                        |
-| --------------------- | ----------------------------------- | ------------ | ------------------------------------------------------------------ |
-| `ref`                 | `RefObject<T \| null>`              | returned     | Bring your own ref, or attach the returned one                     |
-| `target`              | `Document`                          | —            | Anchor to the page; pass `document`. Mutually exclusive with `ref` |
-| `onTick`              | `LoopTickFn`                        | required     | Called every frame (write to refs/DOM only)                        |
-| `fps`                 | `number`                            | —            | Cap frames per second                                              |
-| `enabled`             | `boolean`                           | `true`       | When `false`, tears down the loop (reports `idle`)                 |
-| `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior under reduced motion                                      |
-| `degraded`            | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades                                     |
-| `degradedFps`         | `number`                            | `30`         | FPS cap in degraded throttle mode                                  |
-| `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to IO                                                    |
+| Option                | Type                                | Default      | Description                                                      |
+| --------------------- | ----------------------------------- | ------------ | ---------------------------------------------------------------- |
+| `ref`                 | `RefObject<T \| null>`              | returned     | Bring your own ref, or attach the returned one                   |
+| `target`              | `'page'`                            | —            | Anchor to the page; pass `'page'`. Mutually exclusive with `ref` |
+| `onTick`              | `LoopTickFn`                        | required     | Called every frame (write to refs/DOM only)                      |
+| `fps`                 | `number`                            | —            | Cap frames per second                                            |
+| `enabled`             | `boolean`                           | `true`       | When `false`, tears down the loop (reports `idle`)               |
+| `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior under reduced motion                                    |
+| `degraded`            | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades                                   |
+| `degradedFps`         | `number`                            | `30`         | FPS cap in degraded throttle mode                                |
+| `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to IO                                                  |
 
 ### Return
 
@@ -79,18 +79,18 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 
 ## Page anchor
 
-Pass `target: document` when the loop is not tied to one element (a page-wide effect, a scroll-driven header, a global cursor layer):
+Pass `target: 'page'` when the loop is not tied to one element (a page-wide effect, a scroll-driven header, a global cursor layer):
 
 ```tsx
 const { phase } = useLoop({
-  target: document,
+  target: 'page',
   onTick: () => {
     headerRef.current!.style.setProperty('--y', String(scrollRef.current.y));
   },
 });
 ```
 
-The loop still strong-pauses when the tab is hidden and still honors reduced motion; it just has no viewport test to make, so no `IntersectionObserver` is created. `target` is mutually exclusive with `ref`; passing both throws `conflicting_target`.
+The loop still strong-pauses when the tab is hidden and still honors reduced motion; it just has no viewport test to make, so no `IntersectionObserver` is created. `target` is a string, not `document`, because hook options are built during render and render runs on the server for a client component. It is mutually exclusive with `ref`; passing both throws `conflicting_target`.
 
 Prefer an element `ref` when the animation belongs to one element. Off-screen pausing is the main reason to use `useLoop`, and a page anchor gives that up.
 

@@ -22,10 +22,14 @@ export interface UseSightOptions<
    */
   ref?: RefObject<T | null>;
   /**
-   * Anchor to the page instead of an element. Pass `document`. Mutually
+   * Anchor to the page instead of an element. Pass `'page'`. Mutually
    * exclusive with `ref`.
+   *
+   * This is a string rather than `document` because hook options are built
+   * during render, and render runs on the server for a client component. A
+   * literal `document` there throws before the hook is called.
    */
-  target?: Document;
+  target?: 'page';
   /** `'continuous'` keeps observing. `'once'` freezes at `'visible'` after first intersection. */
   observe?: 'continuous' | 'once';
   /**
@@ -102,7 +106,9 @@ export function useSight<T extends Element = HTMLDivElement>(
   useEffect(() => {
     if (target && options?.ref) conflictingTargetError('useSight');
 
-    const anchor: Element | Document | null = target ?? ref.current;
+    // Resolved here, not in the options object: this runs only on the client.
+    const anchor: Element | Document | null =
+      target === 'page' ? document : ref.current;
     if (!anchor) return;
 
     let frozen = false;

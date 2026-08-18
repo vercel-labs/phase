@@ -51,8 +51,8 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 
 | Need                                                 | Use                                                                                         |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Know if it's on screen?                              | `useSight` (element, or tab visibility with `target: document`)                             |
-| Want phase to run your frame loop?                   | `useLoop` (DOM, or the page with `target: document`) / `useCanvas` (canvas)                 |
+| Know if it's on screen?                              | `useSight` (element, or tab visibility with `target: 'page'`)                               |
+| Want phase to run your frame loop?                   | `useLoop` (DOM, or the page with `target: 'page'`) / `useCanvas` (canvas)                   |
 | You own the loop (WebGL, three.js, Web Worker)?      | `useLifecycle` (active/paused signal)                                                       |
 | Animating one value into render?                     | `useTween`                                                                                  |
 | Mount/unmount transitions?                           | `Presence` / `Swap` / `WhenVisible`                                                         |

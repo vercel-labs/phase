@@ -214,7 +214,7 @@ describe('page target', () => {
   it('reports visible for the page with no observer', async () => {
     const useSight = await getHook();
 
-    const { result } = renderHook(() => useSight({ target: document }));
+    const { result } = renderHook(() => useSight({ target: 'page' }));
 
     expect(result.current.phase).toBe('visible');
     expect(mockIO.instances).toHaveLength(0);
@@ -225,7 +225,7 @@ describe('page target', () => {
     const { ref } = createRefWithElement();
 
     expect(() =>
-      renderHook(() => useSight({ ref, target: document })),
+      renderHook(() => useSight({ ref, target: 'page' })),
     ).toThrowError(/both ref and target/);
   });
 });
@@ -235,7 +235,7 @@ describe('page target + observe: once (regression)', () => {
     const useSight = await getHook();
 
     const { result } = renderHook(() =>
-      useSight({ target: document, observe: 'once' }),
+      useSight({ target: 'page', observe: 'once' }),
     );
 
     expect(result.current.phase).toBe('visible');
@@ -245,7 +245,7 @@ describe('page target + observe: once (regression)', () => {
     const useSight = await getHook();
 
     const { result } = renderHook(() =>
-      useSight({ target: document, observe: 'once' }),
+      useSight({ target: 'page', observe: 'once' }),
     );
 
     act(() => {
@@ -258,5 +258,20 @@ describe('page target + observe: once (regression)', () => {
     });
 
     expect(result.current.phase).toBe('visible');
+  });
+});
+
+describe('page target is SSR-safe', () => {
+  it('rejects a Document at the type level and does not track', async () => {
+    const useSight = await getHook();
+
+    const { result } = renderHook(() =>
+      // @ts-expect-error - Document is not assignable to target: 'page'
+      useSight({ target: document }),
+    );
+
+    // A literal `document` in hook options throws during server render, so the
+    // option is a string. Passing one anyway must not quietly start tracking.
+    expect(result.current.phaseRef.current).toBe('unknown');
   });
 });

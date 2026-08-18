@@ -15,7 +15,7 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 | Option                | Type                       | Default   | Description                                                                                                           |
 | --------------------- | -------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
 | `ref`                 | `RefObject<T \| null>`     | returned  | Bring your own ref                                                                                                    |
-| `target`              | `Document`                 | —         | Anchor to the page; pass `document`. Mutually exclusive with `ref`                                                    |
+| `target`              | `'page'`                   | —         | Anchor to the page; pass `'page'`. Mutually exclusive with `ref`                                                      |
 | `reducedMotion`       | `'pause' \| 'ignore'`      | `'pause'` | Whether reduced motion pauses the lifecycle                                                                           |
 | `paused`              | `boolean`                  | `false`   | Manual pause (e.g. panel covers animation)                                                                            |
 | `enabled`             | `boolean`                  | `true`    | When `false`, tears down and reports `idle`                                                                           |

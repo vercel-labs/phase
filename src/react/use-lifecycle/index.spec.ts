@@ -158,7 +158,7 @@ describe('page target', () => {
   it('activates on the page with no observer', async () => {
     const useLifecycle = await getHook();
 
-    const { result } = renderHook(() => useLifecycle({ target: document }));
+    const { result } = renderHook(() => useLifecycle({ target: 'page' }));
 
     expect(result.current.phase).toBe('active');
     expect(mockIO.instances).toHaveLength(0);
@@ -169,7 +169,22 @@ describe('page target', () => {
     const { ref } = createRefWithElement();
 
     expect(() =>
-      renderHook(() => useLifecycle({ ref, target: document })),
+      renderHook(() => useLifecycle({ ref, target: 'page' })),
     ).toThrowError(/both ref and target/);
+  });
+});
+
+describe('page target is SSR-safe', () => {
+  it('rejects a Document at the type level and does not activate', async () => {
+    const useLifecycle = await getHook();
+
+    const { result } = renderHook(() =>
+      // @ts-expect-error - Document is not assignable to target: 'page'
+      useLifecycle({ target: document }),
+    );
+
+    // A literal `document` in hook options throws during server render, so the
+    // option is a string. Passing one anyway must not quietly activate.
+    expect(result.current.isActive).toBe(false);
   });
 });

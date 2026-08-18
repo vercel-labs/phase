@@ -1252,9 +1252,9 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           2.97 kB |
-| `useLifecycle`            |            1.8 kB |
-| `useSight`                |           1.32 kB |
+| `useLoop`                 |           2.98 kB |
+| `useLifecycle`            |           1.81 kB |
+| `useSight`                |           1.33 kB |
 | `useCanvas`               |           3.51 kB |
 | `useMutation`             |           1.36 kB |
 | `usePointer`              |           1.47 kB |

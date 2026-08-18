@@ -106,7 +106,7 @@ describe('page target', () => {
     const useLoop = await getHook();
     const onTick = vi.fn();
 
-    const { result } = renderHook(() => useLoop({ target: document, onTick }));
+    const { result } = renderHook(() => useLoop({ target: 'page', onTick }));
 
     expect(result.current.phase).toBe('running');
     expect(mockIO.instances).toHaveLength(0);
@@ -122,7 +122,22 @@ describe('page target', () => {
     const { ref } = createRefWithElement();
 
     expect(() =>
-      renderHook(() => useLoop({ ref, target: document, onTick: vi.fn() })),
+      renderHook(() => useLoop({ ref, target: 'page', onTick: vi.fn() })),
     ).toThrowError(/both ref and target/);
+  });
+});
+
+describe('page target is SSR-safe', () => {
+  it('rejects a Document at the type level and does not run', async () => {
+    const useLoop = await getHook();
+
+    const { result } = renderHook(() =>
+      // @ts-expect-error - Document is not assignable to target: 'page'
+      useLoop({ target: document, onTick: vi.fn() }),
+    );
+
+    // A literal `document` in hook options throws during server render, so the
+    // option is a string. Passing one anyway must not quietly start a loop.
+    expect(result.current.phase).not.toBe('running');
   });
 });

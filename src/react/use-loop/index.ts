@@ -28,10 +28,14 @@ export interface UseLoopOptions<T extends Element = HTMLDivElement> {
    */
   ref?: RefObject<T | null>;
   /**
-   * Anchor to the page instead of an element. Pass `document`. Mutually
+   * Anchor to the page instead of an element. Pass `'page'`. Mutually
    * exclusive with `ref`.
+   *
+   * This is a string rather than `document` because hook options are built
+   * during render, and render runs on the server for a client component. A
+   * literal `document` there throws before the hook is called.
    */
-  target?: Document;
+  target?: 'page';
   /**
    * Called every frame. Write to refs or DOM directly. Never call React
    * `setState` here (60 calls/sec = 60 re-renders/sec).
@@ -103,7 +107,9 @@ export function useLoop<T extends Element = HTMLDivElement>(
   useEffect(() => {
     if (target && options.ref) conflictingTargetError('useLoop');
 
-    const anchor: Element | Document | null = target ?? ref.current;
+    // Resolved here, not in the options object: this runs only on the client.
+    const anchor: Element | Document | null =
+      target === 'page' ? document : ref.current;
     if (!anchor || !enabled) {
       setState(INITIAL_STATE);
       return;

@@ -17,10 +17,14 @@ export interface UseLifecycleOptions<T extends Element = HTMLDivElement> {
    */
   ref?: RefObject<T | null>;
   /**
-   * Anchor to the page instead of an element. Pass `document`. Mutually
+   * Anchor to the page instead of an element. Pass `'page'`. Mutually
    * exclusive with `ref`.
+   *
+   * This is a string rather than `document` because hook options are built
+   * during render, and render runs on the server for a client component. A
+   * literal `document` there throws before the hook is called.
    */
-  target?: Document;
+  target?: 'page';
   /** Whether reduced motion pauses the lifecycle. Default `'pause'`. */
   reducedMotion?: LifecycleReducedMotion;
   /** Manually pause regardless of visibility (e.g. a panel opened over the animation). */
@@ -92,7 +96,9 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
   useEffect(() => {
     if (target && options?.ref) conflictingTargetError('useLifecycle');
 
-    const anchor: Element | Document | null = target ?? ref.current;
+    // Resolved here, not in the options object: this runs only on the client.
+    const anchor: Element | Document | null =
+      target === 'page' ? document : ref.current;
     if (!anchor || !enabled) {
       setState(INITIAL_STATE);
       return;
