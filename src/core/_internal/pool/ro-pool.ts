@@ -6,8 +6,8 @@ const callbacks = new Map<Element, Set<ROCallback>>();
 /**
  * Observe an element via a singleton ResizeObserver.
  * One RO instance for the entire page. An element may have any number of
- * subscribers; each receives every entry, and the element stays observed
- * until the last one cleans up.
+ * subscribers; each receives every entry delivered after it subscribes, and
+ * the element stays observed until the last one cleans up.
  *
  * Per-element `box` options are forwarded to `ResizeObserver.observe()`. A
  * single RO holds one observation per target, so when subscribers disagree on

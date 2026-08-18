@@ -1,4 +1,5 @@
 import { createMockIntersectionObserver } from '../../../__mocks__/intersection-observer';
+import { describePoolContract } from './pool-contract';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 
@@ -166,70 +167,43 @@ describe('cleanup', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Multiple subscribers per element
-// ---------------------------------------------------------------------------
-
-describe('multiple subscribers per element', () => {
-  it('every subscriber on an element receives the entry', async () => {
+describe('late subscribers', () => {
+  it('does not receive the initial entry for an already-observed element', async () => {
     const { observeIntersection } = await getModule();
     const el = document.createElement('div');
-    const cb1 = vi.fn();
-    const cb2 = vi.fn();
+    const early = vi.fn();
+    const late = vi.fn();
 
-    observeIntersection({ element: el, onIntersect: cb1 });
-    observeIntersection({ element: el, onIntersect: cb2 });
-
+    observeIntersection({ element: el, onIntersect: early });
     mockIO.trigger(el, true);
 
-    expect(cb1).toHaveBeenCalledTimes(1);
-    expect(cb2).toHaveBeenCalledTimes(1);
-  });
-
-  it('one subscriber cleaning up leaves the others observed', async () => {
-    const { observeIntersection } = await getModule();
-    const el = document.createElement('div');
-    const cb1 = vi.fn();
-    const cb2 = vi.fn();
-    const cleanup1 = observeIntersection({ element: el, onIntersect: cb1 });
-    observeIntersection({ element: el, onIntersect: cb2 });
-
-    cleanup1();
-    expect(firstInstance().observed.has(el)).toBe(true);
+    // `observe()` is a no-op for a target the observer already holds, so this
+    // subscriber waits for the next change rather than learning current state.
+    observeIntersection({ element: el, onIntersect: late });
+    expect(late).not.toHaveBeenCalled();
 
     mockIO.trigger(el, true);
-    expect(cb1).not.toHaveBeenCalled();
-    expect(cb2).toHaveBeenCalledTimes(1);
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(early).toHaveBeenCalledTimes(2);
   });
+});
 
-  it('unobserves only after the last subscriber cleans up', async () => {
+// ---------------------------------------------------------------------------
+// Shared pool contract
+// ---------------------------------------------------------------------------
+
+describePoolContract<Element>({
+  keys: () => [document.createElement('div'), document.createElement('div')],
+  create: async () => {
     const { observeIntersection } = await getModule();
-    const el = document.createElement('div');
-    const cleanup1 = observeIntersection({ element: el, onIntersect: vi.fn() });
-    const cleanup2 = observeIntersection({ element: el, onIntersect: vi.fn() });
-
-    cleanup1();
-    expect(firstInstance().observed.has(el)).toBe(true);
-    cleanup2();
-    expect(firstInstance().observed.has(el)).toBe(false);
-  });
-
-  it('drops the pooled observer once its last element is released', async () => {
-    const { observeIntersection } = await getModule();
-    const el = document.createElement('div');
-    const cleanup1 = observeIntersection({ element: el, onIntersect: vi.fn() });
-    const cleanup2 = observeIntersection({ element: el, onIntersect: vi.fn() });
-    expect(mockIO.instances).toHaveLength(1);
-
-    // The pool entry survives while any subscriber remains, so the same IO is
-    // reused rather than rebuilt.
-    cleanup1();
-    observeIntersection({ element: el, onIntersect: vi.fn() });
-    expect(mockIO.instances).toHaveLength(1);
-    expect(firstInstance().observed.has(el)).toBe(true);
-
-    cleanup2();
-  });
+    return {
+      subscribe: (element, callback) =>
+        observeIntersection({ element, onIntersect: callback }),
+      notify: (element) => mockIO.trigger(element, true),
+      isBound: (element) =>
+        mockIO.instances.some((instance) => instance.observed.has(element)),
+    };
+  },
 });
 
 // ---------------------------------------------------------------------------

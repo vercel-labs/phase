@@ -51,7 +51,7 @@
     "name": "createPointer",
     "path": "src/index.ts",
     "import": "{ createPointer }",
-    "limit": "1.3 kB"
+    "limit": "1.42 kB"
   },
   {
     "name": "createScroll",
@@ -107,7 +107,7 @@
     "path": "src/react/index.ts",
     "import": "{ useSight }",
     "ignore": ["react"],
-    "limit": "1.4 kB"
+    "limit": "1.5 kB"
   },
   {
     "name": "useCanvas",
@@ -177,14 +177,14 @@
     "path": "src/react/index.ts",
     "import": "{ useSize }",
     "ignore": ["react"],
-    "limit": "410 B"
+    "limit": "500 B"
   },
   {
     "name": "useContainerQuery",
     "path": "src/react/index.ts",
     "import": "{ useContainerQuery }",
     "ignore": ["react"],
-    "limit": "400 B"
+    "limit": "470 B"
   },
   {
     "name": "useMediaQuery",

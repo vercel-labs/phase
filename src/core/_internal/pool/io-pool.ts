@@ -18,8 +18,13 @@ const pool = new Map<string, IOPoolEntry>();
 /**
  * Observe an element via a shared IntersectionObserver pool.
  * Elements with identical options share one IO instance. An element may have
- * any number of subscribers; each receives every entry, and the element stays
- * observed until the last one cleans up.
+ * any number of subscribers; each receives every entry delivered after it
+ * subscribes, and the element stays observed until the last one cleans up.
+ *
+ * A subscriber joining an already-observed element does not get the initial
+ * entry: `observe()` is a no-op for a target the observer already holds, so
+ * nothing arrives until the next intersection change. Callers that need
+ * current state on subscribe have to read it themselves.
  *
  * @returns Cleanup function that removes this subscriber, unobserving the
  * element once none remain and dropping the IO once it observes nothing.
