@@ -741,12 +741,12 @@ Animates a number from A to B over a duration. Calls `setState` per frame (appro
 ```tsx
 import { useTween } from 'phase/react';
 
-const opacity = useTween({ target: isVisible ? 1 : 0, duration: 300 });
+const opacity = useTween({ to: isVisible ? 1 : 0, duration: 300 });
 ```
 
 Use `useTween` for single values where the render is cheap (counters, progress bars, opacity). Use `useLoop` when animating many elements or doing canvas work, since per-frame `setState` doesn't scale.
 
-Reduced motion default: `'complete'` (jumps to target instantly). The value still reaches its destination; it skips the animation.
+Reduced motion default: `'complete'` (jumps to the destination instantly). The value still reaches its destination; it skips the animation.
 
 ### usePresence
 
@@ -1258,7 +1258,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useScroll`               |           1.72 kB |
 | `useThrottledCallback`    |             797 B |
 | `useDebouncedCallback`    |             687 B |
-| `useTween`                |             685 B |
+| `useTween`                |             655 B |
 | `usePresence`             |             591 B |
 | `useScrollProgress`       |             999 B |
 | `useSize`                 |             378 B |
