@@ -290,7 +290,15 @@ export function createScroll(options: CreateScrollOptions): Scroll {
       unobserveIO?.();
     };
 
-    recompute();
+    // A page attaches immediately, so `onScroll` runs before the caller holds
+    // an instance to stop. Release what was attached if it throws.
+    try {
+      recompute();
+    } catch (error) {
+      cleanupVisibility();
+      detachListeners();
+      throw error;
+    }
   } else {
     setPhase('tracking', 'started');
     attachListeners();

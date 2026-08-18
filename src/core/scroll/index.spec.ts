@@ -792,3 +792,34 @@ describe('page target', () => {
     scroll.stop();
   });
 });
+
+describe('page target construction failure', () => {
+  it('releases listeners when the first onScroll throws', async () => {
+    const { createScroll } = await getModule();
+    makeScrollable(document.documentElement, {
+      scrollHeight: 5000,
+      clientHeight: 1000,
+    });
+    const addSpy = vi.spyOn(document, 'addEventListener');
+    const removeSpy = vi.spyOn(document, 'removeEventListener');
+
+    expect(() =>
+      createScroll({
+        target: document,
+        onScroll: () => {
+          throw new Error('consumer blew up');
+        },
+      }),
+    ).toThrowError('consumer blew up');
+
+    const count = (spy: typeof addSpy, type: string) =>
+      spy.mock.calls.filter(([t]) => t === type).length;
+    expect(count(removeSpy, 'scroll')).toBe(count(addSpy, 'scroll'));
+    expect(count(removeSpy, 'visibilitychange')).toBe(
+      count(addSpy, 'visibilitychange'),
+    );
+
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
+  });
+});
