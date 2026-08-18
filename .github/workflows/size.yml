@@ -1,8 +1,9 @@
 name: Size
 
 on:
+  # Every open PR, so a stacked PR is measured against the branch below it and
+  # its reported delta is its own contribution rather than the whole stack's.
   pull_request:
-    branches: [main]
 
 concurrency:
   group: size-${{ github.workflow }}-${{ github.ref }}
