@@ -1,6 +1,7 @@
 export type PhaseErrorCode =
   | 'server_context'
   | 'no_target'
+  | 'conflicting_target'
   | 'invalid_duration'
   | 'ticker_stopped'
   | 'missing_context';
@@ -47,6 +48,14 @@ export function noTargetError(fn: string): never {
     code: 'no_target',
     reason: 'The target was null or undefined.',
     fix: 'Pass a mounted Element, or use the React hook which manages the ref.',
+  });
+}
+
+export function conflictingTargetError(fn: string): never {
+  throw new PhaseError(`${fn}() received both ref and target.`, {
+    code: 'conflicting_target',
+    reason: 'A tracker has one anchor.',
+    fix: 'Pass ref for an element, or target: document for the page.',
   });
 }
 

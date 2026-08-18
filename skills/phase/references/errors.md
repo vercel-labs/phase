@@ -25,13 +25,14 @@ if (isPhaseError(err)) {
 
 ### Error codes
 
-| Code               | Trigger                                       | Fix                                           |
-| ------------------ | --------------------------------------------- | --------------------------------------------- |
-| `server_context`   | Calling a browser-only primitive during SSR   | Move into `useEffect` or client-only module   |
-| `no_target`        | Passing null/undefined `target`               | Pass a mounted Element, or use the React hook |
-| `invalid_duration` | `useTween` duration is zero, negative, or NaN | Pass a positive number                        |
-| `ticker_stopped`   | Calling `start`/`resume` on a stopped ticker  | Create a new ticker instance                  |
-| `missing_context`  | `<Swap.State>` used outside `<Swap>`          | Wrap with `<Swap>`                            |
+| Code                 | Trigger                                       | Fix                                                                    |
+| -------------------- | --------------------------------------------- | ---------------------------------------------------------------------- |
+| `server_context`     | Calling a browser-only primitive during SSR   | Move into `useEffect` or client-only module                            |
+| `no_target`          | Passing null/undefined `target`               | Pass a mounted Element, or use the React hook                          |
+| `conflicting_target` | Passing both `ref` and `target` to a hook     | Pass one anchor: `ref` for an element, `target: document` for the page |
+| `invalid_duration`   | `useTween` duration is zero, negative, or NaN | Pass a positive number                                                 |
+| `ticker_stopped`     | Calling `start`/`resume` on a stopped ticker  | Create a new ticker instance                                           |
+| `missing_context`    | `<Swap.State>` used outside `<Swap>`          | Wrap with `<Swap>`                                                     |
 
 ## When to use
 

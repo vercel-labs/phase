@@ -31,14 +31,18 @@ export interface ScrollState {
 
 // `ScrollOptions` is a lib.dom global; do not shadow it (see code-style rules).
 export interface CreateScrollOptions {
-  target: Element;
+  /**
+   * Scroll container to track. Pass an `Element` for a scrollable element, or
+   * `document` to track the page scroller.
+   */
+  target: Element | Document;
   /** Called once per rAF frame with the latest scroll position + progress. */
   onScroll: (state: ScrollState) => void;
   /** Called on phase transitions (tracking, paused, stopped). */
   onPhaseChange?: (phase: ScrollPhase, reason: ScrollReason) => void;
   /** Pause when off-screen or ignore visibility. Default `'pause'`. */
   visibility?: 'pause' | 'ignore';
-  /** IO options forwarded to the visibility observer. */
+  /** IO options forwarded to the visibility observer. Ignored for `document`. */
   intersectionOptions?: IntersectionObserverInit;
   /** Stops the tracker when aborted. */
   signal?: AbortSignal;
@@ -66,6 +70,11 @@ export interface Scroll {
  * This is to `scroll` + `scrollWidth` what `createPointer` is to `pointermove`
  * + `getBoundingClientRect`: the layout read is batched off the hot path so the
  * per-scroll work is a single cheap position read plus math on cached geometry.
+ *
+ * Pass `document` to track the page. Offsets and geometry then come from
+ * `document.scrollingElement`, and because the page is always in view,
+ * `visibility: 'pause'` reacts to tab visibility alone rather than an
+ * `IntersectionObserver`.
  */
 export function createScroll(options: CreateScrollOptions): Scroll {
   if (typeof document === 'undefined') {
@@ -82,6 +91,19 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   } = options;
 
   if (!target) noTargetError('createScroll');
+
+  // Page mode reads offsets and geometry from the scrolling element, while the
+  // `scroll` event stays on the Document (where the page fires it). Element mode
+  // uses the same node for both.
+  let pageDoc: Document | undefined;
+  let scroller: Element;
+  if (isDocument(target)) {
+    pageDoc = target;
+    // `scrollingElement` is `body` in quirks mode and absent in some test DOMs.
+    scroller = target.scrollingElement ?? target.documentElement;
+  } else {
+    scroller = target;
+  }
 
   let _phase: ScrollPhase = 'paused';
   let _reason: ScrollReason = 'initial';
@@ -114,8 +136,8 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   // the resize path.
   function computePosition(): void {
     const { maxX, maxY } = _state;
-    const x = target.scrollLeft;
-    const y = target.scrollTop;
+    const x = scroller.scrollLeft;
+    const y = scroller.scrollTop;
     _state.x = x < 0 ? 0 : x > maxX ? maxX : x;
     _state.y = y < 0 ? 0 : y > maxY ? maxY : y;
     _state.progressX = maxX > 0 ? _state.x / maxX : 0;
@@ -127,10 +149,10 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   // (re-entry re-measures), so `measure()` never forces an off-screen reflow.
   function measure(): void {
     if (stopped || !listenersAttached) return;
-    const scrollWidth = target.scrollWidth;
-    const clientWidth = target.clientWidth;
-    const scrollHeight = target.scrollHeight;
-    const clientHeight = target.clientHeight;
+    const scrollWidth = scroller.scrollWidth;
+    const clientWidth = scroller.clientWidth;
+    const scrollHeight = scroller.scrollHeight;
+    const clientHeight = scroller.clientHeight;
 
     const maxX = scrollWidth - clientWidth;
     const maxY = scrollHeight - clientHeight;
@@ -179,7 +201,11 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     if (listenersAttached) return;
     listenersAttached = true;
     target.addEventListener('scroll', onScrollEvent, { passive: true });
-    unobserveRO = observeResize(target, onROResize);
+    unobserveRO = observeResize(scroller, onROResize);
+    // A viewport height change (mobile URL bar, window resize) moves `maxY`
+    // without resizing the scrolling element's content box, so the observer
+    // alone would leave page geometry stale.
+    if (pageDoc) window.addEventListener('resize', onROResize);
     measure();
   }
 
@@ -189,13 +215,15 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     target.removeEventListener('scroll', onScrollEvent);
     unobserveRO?.();
     unobserveRO = undefined;
+    if (pageDoc) window.removeEventListener('resize', onROResize);
     cancelFlush();
   }
 
   let cleanupVisibility: (() => void) | undefined;
 
   if (visibility === 'pause') {
-    let elementInView = false;
+    // The page is always in view, so only tab visibility gates page mode.
+    let elementInView = pageDoc !== undefined;
     let documentVisible = !document.hidden;
 
     function recompute(): void {
@@ -224,20 +252,24 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     document.addEventListener('visibilitychange', onVisChange);
     window.addEventListener('pageshow', onPageShow);
 
-    const unobserveIO = observeIntersection({
-      element: target,
-      onIntersect: (entry) => {
-        elementInView = entry.isIntersecting;
-        recompute();
-      },
-      ...intersectionOptions,
-    });
+    const unobserveIO = pageDoc
+      ? undefined
+      : observeIntersection({
+          element: scroller,
+          onIntersect: (entry) => {
+            elementInView = entry.isIntersecting;
+            recompute();
+          },
+          ...intersectionOptions,
+        });
 
     cleanupVisibility = () => {
       document.removeEventListener('visibilitychange', onVisChange);
       window.removeEventListener('pageshow', onPageShow);
-      unobserveIO();
+      unobserveIO?.();
     };
+
+    recompute();
   } else {
     setPhase('tracking', 'started');
     attachListeners();
@@ -270,4 +302,10 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     measure,
     stop,
   };
+}
+
+const DOCUMENT_NODE = 9;
+
+function isDocument(target: Element | Document): target is Document {
+  return target.nodeType === DOCUMENT_NODE;
 }

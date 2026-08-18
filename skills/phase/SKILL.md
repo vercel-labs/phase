@@ -4,7 +4,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.23'
+  version: '0.0.24'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library.'
 ---
 
@@ -60,7 +60,7 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 | Pause raw work inside a `Defer` subtree?             | `useRenderState`                                                                            |
 | React to DOM mutations without reflow?               | `useMutation`                                                                               |
 | Track pointer position without layout thrash?        | `usePointer`                                                                                |
-| Track scroll offset/progress without reflow?         | `useScroll`                                                                                 |
+| Track scroll offset/progress without reflow?         | `useScroll` (element, or the page with `target: document`)                                  |
 | Reactive scroll/size/media values?                   | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
 | Scroll/size/visibility without re-renders?           | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
 | Reactive reduced-motion check for non-phase code?    | `usePrefersReducedMotion`                                                                   |
@@ -120,7 +120,7 @@ The audit procedure and invariants above catch JS anti-patterns. These rules cat
 ### Architecture rules
 
 - **Do not ship heavy subtrees as `display:none`-when-closed.** Their JS, observers, subscriptions, and bundle still run. Unmount with conditional rendering or `Presence`, warm on idle with `useWhenIdle`.
-- **Pool window listeners.** Never attach a bare `window` resize/scroll listener that reads layout. Use `useSize`/`useContainerQuery` for element size, `useMediaQuery` for viewport queries, and `useScroll` for scroll position (scrollbars, carousels). Flag N components each owning their own listener.
+- **Pool window listeners.** Never attach a bare `window` resize/scroll listener that reads layout. Use `useSize`/`useContainerQuery` for element size, `useMediaQuery` for viewport queries, and `useScroll` for scroll position (scrollbars, carousels, and the page via `target: document`). Flag N components each owning their own listener.
 - **No redundant MutationObservers on the same target.** Coalesce into one `useMutation` call or coordinate via a shared hook.
 - **No per-frame `setState`.** Write to refs or DOM in `useLoop`/`useCanvas`, or use `useTween` for single values.
 

@@ -61,6 +61,26 @@ function createRefWithElement(scrollWidth = 400, clientWidth = 100) {
   return { ref: { current: el }, el };
 }
 
+/** Give the page scroller mutable vertical geometry (jsdom reports 0). */
+function makePageScrollable(scrollHeight: number, clientHeight: number) {
+  const el = document.documentElement;
+  let top = 0;
+  const define = (key: string, value: number) =>
+    Object.defineProperty(el, key, { value, configurable: true });
+  define('scrollHeight', scrollHeight);
+  define('clientHeight', clientHeight);
+  define('scrollWidth', 0);
+  define('clientWidth', 0);
+  define('scrollLeft', 0);
+  Object.defineProperty(el, 'scrollTop', {
+    get: () => top,
+    set: (v: number) => {
+      top = v;
+    },
+    configurable: true,
+  });
+}
+
 async function getHook() {
   const mod = await import('.');
   return mod.useScroll;
@@ -329,5 +349,72 @@ describe('re-render behavior', () => {
     });
     expect(result.current.phase).toBe('paused');
     expect(result.current.phaseReason).toBe('sight');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Page target
+// ---------------------------------------------------------------------------
+
+describe('page target', () => {
+  it('tracks the page when given document, with no ref attached', async () => {
+    const useScroll = await getHook();
+    makePageScrollable(5000, 1000);
+
+    const { result } = renderHook(() =>
+      useScroll({ target: document, onScroll: vi.fn() }),
+    );
+
+    expect(result.current.phase).toBe('tracking');
+    expect(result.current.stateRef.current.maxY).toBe(4000);
+    expect(mockIO.instances).toHaveLength(0);
+  });
+
+  it('delivers page scroll through onScroll', async () => {
+    const useScroll = await getHook();
+    makePageScrollable(5000, 1000);
+    const onScroll = vi.fn();
+
+    renderHook(() => useScroll({ target: document, onScroll }));
+    onScroll.mockClear();
+
+    document.documentElement.scrollTop = 1000;
+    await act(async () => {
+      document.dispatchEvent(new Event('scroll'));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(onScroll).toHaveBeenCalledTimes(1);
+    expect(onScroll.mock.lastCall?.[0].progressY).toBe(0.25);
+  });
+
+  it('throws when both ref and target are given', async () => {
+    const useScroll = await getHook();
+    makePageScrollable(5000, 1000);
+    const { ref } = createRefWithElement();
+
+    expect(() =>
+      renderHook(() => useScroll({ ref, target: document, onScroll: vi.fn() })),
+    ).toThrowError(/both ref and target/);
+  });
+
+  it('tears down page listeners on unmount', async () => {
+    const useScroll = await getHook();
+    makePageScrollable(5000, 1000);
+    const onScroll = vi.fn();
+
+    const { unmount } = renderHook(() =>
+      useScroll({ target: document, onScroll }),
+    );
+    unmount();
+    onScroll.mockClear();
+
+    document.documentElement.scrollTop = 2000;
+    await act(async () => {
+      document.dispatchEvent(new Event('scroll'));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(onScroll).not.toHaveBeenCalled();
   });
 });

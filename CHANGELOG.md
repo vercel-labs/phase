@@ -1,5 +1,12 @@
 # phase
 
+## 0.2.0
+
+### Minor Changes
+
+- `createScroll` and `useScroll` can track the page. Pass `document` as the `target` (or `target: document` on the hook) to read page scroll offset and progress.
+- Added the `conflicting_target` error code, thrown when a hook receives both `ref` and `target`.
+
 ## 0.1.0
 
 ### Minor Changes

@@ -604,3 +604,149 @@ describe('teardown', () => {
     ]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Page target (document)
+// ---------------------------------------------------------------------------
+
+describe('page target', () => {
+  /** jsdom leaves documentElement geometry at 0; give it real numbers. */
+  function makePageScrollable(geo: Geometry): void {
+    makeScrollable(document.documentElement, geo);
+  }
+
+  it('measures page geometry from the scrolling element', async () => {
+    const { createScroll } = await getModule();
+    makePageScrollable({ scrollHeight: 5000, clientHeight: 1000 });
+    const cb = vi.fn();
+
+    const scroll = createScroll({ target: document, onScroll: cb });
+
+    expect(scroll.phase).toBe('tracking');
+    expect(scroll.state.maxY).toBe(4000);
+    expect(scroll.state.visibleY).toBe(0.2); // 1000 / 5000
+    expect(cb).toHaveBeenCalledTimes(1);
+    scroll.stop();
+  });
+
+  it('tracks immediately without an IntersectionObserver', async () => {
+    const { createScroll } = await getModule();
+    makePageScrollable({ scrollHeight: 3000, clientHeight: 1000 });
+
+    const scroll = createScroll({ target: document, onScroll: vi.fn() });
+
+    // The page is always in view, so gating it behind IO would never attach.
+    expect(mockIO.instances).toHaveLength(0);
+    expect(scroll.phase).toBe('tracking');
+    scroll.stop();
+  });
+
+  it('batches page scroll events into one rAF flush', async () => {
+    const { createScroll } = await getModule();
+    makePageScrollable({ scrollHeight: 5000, clientHeight: 1000 });
+    const cb = vi.fn();
+
+    const scroll = createScroll({ target: document, onScroll: cb });
+    cb.mockClear();
+
+    document.documentElement.scrollTop = 2000;
+    document.dispatchEvent(new Event('scroll'));
+    document.dispatchEvent(new Event('scroll'));
+    expect(cb).not.toHaveBeenCalled();
+
+    flushRAF();
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(scroll.state.y).toBe(2000);
+    expect(scroll.state.progressY).toBe(0.5);
+    scroll.stop();
+  });
+
+  it('pauses when the tab is hidden and resumes when visible', async () => {
+    const { createScroll } = await getModule();
+    makePageScrollable({ scrollHeight: 5000, clientHeight: 1000 });
+    const phases: Array<[string, string]> = [];
+
+    const scroll = createScroll({
+      target: document,
+      onScroll: vi.fn(),
+      onPhaseChange: (phase, reason) => phases.push([phase, reason]),
+    });
+    expect(scroll.phase).toBe('tracking');
+
+    (document as unknown as { hidden: boolean }).hidden = true;
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(scroll.phase).toBe('paused');
+
+    (document as unknown as { hidden: boolean }).hidden = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(scroll.phase).toBe('tracking');
+
+    expect(phases).toEqual([
+      ['tracking', 'started'],
+      ['paused', 'sight'],
+      ['tracking', 'started'],
+    ]);
+    scroll.stop();
+  });
+
+  it('re-measures on window resize, which the observer alone would miss', async () => {
+    const { createScroll } = await getModule();
+    makePageScrollable({ scrollHeight: 5000, clientHeight: 1000 });
+    const cb = vi.fn();
+
+    const scroll = createScroll({ target: document, onScroll: cb });
+    expect(scroll.state.maxY).toBe(4000);
+    cb.mockClear();
+
+    // Viewport shrinks (mobile URL bar) with content height unchanged, so the
+    // content box does not resize and only the resize event can catch it.
+    makePageScrollable({ scrollHeight: 5000, clientHeight: 500 });
+    window.dispatchEvent(new Event('resize'));
+
+    expect(scroll.state.maxY).toBe(4500);
+    expect(cb).toHaveBeenCalled();
+    scroll.stop();
+  });
+
+  it('detaches page listeners on stop', async () => {
+    const { createScroll } = await getModule();
+    makePageScrollable({ scrollHeight: 5000, clientHeight: 1000 });
+    const cb = vi.fn();
+
+    const scroll = createScroll({ target: document, onScroll: cb });
+    scroll.stop();
+    cb.mockClear();
+
+    document.documentElement.scrollTop = 1000;
+    document.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new Event('resize'));
+    flushRAF();
+
+    expect(cb).not.toHaveBeenCalled();
+    expect(scroll.phase).toBe('stopped');
+  });
+
+  it('ignores visibility when asked, staying attached while hidden', async () => {
+    const { createScroll } = await getModule();
+    makePageScrollable({ scrollHeight: 5000, clientHeight: 1000 });
+    const cb = vi.fn();
+
+    const scroll = createScroll({
+      target: document,
+      onScroll: cb,
+      visibility: 'ignore',
+    });
+    cb.mockClear();
+
+    (document as unknown as { hidden: boolean }).hidden = true;
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    document.documentElement.scrollTop = 500;
+    document.dispatchEvent(new Event('scroll'));
+    flushRAF();
+
+    expect(scroll.phase).toBe('tracking');
+    expect(cb).toHaveBeenCalledTimes(1);
+    scroll.stop();
+  });
+});

@@ -337,7 +337,7 @@ Pause priority is `reduced-motion` > `sight` > `manual`.
 
 Reports what fraction of an element is currently visible in the viewport (0–1), via the shared IntersectionObserver pool. Zero forced reflows, zero extra observers. Ideal for reveal/opacity effects.
 
-> **Visibility ratio, not scroll offset.** This reports `intersectionRatio` (how much of an element is visible in the viewport), which plateaus for tall elements once they fill it. For a scroll container's _own_ offset (scrollbars, carousels) use [`createScroll`](#createscroll); for CSS-declarative scroll-linked animation use the native `ScrollTimeline` API; for spring/gesture scroll use `motion`.
+> **Visibility ratio, not scroll offset.** This reports `intersectionRatio` (how much of an element is visible in the viewport), which plateaus for tall elements once they fill it. For a scroll container's _own_ offset (scrollbars, carousels, or the page via `target: document`) use [`createScroll`](#createscroll); for CSS-declarative scroll-linked animation use the native `ScrollTimeline` API; for spring/gesture scroll use `motion`.
 
 ```ts
 import { createScrollProgress } from 'phase';
@@ -401,7 +401,7 @@ scroll.stop();
 
 | Option                | Type                           | Default   | Description                                        |
 | --------------------- | ------------------------------ | --------- | -------------------------------------------------- |
-| `target`              | `Element`                      | required  | Scroll container to track                          |
+| `target`              | `Element \| Document`          | required  | Scroll container, or `document` for the page       |
 | `onScroll`            | `(state: ScrollState) => void` | required  | Called once per rAF frame with position + progress |
 | `onPhaseChange`       | `(phase, reason) => void`      | —         | Called on phase transitions                        |
 | `visibility`          | `'pause' \| 'ignore'`          | `'pause'` | Pause tracking when off-screen, or ignore          |
@@ -409,6 +409,8 @@ scroll.stop();
 | `signal`              | `AbortSignal`                  | —         | Stops the tracker when aborted                     |
 
 The options type is `CreateScrollOptions` (`ScrollOptions` is a `lib.dom` global and must not be shadowed).
+
+Pass `document` to track the page scroller. Offsets and geometry then come from `document.scrollingElement`, and since the page is never off-screen, `visibility: 'pause'` reacts to tab visibility alone and creates no `IntersectionObserver`. Use it for scroll progress bars, condensing headers, and scroll-to-top affordances instead of a bare `window` scroll listener.
 
 ### createThrottle
 
@@ -1209,13 +1211,14 @@ Every error includes a machine-readable `code` and an actionable message.
 import { PhaseError, isPhaseError } from 'phase';
 ```
 
-| Code               | Trigger                                             |
-| ------------------ | --------------------------------------------------- |
-| `server_context`   | Calling a browser-only primitive during SSR         |
-| `no_target`        | Passing a null or undefined `target` to a primitive |
-| `invalid_duration` | `useTween` duration is zero, negative, or NaN       |
-| `ticker_stopped`   | Calling `start`/`resume` on a stopped ticker        |
-| `missing_context`  | `<Swap.State>` used outside `<Swap>`                |
+| Code                 | Trigger                                             |
+| -------------------- | --------------------------------------------------- |
+| `server_context`     | Calling a browser-only primitive during SSR         |
+| `no_target`          | Passing a null or undefined `target` to a primitive |
+| `conflicting_target` | Passing both `ref` and `target` to a hook           |
+| `invalid_duration`   | `useTween` duration is zero, negative, or NaN       |
+| `ticker_stopped`     | Calling `start`/`resume` on a stopped ticker        |
+| `missing_context`    | `<Swap.State>` used outside `<Swap>`                |
 
 ## Relationship to View Transitions
 
@@ -1236,14 +1239,14 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `createSight`             |             970 B |
 | `createLifecycle`         |           1.48 kB |
 | `createLoop`              |            2.6 kB |
-| `createScrollProgress`    |             865 B |
+| `createScrollProgress`    |             863 B |
 | `createRenderState`       |             490 B |
 | `createDevicePixelRatio`  |             544 B |
 | `createMutation`          |           1.17 kB |
 | `createPointer`           |           1.26 kB |
-| `createScroll`            |           1.46 kB |
-| `createThrottle`          |             659 B |
-| `createDebounce`          |             557 B |
+| `createScroll`            |           1.53 kB |
+| `createThrottle`          |             660 B |
+| `createDebounce`          |             558 B |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
 | **Ease**                  |                   |
@@ -1253,14 +1256,14 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useLifecycle`            |           1.68 kB |
 | `useSight`                |           1.18 kB |
 | `useCanvas`               |           3.47 kB |
-| `useMutation`             |           1.37 kB |
-| `usePointer`              |           1.48 kB |
-| `useScroll`               |           1.72 kB |
+| `useMutation`             |           1.36 kB |
+| `usePointer`              |           1.47 kB |
+| `useScroll`               |           1.86 kB |
 | `useThrottledCallback`    |             797 B |
-| `useDebouncedCallback`    |             687 B |
-| `useTween`                |             655 B |
+| `useDebouncedCallback`    |             690 B |
+| `useTween`                |             680 B |
 | `usePresence`             |             591 B |
-| `useScrollProgress`       |             999 B |
+| `useScrollProgress`       |              1 kB |
 | `useSize`                 |             378 B |
 | `useContainerQuery`       |             384 B |
 | `useMediaQuery`           |             246 B |
@@ -1272,8 +1275,8 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `WhenVisible`             |           1.43 kB |
 | `WhenIdle`                |             593 B |
 | `Defer`                   |              86 B |
-| `useIdle`                 |             435 B |
-| `useWhenIdle`             |             446 B |
+| `useIdle`                 |             436 B |
+| `useWhenIdle`             |             443 B |
 | `useRenderState`          |             521 B |
 | `Swap`                    |           1.12 kB |
 

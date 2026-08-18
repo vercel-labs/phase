@@ -12,14 +12,14 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 
 ### Options
 
-| Option                | Type                                                 | Default   | Description                                        |
-| --------------------- | ---------------------------------------------------- | --------- | -------------------------------------------------- |
-| `target`              | `Element`                                            | required  | Scroll container to track                          |
-| `onScroll`            | `(state: ScrollState) => void`                       | required  | Called once per rAF frame with position + progress |
-| `onPhaseChange`       | `(phase: ScrollPhase, reason: ScrollReason) => void` | —         | Called on phase transitions                        |
-| `visibility`          | `'pause' \| 'ignore'`                                | `'pause'` | Pause tracking when off-screen, or ignore          |
-| `intersectionOptions` | `IntersectionObserverInit`                           | —         | Forwarded to the visibility observer               |
-| `signal`              | `AbortSignal`                                        | —         | Stops the tracker when aborted                     |
+| Option                | Type                                                 | Default   | Description                                                  |
+| --------------------- | ---------------------------------------------------- | --------- | ------------------------------------------------------------ |
+| `target`              | `Element \| Document`                                | required  | Scroll container, or `document` for the page                 |
+| `onScroll`            | `(state: ScrollState) => void`                       | required  | Called once per rAF frame with position + progress           |
+| `onPhaseChange`       | `(phase: ScrollPhase, reason: ScrollReason) => void` | —         | Called on phase transitions                                  |
+| `visibility`          | `'pause' \| 'ignore'`                                | `'pause'` | Pause tracking when off-screen, or ignore                    |
+| `intersectionOptions` | `IntersectionObserverInit`                           | —         | Forwarded to the visibility observer. Ignored for `document` |
+| `signal`              | `AbortSignal`                                        | —         | Stops the tracker when aborted                               |
 
 > The options type is `CreateScrollOptions`. `ScrollOptions` is a `lib.dom` global and must not be shadowed.
 
@@ -83,11 +83,27 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 - **Don't call `stop()` then expect to restart.** `stop()` is terminal. Create a new instance.
 - **Don't use it for viewport reveal effects.** That is intersection ratio. Use `createScrollProgress`.
 
+## Page scroll
+
+Pass `document` to track the page scroller:
+
+```ts
+const scroll = createScroll({
+  target: document,
+  onScroll: (s) => {
+    bar.style.transform = `scaleX(${s.progressY})`;
+  },
+});
+```
+
+Offsets and geometry come from `document.scrollingElement` (the `body` in quirks mode), while the `scroll` listener stays on the Document, where the page fires it. Listening on `documentElement` instead would never fire.
+
+Because the page is always in view, `visibility: 'pause'` reacts to tab visibility alone and creates no `IntersectionObserver`; `intersectionOptions` is ignored. Page mode also re-measures on window resize, since a viewport height change moves `maxY` without resizing the scrolling element's content box.
+
 ## Limitations
 
 - **LTR only.** Position clamps to `[0, maxX]`; RTL's negative or max-origin `scrollLeft` is not yet handled.
 - **Content resize needs `measure()`.** The `ResizeObserver` catches container resizes; adding or removing scrollable children changes `scrollWidth` without firing it.
-- **Element scrollers only.** Document and window scroll fire on `document`/`window` rather than the element, so they need separate handling not included here.
 
 ## Reduced motion
 
