@@ -15,14 +15,14 @@ const { ref, phase, phaseReason, phaseRef, phaseReasonRef, stateRef, measure } =
 
 ### Options
 
-| Option                | Type                           | Default   | Description                                                             |
-| --------------------- | ------------------------------ | --------- | ----------------------------------------------------------------------- |
-| `ref`                 | `RefObject<T \| null>`         | returned  | Bring your own ref, or attach the returned one                          |
-| `target`              | `Document`                     | —         | Track the page scroller; pass `document`. Mutually exclusive with `ref` |
-| `onScroll`            | `(state: ScrollState) => void` | required  | Called once per rAF frame with position + progress                      |
-| `visibility`          | `'pause' \| 'ignore'`          | `'pause'` | Pause when off-screen or ignore visibility                              |
-| `enabled`             | `boolean`                      | `true`    | When `false`, tears down the tracker                                    |
-| `intersectionOptions` | `IntersectionObserverInit`     | —         | Forwarded to the visibility observer. Ignored for `document`            |
+| Option                | Type                           | Default   | Description                                                  |
+| --------------------- | ------------------------------ | --------- | ------------------------------------------------------------ |
+| `ref`                 | `RefObject<T \| null>`         | returned  | Bring your own ref, or attach the returned one               |
+| `target`              | `'page'`                       | —         | Track the page scroller. Mutually exclusive with `ref`       |
+| `onScroll`            | `(state: ScrollState) => void` | required  | Called once per rAF frame with position + progress           |
+| `visibility`          | `'pause' \| 'ignore'`          | `'pause'` | Pause when off-screen or ignore visibility                   |
+| `enabled`             | `boolean`                      | `true`    | When `false`, tears down the tracker                         |
+| `intersectionOptions` | `IntersectionObserverInit`     | —         | Forwarded to the visibility observer. Ignored for `document` |
 
 ### Return
 
@@ -45,18 +45,18 @@ See [create-scroll](./create-scroll.md) for the `ScrollState` fields. For a sync
 
 ## Page scroll
 
-Pass `target: document` to track the page instead of an element. Use it for scroll progress bars, sticky/condensing headers, scroll-to-top affordances, and anything else driven by how far down the document the user is.
+Pass `target: 'page'` to track the page instead of an element. Use it for scroll progress bars, sticky/condensing headers, scroll-to-top affordances, and anything else driven by how far down the document the user is.
 
 ```tsx
 const { stateRef } = useScroll({
-  target: document,
+  target: 'page',
   onScroll: (s) => {
     barRef.current!.style.transform = `scaleX(${s.progressY})`;
   },
 });
 ```
 
-In page mode the tracker reads offsets and geometry from `document.scrollingElement`, and `visibility: 'pause'` reacts to tab visibility alone, since the page is never off-screen. `intersectionOptions` is ignored. Everything else behaves identically: one rAF-batched read per frame, geometry cached off the scroll path.
+It is the string `'page'`, not `document`, because hook options are built during render and render runs on the server for a client component; a literal `document` throws there. In page mode the tracker reads offsets and geometry from `document.scrollingElement`, and `visibility: 'pause'` reacts to tab visibility alone, since the page is never off-screen. `intersectionOptions` is ignored. Everything else behaves identically: one rAF-batched read per frame, geometry cached off the scroll path.
 
 Prefer this over a bare `window.addEventListener('scroll', ...)`. The raw listener re-renders or reads layout on every event, up to ~120 times a second.
 

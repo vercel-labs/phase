@@ -4,7 +4,7 @@
 
 ### Minor Changes
 
-- `createScroll` and `useScroll` can track the page. Pass `document` as the `target` (or `target: document` on the hook) to read page scroll offset and progress.
+- `createScroll` and `useScroll` can track the page. Pass `target: document` to `createScroll`, or `target: 'page'` to `useScroll`, to read page scroll offset and progress. The hook takes a string because its options are built during render, which runs on the server for a client component.
 - Added the `conflicting_target` error code, thrown when a hook receives both `ref` and `target`.
 
 ## 0.1.0

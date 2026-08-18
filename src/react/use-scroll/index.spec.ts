@@ -357,12 +357,29 @@ describe('re-render behavior', () => {
 // ---------------------------------------------------------------------------
 
 describe('page target', () => {
-  it('tracks the page when given document, with no ref attached', async () => {
+  it('rejects a Document at the type level, so options stay SSR-safe', async () => {
+    // Hook options are built during render, and render runs on the server for
+    // a client component, where a literal `document` throws a ReferenceError
+    // before the hook is called. `target` is the string 'page' so building the
+    // options object never reads a browser global. Passing a Document is a
+    // type error, and does not silently start tracking either.
     const useScroll = await getHook();
     makePageScrollable(5000, 1000);
 
     const { result } = renderHook(() =>
+      // @ts-expect-error - Document is not assignable to target: 'page'
       useScroll({ target: document, onScroll: vi.fn() }),
+    );
+
+    expect(result.current.phase).toBe('paused');
+  });
+
+  it('tracks the page when target is page, with no ref attached', async () => {
+    const useScroll = await getHook();
+    makePageScrollable(5000, 1000);
+
+    const { result } = renderHook(() =>
+      useScroll({ target: 'page', onScroll: vi.fn() }),
     );
 
     expect(result.current.phase).toBe('tracking');
@@ -375,7 +392,7 @@ describe('page target', () => {
     makePageScrollable(5000, 1000);
     const onScroll = vi.fn();
 
-    renderHook(() => useScroll({ target: document, onScroll }));
+    renderHook(() => useScroll({ target: 'page', onScroll }));
     onScroll.mockClear();
 
     document.documentElement.scrollTop = 1000;
@@ -394,7 +411,7 @@ describe('page target', () => {
     const { ref } = createRefWithElement();
 
     expect(() =>
-      renderHook(() => useScroll({ ref, target: document, onScroll: vi.fn() })),
+      renderHook(() => useScroll({ ref, target: 'page', onScroll: vi.fn() })),
     ).toThrowError(/both ref and target/);
   });
 
@@ -404,7 +421,7 @@ describe('page target', () => {
     const onScroll = vi.fn();
 
     const { unmount } = renderHook(() =>
-      useScroll({ target: document, onScroll }),
+      useScroll({ target: 'page', onScroll }),
     );
     unmount();
     onScroll.mockClear();

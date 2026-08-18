@@ -26,10 +26,14 @@ export interface UseScrollOptions<T extends Element = HTMLDivElement> {
   /** Element to track. When omitted, attach the returned `ref`. */
   ref?: RefObject<T | null>;
   /**
-   * Track the page scroller instead of an element. Pass `document`. Mutually
+   * Track the page scroller instead of an element. Pass `'page'`. Mutually
    * exclusive with `ref`.
+   *
+   * This is a string rather than `document` because hook options are built
+   * during render, and render runs on the server for a client component. A
+   * literal `document` there throws before the hook is called.
    */
-  target?: Document;
+  target?: 'page';
   /** Called once per rAF frame with the latest scroll position + progress. */
   onScroll: ScrollCallback;
   /** Pause when off-screen or ignore visibility. Default `'pause'`. */
@@ -115,7 +119,8 @@ export function useScroll<T extends Element = HTMLDivElement>(
   useEffect(() => {
     if (target && options.ref) conflictingTargetError('useScroll');
 
-    const anchor = target ?? ref.current;
+    // Resolved here, not in the options object: this runs only on the client.
+    const anchor = target === 'page' ? document : ref.current;
     if (!anchor || !enabled) {
       instanceRef.current = null;
       setState(INITIAL_STATE);
