@@ -446,3 +446,33 @@ describe('page target', () => {
     expect(onPhaseChange).not.toHaveBeenCalled();
   });
 });
+
+describe('page target construction failure', () => {
+  it('releases listeners when the initial callback throws', async () => {
+    const { createSight } = await getModule();
+    const addSpy = vi.spyOn(document, 'addEventListener');
+    const removeSpy = vi.spyOn(document, 'removeEventListener');
+
+    expect(() =>
+      createSight({
+        target: document,
+        onPhaseChange: () => {
+          throw new Error('consumer blew up');
+        },
+      }),
+    ).toThrowError('consumer blew up');
+
+    // Construction failed, so the caller has no instance to stop with. The
+    // visibilitychange listener must not outlive the attempt.
+    const added = addSpy.mock.calls.filter(
+      ([type]) => type === 'visibilitychange',
+    ).length;
+    const removed = removeSpy.mock.calls.filter(
+      ([type]) => type === 'visibilitychange',
+    ).length;
+    expect(removed).toBe(added);
+
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
+  });
+});

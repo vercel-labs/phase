@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, type RefObject } from 'react';
 import { conflictingTargetError } from '../../core/_internal/errors';
 import {
   createSight,
+  type Sight,
   type SightPhase,
   type SightReason,
 } from '../../core/sight';
@@ -105,6 +106,9 @@ export function useSight<T extends Element = HTMLDivElement>(
     if (!anchor) return;
 
     let frozen = false;
+    // A page target reports its phase synchronously from createSight, before
+    // `sight` is bound, so the freeze is applied after construction instead.
+    let instance: Sight | null = null;
 
     const sight = createSight({
       target: anchor,
@@ -127,10 +131,13 @@ export function useSight<T extends Element = HTMLDivElement>(
 
         if (observe === 'once' && phase === 'visible') {
           frozen = true;
-          sight.stop();
+          instance?.stop();
         }
       },
     });
+
+    instance = sight;
+    if (frozen) sight.stop();
 
     return () => sight.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps

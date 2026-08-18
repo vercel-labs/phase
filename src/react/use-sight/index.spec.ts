@@ -229,3 +229,34 @@ describe('page target', () => {
     ).toThrowError(/both ref and target/);
   });
 });
+
+describe('page target + observe: once (regression)', () => {
+  it('does not throw when the page reports visible during construction', async () => {
+    const useSight = await getHook();
+
+    const { result } = renderHook(() =>
+      useSight({ target: document, observe: 'once' }),
+    );
+
+    expect(result.current.phase).toBe('visible');
+  });
+
+  it('stays frozen at visible after the tab hides', async () => {
+    const useSight = await getHook();
+
+    const { result } = renderHook(() =>
+      useSight({ target: document, observe: 'once' }),
+    );
+
+    act(() => {
+      Object.defineProperty(document, 'hidden', {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(result.current.phase).toBe('visible');
+  });
+});

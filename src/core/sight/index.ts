@@ -122,7 +122,17 @@ export function createSight(options: SightOptions): Sight {
     // An element target gets its first phase from the observer's initial
     // callback. A page has no observer, so report the starting phase here or
     // consumers would wait on a transition that never comes.
-    recompute('initial');
+    //
+    // This is the only path where a consumer callback runs before the caller
+    // holds an instance to stop, so a throw here has to release the listeners
+    // itself or they outlive the failed construction.
+    try {
+      recompute('initial');
+    } catch (error) {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pageshow', onPageShow);
+      throw error;
+    }
   } else {
     unobserveIO = observeIntersection({
       element: target,
