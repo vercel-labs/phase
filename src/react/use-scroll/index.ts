@@ -6,6 +6,7 @@ import {
   type RefObject,
 } from 'react';
 
+import { conflictingTargetError } from '../../core/_internal/errors';
 import {
   createScroll,
   type Scroll,
@@ -24,13 +25,22 @@ export type ScrollCallback = (state: ScrollState) => void;
 export interface UseScrollOptions<T extends Element = HTMLDivElement> {
   /** Element to track. When omitted, attach the returned `ref`. */
   ref?: RefObject<T | null>;
+  /**
+   * Track the page scroller instead of an element. Pass `'page'`. Mutually
+   * exclusive with `ref`.
+   *
+   * This is a string rather than `document` because hook options are built
+   * during render, and render runs on the server for a client component. A
+   * literal `document` there throws before the hook is called.
+   */
+  target?: 'page';
   /** Called once per rAF frame with the latest scroll position + progress. */
   onScroll: ScrollCallback;
   /** Pause when off-screen or ignore visibility. Default `'pause'`. */
   visibility?: 'pause' | 'ignore';
   /** When `false`, tears down the tracker entirely. Default `true`. */
   enabled?: boolean;
-  /** IO options forwarded to the visibility observer. */
+  /** IO options forwarded to the visibility observer. Ignored for `document`. */
   intersectionOptions?: IntersectionObserverInit;
 }
 
@@ -86,7 +96,12 @@ export function useScroll<T extends Element = HTMLDivElement>(
   options: UseScrollOptions<T>,
 ): UseScrollResult<T> {
   const [state, setState] = useState<ScrollPhaseState>(INITIAL_STATE);
-  const { visibility = 'pause', enabled = true, intersectionOptions } = options;
+  const {
+    target,
+    visibility = 'pause',
+    enabled = true,
+    intersectionOptions,
+  } = options;
 
   const phaseRef = useRef<ScrollPhase>('paused');
   const phaseReasonRef = useRef<ScrollReason>('initial');
@@ -102,8 +117,11 @@ export function useScroll<T extends Element = HTMLDivElement>(
   }, []);
 
   useEffect(() => {
-    const element = ref.current;
-    if (!element || !enabled) {
+    if (target && options.ref) conflictingTargetError('useScroll');
+
+    // Resolved here, not in the options object: this runs only on the client.
+    const anchor = target === 'page' ? document : ref.current;
+    if (!anchor || !enabled) {
       instanceRef.current = null;
       setState(INITIAL_STATE);
       phaseRef.current = 'paused';
@@ -113,7 +131,7 @@ export function useScroll<T extends Element = HTMLDivElement>(
     }
 
     const instance = createScroll({
-      target: element,
+      target: anchor,
       onScroll: (scrollState) => {
         stateRef.current = scrollState;
         onScrollRef.current(scrollState);
@@ -133,7 +151,7 @@ export function useScroll<T extends Element = HTMLDivElement>(
       instanceRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, visibility]);
+  }, [enabled, visibility, target]);
 
   return { ref, ...state, phaseRef, phaseReasonRef, stateRef, measure };
 }

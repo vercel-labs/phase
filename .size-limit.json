@@ -57,7 +57,7 @@
     "name": "createScroll",
     "path": "src/index.ts",
     "import": "{ createScroll }",
-    "limit": "1.6 kB"
+    "limit": "1.69 kB"
   },
   {
     "name": "createThrottle",
@@ -135,7 +135,7 @@
     "path": "src/react/index.ts",
     "import": "{ useScroll }",
     "ignore": ["react"],
-    "limit": "1.9 kB"
+    "limit": "2.05 kB"
   },
   {
     "name": "useThrottledCallback",
