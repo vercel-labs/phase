@@ -1,6 +1,6 @@
 # `createScroll`
 
-Lifecycle-aware scroll tracker. Reads `scrollLeft`/`scrollTop` once per rAF frame and reads the reflow-heavy geometry (`scrollWidth`/`clientWidth`) only on resize or explicit `measure()`, never on the scroll path. Auto-pauses off-screen. The framework-agnostic core behind `useScroll`.
+Lifecycle-aware scroll tracker. Reads `scrollLeft`/`scrollTop` once per rAF frame and reads the reflow-heavy geometry (`scrollWidth`/`clientWidth`) only on a coalesced resize or an explicit `measure()`, never on the scroll path. Auto-pauses off-screen. The framework-agnostic core behind `useScroll`.
 
 ## Signature
 
@@ -76,6 +76,7 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
   });
   ```
 - Call `measure()` after mutating scrollable content (adding/removing children). The `ResizeObserver` catches container resizes automatically; content-driven `scrollWidth` changes need `measure()`.
+- Expect resize-driven geometry to land on the next frame. Resize signals are coalesced into the same rAF flush as scroll, so a burst (or a page hearing one change from both the observer and the resize event) costs one layout read. `measure()` stays synchronous when you need the value immediately.
 
 ## Don't
 

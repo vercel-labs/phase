@@ -6,6 +6,7 @@
 
 - `createSight`, `createLifecycle`, and `createLoop` accept `document` as the `target`, anchoring to the page instead of an element. No `IntersectionObserver` is created and visibility follows the tab.
 - `useSight`, `useLifecycle`, and `useLoop` accept `target: document`, mutually exclusive with `ref`.
+- `createScroll` coalesces resize-driven geometry reads into its frame flush, so a burst of resize signals costs one layout read instead of one each. `measure()` is still synchronous.
 
 ## 0.2.0
 

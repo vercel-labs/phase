@@ -122,7 +122,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
 
   let rafId = 0;
   let dirty = false;
-  let needsMeasure = false;
+  let geometryDirty = false;
   let listenersAttached = false;
   let unobserveRO: (() => void) | undefined;
 
@@ -146,11 +146,9 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     _state.progressY = maxY > 0 ? _state.y / maxY : 0;
   }
 
-  // The one reflow-heavy path. Runs on attach, on ResizeObserver, and on an
-  // explicit `measure()`, never per scroll event. Skipped while paused/off-screen
-  // (re-entry re-measures), so `measure()` never forces an off-screen reflow.
-  function measure(): void {
-    if (stopped || !listenersAttached) return;
+  // The one reflow-heavy read. Runs on attach, on a coalesced resize, and on an
+  // explicit `measure()`, never per scroll event.
+  function readGeometry(): void {
     const scrollWidth = scroller.scrollWidth;
     const clientWidth = scroller.clientWidth;
     const scrollHeight = scroller.scrollHeight;
@@ -162,23 +160,25 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     _state.maxY = maxY > 0 ? maxY : 0;
     _state.visibleX = maxX > 0 ? clientWidth / scrollWidth : 1;
     _state.visibleY = maxY > 0 ? clientHeight / scrollHeight : 1;
+  }
 
+  // Skipped while paused/off-screen (re-entry re-measures), so this never forces
+  // an off-screen reflow.
+  function measure(): void {
+    if (stopped || !listenersAttached) return;
+    geometryDirty = false;
+    readGeometry();
     computePosition();
     onScroll(_state);
   }
 
   function flush(): void {
     rafId = 0;
-    if (stopped) return;
-    // A resize and a scroll landing in the same frame collapse into one
-    // callback: measure() recomputes position and reports on its own.
-    if (needsMeasure) {
-      needsMeasure = false;
-      dirty = false;
-      measure();
-      return;
+    if (stopped || (!dirty && !geometryDirty)) return;
+    if (geometryDirty) {
+      geometryDirty = false;
+      readGeometry();
     }
-    if (!dirty) return;
     dirty = false;
     computePosition();
     onScroll(_state);
@@ -195,7 +195,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
       rafId = 0;
     }
     dirty = false;
-    needsMeasure = false;
+    geometryDirty = false;
   }
 
   function onScrollEvent(): void {
@@ -204,18 +204,13 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     scheduleFlush();
   }
 
+  // Page mode hears one layout change from two sources (the observer and the
+  // resize event), and an element can see a burst from the observer alone. Mark
+  // the geometry stale and let the frame flush read it once.
   function onROResize(): void {
-    if (stopped) return;
-    // Page mode hears about a resize twice (observer + window `resize`), and
-    // `resize` is not frame-aligned the way an observer callback is. Defer to
-    // the frame so one resize costs one layout read, not two. Element mode has
-    // a single frame-aligned source, so it measures inline.
-    if (pageDoc) {
-      needsMeasure = true;
-      scheduleFlush();
-      return;
-    }
-    measure();
+    if (stopped || !listenersAttached) return;
+    geometryDirty = true;
+    scheduleFlush();
   }
 
   function attachListeners(): void {
