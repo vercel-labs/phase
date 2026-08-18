@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # Every open PR, not just those targeting main, so stacked PRs get a signal
+  # before the branch below them merges. Base-relative steps stay correct: the
+  # release-intent check diffs against the PR's own base.
   pull_request:
-    branches: [main]
 
 # Cancel in-progress PR runs on new pushes; let main runs finish so the
 # release workflow's history stays uninterrupted.
