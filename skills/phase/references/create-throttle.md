@@ -65,7 +65,7 @@ Document-level (`visibilitychange` + bfcache `pageshow`). On hide, a pending cal
     callback: (s) => socket.emit('cursor', s.x, s.y),
     interval: 50,
   });
-  pointer = createPointer({ element, onPointer: throttle.call });
+  pointer = createPointer({ target, onPointer: throttle.call });
   // cleanup:
   throttle.stop();
   ```

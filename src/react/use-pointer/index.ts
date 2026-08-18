@@ -86,7 +86,7 @@ export function usePointer<T extends Element = HTMLDivElement>(
     }
 
     const instance = createPointer({
-      element,
+      target: element,
       onPointer: (pointerState) => {
         stateRef.current = pointerState;
         onPointerRef.current(pointerState);

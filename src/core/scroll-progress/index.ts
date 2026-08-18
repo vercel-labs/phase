@@ -1,5 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { noElementError, serverContextError } from '../_internal/errors';
+import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 
 // ---------------------------------------------------------------------------
@@ -7,7 +7,7 @@ import { observeIntersection } from '../_internal/pool/io-pool';
 // ---------------------------------------------------------------------------
 
 export interface ScrollProgressOptions {
-  element: Element;
+  target: Element;
   /** Called when the intersection ratio changes at a threshold crossing. */
   onProgress: (ratio: number) => void;
   /** Number of evenly-spaced thresholds. Default 20 (~5% granularity). */
@@ -63,7 +63,7 @@ function buildThresholds(steps: number): number[] {
  *
  * @example
  * const progress = createScrollProgress({
- *   element: el,
+ *   target: el,
  *   onProgress: (ratio) => {
  *     el.style.opacity = String(ratio);
  *   },
@@ -79,7 +79,7 @@ export function createScrollProgress(
   }
 
   const {
-    element,
+    target: element,
     onProgress,
     steps = DEFAULT_STEPS,
     root,
@@ -87,7 +87,7 @@ export function createScrollProgress(
     signal,
   } = options;
 
-  if (!element) noElementError('createScrollProgress');
+  if (!element) noTargetError('createScrollProgress');
 
   let _ratio = 0;
   let stopped = false;

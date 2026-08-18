@@ -721,14 +721,14 @@ export const SIGNAL_EXAMPLES = {
       {
         file: 'src/hero.ts',
         content:
-          "createLoop({ element: el, onTick: draw, reducedMotion: 'ignore' });\n",
+          "createLoop({ target: el, onTick: draw, reducedMotion: 'ignore' });\n",
       },
     ],
     noMatch: [
       {
         file: 'src/hero.ts',
         content:
-          "createLoop({ element: el, onTick: draw, reducedMotion: 'respect' });\n",
+          "createLoop({ target: el, onTick: draw, reducedMotion: 'respect' });\n",
       },
     ],
   },
@@ -737,7 +737,7 @@ export const SIGNAL_EXAMPLES = {
       {
         file: 'src/spinner.tsx',
         content:
-          'useEffect(() => {\n  const loop = createLoop({ element: ref.current, onTick });\n  return () => loop.stop();\n}, []);\n',
+          'useEffect(() => {\n  const loop = createLoop({ target: ref.current, onTick });\n  return () => loop.stop();\n}, []);\n',
       },
     ],
     noMatch: [
@@ -746,7 +746,7 @@ export const SIGNAL_EXAMPLES = {
         // documented escape hatch.
         file: 'src/use-spinner.ts',
         content:
-          'const loop = createLoop({ element, onTick });\nreturn () => loop.stop();\n',
+          'const loop = createLoop({ target, onTick });\nreturn () => loop.stop();\n',
       },
     ],
   },

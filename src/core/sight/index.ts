@@ -1,5 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { noElementError, serverContextError } from '../_internal/errors';
+import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 
 // ---------------------------------------------------------------------------
@@ -15,7 +15,7 @@ export type SightReason =
   | 'all-hidden';
 
 export interface SightOptions {
-  element: Element;
+  target: Element;
   intersectionOptions?: IntersectionObserverInit;
   onPhaseChange?: (phase: SightPhase, reason: SightReason) => void;
   /** Abort signal that stops the observer when aborted. */
@@ -41,7 +41,7 @@ export interface Sight {
  *
  * @example
  * const sight = createSight({
- *   element: el,
+ *   target: el,
  *   onPhaseChange: (phase) => phase === 'visible' ? loop.start() : loop.pause(),
  * });
  * // cleanup:
@@ -55,9 +55,9 @@ export function createSight(options: SightOptions): Sight {
     serverContextError('createSight');
   }
 
-  const { element, intersectionOptions, onPhaseChange, signal } = options;
+  const { target, intersectionOptions, onPhaseChange, signal } = options;
 
-  if (!element) noElementError('createSight');
+  if (!target) noTargetError('createSight');
 
   let _phase: SightPhase = 'unknown';
   let _reason: SightReason = 'initial';
@@ -106,7 +106,7 @@ export function createSight(options: SightOptions): Sight {
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('pageshow', onPageShow);
   const unobserveIO: () => void = observeIntersection({
-    element,
+    element: target,
     onIntersect: onIntersection,
     ...intersectionOptions,
   });

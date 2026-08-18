@@ -14,7 +14,7 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 | Option                | Type                                | Default      | Description                               |
 | --------------------- | ----------------------------------- | ------------ | ----------------------------------------- |
-| `element`             | `Element`                           | required     | Element to observe for visibility         |
+| `target`              | `Element`                           | required     | Element to observe for visibility         |
 | `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running           |
 | `fps`                 | `number`                            | —            | Cap frames per second                     |
 | `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion |
@@ -73,7 +73,7 @@ const loop = createLoop(options: LoopOptions): Loop;
 - **Never allocate inside `onTick`.** No objects, arrays, closures, template literals, or spreads. `FrameState` is mutated in place; reuse external variables.
 - **Never store a reference to `frame`.** It's the same object every tick, mutated in place. Read values immediately.
 - **Don't call `start()` after `stop()`.** `stop()` is terminal. Create a new loop instance.
-- **Don't use `createLoop` without an element.** Throws `PhaseError` with code `no_element`.
+- **Don't use `createLoop` without an element.** Throws `PhaseError` with code `no_target`.
 
 ## Reduced motion
 

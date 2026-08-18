@@ -1,5 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { noElementError, serverContextError } from '../_internal/errors';
+import { noTargetError, serverContextError } from '../_internal/errors';
 import { createLifecycle } from '../lifecycle';
 import { createTicker } from '../tick';
 import type { FrameState, Ticker } from '../tick';
@@ -26,7 +26,7 @@ export type Quality = 'full' | 'degraded';
 export type DegradedReason = 'unfocused' | 'frame-budget';
 
 interface LoopOptionsBase {
-  element: Element;
+  target: Element;
   /**
    * Called every frame. Write to refs or DOM directly. Never call React
    * `setState` here (60 calls/sec = 60 re-renders/sec).
@@ -95,7 +95,7 @@ const RECOVERY_RETRY_MS = 2000;
  *
  * @example
  * const loop = createLoop({
- *   element: el,
+ *   target: el,
  *   onTick: (frame) => draw(ctx, frame),
  * });
  * // cleanup:
@@ -107,7 +107,7 @@ export function createLoop(options: LoopOptions): Loop {
   }
 
   const {
-    element,
+    target,
     onTick,
     fps: baseFps,
     reducedMotion = 'pause',
@@ -123,7 +123,7 @@ export function createLoop(options: LoopOptions): Loop {
     signal?: AbortSignal;
   };
 
-  if (!element) noElementError('createLoop');
+  if (!target) noTargetError('createLoop');
 
   const degradedFps: number | undefined =
     degraded === 'throttle' ? configuredDegradedFps : undefined;
@@ -300,7 +300,7 @@ export function createLoop(options: LoopOptions): Loop {
   // ticker and quality (frame-budget / focus) on top. Driven manually so it only
   // activates once the loop itself starts.
   const lifecycle = createLifecycle({
-    element,
+    target,
     reducedMotion: reducedMotion === 'pause' ? 'pause' : 'ignore',
     intersectionOptions,
     start: 'manual',

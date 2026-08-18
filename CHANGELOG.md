@@ -1,5 +1,12 @@
 # phase
 
+## 0.1.0
+
+### Minor Changes
+
+- **Breaking:** renamed the `element` option to `target` on `createScroll`, `createSight`, `createLifecycle`, `createLoop`, `createPointer`, `createMutation`, `createScrollProgress`, and `createRenderState`. React hooks are unaffected; they still take `ref`.
+- **Breaking:** the `PhaseError` code for a missing target is now `no_target` (was `no_element`).
+
 ## 0.0.12
 
 ### Patch Changes

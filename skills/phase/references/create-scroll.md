@@ -14,7 +14,7 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 
 | Option                | Type                                                 | Default   | Description                                        |
 | --------------------- | ---------------------------------------------------- | --------- | -------------------------------------------------- |
-| `element`             | `Element`                                            | required  | Scroll container to track                          |
+| `target`              | `Element`                                            | required  | Scroll container to track                          |
 | `onScroll`            | `(state: ScrollState) => void`                       | required  | Called once per rAF frame with position + progress |
 | `onPhaseChange`       | `(phase: ScrollPhase, reason: ScrollReason) => void` | —         | Called on phase transitions                        |
 | `visibility`          | `'pause' \| 'ignore'`                                | `'pause'` | Pause tracking when off-screen, or ignore          |
@@ -66,7 +66,7 @@ const scroll = createScroll(options: CreateScrollOptions): Scroll;
 - Drive a custom scrollbar from cached geometry:
   ```ts
   const scroll = createScroll({
-    element: viewport,
+    target: viewport,
     onScroll: (s) => {
       // thumb CSS needs `transform-origin: left` so scaleX anchors to the track start
       thumb.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;

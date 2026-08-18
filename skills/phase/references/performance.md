@@ -148,7 +148,7 @@ All phase primitives respect `prefers-reduced-motion: reduce` automatically. Byp
 
 ```ts
 // Ignoring reduced motion without justification
-createLoop({ element: el, onTick: draw, reducedMotion: 'ignore' });
+createLoop({ target: el, onTick: draw, reducedMotion: 'ignore' });
 ```
 
 **Do:** Only use `'ignore'` for non-decorative motion (data visualization that communicates via movement, a game, an accessibility feature that uses motion).

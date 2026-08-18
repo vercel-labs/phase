@@ -13,7 +13,7 @@ function dispatchStateChange(element: Element, skipped: boolean): void {
 describe('phase reporting', () => {
   it('starts rendered', () => {
     const el = document.createElement('div');
-    const render = createRenderState({ element: el });
+    const render = createRenderState({ target: el });
     expect(render.phase).toBe('rendered');
     render.stop();
   });
@@ -21,7 +21,7 @@ describe('phase reporting', () => {
   it('reports skipped when the browser skips rendering', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
-    const render = createRenderState({ element: el, onPhaseChange: cb });
+    const render = createRenderState({ target: el, onPhaseChange: cb });
 
     dispatchStateChange(el, true);
 
@@ -35,7 +35,7 @@ describe('phase reporting', () => {
     const el = document.createElement('div');
     const phases: string[] = [];
     const render = createRenderState({
-      element: el,
+      target: el,
       onPhaseChange: (p) => phases.push(p),
     });
 
@@ -50,7 +50,7 @@ describe('phase reporting', () => {
   it('does not fire when the phase is unchanged', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
-    const render = createRenderState({ element: el, onPhaseChange: cb });
+    const render = createRenderState({ target: el, onPhaseChange: cb });
 
     dispatchStateChange(el, false); // already rendered
     expect(cb).not.toHaveBeenCalled();
@@ -70,7 +70,7 @@ describe('cleanup', () => {
   it('stops firing after stop()', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
-    const render = createRenderState({ element: el, onPhaseChange: cb });
+    const render = createRenderState({ target: el, onPhaseChange: cb });
 
     render.stop();
     dispatchStateChange(el, true);
@@ -80,7 +80,7 @@ describe('cleanup', () => {
 
   it('stop() is idempotent', () => {
     const el = document.createElement('div');
-    const render = createRenderState({ element: el });
+    const render = createRenderState({ target: el });
     expect(() => {
       render.stop();
       render.stop();
@@ -92,7 +92,7 @@ describe('cleanup', () => {
     const cb = vi.fn();
     const controller = new AbortController();
     createRenderState({
-      element: el,
+      target: el,
       onPhaseChange: cb,
       signal: controller.signal,
     });
@@ -111,14 +111,14 @@ describe('cleanup', () => {
 describe('guards', () => {
   it('throws without an element', () => {
     expect(() =>
-      createRenderState({ element: null as unknown as Element }),
+      createRenderState({ target: null as unknown as Element }),
     ).toThrow();
   });
 
   it('throws on the server', async () => {
     vi.stubGlobal('document', undefined);
     const { createRenderState: ssrCreate } = await import('.');
-    expect(() => ssrCreate({ element: {} as Element })).toThrow(/server/i);
+    expect(() => ssrCreate({ target: {} as Element })).toThrow(/server/i);
     vi.unstubAllGlobals();
     vi.resetModules();
   });

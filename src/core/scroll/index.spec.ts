@@ -92,7 +92,7 @@ describe('initial state', () => {
     const cb = vi.fn();
 
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: cb,
       visibility: 'ignore',
     });
@@ -111,7 +111,7 @@ describe('initial state', () => {
     makeScrollable(el, { scrollWidth: 100, clientWidth: 100 });
 
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: vi.fn(),
       visibility: 'ignore',
     });
@@ -135,7 +135,7 @@ describe('scroll events', () => {
     const cb = vi.fn();
 
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: cb,
       visibility: 'ignore',
     });
@@ -159,7 +159,7 @@ describe('scroll events', () => {
     const geo = makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
 
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: vi.fn(),
       visibility: 'ignore',
     });
@@ -183,7 +183,7 @@ describe('scroll events', () => {
     const geo = makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
 
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: vi.fn(),
       visibility: 'ignore',
     });
@@ -217,7 +217,7 @@ describe('geometry', () => {
     const cb = vi.fn();
 
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: cb,
       visibility: 'ignore',
     });
@@ -240,7 +240,7 @@ describe('geometry', () => {
     makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
 
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: vi.fn(),
       visibility: 'ignore',
     });
@@ -268,7 +268,7 @@ describe('visibility gating', () => {
     makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
     const cb = vi.fn();
 
-    const scroll = createScroll({ element: el, onScroll: cb });
+    const scroll = createScroll({ target: el, onScroll: cb });
     expect(scroll.phase).toBe('paused');
     expect(cb).toHaveBeenCalledTimes(0);
 
@@ -284,7 +284,7 @@ describe('visibility gating', () => {
     const el = document.createElement('div');
     makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
 
-    const scroll = createScroll({ element: el, onScroll: vi.fn() });
+    const scroll = createScroll({ target: el, onScroll: vi.fn() });
     mockIO.trigger(el, true);
     expect(scroll.phase).toBe('tracking');
 
@@ -300,7 +300,7 @@ describe('visibility gating', () => {
     const geo = makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
     const cb = vi.fn();
 
-    const scroll = createScroll({ element: el, onScroll: cb });
+    const scroll = createScroll({ target: el, onScroll: cb });
     // Never became visible: scroll listener is not attached.
     geo.setLeft(150);
     el.dispatchEvent(new Event('scroll'));
@@ -320,7 +320,7 @@ describe('stop', () => {
     const el = document.createElement('div');
     makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: vi.fn(),
       visibility: 'ignore',
     });
@@ -334,7 +334,7 @@ describe('stop', () => {
     const el = document.createElement('div');
     makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: vi.fn(),
       visibility: 'ignore',
     });
@@ -348,7 +348,7 @@ describe('stop', () => {
     makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
     const controller = new AbortController();
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: vi.fn(),
       visibility: 'ignore',
       signal: controller.signal,
@@ -363,7 +363,7 @@ describe('stop', () => {
     const geo = makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
     const cb = vi.fn();
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: cb,
       visibility: 'ignore',
     });
@@ -383,15 +383,15 @@ describe('stop', () => {
 // ---------------------------------------------------------------------------
 
 describe('error guards', () => {
-  it('throws no_element when element is null', async () => {
+  it('throws no_target when target is null', async () => {
     const { createScroll } = await getModule();
     expect(() =>
       createScroll({
         // @ts-expect-error testing the runtime guard
-        element: null,
+        target: null,
         onScroll: vi.fn(),
       }),
-    ).toThrowError(/DOM element/);
+    ).toThrowError(/target/);
   });
 });
 
@@ -427,7 +427,7 @@ describe('geometry read discipline', () => {
     Object.defineProperty(el, 'scrollTop', { value: 0, configurable: true });
 
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: vi.fn(),
       visibility: 'ignore',
     });
@@ -459,7 +459,7 @@ describe('strong pause', () => {
     const geo = makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
     const cb = vi.fn();
 
-    const scroll = createScroll({ element: el, onScroll: cb });
+    const scroll = createScroll({ target: el, onScroll: cb });
     mockIO.trigger(el, true); // attach + initial measure
     cb.mockClear();
 
@@ -498,7 +498,7 @@ describe('vertical axis', () => {
     });
 
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: vi.fn(),
       visibility: 'ignore',
     });
@@ -525,7 +525,7 @@ describe('measure guards', () => {
     makeScrollable(el, { scrollWidth: 400, clientWidth: 100 }); // never visible → paused
     const cb = vi.fn();
 
-    const scroll = createScroll({ element: el, onScroll: cb });
+    const scroll = createScroll({ target: el, onScroll: cb });
     scroll.measure();
     expect(cb).not.toHaveBeenCalled();
     expect(scroll.state.maxX).toBe(0); // geometry never applied while paused
@@ -538,7 +538,7 @@ describe('measure guards', () => {
     makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
     const cb = vi.fn();
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: cb,
       visibility: 'ignore',
     });
@@ -558,7 +558,7 @@ describe('teardown', () => {
     const { createScroll } = await getModule();
     const el = document.createElement('div');
     makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
-    const scroll = createScroll({ element: el, onScroll: vi.fn() });
+    const scroll = createScroll({ target: el, onScroll: vi.fn() });
     mockIO.trigger(el, true); // attaches RO too
 
     expect(mockIO.instances.some((i) => i.observed.has(el))).toBe(true);
@@ -576,7 +576,7 @@ describe('teardown', () => {
     const controller = new AbortController();
     controller.abort();
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: vi.fn(),
       signal: controller.signal,
     });
@@ -590,7 +590,7 @@ describe('teardown', () => {
     makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
     const phases: Array<[string, string]> = [];
     const scroll = createScroll({
-      element: el,
+      target: el,
       onScroll: vi.fn(),
       onPhaseChange: (p, r) => phases.push([p, r]),
     });

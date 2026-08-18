@@ -93,7 +93,7 @@ export function useScrollProgress<T extends Element = HTMLDivElement>(
     if (!element) return;
 
     const scrollProgress = createScrollProgress({
-      element,
+      target: element,
       onProgress: (ratio: number) => {
         progressRef.current = ratio;
 

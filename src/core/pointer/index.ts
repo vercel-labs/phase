@@ -1,5 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { noElementError, serverContextError } from '../_internal/errors';
+import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 
 // ---------------------------------------------------------------------------
@@ -24,7 +24,7 @@ export interface PointerState {
 }
 
 export interface PointerOptions {
-  element: Element;
+  target: Element;
   /** Called once per rAF frame with the latest pointer position. */
   onPointer: (state: PointerState) => void;
   /** Called on phase transitions (idle, tracking, stopped). */
@@ -55,7 +55,7 @@ export function createPointer(options: PointerOptions): Pointer {
   }
 
   const {
-    element,
+    target: element,
     onPointer,
     onPhaseChange,
     visibility = 'pause',
@@ -63,7 +63,7 @@ export function createPointer(options: PointerOptions): Pointer {
     signal,
   } = options;
 
-  if (!element) noElementError('createPointer');
+  if (!element) noTargetError('createPointer');
 
   let _phase: PointerPhase = 'idle';
   let _reason: PointerReason = 'initial';

@@ -29,9 +29,9 @@ The win is collapsing many teardown calls into one `controller.abort()`. For a s
   const controller = new AbortController();
   const { signal } = controller;
 
-  createSight({ element, onPhaseChange, signal });
+  createSight({ target, onPhaseChange, signal });
   createDevicePixelRatio({ onChange: scheduleResize, signal });
-  const loop = createLoop({ element, onTick, signal });
+  const loop = createLoop({ target, onTick, signal });
 
   // one teardown for all three:
   return () => controller.abort();

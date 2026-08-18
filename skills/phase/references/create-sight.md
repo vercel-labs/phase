@@ -14,7 +14,7 @@ const sight = createSight(options: SightOptions): Sight;
 
 | Option                | Type                                               | Default  | Description                                   |
 | --------------------- | -------------------------------------------------- | -------- | --------------------------------------------- |
-| `element`             | `Element`                                          | required | Element to observe                            |
+| `target`              | `Element`                                          | required | Element to observe                            |
 | `intersectionOptions` | `IntersectionObserverInit`                         | —        | Forwarded to pooled IO                        |
 | `onPhaseChange`       | `(phase: SightPhase, reason: SightReason) => void` | —        | Called on visibility transitions              |
 | `signal`              | `AbortSignal`                                      | —        | Stops the observer when the signal is aborted |

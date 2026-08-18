@@ -189,7 +189,7 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
     let loopInstance: ReturnType<typeof createLoop> | null = null;
 
     const loop = createLoop({
-      element: container,
+      target: container,
       fps,
       reducedMotion,
       ...degradedConfig(degraded, degradedFps),

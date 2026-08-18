@@ -1,5 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { noElementError, serverContextError } from '../_internal/errors';
+import { noTargetError, serverContextError } from '../_internal/errors';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -8,7 +8,7 @@ import { noElementError, serverContextError } from '../_internal/errors';
 export type RenderPhase = 'rendered' | 'skipped';
 
 export interface RenderStateOptions {
-  element: Element;
+  target: Element;
   onPhaseChange?: (phase: RenderPhase) => void;
   /** Abort signal that stops the observer when aborted. */
   signal?: AbortSignal;
@@ -38,7 +38,7 @@ export interface RenderState {
  *
  * @example
  * const render = createRenderState({
- *   element: el,
+ *   target: el,
  *   onPhaseChange: (phase) => phase === 'skipped' ? clock.pause() : clock.resume(),
  * });
  * // cleanup:
@@ -56,9 +56,9 @@ export function createRenderState(options: RenderStateOptions): RenderState {
     serverContextError('createRenderState');
   }
 
-  const { element, onPhaseChange, signal } = options;
+  const { target: element, onPhaseChange, signal } = options;
 
-  if (!element) noElementError('createRenderState');
+  if (!element) noTargetError('createRenderState');
 
   let _phase: RenderPhase = 'rendered';
   let stopped = false;

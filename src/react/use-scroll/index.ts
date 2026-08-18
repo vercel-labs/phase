@@ -113,7 +113,7 @@ export function useScroll<T extends Element = HTMLDivElement>(
     }
 
     const instance = createScroll({
-      element,
+      target: element,
       onScroll: (scrollState) => {
         stateRef.current = scrollState;
         onScrollRef.current(scrollState);

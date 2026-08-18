@@ -14,7 +14,7 @@ const pointer = createPointer(options: PointerOptions): Pointer;
 
 | Option                | Type                            | Default   | Description                                    |
 | --------------------- | ------------------------------- | --------- | ---------------------------------------------- |
-| `element`             | `Element`                       | required  | Element to track pointer events on             |
+| `target`              | `Element`                       | required  | Element to track pointer events on             |
 | `onPointer`           | `(state: PointerState) => void` | required  | Called once per rAF frame with latest position |
 | `onPhaseChange`       | `(phase, reason) => void`       | --        | Called on phase transitions                    |
 | `visibility`          | `'pause' \| 'ignore'`           | `'pause'` | Pause when off-screen or ignore visibility     |
@@ -62,7 +62,7 @@ const pointer = createPointer(options: PointerOptions): Pointer;
 
   ```ts
   const pointer = createPointer({
-    element: document.documentElement,
+    target: document.documentElement,
     visibility: 'ignore', // the root is never meaningfully off-screen
     onPointer: (state) => {
       // state.x / state.y are page-relative (include scroll)
@@ -77,7 +77,7 @@ const pointer = createPointer(options: PointerOptions): Pointer;
 - Use for rAF-batched pointer tracking:
   ```ts
   const pointer = createPointer({
-    element: el,
+    target: el,
     onPointer: (state) => {
       cursor.style.transform = `translate(${state.x}px, ${state.y}px)`;
     },

@@ -176,7 +176,7 @@ The main primitive. Composes a ticker, visibility observer, and reduced-motion l
 import { createLoop } from 'phase';
 
 const loop = createLoop({
-  element: el,
+  target: el,
   onTick: (frame) => {
     // frame.time    — browser rAF timestamp
     // frame.delta   — ms since last tick (clamped to 40ms)
@@ -229,7 +229,7 @@ Controls the loop's response when quality degrades. Same three-value pattern as 
 
 ```ts
 createLoop({
-  element: el,
+  target: el,
   onTick: draw,
   degraded: 'throttle', // default
   degradedFps: 20, // only accepted when degraded is 'throttle'
@@ -240,7 +240,7 @@ createLoop({
 
 | Option          | Type                                | Default      | Description                               |
 | --------------- | ----------------------------------- | ------------ | ----------------------------------------- |
-| `element`       | `Element`                           | required     | Element to observe for visibility         |
+| `target`        | `Element`                           | required     | Element to observe for visibility         |
 | `onTick`        | `(frame: FrameState) => void`       | required     | Called each frame while running           |
 | `fps`           | `number`                            | —            | Cap frames per second                     |
 | `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion |
@@ -283,7 +283,7 @@ Answers one question: is this element visible right now? Combines `document.visi
 import { createSight } from 'phase';
 
 const sight = createSight({
-  element: el,
+  target: el,
   onPhaseChange: (phase, reason) => {
     // phase:  'visible' | 'hidden' | 'unknown'
     // reason: 'initial' | 'viewport' | 'document' | 'bfcache' | 'all-hidden'
@@ -303,7 +303,7 @@ Use `createLifecycle` when you own your render loop (a three.js/WebGL renderer, 
 import { createLifecycle } from 'phase';
 
 const lifecycle = createLifecycle({
-  element: canvas,
+  target: canvas,
   onPhaseChange: (phase, reason) => {
     // phase:  'idle' | 'active' | 'paused' | 'stopped'
     // reason: 'started' | 'resumed' | 'sight' | 'reduced-motion' | 'manual' | 'disposed' | 'initial'
@@ -343,7 +343,7 @@ Reports what fraction of an element is currently visible in the viewport (0–1)
 import { createScrollProgress } from 'phase';
 
 const progress = createScrollProgress({
-  element: el,
+  target: el,
   onProgress: (ratio) => {
     el.style.opacity = String(ratio);
   },
@@ -361,7 +361,7 @@ The `steps` option controls threshold granularity. Default `20` generates 21 eve
 
 | Option       | Type                          | Default  | Description                        |
 | ------------ | ----------------------------- | -------- | ---------------------------------- |
-| `element`    | `Element`                     | required | Element to observe                 |
+| `target`     | `Element`                     | required | Element to observe                 |
 | `onProgress` | `(ratio: number) => void`     | required | Called at each threshold crossing  |
 | `steps`      | `number`                      | `20`     | Number of evenly-spaced thresholds |
 | `root`       | `Element \| Document \| null` | —        | IO root element                    |
@@ -377,7 +377,7 @@ Tracks a scroll container's offset and progress. Reads `scrollLeft`/`scrollTop` 
 import { createScroll } from 'phase';
 
 const scroll = createScroll({
-  element: viewport,
+  target: viewport,
   onScroll: (s) => {
     // thumb CSS needs `transform-origin: left` so scaleX anchors to the track start
     thumb.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;
@@ -401,7 +401,7 @@ scroll.stop();
 
 | Option                | Type                           | Default   | Description                                        |
 | --------------------- | ------------------------------ | --------- | -------------------------------------------------- |
-| `element`             | `Element`                      | required  | Scroll container to track                          |
+| `target`              | `Element`                      | required  | Scroll container to track                          |
 | `onScroll`            | `(state: ScrollState) => void` | required  | Called once per rAF frame with position + progress |
 | `onPhaseChange`       | `(phase, reason) => void`      | —         | Called on phase transitions                        |
 | `visibility`          | `'pause' \| 'ignore'`          | `'pause'` | Pause tracking when off-screen, or ignore          |
@@ -481,7 +481,7 @@ Reports whether the browser is rendering an element or skipping it under `conten
 import { createRenderState } from 'phase';
 
 const renderState = createRenderState({
-  element: el,
+  target: el,
   onPhaseChange: (phase) => {
     if (phase === 'skipped') clock.pause();
     else clock.resume();
@@ -518,7 +518,7 @@ A lifecycle-aware `MutationObserver`: records are coalesced into one callback pe
 import { createMutation } from 'phase';
 
 const mutation = createMutation({
-  element: list,
+  target: list,
   mutation: { childList: true },
   onMutations: (records) => syncItems(records),
 });
@@ -536,7 +536,7 @@ Tracks pointer position relative to an element, batching high-frequency events i
 import { createPointer } from 'phase';
 
 const pointer = createPointer({
-  element: surface,
+  target: surface,
   onPointer: (state) => {
     cursor.style.transform = `translate(${state.x}px, ${state.y}px)`;
   },
@@ -1209,13 +1209,13 @@ Every error includes a machine-readable `code` and an actionable message.
 import { PhaseError, isPhaseError } from 'phase';
 ```
 
-| Code               | Trigger                                              |
-| ------------------ | ---------------------------------------------------- |
-| `server_context`   | Calling a browser-only primitive during SSR          |
-| `no_element`       | Passing a null or undefined `element` to a primitive |
-| `invalid_duration` | `useTween` duration is zero, negative, or NaN        |
-| `ticker_stopped`   | Calling `start`/`resume` on a stopped ticker         |
-| `missing_context`  | `<Swap.State>` used outside `<Swap>`                 |
+| Code               | Trigger                                             |
+| ------------------ | --------------------------------------------------- |
+| `server_context`   | Calling a browser-only primitive during SSR         |
+| `no_target`        | Passing a null or undefined `target` to a primitive |
+| `invalid_duration` | `useTween` duration is zero, negative, or NaN       |
+| `ticker_stopped`   | Calling `start`/`resume` on a stopped ticker        |
+| `missing_context`  | `<Swap.State>` used outside `<Swap>`                |
 
 ## Relationship to View Transitions
 
@@ -1232,18 +1232,18 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |             846 B |
-| `createSight`             |             967 B |
+| `createTicker`            |             847 B |
+| `createSight`             |             970 B |
 | `createLifecycle`         |           1.48 kB |
-| `createLoop`              |           2.62 kB |
-| `createScrollProgress`    |             866 B |
-| `createRenderState`       |             495 B |
+| `createLoop`              |            2.6 kB |
+| `createScrollProgress`    |             865 B |
+| `createRenderState`       |             490 B |
 | `createDevicePixelRatio`  |             544 B |
-| `createMutation`          |           1.18 kB |
-| `createPointer`           |           1.27 kB |
-| `createScroll`            |           1.45 kB |
-| `createThrottle`          |             657 B |
-| `createDebounce`          |             559 B |
+| `createMutation`          |           1.17 kB |
+| `createPointer`           |           1.26 kB |
+| `createScroll`            |           1.46 kB |
+| `createThrottle`          |             659 B |
+| `createDebounce`          |             557 B |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
 | **Ease**                  |                   |
@@ -1253,14 +1253,14 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useLifecycle`            |           1.68 kB |
 | `useSight`                |           1.18 kB |
 | `useCanvas`               |           3.47 kB |
-| `useMutation`             |           1.36 kB |
-| `usePointer`              |           1.47 kB |
+| `useMutation`             |           1.37 kB |
+| `usePointer`              |           1.48 kB |
 | `useScroll`               |           1.72 kB |
 | `useThrottledCallback`    |             797 B |
-| `useDebouncedCallback`    |             688 B |
-| `useTween`                |             655 B |
+| `useDebouncedCallback`    |             687 B |
+| `useTween`                |             685 B |
 | `usePresence`             |             591 B |
-| `useScrollProgress`       |             997 B |
+| `useScrollProgress`       |             999 B |
 | `useSize`                 |             378 B |
 | `useContainerQuery`       |             384 B |
 | `useMediaQuery`           |             246 B |
@@ -1269,13 +1269,13 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
 | `Presence`                |             741 B |
-| `WhenVisible`             |           1.44 kB |
+| `WhenVisible`             |           1.43 kB |
 | `WhenIdle`                |             593 B |
 | `Defer`                   |              86 B |
 | `useIdle`                 |             435 B |
-| `useWhenIdle`             |             445 B |
-| `useRenderState`          |             527 B |
-| `Swap`                    |           1.13 kB |
+| `useWhenIdle`             |             446 B |
+| `useRenderState`          |             521 B |
+| `Swap`                    |           1.12 kB |
 
 <!-- SIZE-TABLE:END -->
 

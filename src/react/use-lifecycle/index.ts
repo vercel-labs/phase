@@ -86,7 +86,7 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
     }
 
     const lifecycle = createLifecycle({
-      element,
+      target: element,
       reducedMotion,
       intersectionOptions,
       onPhaseChange: (phase, phaseReason) => {

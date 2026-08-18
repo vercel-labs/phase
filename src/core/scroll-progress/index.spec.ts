@@ -25,7 +25,7 @@ describe('ratio updates', () => {
     const { createScrollProgress } = await getModule();
     const el = document.createElement('div');
     const cb = vi.fn();
-    const progress = createScrollProgress({ element: el, onProgress: cb });
+    const progress = createScrollProgress({ target: el, onProgress: cb });
 
     mockIO.triggerWithRatio(el, 0.5);
 
@@ -38,7 +38,7 @@ describe('ratio updates', () => {
     const { createScrollProgress } = await getModule();
     const el = document.createElement('div');
     const cb = vi.fn();
-    const progress = createScrollProgress({ element: el, onProgress: cb });
+    const progress = createScrollProgress({ target: el, onProgress: cb });
 
     mockIO.triggerWithRatio(el, 0.5);
     mockIO.triggerWithRatio(el, 0.5);
@@ -52,7 +52,7 @@ describe('ratio updates', () => {
     const el = document.createElement('div');
     const ratios: number[] = [];
     const progress = createScrollProgress({
-      element: el,
+      target: el,
       onProgress: (r) => ratios.push(r),
     });
 
@@ -73,7 +73,7 @@ describe('synchronous ratio read', () => {
   it('ratio returns 0 before first observation', async () => {
     const { createScrollProgress } = await getModule();
     const el = document.createElement('div');
-    const progress = createScrollProgress({ element: el, onProgress: vi.fn() });
+    const progress = createScrollProgress({ target: el, onProgress: vi.fn() });
 
     expect(progress.ratio).toBe(0);
     progress.stop();
@@ -82,7 +82,7 @@ describe('synchronous ratio read', () => {
   it('ratio returns last-reported value', async () => {
     const { createScrollProgress } = await getModule();
     const el = document.createElement('div');
-    const progress = createScrollProgress({ element: el, onProgress: vi.fn() });
+    const progress = createScrollProgress({ target: el, onProgress: vi.fn() });
 
     mockIO.triggerWithRatio(el, 0.75);
     expect(progress.ratio).toBe(0.75);
@@ -98,7 +98,7 @@ describe('stop', () => {
   it('stop is idempotent', async () => {
     const { createScrollProgress } = await getModule();
     const el = document.createElement('div');
-    const progress = createScrollProgress({ element: el, onProgress: vi.fn() });
+    const progress = createScrollProgress({ target: el, onProgress: vi.fn() });
 
     progress.stop();
     expect(() => progress.stop()).not.toThrow();
@@ -108,7 +108,7 @@ describe('stop', () => {
     const { createScrollProgress } = await getModule();
     const el = document.createElement('div');
     const cb = vi.fn();
-    const progress = createScrollProgress({ element: el, onProgress: cb });
+    const progress = createScrollProgress({ target: el, onProgress: cb });
 
     mockIO.triggerWithRatio(el, 0.5);
     cb.mockClear();
@@ -125,7 +125,7 @@ describe('stop', () => {
     const cb = vi.fn();
     const controller = new AbortController();
     createScrollProgress({
-      element: el,
+      target: el,
       onProgress: cb,
       signal: controller.signal,
     });
@@ -147,8 +147,8 @@ describe('pool deduplication', () => {
     const el1 = document.createElement('div');
     const el2 = document.createElement('div');
 
-    const p1 = createScrollProgress({ element: el1, onProgress: vi.fn() });
-    const p2 = createScrollProgress({ element: el2, onProgress: vi.fn() });
+    const p1 = createScrollProgress({ target: el1, onProgress: vi.fn() });
+    const p2 = createScrollProgress({ target: el2, onProgress: vi.fn() });
 
     expect(mockIO.instances).toHaveLength(1);
     p1.stop();
@@ -161,12 +161,12 @@ describe('pool deduplication', () => {
     const el2 = document.createElement('div');
 
     const p1 = createScrollProgress({
-      element: el1,
+      target: el1,
       onProgress: vi.fn(),
       steps: 10,
     });
     const p2 = createScrollProgress({
-      element: el2,
+      target: el2,
       onProgress: vi.fn(),
       steps: 50,
     });
@@ -185,7 +185,7 @@ describe('threshold generation', () => {
   it('default steps creates IO with 21 thresholds', async () => {
     const { createScrollProgress } = await getModule();
     const el = document.createElement('div');
-    const progress = createScrollProgress({ element: el, onProgress: vi.fn() });
+    const progress = createScrollProgress({ target: el, onProgress: vi.fn() });
 
     const inst = mockIO.instances[0];
     expect(inst?.options?.threshold).toHaveLength(21);
@@ -196,7 +196,7 @@ describe('threshold generation', () => {
     const { createScrollProgress } = await getModule();
     const el = document.createElement('div');
     const progress = createScrollProgress({
-      element: el,
+      target: el,
       onProgress: vi.fn(),
       steps: 10,
     });
@@ -216,7 +216,7 @@ describe('options passthrough', () => {
     const { createScrollProgress } = await getModule();
     const el = document.createElement('div');
     const progress = createScrollProgress({
-      element: el,
+      target: el,
       onProgress: vi.fn(),
       rootMargin: '100px',
     });
@@ -238,7 +238,7 @@ describe('SSR', () => {
     const { createScrollProgress } = await import('.');
     expect(() =>
       createScrollProgress({
-        element: document.createElement('div'),
+        target: document.createElement('div'),
         onProgress: vi.fn(),
       }),
     ).toThrow();

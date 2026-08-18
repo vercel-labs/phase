@@ -101,7 +101,7 @@ export function useLoop<T extends Element = HTMLDivElement>(
     }
 
     const loop = createLoop({
-      element,
+      target: element,
       onTick: (frame) => onTickRef.current(frame),
       fps,
       reducedMotion,

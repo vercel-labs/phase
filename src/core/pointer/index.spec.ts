@@ -72,7 +72,7 @@ describe('initial state', () => {
     const { createPointer } = await getModule();
     const el = document.createElement('div');
     const pointer = createPointer({
-      element: el,
+      target: el,
       onPointer: vi.fn(),
       visibility: 'ignore',
     });
@@ -93,7 +93,7 @@ describe('pointer events', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const pointer = createPointer({
-      element: el,
+      target: el,
       onPointer: cb,
       visibility: 'ignore',
     });
@@ -127,7 +127,7 @@ describe('pointer events', () => {
 
     const cb = vi.fn();
     const pointer = createPointer({
-      element: el,
+      target: el,
       onPointer: cb,
       visibility: 'ignore',
     });
@@ -156,7 +156,7 @@ describe('pointer events', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const pointer = createPointer({
-      element: el,
+      target: el,
       onPointer: cb,
       visibility: 'ignore',
     });
@@ -191,7 +191,7 @@ describe('visibility gating', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const pointer = createPointer({
-      element: el,
+      target: el,
       onPointer: cb,
     });
 
@@ -209,7 +209,7 @@ describe('visibility gating', () => {
     const { createPointer } = await getModule();
     const el = document.createElement('div');
     const pointer = createPointer({
-      element: el,
+      target: el,
       onPointer: vi.fn(),
     });
 
@@ -233,7 +233,7 @@ describe('stop', () => {
     const { createPointer } = await getModule();
     const el = document.createElement('div');
     const pointer = createPointer({
-      element: el,
+      target: el,
       onPointer: vi.fn(),
       visibility: 'ignore',
     });
@@ -246,7 +246,7 @@ describe('stop', () => {
     const { createPointer } = await getModule();
     const el = document.createElement('div');
     const pointer = createPointer({
-      element: el,
+      target: el,
       onPointer: vi.fn(),
       visibility: 'ignore',
     });
@@ -259,7 +259,7 @@ describe('stop', () => {
     const el = document.createElement('div');
     const controller = new AbortController();
     const pointer = createPointer({
-      element: el,
+      target: el,
       onPointer: vi.fn(),
       signal: controller.signal,
       visibility: 'ignore',
@@ -273,7 +273,7 @@ describe('stop', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const pointer = createPointer({
-      element: el,
+      target: el,
       onPointer: cb,
       visibility: 'ignore',
     });
@@ -295,14 +295,14 @@ describe('stop', () => {
 // ---------------------------------------------------------------------------
 
 describe('error guards', () => {
-  it('throws no_element when element is null', async () => {
+  it('throws no_target when target is null', async () => {
     const { createPointer } = await getModule();
     expect(() =>
       createPointer({
         // @ts-expect-error — testing the runtime guard
-        element: null,
+        target: null,
         onPointer: vi.fn(),
       }),
-    ).toThrowError(/DOM element/);
+    ).toThrowError(/target/);
   });
 });

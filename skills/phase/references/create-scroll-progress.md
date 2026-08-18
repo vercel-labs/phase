@@ -14,7 +14,7 @@ const progress = createScrollProgress(options: ScrollProgressOptions): ScrollPro
 
 | Option       | Type                          | Default  | Description                                                     |
 | ------------ | ----------------------------- | -------- | --------------------------------------------------------------- |
-| `element`    | `Element`                     | required | Element to observe                                              |
+| `target`     | `Element`                     | required | Element to observe                                              |
 | `onProgress` | `(ratio: number) => void`     | required | Called at each threshold crossing                               |
 | `steps`      | `number`                      | `20`     | Number of evenly-spaced thresholds (21 values: 0%, 5%, …, 100%) |
 | `root`       | `Element \| Document \| null` | —        | IO root element                                                 |

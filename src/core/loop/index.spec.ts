@@ -53,7 +53,7 @@ describe('phase transitions', () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
       const loop = createLoop({
-        element: el,
+        target: el,
         onTick: vi.fn(),
         start: 'manual',
       });
@@ -67,7 +67,7 @@ describe('phase transitions', () => {
     it('start: auto + sight visible -> running', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       // auto-start calls reconcile immediately, but sight hasn't reported yet,
       // so the loop starts paused(sight). When IO fires visible, it resumes.
       makeSightVisible(el);
@@ -79,7 +79,7 @@ describe('phase transitions', () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
       const loop = createLoop({
-        element: el,
+        target: el,
         onTick: vi.fn(),
         start: 'manual',
       });
@@ -96,7 +96,7 @@ describe('phase transitions', () => {
     it('sight goes hidden -> paused, reason=sight', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
       expect(loop.phase).toBe('running');
 
@@ -109,7 +109,7 @@ describe('phase transitions', () => {
     it('reduced motion enabled -> paused, reason=reduced-motion', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
 
       enableReducedMotion();
@@ -121,7 +121,7 @@ describe('phase transitions', () => {
     it('reduced motion takes priority over sight', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
 
       enableReducedMotion();
@@ -137,7 +137,7 @@ describe('phase transitions', () => {
     it('sight returns to visible -> running, reason=resumed', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
       makeSightHidden(el);
       expect(loop.phase).toBe('paused');
@@ -151,7 +151,7 @@ describe('phase transitions', () => {
     it('reduced motion disabled -> resumes if sight visible', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
       enableReducedMotion();
       expect(loop.phase).toBe('paused');
@@ -166,7 +166,7 @@ describe('phase transitions', () => {
     it('stop() -> stopped, reason=disposed', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
       loop.stop();
       expect(loop.phase).toBe('stopped');
@@ -178,7 +178,7 @@ describe('phase transitions', () => {
     it('stop() from paused -> stopped, reason=disposed', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
       makeSightHidden(el);
       loop.stop();
@@ -192,7 +192,7 @@ describe('phase transitions', () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
       const loop = createLoop({
-        element: el,
+        target: el,
         onTick: vi.fn(),
         start: 'manual',
       });
@@ -204,7 +204,7 @@ describe('phase transitions', () => {
     it('signals after stop do not change phase', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
       loop.stop();
 
@@ -224,7 +224,7 @@ describe('reduced motion modes', () => {
     it('pauses when reduced motion matches', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
       enableReducedMotion();
       expect(loop.phase).toBe('paused');
@@ -234,7 +234,7 @@ describe('reduced motion modes', () => {
     it('resumes when preference changes back', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
       enableReducedMotion();
       disableReducedMotion();
@@ -249,7 +249,7 @@ describe('reduced motion modes', () => {
       const el = document.createElement('div');
       enableReducedMotion();
       const loop = createLoop({
-        element: el,
+        target: el,
         onTick: vi.fn(),
         reducedMotion: 'ignore',
       });
@@ -270,7 +270,7 @@ describe('quality signal', () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
       const loop = createLoop({
-        element: el,
+        target: el,
         onTick: vi.fn(),
         start: 'manual',
       });
@@ -284,7 +284,7 @@ describe('quality signal', () => {
     it('window blur -> degraded, qualityReason=unfocused', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
 
       // Simulate hasFocus returning false
@@ -299,7 +299,7 @@ describe('quality signal', () => {
     it('window focus -> quality recovers to full', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
 
       const hasFocusSpy = vi.spyOn(document, 'hasFocus');
@@ -318,7 +318,7 @@ describe('quality signal', () => {
     it('quality can be degraded while phase is running', async () => {
       const { createLoop } = await getModule();
       const el = document.createElement('div');
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
 
       vi.spyOn(document, 'hasFocus').mockReturnValue(false);
@@ -336,7 +336,7 @@ describe('quality signal - degraded option', () => {
     const { createLoop } = await getModule();
     const el = document.createElement('div');
     const loop = createLoop({
-      element: el,
+      target: el,
       onTick: vi.fn(),
       degraded: 'pause',
     });
@@ -355,7 +355,7 @@ describe('quality signal - degraded option', () => {
     const { createLoop } = await getModule();
     const el = document.createElement('div');
     const loop = createLoop({
-      element: el,
+      target: el,
       onTick: vi.fn(),
       degraded: 'ignore',
     });
@@ -374,7 +374,7 @@ describe('quality signal - degraded option', () => {
     const { createLoop } = await getModule();
     const el = document.createElement('div');
     const loop = createLoop({
-      element: el,
+      target: el,
       onTick: vi.fn(),
       degraded: 'pause',
     });
@@ -445,7 +445,7 @@ describe('quality signal - frame budget', () => {
     const { createLoop } = await getModule();
     const clock = setupManualClock();
     const el = document.createElement('div');
-    const loop = createLoop({ element: el, onTick: vi.fn() });
+    const loop = createLoop({ target: el, onTick: vi.fn() });
     makeSightVisible(el);
 
     degradeViaBudget(clock);
@@ -461,7 +461,7 @@ describe('quality signal - frame budget', () => {
     const clock = setupManualClock();
     const el = document.createElement('div');
     const loop = createLoop({
-      element: el,
+      target: el,
       onTick: vi.fn(),
       degraded: 'pause',
     });
@@ -484,7 +484,7 @@ describe('quality signal - frame budget', () => {
     const clock = setupManualClock();
     const el = document.createElement('div');
     const loop = createLoop({
-      element: el,
+      target: el,
       onTick: vi.fn(),
       degraded: 'pause',
     });
@@ -510,7 +510,7 @@ describe('onPhaseChange callback', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const loop = createLoop({
-      element: el,
+      target: el,
       onTick: vi.fn(),
       onPhaseChange: cb,
     });
@@ -530,7 +530,7 @@ describe('onPhaseChange callback', () => {
     const { createLoop } = await getModule();
     const el = document.createElement('div');
     expect(() => {
-      const loop = createLoop({ element: el, onTick: vi.fn() });
+      const loop = createLoop({ target: el, onTick: vi.fn() });
       makeSightVisible(el);
       loop.stop();
     }).not.toThrow();
@@ -545,7 +545,7 @@ describe('stop cleanup', () => {
   it('stop is idempotent', async () => {
     const { createLoop } = await getModule();
     const el = document.createElement('div');
-    const loop = createLoop({ element: el, onTick: vi.fn() });
+    const loop = createLoop({ target: el, onTick: vi.fn() });
     loop.stop();
     expect(() => loop.stop()).not.toThrow();
   });
@@ -555,7 +555,7 @@ describe('stop cleanup', () => {
     const el = document.createElement('div');
     const controller = new AbortController();
     const loop = createLoop({
-      element: el,
+      target: el,
       onTick: vi.fn(),
       signal: controller.signal,
     });
@@ -575,7 +575,7 @@ describe('compound signal changes', () => {
   it('sight hidden AND reduced motion -> reason is reduced-motion (priority)', async () => {
     const { createLoop } = await getModule();
     const el = document.createElement('div');
-    const loop = createLoop({ element: el, onTick: vi.fn() });
+    const loop = createLoop({ target: el, onTick: vi.fn() });
     makeSightVisible(el);
 
     enableReducedMotion();
@@ -588,7 +588,7 @@ describe('compound signal changes', () => {
   it('quality degrades while paused: no crash', async () => {
     const { createLoop } = await getModule();
     const el = document.createElement('div');
-    const loop = createLoop({ element: el, onTick: vi.fn() });
+    const loop = createLoop({ target: el, onTick: vi.fn() });
     makeSightVisible(el);
     makeSightHidden(el);
     expect(loop.phase).toBe('paused');
@@ -611,7 +611,7 @@ describe('SSR', () => {
     vi.resetModules();
     const { createLoop } = await import('.');
     const el = document.createElement('div');
-    expect(() => createLoop({ element: el, onTick: vi.fn() })).toThrow();
+    expect(() => createLoop({ target: el, onTick: vi.fn() })).toThrow();
     vi.stubGlobal('requestAnimationFrame', origRaf);
   });
 });

@@ -32,7 +32,7 @@ export function useRenderState<T extends Element = HTMLDivElement>(
     if (!element) return;
 
     const render = createRenderState({
-      element,
+      target: element,
       onPhaseChange: setPhase,
     });
 

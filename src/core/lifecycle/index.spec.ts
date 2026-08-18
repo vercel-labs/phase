@@ -46,7 +46,7 @@ describe('createLifecycle', () => {
     it('initial phase is idle/initial with start: manual', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el, start: 'manual' });
+      const lifecycle = createLifecycle({ target: el, start: 'manual' });
       expect(lifecycle.phase).toBe('idle');
       expect(lifecycle.phaseReason).toBe('initial');
       lifecycle.stop();
@@ -55,7 +55,7 @@ describe('createLifecycle', () => {
     it('auto-start pauses on sight until visible, then activates', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el });
+      const lifecycle = createLifecycle({ target: el });
       // Not visible yet → paused/sight
       expect(lifecycle.phase).toBe('paused');
       expect(lifecycle.phaseReason).toBe('sight');
@@ -69,7 +69,7 @@ describe('createLifecycle', () => {
     it('manual start stays idle until start()', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el, start: 'manual' });
+      const lifecycle = createLifecycle({ target: el, start: 'manual' });
       makeVisible(el);
       expect(lifecycle.phase).toBe('idle');
 
@@ -82,7 +82,7 @@ describe('createLifecycle', () => {
     it('second activation reports resumed, not started', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el });
+      const lifecycle = createLifecycle({ target: el });
       makeVisible(el);
       expect(lifecycle.phaseReason).toBe('started');
 
@@ -98,7 +98,7 @@ describe('createLifecycle', () => {
     it('pauses when reduced motion is active (default)', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el });
+      const lifecycle = createLifecycle({ target: el });
       makeVisible(el);
       enableReducedMotion();
       expect(lifecycle.phase).toBe('paused');
@@ -109,7 +109,7 @@ describe('createLifecycle', () => {
     it('reduced motion takes priority over sight', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el });
+      const lifecycle = createLifecycle({ target: el });
       makeVisible(el);
       enableReducedMotion();
       makeHidden(el);
@@ -120,7 +120,7 @@ describe('createLifecycle', () => {
     it('resumes when reduced motion clears (if visible)', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el });
+      const lifecycle = createLifecycle({ target: el });
       makeVisible(el);
       enableReducedMotion();
       disableReducedMotion();
@@ -133,7 +133,7 @@ describe('createLifecycle', () => {
       const el = document.createElement('div');
       enableReducedMotion();
       const lifecycle = createLifecycle({
-        element: el,
+        target: el,
         reducedMotion: 'ignore',
       });
       makeVisible(el);
@@ -146,7 +146,7 @@ describe('createLifecycle', () => {
     it('pause() pauses with reason manual, resume() restores', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el });
+      const lifecycle = createLifecycle({ target: el });
       makeVisible(el);
       expect(lifecycle.phase).toBe('active');
 
@@ -162,7 +162,7 @@ describe('createLifecycle', () => {
     it('sight and reduced-motion take priority over manual pause', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el });
+      const lifecycle = createLifecycle({ target: el });
       makeVisible(el);
       lifecycle.pause();
       expect(lifecycle.phaseReason).toBe('manual');
@@ -182,7 +182,7 @@ describe('createLifecycle', () => {
     it('stop() transitions to stopped/disposed', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el });
+      const lifecycle = createLifecycle({ target: el });
       makeVisible(el);
       lifecycle.stop();
       expect(lifecycle.phase).toBe('stopped');
@@ -192,7 +192,7 @@ describe('createLifecycle', () => {
     it('signals after stop do not change phase', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el });
+      const lifecycle = createLifecycle({ target: el });
       makeVisible(el);
       lifecycle.stop();
       makeHidden(el);
@@ -203,7 +203,7 @@ describe('createLifecycle', () => {
     it('stop is idempotent', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el });
+      const lifecycle = createLifecycle({ target: el });
       lifecycle.stop();
       expect(() => lifecycle.stop()).not.toThrow();
     });
@@ -211,7 +211,7 @@ describe('createLifecycle', () => {
     it('start() after stop is a no-op', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
-      const lifecycle = createLifecycle({ element: el, start: 'manual' });
+      const lifecycle = createLifecycle({ target: el, start: 'manual' });
       lifecycle.stop();
       lifecycle.start();
       expect(lifecycle.phase).toBe('stopped');
@@ -223,7 +223,7 @@ describe('createLifecycle', () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
       const cb = vi.fn();
-      const lifecycle = createLifecycle({ element: el, onPhaseChange: cb });
+      const lifecycle = createLifecycle({ target: el, onPhaseChange: cb });
 
       makeVisible(el);
       expect(cb).toHaveBeenCalledWith('active', 'started');
@@ -243,7 +243,7 @@ describe('createLifecycle', () => {
       const cb = vi.fn();
       const controller = new AbortController();
       const lifecycle = createLifecycle({
-        element: el,
+        target: el,
         onPhaseChange: cb,
         signal: controller.signal,
       });
@@ -267,7 +267,7 @@ describe('createLifecycle', () => {
       vi.resetModules();
       const { createLifecycle } = await import('.');
       const el = origDocument.createElement('div');
-      expect(() => createLifecycle({ element: el })).toThrow();
+      expect(() => createLifecycle({ target: el })).toThrow();
       vi.stubGlobal('document', origDocument);
     });
   });
