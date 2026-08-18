@@ -121,6 +121,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
 
   let rafId = 0;
   let dirty = false;
+  let needsMeasure = false;
   let listenersAttached = false;
   let unobserveRO: (() => void) | undefined;
 
@@ -167,7 +168,16 @@ export function createScroll(options: CreateScrollOptions): Scroll {
 
   function flush(): void {
     rafId = 0;
-    if (!dirty || stopped) return;
+    if (stopped) return;
+    // A resize and a scroll landing in the same frame collapse into one
+    // callback: measure() recomputes position and reports on its own.
+    if (needsMeasure) {
+      needsMeasure = false;
+      dirty = false;
+      measure();
+      return;
+    }
+    if (!dirty) return;
     dirty = false;
     computePosition();
     onScroll(_state);
@@ -184,6 +194,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
       rafId = 0;
     }
     dirty = false;
+    needsMeasure = false;
   }
 
   function onScrollEvent(): void {
@@ -194,6 +205,15 @@ export function createScroll(options: CreateScrollOptions): Scroll {
 
   function onROResize(): void {
     if (stopped) return;
+    // Page mode hears about a resize twice (observer + window `resize`), and
+    // `resize` is not frame-aligned the way an observer callback is. Defer to
+    // the frame so one resize costs one layout read, not two. Element mode has
+    // a single frame-aligned source, so it measures inline.
+    if (pageDoc) {
+      needsMeasure = true;
+      scheduleFlush();
+      return;
+    }
     measure();
   }
 

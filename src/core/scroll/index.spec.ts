@@ -702,9 +702,51 @@ describe('page target', () => {
     // content box does not resize and only the resize event can catch it.
     makePageScrollable({ scrollHeight: 5000, clientHeight: 500 });
     window.dispatchEvent(new Event('resize'));
+    flushRAF();
 
     expect(scroll.state.maxY).toBe(4500);
     expect(cb).toHaveBeenCalled();
+    scroll.stop();
+  });
+
+  it('measures once per resize, not once per notification source', async () => {
+    const { createScroll } = await getModule();
+    makePageScrollable({ scrollHeight: 5000, clientHeight: 1000 });
+    const cb = vi.fn();
+
+    const scroll = createScroll({ target: document, onScroll: cb });
+    cb.mockClear();
+
+    // One real resize notifies both the observer (the scrolling element's box
+    // changed) and the window listener. That must cost one layout read.
+    mockRO.trigger(document.documentElement, 0, 5000);
+    window.dispatchEvent(new Event('resize'));
+    flushRAF();
+
+    expect(cb).toHaveBeenCalledTimes(1);
+    scroll.stop();
+  });
+
+  it('collapses a resize and a scroll in the same frame into one callback', async () => {
+    const { createScroll } = await getModule();
+    makePageScrollable({ scrollHeight: 5000, clientHeight: 1000 });
+    const cb = vi.fn();
+
+    const scroll = createScroll({ target: document, onScroll: cb });
+    cb.mockClear();
+
+    // Redefine geometry first: the helper reinstalls scrollTop, so setting the
+    // offset afterwards is what keeps this about coalescing rather than setup.
+    makePageScrollable({ scrollHeight: 5000, clientHeight: 500 });
+    document.documentElement.scrollTop = 1000;
+    document.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new Event('resize'));
+    flushRAF();
+
+    expect(cb).toHaveBeenCalledTimes(1);
+    // The single callback reflects both the new geometry and the new offset.
+    expect(scroll.state.maxY).toBe(4500);
+    expect(scroll.state.y).toBe(1000);
     scroll.stop();
   });
 
