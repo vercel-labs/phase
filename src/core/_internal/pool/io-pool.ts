@@ -10,16 +10,19 @@ export interface ObserveIntersectionOptions {
 
 interface IOPoolEntry {
   observer: IntersectionObserver;
-  callbacks: Map<Element, IOCallback>;
+  callbacks: Map<Element, Set<IOCallback>>;
 }
 
 const pool = new Map<string, IOPoolEntry>();
 
 /**
  * Observe an element via a shared IntersectionObserver pool.
- * Elements with identical options share one IO instance.
+ * Elements with identical options share one IO instance. An element may have
+ * any number of subscribers; each receives every entry, and the element stays
+ * observed until the last one cleans up.
  *
- * @returns Cleanup function that unobserves the element and removes the IO if empty.
+ * @returns Cleanup function that removes this subscriber, unobserving the
+ * element once none remain and dropping the IO once it observes nothing.
  */
 export function observeIntersection(
   options: ObserveIntersectionOptions,
@@ -30,7 +33,12 @@ export function observeIntersection(
   const key: string = getPoolKey(ioInit);
   const entry: IOPoolEntry = getOrCreatePoolEntry(key, ioInit);
 
-  entry.callbacks.set(element, onIntersect);
+  let subscribers: Set<IOCallback> | undefined = entry.callbacks.get(element);
+  if (!subscribers) {
+    subscribers = new Set();
+    entry.callbacks.set(element, subscribers);
+  }
+  subscribers.add(onIntersect);
   entry.observer.observe(element);
 
   let disposed = false;
@@ -42,11 +50,16 @@ export function observeIntersection(
     const poolEntry: IOPoolEntry | undefined = pool.get(key);
     if (!poolEntry) return;
 
-    // Only unobserve if our callback is still the registered one.
-    // A later subscription on the same element would have overwritten it.
-    if (poolEntry.callbacks.get(element) === onIntersect) {
-      poolEntry.observer.unobserve(element);
-      poolEntry.callbacks.delete(element);
+    // Unobserve once this element has no subscribers left; other subscribers
+    // on the same element must keep receiving entries.
+    const current: Set<IOCallback> | undefined =
+      poolEntry.callbacks.get(element);
+    if (current) {
+      current.delete(onIntersect);
+      if (current.size === 0) {
+        poolEntry.observer.unobserve(element);
+        poolEntry.callbacks.delete(element);
+      }
     }
 
     if (poolEntry.callbacks.size === 0) {
@@ -90,11 +103,16 @@ function getOrCreatePoolEntry(
 
 /** Create a new pool entry for the given options. */
 const createPoolEntry = (options: IntersectionObserverInit): IOPoolEntry => {
-  const callbacks = new Map<Element, IOCallback>();
+  const callbacks = new Map<Element, Set<IOCallback>>();
   const observer = new IntersectionObserver((entries) => {
     for (const ioEntry of entries) {
-      const cb: IOCallback | undefined = callbacks.get(ioEntry.target);
-      if (cb) cb(ioEntry);
+      const subscribers: Set<IOCallback> | undefined = callbacks.get(
+        ioEntry.target,
+      );
+      if (!subscribers) continue;
+      // Iterated directly rather than copied: Set iteration already tolerates
+      // a subscriber removing itself, which is the reentrant case that happens.
+      for (const cb of subscribers) cb(ioEntry);
     }
   }, options);
 

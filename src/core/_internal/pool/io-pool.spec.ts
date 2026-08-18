@@ -167,11 +167,11 @@ describe('cleanup', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Ownership safety
+// Multiple subscribers per element
 // ---------------------------------------------------------------------------
 
-describe('ownership safety', () => {
-  it('second subscription on same element overwrites callback', async () => {
+describe('multiple subscribers per element', () => {
+  it('every subscriber on an element receives the entry', async () => {
     const { observeIntersection } = await getModule();
     const el = document.createElement('div');
     const cb1 = vi.fn();
@@ -182,34 +182,53 @@ describe('ownership safety', () => {
 
     mockIO.trigger(el, true);
 
+    expect(cb1).toHaveBeenCalledTimes(1);
+    expect(cb2).toHaveBeenCalledTimes(1);
+  });
+
+  it('one subscriber cleaning up leaves the others observed', async () => {
+    const { observeIntersection } = await getModule();
+    const el = document.createElement('div');
+    const cb1 = vi.fn();
+    const cb2 = vi.fn();
+    const cleanup1 = observeIntersection({ element: el, onIntersect: cb1 });
+    observeIntersection({ element: el, onIntersect: cb2 });
+
+    cleanup1();
+    expect(firstInstance().observed.has(el)).toBe(true);
+
+    mockIO.trigger(el, true);
     expect(cb1).not.toHaveBeenCalled();
     expect(cb2).toHaveBeenCalledTimes(1);
   });
 
-  it('first cleanup does NOT unobserve if second subscription replaced it', async () => {
+  it('unobserves only after the last subscriber cleans up', async () => {
     const { observeIntersection } = await getModule();
     const el = document.createElement('div');
     const cleanup1 = observeIntersection({ element: el, onIntersect: vi.fn() });
-    const cb2 = vi.fn();
-    observeIntersection({ element: el, onIntersect: cb2 });
-
-    cleanup1();
-
-    // el should still be observed (owned by second subscription)
-    expect(firstInstance().observed.has(el)).toBe(true);
-
-    mockIO.trigger(el, true);
-    expect(cb2).toHaveBeenCalledTimes(1);
-  });
-
-  it('second cleanup correctly unobserves', async () => {
-    const { observeIntersection } = await getModule();
-    const el = document.createElement('div');
-    observeIntersection({ element: el, onIntersect: vi.fn() });
     const cleanup2 = observeIntersection({ element: el, onIntersect: vi.fn() });
 
+    cleanup1();
+    expect(firstInstance().observed.has(el)).toBe(true);
     cleanup2();
     expect(firstInstance().observed.has(el)).toBe(false);
+  });
+
+  it('drops the pooled observer once its last element is released', async () => {
+    const { observeIntersection } = await getModule();
+    const el = document.createElement('div');
+    const cleanup1 = observeIntersection({ element: el, onIntersect: vi.fn() });
+    const cleanup2 = observeIntersection({ element: el, onIntersect: vi.fn() });
+    expect(mockIO.instances).toHaveLength(1);
+
+    // The pool entry survives while any subscriber remains, so the same IO is
+    // reused rather than rebuilt.
+    cleanup1();
+    observeIntersection({ element: el, onIntersect: vi.fn() });
+    expect(mockIO.instances).toHaveLength(1);
+    expect(firstInstance().observed.has(el)).toBe(true);
+
+    cleanup2();
   });
 });
 

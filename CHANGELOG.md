@@ -1,5 +1,12 @@
 # phase
 
+## 0.3.1
+
+### Patch Changes
+
+- Pooled IntersectionObserver and ResizeObserver support multiple subscribers per element. A second subscriber on the same element previously replaced the first, so one of two hooks watching the same node stopped receiving updates, and the element was unobserved as soon as either cleaned up. Both pools now track a set of subscribers and release the element only once the last one is gone, matching the MediaQueryList pool.
+- Raised the `useSize` size budget to cover the pooling fix and restore the documented headroom.
+
 ## 0.3.0
 
 ### Minor Changes

@@ -117,11 +117,11 @@ describe('cleanup', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Ownership safety
+// Multiple subscribers per element
 // ---------------------------------------------------------------------------
 
-describe('ownership safety', () => {
-  it('second subscription on same element overwrites callback', async () => {
+describe('multiple subscribers per element', () => {
+  it('every subscriber on an element receives the entry', async () => {
     const { observeResize } = await getModule();
     const el = document.createElement('div');
     const cb1 = vi.fn();
@@ -130,30 +130,70 @@ describe('ownership safety', () => {
     observeResize(el, cb2);
 
     mockRO.trigger(el, 100, 50);
-    expect(cb1).not.toHaveBeenCalled();
+    expect(cb1).toHaveBeenCalledTimes(1);
     expect(cb2).toHaveBeenCalledTimes(1);
   });
 
-  it('first cleanup does NOT unobserve if second subscription replaced it', async () => {
+  it('one subscriber cleaning up leaves the others observed', async () => {
     const { observeResize } = await getModule();
     const el = document.createElement('div');
-    const cleanup1 = observeResize(el, vi.fn());
+    const cb1 = vi.fn();
     const cb2 = vi.fn();
+    const cleanup1 = observeResize(el, cb1);
     observeResize(el, cb2);
 
     cleanup1();
     expect(firstInstance().observed.has(el)).toBe(true);
 
     mockRO.trigger(el, 100, 50);
+    expect(cb1).not.toHaveBeenCalled();
     expect(cb2).toHaveBeenCalledTimes(1);
   });
 
-  it('second cleanup correctly unobserves', async () => {
+  it('unobserves only after the last subscriber cleans up', async () => {
     const { observeResize } = await getModule();
     const el = document.createElement('div');
-    observeResize(el, vi.fn());
+    const cleanup1 = observeResize(el, vi.fn());
     const cleanup2 = observeResize(el, vi.fn());
+
+    cleanup1();
+    expect(firstInstance().observed.has(el)).toBe(true);
     cleanup2();
     expect(firstInstance().observed.has(el)).toBe(false);
+  });
+
+  it('a repeated cleanup does not evict a later subscriber', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    const cleanup1 = observeResize(el, vi.fn());
+    cleanup1();
+
+    const cb2 = vi.fn();
+    observeResize(el, cb2);
+    cleanup1(); // idempotent, and must not touch cb2's subscription
+
+    expect(firstInstance().observed.has(el)).toBe(true);
+    mockRO.trigger(el, 100, 50);
+    expect(cb2).toHaveBeenCalledTimes(1);
+  });
+
+  it('a subscriber may unsubscribe from inside its own callback', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    const other = vi.fn();
+    let cleanupSelf: (() => void) | undefined;
+    const selfRemoving = vi.fn(() => cleanupSelf?.());
+
+    cleanupSelf = observeResize(el, selfRemoving);
+    observeResize(el, other);
+
+    expect(() => mockRO.trigger(el, 100, 50)).not.toThrow();
+    expect(selfRemoving).toHaveBeenCalledTimes(1);
+    expect(other).toHaveBeenCalledTimes(1);
+
+    // The self-removing subscriber is gone; the other one keeps working.
+    mockRO.trigger(el, 200, 80);
+    expect(selfRemoving).toHaveBeenCalledTimes(1);
+    expect(other).toHaveBeenCalledTimes(2);
   });
 });
