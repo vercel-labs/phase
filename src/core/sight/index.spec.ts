@@ -42,7 +42,7 @@ describe('initial state', () => {
   it('phase starts as unknown', async () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
-    const sight = createSight({ element: el });
+    const sight = createSight({ target: el });
     expect(sight.phase).toBe('unknown');
     sight.stop();
   });
@@ -50,7 +50,7 @@ describe('initial state', () => {
   it('reason starts as initial', async () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
-    const sight = createSight({ element: el });
+    const sight = createSight({ target: el });
     expect(sight.phaseReason).toBe('initial');
     sight.stop();
   });
@@ -65,7 +65,7 @@ describe('phase transitions', () => {
     it('IO intersecting + doc visible -> visible', async () => {
       const { createSight } = await getModule();
       const el = document.createElement('div');
-      const sight = createSight({ element: el });
+      const sight = createSight({ target: el });
 
       mockIO.trigger(el, true);
       expect(sight.phase).toBe('visible');
@@ -78,7 +78,7 @@ describe('phase transitions', () => {
       const { createSight } = await getModule();
       const el = document.createElement('div');
       const cb = vi.fn();
-      const sight = createSight({ element: el, onPhaseChange: cb });
+      const sight = createSight({ target: el, onPhaseChange: cb });
 
       mockIO.trigger(el, false);
       expect(sight.phase).toBe('hidden');
@@ -91,7 +91,7 @@ describe('phase transitions', () => {
     it('document backgrounded -> hidden, reason=document', async () => {
       const { createSight } = await getModule();
       const el = document.createElement('div');
-      const sight = createSight({ element: el });
+      const sight = createSight({ target: el });
 
       mockIO.trigger(el, true);
       expect(sight.phase).toBe('visible');
@@ -105,7 +105,7 @@ describe('phase transitions', () => {
     it('element scrolled out -> hidden, reason=viewport', async () => {
       const { createSight } = await getModule();
       const el = document.createElement('div');
-      const sight = createSight({ element: el });
+      const sight = createSight({ target: el });
 
       mockIO.trigger(el, true);
       mockIO.trigger(el, false);
@@ -115,18 +115,18 @@ describe('phase transitions', () => {
       sight.stop();
     });
 
-    it('throws no_element when element is null', async () => {
+    it('throws no_target when target is null', async () => {
       const { createSight } = await import('.');
       expect(() =>
         // @ts-expect-error — testing the runtime guard for JS callers
-        createSight({ element: null }),
-      ).toThrowError(/DOM element/);
+        createSight({ target: null }),
+      ).toThrowError(/target/);
     });
 
     it('both hidden simultaneously -> hidden, reason=all-hidden', async () => {
       const { createSight } = await getModule();
       const el = document.createElement('div');
-      const sight = createSight({ element: el });
+      const sight = createSight({ target: el });
 
       mockIO.trigger(el, true);
       expect(sight.phase).toBe('visible');
@@ -145,7 +145,7 @@ describe('phase transitions', () => {
     it('element scrolls back + doc visible -> visible', async () => {
       const { createSight } = await getModule();
       const el = document.createElement('div');
-      const sight = createSight({ element: el });
+      const sight = createSight({ target: el });
 
       mockIO.trigger(el, true);
       mockIO.trigger(el, false);
@@ -159,7 +159,7 @@ describe('phase transitions', () => {
     it('tab foregrounded + element in view -> visible', async () => {
       const { createSight } = await getModule();
       const el = document.createElement('div');
-      const sight = createSight({ element: el });
+      const sight = createSight({ target: el });
 
       mockIO.trigger(el, true);
       setDocumentHidden(true);
@@ -175,7 +175,7 @@ describe('phase transitions', () => {
     it('pageshow with persisted=true -> visible, reason=bfcache', async () => {
       const { createSight } = await getModule();
       const el = document.createElement('div');
-      const sight = createSight({ element: el });
+      const sight = createSight({ target: el });
 
       mockIO.trigger(el, true);
       setDocumentHidden(true);
@@ -190,7 +190,7 @@ describe('phase transitions', () => {
     it('pageshow with persisted=false -> no change', async () => {
       const { createSight } = await getModule();
       const el = document.createElement('div');
-      const sight = createSight({ element: el });
+      const sight = createSight({ target: el });
 
       mockIO.trigger(el, true);
       setDocumentHidden(true);
@@ -210,7 +210,7 @@ describe('reason tracking', () => {
   it('first visible transition defaults to reason=viewport', async () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
-    const sight = createSight({ element: el });
+    const sight = createSight({ target: el });
 
     mockIO.trigger(el, true);
     expect(sight.phaseReason).toBe('viewport');
@@ -227,7 +227,7 @@ describe('onPhaseChange callback', () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
     const cb = vi.fn();
-    const sight = createSight({ element: el, onPhaseChange: cb });
+    const sight = createSight({ target: el, onPhaseChange: cb });
 
     mockIO.trigger(el, true);
     expect(cb).toHaveBeenCalledTimes(1);
@@ -239,7 +239,7 @@ describe('onPhaseChange callback', () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
     const cb = vi.fn();
-    const sight = createSight({ element: el, onPhaseChange: cb });
+    const sight = createSight({ target: el, onPhaseChange: cb });
 
     mockIO.trigger(el, false);
     // unknown -> hidden (1 call)
@@ -254,7 +254,7 @@ describe('onPhaseChange callback', () => {
   it('is optional (no error when omitted)', async () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
-    const sight = createSight({ element: el });
+    const sight = createSight({ target: el });
     expect(() => mockIO.trigger(el, true)).not.toThrow();
     sight.stop();
   });
@@ -268,7 +268,7 @@ describe('stop', () => {
   it('phase returns hidden after stop', async () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
-    const sight = createSight({ element: el });
+    const sight = createSight({ target: el });
     mockIO.trigger(el, true);
     expect(sight.phase).toBe('visible');
     sight.stop();
@@ -278,7 +278,7 @@ describe('stop', () => {
   it('reason resets to initial after stop', async () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
-    const sight = createSight({ element: el });
+    const sight = createSight({ target: el });
     mockIO.trigger(el, true);
     sight.stop();
     expect(sight.phaseReason).toBe('initial');
@@ -288,7 +288,7 @@ describe('stop', () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
     const cb = vi.fn();
-    const sight = createSight({ element: el, onPhaseChange: cb });
+    const sight = createSight({ target: el, onPhaseChange: cb });
 
     mockIO.trigger(el, true);
     expect(cb).toHaveBeenCalledTimes(1);
@@ -304,7 +304,7 @@ describe('stop', () => {
   it('stop is idempotent', async () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
-    const sight = createSight({ element: el });
+    const sight = createSight({ target: el });
     sight.stop();
     expect(() => sight.stop()).not.toThrow();
   });
@@ -315,7 +315,7 @@ describe('stop', () => {
     const cb = vi.fn();
     const controller = new AbortController();
     const sight = createSight({
-      element: el,
+      target: el,
       onPhaseChange: cb,
       signal: controller.signal,
     });
@@ -337,7 +337,7 @@ describe('rapid signal churn', () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
     const cb = vi.fn();
-    createSight({ element: el, onPhaseChange: cb });
+    createSight({ target: el, onPhaseChange: cb });
 
     mockIO.trigger(el, true); // unknown->visible
     mockIO.trigger(el, false); // visible->hidden
@@ -350,7 +350,7 @@ describe('rapid signal churn', () => {
     const { createSight } = await getModule();
     const el = document.createElement('div');
     const cb = vi.fn();
-    createSight({ element: el, onPhaseChange: cb });
+    createSight({ target: el, onPhaseChange: cb });
 
     mockIO.trigger(el, true);
     mockIO.trigger(el, true); // duplicate — phase stays visible

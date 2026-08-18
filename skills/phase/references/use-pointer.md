@@ -62,7 +62,7 @@ Phase transitions (tracking ⇄ idle) fire only on pointer enter/leave, so react
   ```tsx
   useEffect(() => {
     const pointer = createPointer({
-      element: document.documentElement,
+      target: document.documentElement,
       visibility: 'ignore',
       onPointer: (state) => {
         cursorRef.current?.style.setProperty('--x', `${state.x}px`);

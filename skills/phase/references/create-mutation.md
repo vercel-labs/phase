@@ -14,7 +14,7 @@ const mutation = createMutation(options: MutationOptions): Mutation;
 
 | Option                | Type                                  | Default   | Description                                      |
 | --------------------- | ------------------------------------- | --------- | ------------------------------------------------ |
-| `element`             | `Element`                             | required  | Element to observe                               |
+| `target`              | `Element`                             | required  | Element to observe                               |
 | `mutation`            | `MutationObserverInit`                | required  | Standard MutationObserver configuration          |
 | `onMutations`         | `(records: MutationRecord[]) => void` | required  | Called once per rAF frame with coalesced records |
 | `onPhaseChange`       | `(phase, reason) => void`             | --        | Called on phase transitions                      |
@@ -68,7 +68,7 @@ const mutation = createMutation(options: MutationOptions): Mutation;
 - Observe `childList` for structural changes with visibility gating:
   ```ts
   const mutation = createMutation({
-    element: list,
+    target: list,
     mutation: { childList: true },
     onMutations: (records) => updateCount(records.length),
   });
@@ -76,7 +76,7 @@ const mutation = createMutation(options: MutationOptions): Mutation;
 - Observe specific attributes on a single element (not subtree):
   ```ts
   const mutation = createMutation({
-    element: el,
+    target: el,
     mutation: { attributes: true, attributeFilter: ['data-state'] },
     onMutations: (records) => syncState(records),
   });

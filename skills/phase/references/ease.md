@@ -74,7 +74,7 @@ Easing, interpolation, and your value range are three separate concerns. phase k
 - Use `clamp01` before easing to prevent out-of-range artifacts.
 - Pass custom easing to `useTween`:
   ```tsx
-  const value = useTween({ target: 100, easing: easeOutBack });
+  const value = useTween({ to: 100, easing: easeOutBack });
   ```
 - Use `remap` to convert between coordinate spaces:
   ```ts

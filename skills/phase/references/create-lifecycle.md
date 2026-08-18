@@ -14,7 +14,7 @@ const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
 
 | Option                | Type                                                       | Default   | Description                                    |
 | --------------------- | ---------------------------------------------------------- | --------- | ---------------------------------------------- |
-| `element`             | `Element`                                                  | required  | Element to observe for visibility              |
+| `target`              | `Element`                                                  | required  | Element to observe for visibility              |
 | `reducedMotion`       | `'pause' \| 'ignore'`                                      | `'pause'` | Whether reduced motion pauses the lifecycle    |
 | `intersectionOptions` | `IntersectionObserverInit`                                 | —         | Forwarded to pooled IO                         |
 | `start`               | `'auto' \| 'manual'`                                       | `'auto'`  | Whether to start immediately                   |
@@ -68,7 +68,7 @@ const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
     if (cancelled) return; // unmounted before the chunk loaded
     engine = createScrambleEngine(canvas);
     lifecycle = createLifecycle({
-      element: canvas,
+      target: canvas,
       onPhaseChange: (phase) => {
         if (phase === 'active') engine?.start();
         else engine?.stop();

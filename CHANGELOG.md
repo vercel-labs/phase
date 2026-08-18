@@ -1,5 +1,14 @@
 # phase
 
+## 0.1.0
+
+### Minor Changes
+
+- **Breaking:** renamed the `element` option to `target` on `createScroll`, `createSight`, `createLifecycle`, `createLoop`, `createPointer`, `createMutation`, `createScrollProgress`, and `createRenderState`. React hooks are unaffected; they still take `ref`.
+- **Breaking:** the `PhaseError` code for a missing target is now `no_target` (was `no_element`).
+- **Breaking:** renamed `useTween`'s `target` option to `to`, so `target` means the observed anchor everywhere in the API.
+- Raised the `useTween` size budget from 675 B to 720 B, restoring the standard ~10% headroom.
+
 ## 0.0.12
 
 ### Patch Changes

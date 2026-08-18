@@ -1,6 +1,6 @@
 export type PhaseErrorCode =
   | 'server_context'
-  | 'no_element'
+  | 'no_target'
   | 'invalid_duration'
   | 'ticker_stopped'
   | 'missing_context';
@@ -42,10 +42,10 @@ export function serverContextError(fn: string): never {
   });
 }
 
-export function noElementError(fn: string): never {
-  throw new PhaseError(`${fn}() requires a DOM element.`, {
-    code: 'no_element',
-    reason: 'The element was null or undefined.',
+export function noTargetError(fn: string): never {
+  throw new PhaseError(`${fn}() requires a target.`, {
+    code: 'no_target',
+    reason: 'The target was null or undefined.',
     fix: 'Pass a mounted Element, or use the React hook which manages the ref.',
   });
 }

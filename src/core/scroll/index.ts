@@ -1,5 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { noElementError, serverContextError } from '../_internal/errors';
+import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 import { observeResize } from '../_internal/pool/ro-pool';
 
@@ -31,7 +31,7 @@ export interface ScrollState {
 
 // `ScrollOptions` is a lib.dom global; do not shadow it (see code-style rules).
 export interface CreateScrollOptions {
-  element: Element;
+  target: Element;
   /** Called once per rAF frame with the latest scroll position + progress. */
   onScroll: (state: ScrollState) => void;
   /** Called on phase transitions (tracking, paused, stopped). */
@@ -73,7 +73,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   }
 
   const {
-    element,
+    target,
     onScroll,
     onPhaseChange,
     visibility = 'pause',
@@ -81,7 +81,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     signal,
   } = options;
 
-  if (!element) noElementError('createScroll');
+  if (!target) noTargetError('createScroll');
 
   let _phase: ScrollPhase = 'paused';
   let _reason: ScrollReason = 'initial';
@@ -114,8 +114,8 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   // the resize path.
   function computePosition(): void {
     const { maxX, maxY } = _state;
-    const x = element.scrollLeft;
-    const y = element.scrollTop;
+    const x = target.scrollLeft;
+    const y = target.scrollTop;
     _state.x = x < 0 ? 0 : x > maxX ? maxX : x;
     _state.y = y < 0 ? 0 : y > maxY ? maxY : y;
     _state.progressX = maxX > 0 ? _state.x / maxX : 0;
@@ -127,10 +127,10 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   // (re-entry re-measures), so `measure()` never forces an off-screen reflow.
   function measure(): void {
     if (stopped || !listenersAttached) return;
-    const scrollWidth = element.scrollWidth;
-    const clientWidth = element.clientWidth;
-    const scrollHeight = element.scrollHeight;
-    const clientHeight = element.clientHeight;
+    const scrollWidth = target.scrollWidth;
+    const clientWidth = target.clientWidth;
+    const scrollHeight = target.scrollHeight;
+    const clientHeight = target.clientHeight;
 
     const maxX = scrollWidth - clientWidth;
     const maxY = scrollHeight - clientHeight;
@@ -178,15 +178,15 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   function attachListeners(): void {
     if (listenersAttached) return;
     listenersAttached = true;
-    element.addEventListener('scroll', onScrollEvent, { passive: true });
-    unobserveRO = observeResize(element, onROResize);
+    target.addEventListener('scroll', onScrollEvent, { passive: true });
+    unobserveRO = observeResize(target, onROResize);
     measure();
   }
 
   function detachListeners(): void {
     if (!listenersAttached) return;
     listenersAttached = false;
-    element.removeEventListener('scroll', onScrollEvent);
+    target.removeEventListener('scroll', onScrollEvent);
     unobserveRO?.();
     unobserveRO = undefined;
     cancelFlush();
@@ -225,7 +225,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     window.addEventListener('pageshow', onPageShow);
 
     const unobserveIO = observeIntersection({
-      element,
+      element: target,
       onIntersect: (entry) => {
         elementInView = entry.isIntersecting;
         recompute();

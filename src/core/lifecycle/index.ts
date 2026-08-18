@@ -1,5 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { noElementError, serverContextError } from '../_internal/errors';
+import { noTargetError, serverContextError } from '../_internal/errors';
 import {
   readMediaQuery,
   subscribeMediaQuery,
@@ -25,7 +25,7 @@ export type LifecycleReason =
 export type LifecycleReducedMotion = 'pause' | 'ignore';
 
 export interface LifecycleOptions {
-  element: Element;
+  target: Element;
   reducedMotion?: LifecycleReducedMotion;
   intersectionOptions?: IntersectionObserverInit;
   start?: 'auto' | 'manual';
@@ -67,7 +67,7 @@ const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
  *
  * @example
  * const lifecycle = createLifecycle({
- *   element: canvas,
+ *   target: canvas,
  *   onPhaseChange: (phase) => {
  *     if (phase === 'active') renderer.start();
  *     else renderer.stop();
@@ -82,7 +82,7 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
   }
 
   const {
-    element,
+    target,
     reducedMotion = 'pause',
     intersectionOptions,
     start: startMode = 'auto',
@@ -90,7 +90,7 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
     signal,
   } = options;
 
-  if (!element) noElementError('createLifecycle');
+  if (!target) noTargetError('createLifecycle');
 
   let _phase: LifecyclePhase = 'idle';
   let _reason: LifecycleReason = 'initial';
@@ -145,7 +145,7 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
   // --- Init subsystems ---
 
   const sight = createSight({
-    element,
+    target,
     intersectionOptions,
     onPhaseChange: onSightChange,
   });

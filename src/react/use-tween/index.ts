@@ -7,17 +7,17 @@ import { clamp01, easeOutCubic } from '../../ease';
 import { useSyncedRef } from '../use-synced-ref';
 
 export interface UseTweenOptions {
-  target: number;
+  to: number;
   duration?: number;
   delay?: number;
   easing?: (progress: number) => number;
   enabled?: boolean;
-  /** Default: `'complete'`. Tweens jump to target under reduced motion. */
+  /** Default: `'complete'`. Tweens jump straight to the destination under reduced motion. */
   reducedMotion?: ReducedMotionBehavior;
 }
 
 /**
- * Animate a value from its current position to `target` over `duration`.
+ * Animate a value from its current position toward `to` over `duration`.
  *
  * Uses `useState` per frame. Appropriate for cheap renders (counters, opacity,
  * progress bars). For batch animations, use `useLoop` with ref-based DOM writes.
@@ -30,11 +30,11 @@ export interface UseTweenOptions {
  * weight for no benefit.
  *
  * @example
- * const value = useTween({ target: 100, duration: 500 });
+ * const value = useTween({ to: 100, duration: 500 });
  */
 export function useTween(options: UseTweenOptions): number {
   const {
-    target,
+    to,
     duration = 300,
     delay = 0,
     easing = easeOutCubic,
@@ -42,11 +42,11 @@ export function useTween(options: UseTweenOptions): number {
     reducedMotion = 'complete',
   } = options;
 
-  const [value, setValue] = useState(target);
+  const [value, setValue] = useState(to);
   const easingRef = useSyncedRef(easing);
 
-  const fromRef = useRef(target);
-  const currentRef = useRef(target);
+  const fromRef = useRef(to);
+  const currentRef = useRef(to);
   const isFirstRender = useRef(true);
 
   useEffect(() => {
@@ -57,19 +57,19 @@ export function useTween(options: UseTweenOptions): number {
     // First render: sync refs without animating.
     if (isFirstRender.current) {
       isFirstRender.current = false;
-      jumpToTarget({ target, fromRef, currentRef, setValue });
+      jumpToTarget({ to, fromRef, currentRef, setValue });
       return;
     }
 
     // Disabled or reduced motion: jump immediately.
     if (!enabled || (reducedMotion !== 'ignore' && prefersReducedMotion())) {
-      jumpToTarget({ target, fromRef, currentRef, setValue });
+      jumpToTarget({ to, fromRef, currentRef, setValue });
       return;
     }
 
-    // Already at target: nothing to animate.
+    // Already at the destination: nothing to animate.
     const from: number = currentRef.current;
-    if (from === target) return;
+    if (from === to) return;
 
     let rafId: number;
     let startTime: number | null = null;
@@ -86,16 +86,14 @@ export function useTween(options: UseTweenOptions): number {
 
       const progress: number = clamp01(elapsed / duration);
       const current: number =
-        progress === 1
-          ? target
-          : from + (target - from) * easingRef.current(progress);
+        progress === 1 ? to : from + (to - from) * easingRef.current(progress);
       currentRef.current = current;
       setValue(current);
 
       if (progress < 1) {
         rafId = requestAnimationFrame(tick);
       } else {
-        fromRef.current = target;
+        fromRef.current = to;
       }
     }
 
@@ -107,7 +105,7 @@ export function useTween(options: UseTweenOptions): number {
       fromRef.current = currentRef.current;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, duration, delay, enabled, reducedMotion]);
+  }, [to, duration, delay, enabled, reducedMotion]);
 
   return value;
 }
@@ -117,15 +115,15 @@ export function useTween(options: UseTweenOptions): number {
 // ---------------------------------------------------------------------------
 
 interface JumpToTargetOptions {
-  target: number;
+  to: number;
   fromRef: React.RefObject<number>;
   currentRef: React.RefObject<number>;
   setValue: (value: number) => void;
 }
 
 function jumpToTarget(options: JumpToTargetOptions): void {
-  const { target, fromRef, currentRef, setValue } = options;
-  fromRef.current = target;
-  currentRef.current = target;
-  setValue(target);
+  const { to, fromRef, currentRef, setValue } = options;
+  fromRef.current = to;
+  currentRef.current = to;
+  setValue(to);
 }

@@ -1,5 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { noElementError, serverContextError } from '../_internal/errors';
+import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 
 // ---------------------------------------------------------------------------
@@ -10,7 +10,7 @@ export type MutationPhase = 'observing' | 'paused' | 'stopped';
 export type MutationReason = 'initial' | 'started' | 'sight' | 'disposed';
 
 export interface MutationOptions {
-  element: Element;
+  target: Element;
   /** Standard MutationObserver configuration. */
   mutation: MutationObserverInit;
   /** Called once per rAF frame with coalesced records. Never per-record. */
@@ -42,7 +42,7 @@ export function createMutation(options: MutationOptions): Mutation {
   }
 
   const {
-    element,
+    target: element,
     mutation: mutationInit,
     onMutations,
     onPhaseChange,
@@ -51,7 +51,7 @@ export function createMutation(options: MutationOptions): Mutation {
     signal,
   } = options;
 
-  if (!element) noElementError('createMutation');
+  if (!element) noTargetError('createMutation');
 
   warnReflowStorm(mutationInit);
 

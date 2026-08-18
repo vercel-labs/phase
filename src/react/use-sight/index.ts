@@ -98,7 +98,7 @@ export function useSight<T extends Element = HTMLDivElement>(
     let frozen = false;
 
     const sight = createSight({
-      element,
+      target: element,
       intersectionOptions: {
         root: options?.root,
         rootMargin: options?.rootMargin,

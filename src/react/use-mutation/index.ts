@@ -95,7 +95,7 @@ export function useMutation<T extends Element = HTMLDivElement>(
     }
 
     const instance = createMutation({
-      element,
+      target: element,
       mutation: mutationInit,
       onMutations: (records) => onMutationsRef.current(records),
       onPhaseChange: (phase, reason) => {

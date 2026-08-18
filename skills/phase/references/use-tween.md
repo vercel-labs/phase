@@ -1,6 +1,6 @@
 # `useTween`
 
-Animates a number from its current position to `target` over a duration. Calls `setState` per frame, appropriate when the animated value is used in render output and the render is cheap.
+Animates a number from its current position to `to` over a duration. Calls `setState` per frame, appropriate when the animated value is used in render output and the render is cheap.
 
 ## Signature
 
@@ -12,14 +12,14 @@ const value: number = useTween(options);
 
 ### Options
 
-| Option          | Type                                | Default        | Description                   |
-| --------------- | ----------------------------------- | -------------- | ----------------------------- |
-| `target`        | `number`                            | required       | Value to animate toward       |
-| `duration`      | `number`                            | `300`          | Animation duration in ms      |
-| `delay`         | `number`                            | `0`            | Delay before starting in ms   |
-| `easing`        | `(progress: number) => number`      | `easeOutCubic` | Easing function               |
-| `enabled`       | `boolean`                           | `true`         | When `false`, jumps to target |
-| `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'complete'`   | Behavior under reduced motion |
+| Option          | Type                                | Default        | Description                            |
+| --------------- | ----------------------------------- | -------------- | -------------------------------------- |
+| `to`            | `number`                            | required       | Value to animate toward                |
+| `duration`      | `number`                            | `300`          | Animation duration in ms               |
+| `delay`         | `number`                            | `0`            | Delay before starting in ms            |
+| `easing`        | `(progress: number) => number`      | `easeOutCubic` | Easing function                        |
+| `enabled`       | `boolean`                           | `true`         | When `false`, jumps to the destination |
+| `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'complete'`   | Behavior under reduced motion          |
 
 ### Return
 
@@ -44,11 +44,11 @@ Returns the current animated `number`.
 
 - Use for cheap single-value tweens:
   ```tsx
-  const opacity = useTween({ target: isVisible ? 1 : 0, duration: 300 });
+  const opacity = useTween({ to: isVisible ? 1 : 0, duration: 300 });
   return <div style={{ opacity }}>{content}</div>;
   ```
-- Change `target` to interrupt and re-animate from current position (smooth interruption).
-- Custom easing controls intermediate values; completed tweens land exactly on `target`.
+- Change `to` to interrupt and re-animate from current position (smooth interruption).
+- Custom easing controls intermediate values; completed tweens land exactly on `to`.
 - Replacing `easing` updates future frames without restarting the active tween.
 - Use `delay` for staggered animations across multiple elements.
 
@@ -60,7 +60,7 @@ Returns the current animated `number`.
 
 ## Reduced motion
 
-Default `'complete'`: jumps to target instantly. The value still arrives at its destination. The animation is skipped. This is the right default for tweens that must reach their final state.
+Default `'complete'`: jumps to the destination instantly. The value still arrives at its destination. The animation is skipped. This is the right default for tweens that must reach their final state.
 
 ## See also
 

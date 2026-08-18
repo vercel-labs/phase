@@ -8,7 +8,7 @@ Reports whether the browser is rendering an element or skipping it under `conten
 import { createRenderState } from 'phase';
 
 const render = createRenderState({
-  element: el,
+  target: el,
   onPhaseChange: (phase) => {
     // phase: 'rendered' | 'skipped'
   },
@@ -21,7 +21,7 @@ render.stop();
 
 | Option          | Type                           | Default  | Description                                   |
 | --------------- | ------------------------------ | -------- | --------------------------------------------- |
-| `element`       | `Element`                      | required | Element under `content-visibility`            |
+| `target`        | `Element`                      | required | Element under `content-visibility`            |
 | `onPhaseChange` | `(phase: RenderPhase) => void` | —        | Called on each render-state transition        |
 | `signal`        | `AbortSignal`                  | —        | Stops the observer when the signal is aborted |
 
@@ -50,7 +50,7 @@ render.stop();
 - **Pause raw work when skipped:**
   ```ts
   const render = createRenderState({
-    element: el,
+    target: el,
     onPhaseChange: (phase) =>
       phase === 'skipped' ? clock.pause() : clock.resume(),
   });

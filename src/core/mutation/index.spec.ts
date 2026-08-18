@@ -59,7 +59,7 @@ describe('initial state', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
     });
@@ -72,7 +72,7 @@ describe('initial state', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
       visibility: 'ignore',
@@ -93,7 +93,7 @@ describe('rAF batching', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: cb,
       visibility: 'ignore',
@@ -115,7 +115,7 @@ describe('rAF batching', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: cb,
       visibility: 'ignore',
@@ -133,7 +133,7 @@ describe('rAF batching', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: cb,
     });
@@ -154,7 +154,7 @@ describe('visibility gating', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
     });
@@ -170,7 +170,7 @@ describe('visibility gating', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
     });
@@ -188,7 +188,7 @@ describe('visibility gating', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
     });
@@ -204,7 +204,7 @@ describe('visibility gating', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
     });
@@ -221,7 +221,7 @@ describe('visibility gating', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: cb,
     });
@@ -241,7 +241,7 @@ describe('visibility gating', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: cb,
     });
@@ -258,7 +258,7 @@ describe('visibility gating', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
     });
@@ -284,7 +284,7 @@ describe('onPhaseChange callback', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
       onPhaseChange: cb,
@@ -306,7 +306,7 @@ describe('onPhaseChange callback', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
       onPhaseChange: cb,
@@ -323,7 +323,7 @@ describe('onPhaseChange callback', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
       onPhaseChange: cb,
@@ -341,7 +341,7 @@ describe('onPhaseChange callback', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
     });
@@ -354,7 +354,7 @@ describe('onPhaseChange callback', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
       onPhaseChange: cb,
@@ -374,7 +374,7 @@ describe('stop', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
     });
@@ -389,7 +389,7 @@ describe('stop', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
     });
@@ -402,7 +402,7 @@ describe('stop', () => {
     const el = document.createElement('div');
     const controller = new AbortController();
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
       signal: controller.signal,
@@ -419,7 +419,7 @@ describe('stop', () => {
     controller.abort();
 
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: vi.fn(),
       signal: controller.signal,
@@ -433,7 +433,7 @@ describe('stop', () => {
     const el = document.createElement('div');
     const cb = vi.fn();
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { childList: true },
       onMutations: cb,
       visibility: 'ignore',
@@ -452,16 +452,16 @@ describe('stop', () => {
 // ---------------------------------------------------------------------------
 
 describe('error guards', () => {
-  it('throws no_element when element is null', async () => {
+  it('throws no_target when target is null', async () => {
     const { createMutation } = await getModule();
     expect(() =>
       createMutation({
         // @ts-expect-error — testing the runtime guard
-        element: null,
+        target: null,
         mutation: { childList: true },
         onMutations: vi.fn(),
       }),
-    ).toThrowError(/DOM element/);
+    ).toThrowError(/target/);
   });
 });
 
@@ -484,7 +484,7 @@ describe('dev-mode warnings', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { subtree: true, attributes: true, attributeFilter: ['style'] },
       onMutations: vi.fn(),
       visibility: 'ignore',
@@ -499,7 +499,7 @@ describe('dev-mode warnings', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: {
         subtree: true,
         attributes: true,
@@ -518,7 +518,7 @@ describe('dev-mode warnings', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: { attributes: true, attributeFilter: ['style'] },
       onMutations: vi.fn(),
       visibility: 'ignore',
@@ -531,7 +531,7 @@ describe('dev-mode warnings', () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');
     const mutation = createMutation({
-      element: el,
+      target: el,
       mutation: {
         subtree: true,
         attributes: true,
