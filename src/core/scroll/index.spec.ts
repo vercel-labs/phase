@@ -76,6 +76,14 @@ function makeScrollable(
   return { setLeft: (v: number) => (el.scrollLeft = v) };
 }
 
+/** How many times a listener spy saw a given event type. */
+function countCalls(
+  spy: { mock: { calls: Array<[unknown, ...unknown[]]> } },
+  type: string,
+): number {
+  return spy.mock.calls.filter(([t]) => t === type).length;
+}
+
 async function getModule() {
   return import('.');
 }
@@ -812,11 +820,9 @@ describe('page target construction failure', () => {
       }),
     ).toThrowError('consumer blew up');
 
-    const count = (spy: typeof addSpy, type: string) =>
-      spy.mock.calls.filter(([t]) => t === type).length;
-    expect(count(removeSpy, 'scroll')).toBe(count(addSpy, 'scroll'));
-    expect(count(removeSpy, 'visibilitychange')).toBe(
-      count(addSpy, 'visibilitychange'),
+    expect(countCalls(removeSpy, 'scroll')).toBe(countCalls(addSpy, 'scroll'));
+    expect(countCalls(removeSpy, 'visibilitychange')).toBe(
+      countCalls(addSpy, 'visibilitychange'),
     );
 
     addSpy.mockRestore();
