@@ -209,3 +209,23 @@ describe('useSight with onVisibilityChange (transient mode)', () => {
     expect(onVisibilityChange).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('page target', () => {
+  it('reports visible for the page with no observer', async () => {
+    const useSight = await getHook();
+
+    const { result } = renderHook(() => useSight({ target: document }));
+
+    expect(result.current.phase).toBe('visible');
+    expect(mockIO.instances).toHaveLength(0);
+  });
+
+  it('throws when both ref and target are given', async () => {
+    const useSight = await getHook();
+    const { ref } = createRefWithElement();
+
+    expect(() =>
+      renderHook(() => useSight({ ref, target: document })),
+    ).toThrowError(/both ref and target/);
+  });
+});

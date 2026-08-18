@@ -14,9 +14,9 @@ const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
 
 | Option                | Type                                                       | Default   | Description                                    |
 | --------------------- | ---------------------------------------------------------- | --------- | ---------------------------------------------- |
-| `target`              | `Element`                                                  | required  | Element to observe for visibility              |
+| `target`              | `Element \| Document`                                      | required  | Element to observe, or `document` for the page |
 | `reducedMotion`       | `'pause' \| 'ignore'`                                      | `'pause'` | Whether reduced motion pauses the lifecycle    |
-| `intersectionOptions` | `IntersectionObserverInit`                                 | —         | Forwarded to pooled IO                         |
+| `intersectionOptions` | `IntersectionObserverInit`                                 | —         | Forwarded to pooled IO. Ignored for `document` |
 | `start`               | `'auto' \| 'manual'`                                       | `'auto'`  | Whether to start immediately                   |
 | `onPhaseChange`       | `(phase: LifecyclePhase, reason: LifecycleReason) => void` | —         | Called on phase transitions                    |
 | `signal`              | `AbortSignal`                                              | —         | Stops the lifecycle when the signal is aborted |

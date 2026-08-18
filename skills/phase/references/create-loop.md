@@ -12,18 +12,18 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 ### Options
 
-| Option                | Type                                | Default      | Description                               |
-| --------------------- | ----------------------------------- | ------------ | ----------------------------------------- |
-| `target`              | `Element`                           | required     | Element to observe for visibility         |
-| `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running           |
-| `fps`                 | `number`                            | —            | Cap frames per second                     |
-| `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion |
-| `degraded`            | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades            |
-| `degradedFps`         | `number`                            | `30`         | FPS cap in degraded throttle mode         |
-| `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to the underlying IO            |
-| `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately              |
-| `onPhaseChange`       | `(phase, reason) => void`           | —            | Called on every phase transition          |
-| `signal`              | `AbortSignal`                       | —            | Stops the loop when the signal is aborted |
+| Option                | Type                                | Default      | Description                                            |
+| --------------------- | ----------------------------------- | ------------ | ------------------------------------------------------ |
+| `target`              | `Element \| Document`               | required     | Element to observe, or `document` for the page         |
+| `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running                        |
+| `fps`                 | `number`                            | —            | Cap frames per second                                  |
+| `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion              |
+| `degraded`            | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades                         |
+| `degradedFps`         | `number`                            | `30`         | FPS cap in degraded throttle mode                      |
+| `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to the underlying IO. Ignored for `document` |
+| `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately                           |
+| `onPhaseChange`       | `(phase, reason) => void`           | —            | Called on every phase transition                       |
+| `signal`              | `AbortSignal`                       | —            | Stops the loop when the signal is aborted              |
 
 ### Return (Loop)
 

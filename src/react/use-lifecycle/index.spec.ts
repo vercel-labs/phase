@@ -153,3 +153,23 @@ describe('useLifecycle', () => {
     expect(cb1).toHaveBeenCalledTimes(cb1CallCount);
   });
 });
+
+describe('page target', () => {
+  it('activates on the page with no observer', async () => {
+    const useLifecycle = await getHook();
+
+    const { result } = renderHook(() => useLifecycle({ target: document }));
+
+    expect(result.current.phase).toBe('active');
+    expect(mockIO.instances).toHaveLength(0);
+  });
+
+  it('throws when both ref and target are given', async () => {
+    const useLifecycle = await getHook();
+    const { ref } = createRefWithElement();
+
+    expect(() =>
+      renderHook(() => useLifecycle({ ref, target: document })),
+    ).toThrowError(/both ref and target/);
+  });
+});

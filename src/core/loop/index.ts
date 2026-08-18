@@ -26,7 +26,8 @@ export type Quality = 'full' | 'degraded';
 export type DegradedReason = 'unfocused' | 'frame-budget';
 
 interface LoopOptionsBase {
-  target: Element;
+  /** Element to observe, or `document` to anchor the loop to the page. */
+  target: Element | Document;
   /**
    * Called every frame. Write to refs or DOM directly. Never call React
    * `setState` here (60 calls/sec = 60 re-renders/sec).

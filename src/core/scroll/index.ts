@@ -1,4 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
+import { isDocument } from '../_internal/dom';
 import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 import { observeResize } from '../_internal/pool/ro-pool';
@@ -322,10 +323,4 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     measure,
     stop,
   };
-}
-
-const DOCUMENT_NODE = 9;
-
-function isDocument(target: Element | Document): target is Document {
-  return target.nodeType === DOCUMENT_NODE;
 }

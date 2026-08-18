@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type RefObject } from 'react';
 
+import { conflictingTargetError } from '../../core/_internal/errors';
 import {
   createLifecycle,
   type Lifecycle,
@@ -15,6 +16,11 @@ export interface UseLifecycleOptions<T extends Element = HTMLDivElement> {
    * the returned `ref`.
    */
   ref?: RefObject<T | null>;
+  /**
+   * Anchor to the page instead of an element. Pass `document`. Mutually
+   * exclusive with `ref`.
+   */
+  target?: Document;
   /** Whether reduced motion pauses the lifecycle. Default `'pause'`. */
   reducedMotion?: LifecycleReducedMotion;
   /** Manually pause regardless of visibility (e.g. a panel opened over the animation). */
@@ -68,7 +74,12 @@ const INITIAL_STATE: LifecycleState = {
 export function useLifecycle<T extends Element = HTMLDivElement>(
   options?: UseLifecycleOptions<T>,
 ): UseLifecycleResult<T> {
-  const { reducedMotion, intersectionOptions, enabled = true } = options ?? {};
+  const {
+    target,
+    reducedMotion,
+    intersectionOptions,
+    enabled = true,
+  } = options ?? {};
   const paused = options?.paused ?? false;
   const onPhaseChangeRef = useSyncedRef(options?.onPhaseChange);
 
@@ -79,14 +90,16 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
   const lifecycleRef = useRef<Lifecycle | null>(null);
 
   useEffect(() => {
-    const element: Element | null = ref.current;
-    if (!element || !enabled) {
+    if (target && options?.ref) conflictingTargetError('useLifecycle');
+
+    const anchor: Element | Document | null = target ?? ref.current;
+    if (!anchor || !enabled) {
       setState(INITIAL_STATE);
       return;
     }
 
     const lifecycle = createLifecycle({
-      target: element,
+      target: anchor,
       reducedMotion,
       intersectionOptions,
       onPhaseChange: (phase, phaseReason) => {
@@ -104,7 +117,7 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
       lifecycleRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, reducedMotion]);
+  }, [enabled, reducedMotion, target]);
 
   // Sync subsequent `paused` changes onto the live lifecycle.
   useEffect(() => {

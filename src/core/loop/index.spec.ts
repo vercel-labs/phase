@@ -35,6 +35,15 @@ function makeSightHidden(el: Element): void {
   mockIO.trigger(el, false);
 }
 
+function setDocumentHidden(hidden: boolean): void {
+  Object.defineProperty(document, 'hidden', {
+    value: hidden,
+    writable: true,
+    configurable: true,
+  });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
+
 function enableReducedMotion(): void {
   mockMM.setMatches('(prefers-reduced-motion: reduce)', true);
 }
@@ -613,5 +622,47 @@ describe('SSR', () => {
     const el = document.createElement('div');
     expect(() => createLoop({ target: el, onTick: vi.fn() })).toThrow();
     vi.stubGlobal('requestAnimationFrame', origRaf);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Page anchor (document)
+// ---------------------------------------------------------------------------
+
+describe('page anchor', () => {
+  it('runs a page-anchored loop with no observer', async () => {
+    const { createLoop } = await getModule();
+    const onTick = vi.fn();
+
+    const loop = createLoop({ target: document, onTick });
+
+    expect(mockIO.instances).toHaveLength(0);
+    expect(loop.phase).toBe('running');
+
+    await vi.advanceTimersByTimeAsync(32);
+    expect(onTick).toHaveBeenCalled();
+    loop.stop();
+  });
+
+  it('strong-pauses when the tab is hidden', async () => {
+    const { createLoop } = await getModule();
+    const onTick = vi.fn();
+    const loop = createLoop({ target: document, onTick });
+
+    await vi.advanceTimersByTimeAsync(32);
+    expect(onTick).toHaveBeenCalled();
+
+    setDocumentHidden(true);
+    expect(loop.phase).toBe('paused');
+    onTick.mockClear();
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(onTick).not.toHaveBeenCalled();
+
+    setDocumentHidden(false);
+    expect(loop.phase).toBe('running');
+    await vi.advanceTimersByTimeAsync(32);
+    expect(onTick).toHaveBeenCalled();
+    loop.stop();
   });
 });

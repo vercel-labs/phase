@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type RefObject } from 'react';
 
+import { conflictingTargetError } from '../../core/_internal/errors';
 import {
   createSight,
   type SightPhase,
@@ -19,6 +20,11 @@ export interface UseSightOptions<
    * Element to observe. Optional. When omitted, attach the returned `ref`.
    */
   ref?: RefObject<T | null>;
+  /**
+   * Anchor to the page instead of an element. Pass `document`. Mutually
+   * exclusive with `ref`.
+   */
+  target?: Document;
   /** `'continuous'` keeps observing. `'once'` freezes at `'visible'` after first intersection. */
   observe?: 'continuous' | 'once';
   /**
@@ -88,17 +94,20 @@ export function useSight<T extends Element = HTMLDivElement>(
   const phaseReasonRef = useRef<SightReason>('initial');
   const onVisibilityChangeRef = useSyncedRef(options?.onVisibilityChange);
 
+  const target = options?.target;
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
 
   useEffect(() => {
-    const element: Element | null = ref.current;
-    if (!element) return;
+    if (target && options?.ref) conflictingTargetError('useSight');
+
+    const anchor: Element | Document | null = target ?? ref.current;
+    if (!anchor) return;
 
     let frozen = false;
 
     const sight = createSight({
-      target: element,
+      target: anchor,
       intersectionOptions: {
         root: options?.root,
         rootMargin: options?.rootMargin,
@@ -125,7 +134,7 @@ export function useSight<T extends Element = HTMLDivElement>(
 
     return () => sight.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [observe]);
+  }, [observe, target]);
 
   return { ref, ...state, phaseRef, phaseReasonRef };
 }

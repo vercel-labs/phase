@@ -9,13 +9,13 @@
     "name": "createSight",
     "path": "src/index.ts",
     "import": "{ createSight }",
-    "limit": "1.05 kB"
+    "limit": "1.1 kB"
   },
   {
     "name": "createLifecycle",
     "path": "src/index.ts",
     "import": "{ createLifecycle }",
-    "limit": "1.6 kB"
+    "limit": "1.65 kB"
   },
   {
     "name": "createLoop",
@@ -93,21 +93,21 @@
     "path": "src/react/index.ts",
     "import": "{ useLoop }",
     "ignore": ["react"],
-    "limit": "3.05 kB"
+    "limit": "3.23 kB"
   },
   {
     "name": "useLifecycle",
     "path": "src/react/index.ts",
     "import": "{ useLifecycle }",
     "ignore": ["react"],
-    "limit": "1.7 kB"
+    "limit": "1.95 kB"
   },
   {
     "name": "useSight",
     "path": "src/react/index.ts",
     "import": "{ useSight }",
     "ignore": ["react"],
-    "limit": "1.35 kB"
+    "limit": "1.4 kB"
   },
   {
     "name": "useCanvas",
@@ -233,14 +233,14 @@
     "path": "src/react/index.ts",
     "import": "{ WhenVisible }",
     "ignore": ["react"],
-    "limit": "1.45 kB"
+    "limit": "1.68 kB"
   },
   {
     "name": "WhenIdle",
     "path": "src/react/index.ts",
     "import": "{ WhenIdle }",
     "ignore": ["react"],
-    "limit": "600 B"
+    "limit": "0.66 kB"
   },
   {
     "name": "Defer",

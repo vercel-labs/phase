@@ -1,5 +1,12 @@
 # phase
 
+## 0.3.0
+
+### Minor Changes
+
+- `createSight`, `createLifecycle`, and `createLoop` accept `document` as the `target`, anchoring to the page instead of an element. No `IntersectionObserver` is created and visibility follows the tab.
+- `useSight`, `useLifecycle`, and `useLoop` accept `target: document`, mutually exclusive with `ref`.
+
 ## 0.2.0
 
 ### Minor Changes
