@@ -197,11 +197,12 @@ for (const scenario of readdirSync(scenariosDir)) {
     fail(`evals/${scenario}/expected-findings.json is not valid JSON`);
     continue;
   }
-  const assertions = expected.scan?.assertions;
-  const referenced = [
-    ...(assertions?.required ?? []),
-    ...(assertions?.requiredAbsent ?? []),
-  ];
+  const assertionSets = expected.scan?.runs
+    ? expected.scan.runs.map((run) => run.assertions)
+    : [expected.scan?.assertions];
+  const referenced = assertionSets.flatMap((assertions) =>
+    (assertions?.required ?? []).concat(assertions?.requiredAbsent ?? []),
+  );
   for (const entry of referenced) {
     if (!SIGNALS.some((s) => s.id === entry.signal)) {
       fail(`evals/${scenario} references unknown signal \`${entry.signal}\``);

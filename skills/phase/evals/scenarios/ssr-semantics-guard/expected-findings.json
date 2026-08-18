@@ -17,7 +17,7 @@
     "Reads app/page.tsx before recommending and notices experimental_ppr and that everything is a Server Component in the initial SSR HTML (Step 2.5 blast radius)",
     "Recommends Defer (or CSS content-visibility with contain-intrinsic-size) for the testimonials wall: content stays server-rendered and in the PPR static shell, only paint is deferred",
     "Does not recommend WhenVisible, WhenIdle, or next/dynamic with ssr: false for this server-rendered content unless explicitly labeled semantics-changing, with the SSR/SEO/PPR impact stated and user confirmation requested",
-    "If a lazy mount is offered as a labeled alternative, it includes a fallback sized to the final content height",
+    "If a lazy mount is offered as a labeled alternative, it reserves the child's final in-flow footprint through the wrapper, parent, or fallback when that footprint is nonzero",
     "Marks each recommendation with the Semantics row (preserving vs changing) from the audit.md template",
     "Classifies the rest of the page as no change; invents no defects"
   ]

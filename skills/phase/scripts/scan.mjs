@@ -11,7 +11,7 @@
  * references/audit.md before recommending a change. Zero dependencies.
  */
 
-import { lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,7 +35,7 @@ export function scanTargets(paths, options = {}) {
   // Overlapping targets (`scan.mjs src src/components`) would otherwise
   // report the same file twice and double every count.
   const seen = new Set();
-  const probedRoots = new Set();
+  const projectRoots = new Map();
 
   for (const target of paths) {
     const root = resolve(target);
@@ -47,10 +47,16 @@ export function scanTargets(paths, options = {}) {
     // workflow most likely to run against a Next.js app, and it is exactly
     // where a missing context stamp would hide the blast-radius warning.
     const configRoot = stat.isDirectory() ? root : base;
-    if (!probedRoots.has(configRoot)) {
-      probedRoots.add(configRoot);
-      detectNextConfig(configRoot, context);
+    if (!projectRoots.has(configRoot)) {
+      const projectRoot = detectProjectRoot(configRoot, context);
+      // Router layout is resolved from the project root, not the target, so a
+      // nested target keeps the context its project actually has.
+      projectRoots.set(configRoot, {
+        projectRoot,
+        appRouterRoot: detectAppRouterRoot(projectRoot ?? configRoot),
+      });
     }
+    const { projectRoot, appRouterRoot } = projectRoots.get(configRoot);
 
     for (const filePath of files) {
       if (seen.has(filePath)) continue;
@@ -84,7 +90,12 @@ export function scanTargets(paths, options = {}) {
 
       // Excluded paths (tests, fixtures, agent config) must not poison
       // environment detection either.
-      if (!EXCLUDED_PATHS.test(rel)) updateContext(rel, content, context);
+      if (!EXCLUDED_PATHS.test(rel)) {
+        const contextRel = projectRoot
+          ? toPosix(relative(projectRoot, filePath))
+          : rel;
+        updateContext(contextRel, content, context, rel, appRouterRoot);
+      }
       findings.push(...scanFile(rel, content, diag));
     }
   }
@@ -784,11 +795,11 @@ export const SIGNALS = [
   },
   {
     id: 'when-visible-no-fallback',
-    replacement: 'a fallback sized to the final content height',
-    label: 'WhenVisible/WhenIdle without a sized fallback (layout shift)',
+    replacement: 'reserve the final in-flow footprint when it is nonzero',
+    label: 'WhenVisible/WhenIdle without a fallback (verify mount geometry)',
     severity: 'high',
     noise: 'noisy',
-    why: 'Children are absent until triggered; an unsized mount causes CLS.',
+    why: 'Children are absent until triggered; unreserved in-flow size can shift layout.',
     fix: 'references/rendering-recipes.md',
     matcher: matchesUngatedLazyMount,
     fileTypes: 'jsx',
@@ -1661,17 +1672,19 @@ function toPosix(path) {
 
 // Best-effort environment detection so recommendations can account for
 // rendering semantics (see references/audit.md Step 2.5). Walks up from the
-// target toward the project root (nearest package.json or .git), so scanning
-// a subdirectory of a Next.js app still finds its config. File-content
-// markers work at any depth regardless.
-function detectNextConfig(root, context) {
+// target toward the project root (nearest next.config, package.json, or
+// .git), so scanning a subdirectory of a Next.js app still finds its config.
+// Returns the project root it stopped at, which anchors router detection for
+// nested targets. next.config is optional in Next.js, so a package.json root
+// is still a usable anchor. File-content markers work at any depth regardless.
+function detectProjectRoot(root, context) {
   let dir = root;
   for (let depth = 0; depth < 10; depth++) {
     let entries;
     try {
       entries = readdirSync(dir);
     } catch {
-      return;
+      return null;
     }
     const config = entries.find((e) =>
       /^next\.config\.(js|mjs|ts|cjs)$/.test(e),
@@ -1694,29 +1707,76 @@ function detectNextConfig(root, context) {
       } catch {
         /* unreadable config */
       }
-      return;
+      return dir;
     }
     // Project root without a Next config: stop rather than escape into an
     // unrelated parent project.
-    if (entries.includes('package.json') || entries.includes('.git')) return;
+    if (entries.includes('package.json') || entries.includes('.git'))
+      return dir;
     const parent = dirname(dir);
-    if (parent === dir) return;
+    if (parent === dir) return null;
     dir = parent;
   }
+  return null;
 }
 
-function updateContext(rel, content, context) {
-  if (/(^|\/)app\/.*(page|layout|template)\.[jt]sx?$/.test(rel)) {
+const ROUTE_FILE = /^(?:page|layout|template|default|route)\.[jt]sx?$/;
+
+// A directory named `app` is only an App Router root when it actually holds
+// route files. Pages Router projects and plain repos routinely keep an
+// unrelated `app/` folder, and claiming App Router for those is what turns a
+// scanner miss into a recommendation that breaks SSR or PPR.
+function detectAppRouterRoot(base) {
+  for (const prefix of ['app', 'src/app']) {
+    if (containsRouteFile(join(base, prefix))) return prefix;
+  }
+  return null;
+}
+
+// Breadth-first with a visit budget: route files sit near the top of a router
+// tree, so this stops early on real projects and cannot walk a huge unrelated
+// `app/` directory to a halt.
+function containsRouteFile(appRoot) {
+  const queue = [appRoot];
+  for (let visited = 0; visited < 64 && queue.length > 0; visited++) {
+    const dir = queue.shift();
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isFile() && ROUTE_FILE.test(entry.name)) return true;
+      if (entry.isDirectory() && !SKIP_DIRS.has(entry.name)) {
+        queue.push(join(dir, entry.name));
+      }
+    }
+  }
+  return false;
+}
+
+function updateContext(
+  projectRel,
+  content,
+  context,
+  evidencePath = projectRel,
+  appRouterRoot = null,
+) {
+  if (
+    appRouterRoot &&
+    (projectRel === appRouterRoot || projectRel.startsWith(`${appRouterRoot}/`))
+  ) {
     context.appRouter = true;
     context.framework ??= 'next';
-    noteEvidence(context, rel);
+    noteEvidence(context, evidencePath);
   }
   // The route-segment config shape, not the bare token: prose or tooling
   // that merely mentions experimental_ppr must not count as detection.
   if (/\bexport\s+const\s+experimental_ppr\s*=\s*true\b/.test(content)) {
     context.ppr = true;
     context.framework ??= 'next';
-    noteEvidence(context, rel);
+    noteEvidence(context, evidencePath);
   }
   if (/^\s*['"]use client['"]/m.test(content)) {
     context.clientComponents++;
@@ -2205,9 +2265,19 @@ function main() {
   }
 }
 
-if (
-  process.argv[1] &&
-  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-) {
+// import.meta.url is already symlink-resolved, but argv[1] is whatever the
+// caller typed. Comparing them unresolved means a skill installed under a
+// symlinked path never matches, and the CLI exits 0 having printed nothing —
+// indistinguishable from a clean scan.
+function isEntryPoint(argvPath) {
+  const self = fileURLToPath(import.meta.url);
+  try {
+    return realpathSync(argvPath) === self;
+  } catch {
+    return resolve(argvPath) === self;
+  }
+}
+
+if (process.argv[1] && isEntryPoint(process.argv[1])) {
   main();
 }

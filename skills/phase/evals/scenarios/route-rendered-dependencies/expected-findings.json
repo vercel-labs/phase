@@ -1,0 +1,49 @@
+{
+  "description": "Regression guard for route audits: a literal route scan cannot find defects in directly rendered dependencies, and route consumers rather than reusable packages own critical-versus-below-fold render gating.",
+  "scan": {
+    "target": "workspace/app/dashboard",
+    "runs": [
+      {
+        "name": "primary route",
+        "assertions": {
+          "required": [
+            {
+              "signal": "when-visible-no-fallback",
+              "file": "page.tsx",
+              "count": 1
+            }
+          ],
+          "requiredAbsent": [
+            {
+              "signal": "manual-raf",
+              "reason": "the scanner does not follow the route's imports"
+            }
+          ],
+          "context": { "framework": "next", "appRouter": true }
+        }
+      },
+      {
+        "name": "focused shared chart",
+        "target": "workspace/packages/charts/src",
+        "assertions": {
+          "required": [
+            {
+              "signal": "manual-raf",
+              "file": "shared-chart.tsx"
+            }
+          ],
+          "context": { "framework": "next", "appRouter": false }
+        }
+      }
+    ]
+  },
+  "expectedBehavior": [
+    "Runs the primary route scan before any focused scan and states that scanner targets are literal and non-transitive",
+    "Reads the route and its directly rendered local or shared animation, chart, canvas, scroll, and rendering imports, then runs a focused scan of the shared chart",
+    "Does not expand into backend, data, generated, or unrelated workspace dependencies",
+    "Finds the shared chart's unguarded recurring requestAnimationFrame loop and recommends lifecycle-aware ownership",
+    "Classifies the missing fallback on LazyOverlay as no change after verifying that its fixed overlay output has zero final in-flow footprint",
+    "Keeps the reusable SharedChart renderable by default because it serves both critical and below-fold consumers",
+    "Keeps Defer or mount gating at the below-fold route consumer and labels whether the recommendation preserves SSR or changes server HTML and mount timing"
+  ]
+}
