@@ -59,7 +59,7 @@ import { WhenVisible } from 'phase/react';
   </WhenVisible>;
   ```
 - Use `rootMargin` to preload before the element is visible (e.g. `'200px'` starts loading 200px early).
-- **Render the `fallback` at the final content's height** so nothing shifts when children mount.
+- **Reserve the child's final in-flow footprint** through the wrapper, parent layout, or `fallback` when mounting would otherwise change layout.
 - In Next.js, prefer `next/dynamic` over `lazy()` (SSR-aware, integrates a `loading` placeholder). See [rendering-recipes.md](./rendering-recipes.md).
 
 ## Don't
@@ -67,7 +67,7 @@ import { WhenVisible } from 'phase/react';
 - **Don't expect it to unmount when scrolled away.** It's one-shot. Once visible, stays mounted.
 - **Don't use for exit animations.** `WhenVisible` has no exit phase. Use `<Presence>`.
 - **Don't set `rootMargin: '0px'`** unless you want no preloading headroom.
-- **Don't ship a zero-height `fallback`.** A mismatched placeholder height causes layout shift on mount.
+- **Don't leave nonzero in-flow size unreserved.** A zero-height fallback is correct for null, fixed, portaled, or otherwise out-of-flow output.
 
 ## Ref forwarding
 

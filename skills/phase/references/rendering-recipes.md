@@ -4,7 +4,7 @@ How to compose `Defer`, `WhenVisible`, `WhenIdle`, `useIdle`, `useWhenIdle`, and
 
 For the single-helper decision (which one at all), see [decision-guide.md](./decision-guide.md). This file is about combining them.
 
-> **Reserve space in the fallback (for `WhenVisible` / `WhenIdle`).** Their children are absent from the DOM until they mount, so a zero-height or mismatched `fallback` (or `loading` placeholder) shifts everything below the moment the real content appears. Render the fallback at the final content's height, such as a sized skeleton or fixed-height box. This is the most common way these two helpers introduce a loading problem, and every recipe below follows it.
+> **Reserve the final in-flow footprint (for `WhenVisible` / `WhenIdle`).** Their children are absent from the DOM until they mount, so mounting shifts later content when it adds unreserved in-flow size. Reserve that footprint through the wrapper, parent layout, `fallback`, or loading placeholder. The correct footprint can be zero when the child renders null, fixed or portaled UI, or otherwise out-of-flow output. Verify the actual before/after geometry rather than treating fallback presence as proof.
 >
 > **`Defer` is different: no hard layout shift.** Its children stay in the DOM and the browser measures and paints them at their true size when they scroll in, so a wrong `estimatedHeight` does **not** shift content. It only affects scrollbar proportion and scroll-anchoring math until first render. Give a realistic estimate to keep the scrollbar steady, but an imperfect one is cosmetic, not a CLS bug.
 
@@ -157,7 +157,7 @@ function Raw() {
 - **Don't wrap a `Defer` in a `WhenVisible`.** Redundant. `WhenVisible` already withholds the mount until near the viewport, so the `content-visibility` skip never applies. Pick one tier.
 - **Don't reach for `useRenderState` around a phase loop.** `useLoop`/`useCanvas`/`useLifecycle` self-pause off-screen already. Adding it is dead weight.
 - **Don't use `WhenIdle`/`WhenVisible` for SEO-critical content.** Their children are absent from SSR HTML. Use `Defer`.
-- **Don't ship a zero-height or mismatched fallback.** Gating the mount only helps if the placeholder reserves the final size; otherwise you trade a render cost for a layout shift.
+- **Don't leave a nonzero final in-flow footprint unreserved.** Match it through the wrapper, parent layout, or fallback. A zero-height fallback is correct when the mounted output also has zero in-flow footprint.
 - **Don't rely on `useSize` or `useContainerQuery` inside a skipped `Defer` subtree.** The CSS Containment spec silences `ResizeObserver` callbacks while `content-visibility: auto` content is skipped. This is spec behavior across all browsers, not a bug. Size observations resume when the element scrolls back into view, but any changes that occurred while skipped are delivered only at that point. Use `useRenderState` to detect the skip/unskip transition if your code depends on it.
 
 ## See also

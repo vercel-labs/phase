@@ -58,7 +58,7 @@ cancel(); // optional: prevent the callback before it runs
 
 ## Do
 
-- **Render the `fallback` at the final content's height** to avoid layout shift when children mount:
+- **Reserve the child's final in-flow footprint** through the wrapper, parent layout, or `fallback` when mounting would otherwise change layout:
   ```tsx
   <WhenIdle fallback={<Skeleton className="h-[320px]" />}>
     <Comments />

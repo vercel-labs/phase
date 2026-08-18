@@ -39,7 +39,9 @@ phase is the _when_ layer (when to animate, render, and pause) from one set of s
 | `WhenIdle`    | React mount until idle              | no      | no           | non-critical UI that shouldn't block first paint   |
 | `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading / reveals              |
 
-`Defer` is the cheapest and safest (keeps content, skips paint) and never causes a hard layout shift; its children stay in the DOM at true size. `When*` save the most (no DOM until triggered) but **will shift layout / cause CLS unless the `fallback` reserves the exact final content height**, so always size it (see [references/rendering-recipes.md](references/rendering-recipes.md)).
+`Defer` is the cheapest and safest (keeps content, skips paint) and never causes a hard layout shift; its children stay in the DOM at true size. `When*` save the most (no DOM until triggered) but can shift layout when mounted content adds in-flow size. Reserve the child's final in-flow footprint through the wrapper, parent layout, or `fallback`. That footprint may be zero for null, fixed, portaled, or otherwise out-of-flow output, so verify the actual geometry rather than requiring a fallback categorically (see [references/rendering-recipes.md](references/rendering-recipes.md)).
+
+Route-specific render gating belongs to the route consumer. Keep reusable package components renderable by default when they serve both critical and below-the-fold positions; wrap only the non-critical usage in `Defer`, `WhenVisible`, or `WhenIdle`, and label the SSR and mount-timing consequences.
 
 Two idle hooks defer work off the critical path: `useIdle` gates rendering with a boolean once the browser is idle, and `useWhenIdle` runs a side effect (prefetch, `import()`) once idle. `useRenderState(ref)` reads a `Defer` subtree's render-skip state to pause **raw, non-phase** work (a hand-written rAF loop, `setInterval`); phase's own loops already self-pause off-screen.
 
@@ -77,7 +79,7 @@ Reach for core primitives in React when the hook doesn't fit, such as building a
 
 ## Non-negotiable invariants
 
-Tests enforce these guarantees for animation hot paths. Violating them in consumer code is always a bug. (Rendering helpers carry one rule of their own: reserve fallback height so `WhenVisible` / `WhenIdle` don't shift layout, see [references/rendering-recipes.md](references/rendering-recipes.md).)
+Tests enforce these guarantees for animation hot paths. Violating them in consumer code is always a bug. For `WhenVisible` / `WhenIdle`, verify whether mounting changes the wrapper's in-flow footprint and reserve that space when it does (see [references/rendering-recipes.md](references/rendering-recipes.md)).
 
 1. **Zero per-frame allocations.** No objects, arrays, closures, template literals, or spreads in `onTick`/`draw`.
 2. **Never `setState` inside `onTick`.** Write to refs or the DOM directly. Only phase changes trigger re-renders.
