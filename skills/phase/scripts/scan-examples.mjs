@@ -168,11 +168,39 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/sizer.ts',
         content: 'const w = el.offsetWidth;\n',
       },
+      {
+        // A real member read inside a JSX expression still counts.
+        file: 'src/overlay.tsx',
+        content: 'return <Overlay x={element.offsetLeft} />;\n',
+      },
+      {
+        file: 'src/safe-sizer.ts',
+        content: 'const w = el?.offsetWidth;\n',
+      },
+      {
+        file: 'src/computed-access.ts',
+        content: "const h = el['clientHeight'];\n",
+      },
+      {
+        // Global invocation, no member access needed.
+        file: 'src/styles.ts',
+        content: 'const s = getComputedStyle(el);\n',
+      },
     ],
     noMatch: [
       {
         file: 'src/reveal.ts',
         content: "import { useSize } from 'phase/react';\n",
+      },
+      {
+        // Regression: JSX prop names are not DOM reads.
+        file: 'src/overlay.tsx',
+        content: 'return <Overlay offsetLeft={12} offsetTop={8} />;\n',
+      },
+      {
+        // Destructuring proves nothing about the source object.
+        file: 'src/props.ts',
+        content: 'const { offsetLeft, clientWidth } = props;\n',
       },
     ],
   },
@@ -678,6 +706,24 @@ export const SIGNAL_EXAMPLES = {
         content:
           "el.addEventListener('pointermove', (e) => {\n  const rect = el.getBoundingClientRect();\n  move(e.clientX - rect.left, e.clientY - rect.top);\n});\n",
       },
+      {
+        // Inline JSX move handler with a layout read in the body.
+        file: 'src/slider.tsx',
+        content:
+          'return (\n  <div\n    onPointerMove={(event) => {\n      const rect = event.currentTarget.getBoundingClientRect();\n      move(event.clientX - rect.left);\n    }}\n  />\n);\n',
+      },
+      {
+        // One-hop useCallback binding, defined away from the JSX.
+        file: 'src/scrubber.tsx',
+        content:
+          'const handleMouseMove = useCallback((event) => {\n  const rect = container.getBoundingClientRect();\n  move(event.clientX - rect.left);\n}, []);\n\nreturn <div onMouseMove={handleMouseMove} />;\n',
+      },
+      {
+        // One-hop function declaration binding.
+        file: 'src/tracker.tsx',
+        content:
+          'function handlePointerMove(event) {\n  const width = surface.offsetWidth;\n  move(event.clientX / width);\n}\n\nreturn <section onPointerMove={handlePointerMove} />;\n',
+      },
     ],
     noMatch: [
       {
@@ -689,6 +735,43 @@ export const SIGNAL_EXAMPLES = {
       {
         file: 'src/spotlight.tsx',
         content: "import { usePointer } from 'phase/react';\n",
+      },
+      {
+        // Coordinate-only JSX handler: no reflow to batch.
+        file: 'src/glow.tsx',
+        content:
+          'return <div onPointerMove={(e) => move(e.clientX, e.clientY)} />;\n',
+      },
+      {
+        // A custom component prop does not prove a DOM event.
+        file: 'src/panel.tsx',
+        content:
+          'return (\n  <Overlay\n    onPointerMove={(e) => {\n      const rect = box.getBoundingClientRect();\n      move(e.clientX - rect.left);\n    }}\n  />\n);\n',
+      },
+      {
+        // Click handlers are not move-frequency events.
+        file: 'src/expander.tsx',
+        content:
+          'return (\n  <div\n    onClick={(e) => {\n      const w = e.currentTarget.offsetWidth;\n      log(w);\n    }}\n  />\n);\n',
+      },
+      {
+        // The handler only calls a helper the scanner cannot resolve.
+        file: 'src/delegate.tsx',
+        content:
+          'const handleMouseMove = useCallback((event) => {\n  measure(event);\n}, []);\n\nreturn <div onMouseMove={handleMouseMove} />;\n',
+      },
+      {
+        // A layout read outside the move callback belongs to other signals.
+        file: 'src/nearby.tsx',
+        content:
+          'const width = el.offsetWidth;\nreturn <div onPointerMove={(e) => move(e.clientX / width)} />;\n',
+      },
+      {
+        // Member-expression handlers (class methods, forwarded props) are
+        // not resolvable with one local hop.
+        file: 'src/canvas-surface.tsx',
+        content:
+          'const width = surface.offsetWidth;\nreturn <canvas onPointerMove={this.handleCanvasPointerMove} onTouchMove={props.onTouchMove} />;\n',
       },
     ],
   },
