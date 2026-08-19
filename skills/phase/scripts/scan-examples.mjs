@@ -202,6 +202,11 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/props.ts',
         content: 'const { offsetLeft, clientWidth } = props;\n',
       },
+      {
+        // Reading the method reference does not invoke the layout API.
+        file: 'src/method-reference.ts',
+        content: 'const measure = element.getBoundingClientRect;\n',
+      },
     ],
   },
   'js-layout-write': {
@@ -713,7 +718,7 @@ export const SIGNAL_EXAMPLES = {
           'return (\n  <div\n    onPointerMove={(event) => {\n      const rect = event.currentTarget.getBoundingClientRect();\n      move(event.clientX - rect.left);\n    }}\n  />\n);\n',
       },
       {
-        // One-hop useCallback binding, defined away from the JSX.
+        // One-hop `useCallback` binding defined away from the JSX.
         file: 'src/scrubber.tsx',
         content:
           'const handleMouseMove = useCallback((event) => {\n  const rect = container.getBoundingClientRect();\n  move(event.clientX - rect.left);\n}, []);\n\nreturn <div onMouseMove={handleMouseMove} />;\n',
@@ -727,7 +732,7 @@ export const SIGNAL_EXAMPLES = {
     ],
     noMatch: [
       {
-        // No layout read in the handler: cheap, not a reflow storm.
+        // No layout read in the handler means no reflow to batch.
         file: 'src/spotlight.ts',
         content:
           "el.addEventListener('pointermove', (e) => {\n  last.x = e.clientX;\n  last.y = e.clientY;\n});\n",
@@ -737,7 +742,7 @@ export const SIGNAL_EXAMPLES = {
         content: "import { usePointer } from 'phase/react';\n",
       },
       {
-        // Coordinate-only JSX handler: no reflow to batch.
+        // A coordinate-only JSX handler has no reflow to batch.
         file: 'src/glow.tsx',
         content:
           'return <div onPointerMove={(e) => move(e.clientX, e.clientY)} />;\n',
@@ -774,15 +779,15 @@ export const SIGNAL_EXAMPLES = {
           'const width = surface.offsetWidth;\nreturn <canvas onPointerMove={this.handleCanvasPointerMove} onTouchMove={props.onTouchMove} />;\n',
       },
       {
-        // Regression: an unspaced `<` comparison in an earlier prop must not
-        // read as a tag open — the prop belongs to a capitalized component.
+        // An unspaced `<` comparison in an earlier prop must not read as a tag
+        // opening. The move prop belongs to a capitalized component.
         file: 'src/gauge.tsx',
         content:
           "return <Overlay className={x <y ? 'a' : 'b'} onPointerMove={(e) => { const r = el.getBoundingClientRect(); move(r.left); }} />;\n",
       },
       {
-        // Regression: an arrow inside a call expression is render-time code,
-        // not the move handler.
+        // An arrow inside a call expression runs during render, not during the
+        // move event.
         file: 'src/registry.tsx',
         content:
           'return <div onPointerMove={handlers.find((h) => h.el.offsetWidth > 0)} />;\n',

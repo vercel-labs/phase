@@ -475,19 +475,21 @@ const NON_COMPOSITOR_TRANSITION = new RegExp(
 const MATCH_MEDIA_CALL = /\bmatchMedia\s*(?:\?\.)?\s*\(/;
 const MATCH_MEDIA_CALLS = new RegExp(MATCH_MEDIA_CALL.source, 'g');
 
-// A layout read must be syntax-real: member access (`el.offsetWidth`,
-// `el?.offsetWidth`, `el['offsetWidth']`) or a layout API invocation. Bare
-// name matching flagged JSX prop names (`<Overlay offsetLeft={12} />`) as
-// critical reflows; a property name alone proves nothing about the DOM.
-// Destructuring (`const { offsetLeft } = el`) stays unmatched by design:
-// proving the source object is an element needs data flow the scanner does
-// not do. Each signal keeps its own property list; the builder only fixes
-// the syntax every list is matched with.
+// The scanner recognizes a layout read only through member access
+// (`el.offsetWidth`, `el?.offsetWidth`, or `el['offsetWidth']`) or a layout API
+// call. Bare-name matching treated JSX props such as
+// `<Overlay offsetLeft={12} />` as critical reflows, even though a property
+// name alone proves nothing about the DOM. Destructuring remains unmatched
+// because attributing the value to an element requires data-flow analysis.
+// Each signal keeps its own property list; this builder standardizes how the
+// scanner matches that list.
 function layoutReadPattern(properties, { computedStyle = false } = {}) {
-  const names = ['getBoundingClientRect', ...properties].join('|');
+  const names = properties.join('|');
   const forms = [
     `(?:\\?\\.|\\.)\\s*(?:${names})\\b`,
     `\\[\\s*['"](?:${names})['"]\\s*\\]`,
+    String.raw`(?:\?\.|\.)\s*getBoundingClientRect\s*(?:\?\.)?\s*\(`,
+    String.raw`\[\s*['"]getBoundingClientRect['"]\s*\]\s*(?:\?\.)?\s*\(`,
   ];
   if (computedStyle) forms.push(String.raw`\bgetComputedStyle\s*\(`);
   return new RegExp(forms.join('|'));
@@ -779,11 +781,11 @@ export const SIGNALS = [
     noise: 'normal',
     why: 'A synchronous reflow per event; move events fire far above 60/sec.',
     fix: 'references/use-pointer.md',
-    // Two forms of the same storm: a raw listener, or an intrinsic JSX move
-    // prop. The listener form requires a layout read nearby (contextPattern);
-    // the JSX form requires one inside the associated handler body, resolved
-    // lexically (see analyzeMoveHandlers), so a useCallback defined far from
-    // the JSX still counts and a custom-component prop never does.
+    // Raw listeners and intrinsic JSX move props can both read layout at event
+    // frequency. A raw listener requires a nearby layout read through
+    // contextPattern. A JSX prop requires a layout read inside the associated
+    // handler body. Lexical association lets a distant useCallback binding
+    // match without treating a custom-component prop as a DOM event.
     pattern:
       /addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove)['"]|\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/,
     contextPattern: POINTER_LAYOUT_READ,
@@ -1520,21 +1522,21 @@ const EMPTY_MOVE_ANALYSIS = { propRanges: new Map(), handlerLines: new Set() };
 const MOVE_HANDLER_PROP = /\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/;
 const MOVE_HANDLER_PROPS = new RegExp(MOVE_HANDLER_PROP.source, 'g');
 
-// A prop value only counts as an inline handler when it starts as one:
-// a function expression, parenthesized arrow params, or a single-param
-// arrow. An arrow deeper in the value (`handlers.find(h => h.active)`)
-// belongs to render-time code, not to the move event.
+// A prop value counts as an inline handler only when it starts with a function
+// expression, parenthesized arrow parameters, or a single arrow parameter.
+// A nested arrow such as `handlers.find(h => h.active)` runs during render,
+// not during the move event.
 const INLINE_HANDLER_VALUE =
   /^(?:async\s+)?(?:function\b|\([^)]*\)\s*(?::\s*[^=]+)?=>|[A-Za-z_$][\w$]*\s*=>)/;
 
 // A useCallback wrapper hides the arrow from collectCallbacks' declaration
-// patterns, and it is the standard way React code names a move handler.
+// patterns. React code commonly uses this wrapper for named move handlers.
 const USE_CALLBACK_BINDING =
   /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*useCallback\s*\(\s*(?:async\s+)?(?:function(?:\s+[A-Za-z_$][\w$]*)?\s*\([^)]*\)|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)\s*\{/g;
 
-// How far back to look for the JSX tag a move prop belongs to. Covers a tag
-// with several multi-line props; a tag longer than this loses the
-// specialized finding, never gains a wrong one.
+// Limits how far the scanner looks for the JSX tag that owns a move prop. This
+// covers tags with several multi-line props. A longer tag loses the
+// specialized finding instead of producing an unrelated one.
 const MOVE_HANDLER_TAG_WINDOW = 800;
 
 /**
@@ -1545,11 +1547,11 @@ const MOVE_HANDLER_TAG_WINDOW = 800;
  * capitalized components and handlers the file does not define are dropped:
  * neither proves a DOM event will run the code.
  *
- * Returns prop line → handler line range, plus the set of lines inside any
- * associated handler body (used to rank findings there as per-frame).
+ * Maps each prop line to its handler line range and records the lines inside
+ * associated handler bodies for per-frame ranking.
  *
- * Gated on a cheap test: almost no file has a JSX move prop, and the full
- * association is a second callback-collection pass over the source.
+ * A regex gate skips the second callback-collection pass when the source has
+ * no JSX move prop.
  */
 function analyzeMoveHandlers(type, sourceIndex) {
   const { source, lineStarts, bracePairs } = sourceIndex;
@@ -1578,18 +1580,18 @@ function analyzeMoveHandlers(type, sourceIndex) {
     let end;
     if (/^[A-Za-z_$][\w$]*$/.test(value)) {
       const callback = callbacksByName.get(value);
-      // A name this file does not define (imported, or a class method
-      // reached through `this`) is out of scope: one local hop only.
+      // Resolve one local hop only. Imported names and class methods reached
+      // through `this` remain out of scope.
       if (!callback) continue;
       start = callback.start;
       end = callback.end;
     } else if (INLINE_HANDLER_VALUE.test(value)) {
-      // Inline handler: the prop's brace-balanced value is the body.
+      // The prop's brace-balanced value contains the inline handler body.
       start = open;
       end = close;
     } else {
-      // Member expressions, ternaries, call results: not provably a local
-      // handler, so no association.
+      // Member expressions, ternaries, and call results do not prove a local
+      // handler, so the scanner does not associate them.
       continue;
     }
 
@@ -1606,14 +1608,13 @@ function analyzeMoveHandlers(type, sourceIndex) {
   return { propRanges, handlerLines };
 }
 
-// The prop must belong to an intrinsic JSX tag: a lowercase tag name proves a
-// DOM element, so the handler runs at DOM event frequency. A capitalized
-// component may debounce, transform, or never attach the prop. Walks back to
-// the nearest tag open at attribute level, then forward tracking JSX
-// expression braces: a `>` at brace depth zero closes the tag, so a prop past
-// it belongs elsewhere. The backward walk tracks braces too: a `<` inside an
-// earlier prop's expression (`className={x <y ? ...}`) is a comparison, not
-// the tag this prop belongs to.
+// A lowercase JSX tag proves the prop belongs to a DOM element, so the handler
+// runs at DOM event frequency. A capitalized component may debounce,
+// transform, or omit the prop. The scanner walks backward to the nearest tag
+// opening at attribute level, then walks forward through JSX expression
+// braces. A `>` at brace depth zero closes the tag. During the backward walk,
+// brace depth prevents a comparison such as `className={x <y ? ...}` from
+// being mistaken for a tag opening.
 function intrinsicTagOwns(source, propIndex) {
   const from = Math.max(0, propIndex - MOVE_HANDLER_TAG_WINDOW);
   let tagStart = -1;
@@ -1923,9 +1924,9 @@ function scanSignal(
       if (!match) continue;
       matchIndex = match.index;
 
-      // A JSX move prop is judged by its associated handler body, which may
-      // sit far outside the context window; the listener form keeps the
-      // window. Both forms share one signal, so the match decides the policy.
+      // A JSX move prop uses its associated handler body, which may sit beyond
+      // the context window. A raw listener keeps the window-based policy. The
+      // matched form selects the policy because both forms share one signal.
       if (signal.moveHandlerReads && /^on[A-Z]/.test(match[0])) {
         if (!matchesMoveHandlerBody(signal, i, moveAnalysis, uncommentedLines))
           continue;
@@ -1963,9 +1964,8 @@ function scanSignal(
 
 /**
  * Whether a JSX move-prop line has an associated handler body containing a
- * layout read (see analyzeMoveHandlers). Unassociated props — custom
- * components, member-expression handlers, names the file does not define —
- * never match.
+ * layout read (see analyzeMoveHandlers). Custom components,
+ * member-expression handlers, and names the file does not define never match.
  */
 function matchesMoveHandlerBody(signal, line, moveAnalysis, uncommentedLines) {
   const range = moveAnalysis.propRanges.get(line);
@@ -2254,9 +2254,9 @@ function executionOf(lines, i, type, rafAnalysis, moveAnalysis) {
   ) {
     return 'per-frame';
   }
-  // Inside an intrinsic JSX move handler, or on its prop line: a move event
-  // runs this code, so the association ranks it directly. The window below
-  // cannot see a handler defined far from its JSX.
+  // A move event runs code inside an intrinsic JSX move handler. Rank the
+  // handler body and its prop line directly because the window below cannot
+  // see a handler defined far from its JSX.
   if (moveAnalysis.handlerLines.has(i) || moveAnalysis.propRanges.has(i)) {
     return 'per-frame';
   }
