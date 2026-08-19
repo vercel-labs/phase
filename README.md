@@ -238,15 +238,15 @@ createLoop({
 
 #### Loop options
 
-| Option          | Type                                | Default      | Description                               |
-| --------------- | ----------------------------------- | ------------ | ----------------------------------------- |
-| `target`        | `Element`                           | required     | Element to observe for visibility         |
-| `onTick`        | `(frame: FrameState) => void`       | required     | Called each frame while running           |
-| `fps`           | `number`                            | —            | Cap frames per second                     |
-| `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion |
-| `degraded`      | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades            |
-| `degradedFps`   | `number`                            | `30`         | FPS cap in degraded throttle mode         |
-| `onPhaseChange` | `(phase, reason) => void`           | —            | Called on every phase transition          |
+| Option          | Type                                | Default      | Description                                                   |
+| --------------- | ----------------------------------- | ------------ | ------------------------------------------------------------- |
+| `target`        | `Element \| Document`               | required     | Element to observe for visibility, or `document` for the page |
+| `onTick`        | `(frame: FrameState) => void`       | required     | Called each frame while running                               |
+| `fps`           | `number`                            | —            | Cap frames per second                                         |
+| `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion                     |
+| `degraded`      | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades                                |
+| `degradedFps`   | `number`                            | `30`         | FPS cap in degraded throttle mode                             |
+| `onPhaseChange` | `(phase, reason) => void`           | —            | Called on every phase transition                              |
 
 ### createTicker
 
@@ -359,17 +359,17 @@ The `steps` option controls threshold granularity. Default `20` generates 21 eve
 
 #### ScrollProgress options
 
-| Option       | Type                          | Default  | Description                        |
-| ------------ | ----------------------------- | -------- | ---------------------------------- |
-| `target`     | `Element`                     | required | Element to observe                 |
-| `onProgress` | `(ratio: number) => void`     | required | Called at each threshold crossing  |
-| `steps`      | `number`                      | `20`     | Number of evenly-spaced thresholds |
-| `root`       | `Element \| Document \| null` | —        | IO root element                    |
-| `rootMargin` | `string`                      | —        | IO root margin                     |
+| Option       | Type                          | Default  | Description                                    |
+| ------------ | ----------------------------- | -------- | ---------------------------------------------- |
+| `target`     | `Element \| Document`         | required | Element to observe, or `document` for the page |
+| `onProgress` | `(ratio: number) => void`     | required | Called at each threshold crossing              |
+| `steps`      | `number`                      | `20`     | Number of evenly-spaced thresholds             |
+| `root`       | `Element \| Document \| null` | —        | IO root element                                |
+| `rootMargin` | `string`                      | —        | IO root margin                                 |
 
 ### createScroll
 
-Tracks a scroll container's offset and progress. Reads `scrollLeft`/`scrollTop` once per rAF frame and reads the reflow-heavy geometry (`scrollWidth`/`clientWidth`) only on resize or explicit `measure()`, never on the scroll path. Auto-pauses off-screen via the shared IntersectionObserver pool. This is to `scroll` + `scrollWidth` what `createPointer` is to `pointermove` + `getBoundingClientRect`.
+Tracks a scroll container's offset and progress. Reads `scrollLeft`/`scrollTop` once per rAF frame and reads the reflow-heavy geometry (`scrollWidth`/`clientWidth`) only on a coalesced resize or an explicit `measure()`, never on the scroll path. Auto-pauses off-screen via the shared IntersectionObserver pool. This is to `scroll` + `scrollWidth` what `createPointer` is to `pointermove` + `getBoundingClientRect`.
 
 > **Scroll offset, not visibility ratio.** This reports the element's own scroll position (for scrollbars, carousels, position indicators). For _how much of an element is in the viewport_, use [`createScrollProgress`](#createscrollprogress); for CSS-declarative scroll-linked animation, use the native `ScrollTimeline` API.
 
@@ -1236,9 +1236,9 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
 | `createTicker`            |             847 B |
-| `createSight`             |             970 B |
-| `createLifecycle`         |           1.48 kB |
-| `createLoop`              |            2.6 kB |
+| `createSight`             |           1.01 kB |
+| `createLifecycle`         |           1.52 kB |
+| `createLoop`              |           2.65 kB |
 | `createScrollProgress`    |             869 B |
 | `createRenderState`       |             490 B |
 | `createDevicePixelRatio`  |             544 B |
@@ -1252,18 +1252,18 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           2.85 kB |
-| `useLifecycle`            |           1.68 kB |
-| `useSight`                |           1.18 kB |
-| `useCanvas`               |           3.47 kB |
+| `useLoop`                 |           2.98 kB |
+| `useLifecycle`            |           1.81 kB |
+| `useSight`                |           1.33 kB |
+| `useCanvas`               |           3.51 kB |
 | `useMutation`             |           1.36 kB |
 | `usePointer`              |           1.47 kB |
 | `useScroll`               |            1.9 kB |
-| `useThrottledCallback`    |             797 B |
-| `useDebouncedCallback`    |             690 B |
+| `useThrottledCallback`    |             804 B |
+| `useDebouncedCallback`    |             696 B |
 | `useTween`                |             680 B |
 | `usePresence`             |             591 B |
-| `useScrollProgress`       |              1 kB |
+| `useScrollProgress`       |             991 B |
 | `useSize`                 |             378 B |
 | `useContainerQuery`       |             384 B |
 | `useMediaQuery`           |             246 B |
@@ -1272,12 +1272,12 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
 | `Presence`                |             741 B |
-| `WhenVisible`             |           1.43 kB |
-| `WhenIdle`                |             592 B |
+| `WhenVisible`             |           1.57 kB |
+| `WhenIdle`                |             596 B |
 | `Defer`                   |              86 B |
-| `useIdle`                 |             435 B |
-| `useWhenIdle`             |             443 B |
-| `useRenderState`          |             521 B |
+| `useIdle`                 |             414 B |
+| `useWhenIdle`             |             445 B |
+| `useRenderState`          |             515 B |
 | `Swap`                    |           1.12 kB |
 
 <!-- SIZE-TABLE:END -->

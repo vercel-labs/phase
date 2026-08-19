@@ -4,7 +4,7 @@ description: "Use when building, reviewing, or optimizing web animations OR rend
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.24'
+  version: '0.0.25'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library.'
 ---
 
@@ -51,8 +51,8 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 
 | Need                                                 | Use                                                                                         |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Know if it's on screen?                              | `useSight`                                                                                  |
-| Want phase to run your frame loop?                   | `useLoop` (DOM) / `useCanvas` (canvas)                                                      |
+| Know if it's on screen?                              | `useSight` (element, or tab visibility with `target: 'page'`)                               |
+| Want phase to run your frame loop?                   | `useLoop` (DOM, or the page with `target: 'page'`) / `useCanvas` (canvas)                   |
 | You own the loop (WebGL, three.js, Web Worker)?      | `useLifecycle` (active/paused signal)                                                       |
 | Animating one value into render?                     | `useTween`                                                                                  |
 | Mount/unmount transitions?                           | `Presence` / `Swap` / `WhenVisible`                                                         |

@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, type RefObject } from 'react';
 
+import { conflictingTargetError } from '../../core/_internal/errors';
 import {
   createSight,
+  type Sight,
   type SightPhase,
   type SightReason,
 } from '../../core/sight';
@@ -19,6 +21,15 @@ export interface UseSightOptions<
    * Element to observe. Optional. When omitted, attach the returned `ref`.
    */
   ref?: RefObject<T | null>;
+  /**
+   * Anchor to the page instead of an element. Pass `'page'`. Mutually
+   * exclusive with `ref`.
+   *
+   * This is a string rather than `document` because hook options are built
+   * during render, and render runs on the server for a client component. A
+   * literal `document` there throws before the hook is called.
+   */
+  target?: 'page';
   /** `'continuous'` keeps observing. `'once'` freezes at `'visible'` after first intersection. */
   observe?: 'continuous' | 'once';
   /**
@@ -88,17 +99,25 @@ export function useSight<T extends Element = HTMLDivElement>(
   const phaseReasonRef = useRef<SightReason>('initial');
   const onVisibilityChangeRef = useSyncedRef(options?.onVisibilityChange);
 
+  const target = options?.target;
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
 
   useEffect(() => {
-    const element: Element | null = ref.current;
-    if (!element) return;
+    if (target && options?.ref) conflictingTargetError('useSight');
+
+    // Resolved here, not in the options object: this runs only on the client.
+    const anchor: Element | Document | null =
+      target === 'page' ? document : ref.current;
+    if (!anchor) return;
 
     let frozen = false;
+    // A page target reports its phase synchronously from createSight, before
+    // `sight` is bound, so the freeze is applied after construction instead.
+    let instance: Sight | null = null;
 
     const sight = createSight({
-      target: element,
+      target: anchor,
       intersectionOptions: {
         root: options?.root,
         rootMargin: options?.rootMargin,
@@ -118,14 +137,17 @@ export function useSight<T extends Element = HTMLDivElement>(
 
         if (observe === 'once' && phase === 'visible') {
           frozen = true;
-          sight.stop();
+          instance?.stop();
         }
       },
     });
 
+    instance = sight;
+    if (frozen) sight.stop();
+
     return () => sight.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [observe]);
+  }, [observe, target]);
 
   return { ref, ...state, phaseRef, phaseReasonRef };
 }

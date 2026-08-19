@@ -76,6 +76,14 @@ function makeScrollable(
   return { setLeft: (v: number) => (el.scrollLeft = v) };
 }
 
+/** How many times a listener spy saw a given event type. */
+function countCalls(
+  spy: { mock: { calls: Array<[unknown, ...unknown[]]> } },
+  type: string,
+): number {
+  return spy.mock.calls.filter(([t]) => t === type).length;
+}
+
 async function getModule() {
   return import('.');
 }
@@ -251,6 +259,7 @@ describe('geometry', () => {
       configurable: true,
     });
     mockRO.trigger(el, 250, 50);
+    flushRAF(); // geometry re-reads on the frame, not per resize callback
 
     expect(scroll.state.maxX).toBe(150); // 400 - 250
     scroll.stop();
@@ -789,6 +798,78 @@ describe('page target', () => {
 
     expect(scroll.phase).toBe('tracking');
     expect(cb).toHaveBeenCalledTimes(1);
+    scroll.stop();
+  });
+});
+
+describe('page target construction failure', () => {
+  it('releases listeners when the first onScroll throws', async () => {
+    const { createScroll } = await getModule();
+    makeScrollable(document.documentElement, {
+      scrollHeight: 5000,
+      clientHeight: 1000,
+    });
+    const addSpy = vi.spyOn(document, 'addEventListener');
+    const removeSpy = vi.spyOn(document, 'removeEventListener');
+
+    expect(() =>
+      createScroll({
+        target: document,
+        onScroll: () => {
+          throw new Error('consumer blew up');
+        },
+      }),
+    ).toThrowError('consumer blew up');
+
+    expect(countCalls(removeSpy, 'scroll')).toBe(countCalls(addSpy, 'scroll'));
+    expect(countCalls(removeSpy, 'visibilitychange')).toBe(
+      countCalls(addSpy, 'visibilitychange'),
+    );
+
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
+  });
+});
+
+describe('page target geometry coalescing', () => {
+  it('emits once when both geometry sources fire in the same frame', async () => {
+    const { createScroll } = await getModule();
+    makeScrollable(document.documentElement, {
+      scrollHeight: 5000,
+      clientHeight: 1000,
+    });
+    const cb = vi.fn();
+
+    const scroll = createScroll({ target: document, onScroll: cb });
+    cb.mockClear();
+
+    // A real window resize changes the scrolling element's box AND fires the
+    // resize event, so page mode hears about the same layout change twice.
+    mockRO.trigger(document.documentElement, 800, 5000);
+    window.dispatchEvent(new Event('resize'));
+    flushRAF();
+
+    expect(cb).toHaveBeenCalledTimes(1);
+    scroll.stop();
+  });
+
+  it('still re-measures geometry, not just position', async () => {
+    const { createScroll } = await getModule();
+    makeScrollable(document.documentElement, {
+      scrollHeight: 5000,
+      clientHeight: 1000,
+    });
+    const scroll = createScroll({ target: document, onScroll: vi.fn() });
+    expect(scroll.state.maxY).toBe(4000);
+
+    makeScrollable(document.documentElement, {
+      scrollHeight: 5000,
+      clientHeight: 500,
+    });
+    window.dispatchEvent(new Event('resize'));
+    flushRAF();
+
+    expect(scroll.state.maxY).toBe(4500);
     scroll.stop();
   });
 });

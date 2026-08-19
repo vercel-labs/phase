@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type RefObject } from 'react';
 
+import { conflictingTargetError } from '../../core/_internal/errors';
 import {
   createLoop,
   type LoopPhase,
@@ -26,6 +27,15 @@ export interface UseLoopOptions<T extends Element = HTMLDivElement> {
    * Pass your own ref to share it or attach it elsewhere.
    */
   ref?: RefObject<T | null>;
+  /**
+   * Anchor to the page instead of an element. Pass `'page'`. Mutually
+   * exclusive with `ref`.
+   *
+   * This is a string rather than `document` because hook options are built
+   * during render, and render runs on the server for a client component. A
+   * literal `document` there throws before the hook is called.
+   */
+  target?: 'page';
   /**
    * Called every frame. Write to refs or DOM directly. Never call React
    * `setState` here (60 calls/sec = 60 re-renders/sec).
@@ -77,6 +87,7 @@ export function useLoop<T extends Element = HTMLDivElement>(
   options: UseLoopOptions<T>,
 ): UseLoopResult<T> {
   const {
+    target,
     fps,
     enabled = true,
     reducedMotion,
@@ -94,14 +105,18 @@ export function useLoop<T extends Element = HTMLDivElement>(
   const loopRef = useRef<ReturnType<typeof createLoop> | null>(null);
 
   useEffect(() => {
-    const element: Element | null = ref.current;
-    if (!element || !enabled) {
+    if (target && options.ref) conflictingTargetError('useLoop');
+
+    // Resolved here, not in the options object: this runs only on the client.
+    const anchor: Element | Document | null =
+      target === 'page' ? document : ref.current;
+    if (!anchor || !enabled) {
       setState(INITIAL_STATE);
       return;
     }
 
     const loop = createLoop({
-      target: element,
+      target: anchor,
       onTick: (frame) => onTickRef.current(frame),
       fps,
       reducedMotion,
@@ -127,7 +142,7 @@ export function useLoop<T extends Element = HTMLDivElement>(
       loopRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, fps, reducedMotion, degraded, degradedFps]);
+  }, [enabled, fps, reducedMotion, degraded, degradedFps, target]);
 
   return { ref, ...state };
 }

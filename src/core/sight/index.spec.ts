@@ -358,3 +358,121 @@ describe('rapid signal churn', () => {
     expect(cb).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Page target (document)
+// ---------------------------------------------------------------------------
+
+describe('page target', () => {
+  it('reports visible immediately with no observer', async () => {
+    const { createSight } = await getModule();
+    const onPhaseChange = vi.fn();
+
+    const sight = createSight({ target: document, onPhaseChange });
+
+    // No viewport test to make, so no observer and no waiting for a callback.
+    expect(mockIO.instances).toHaveLength(0);
+    expect(sight.phase).toBe('visible');
+    expect(onPhaseChange).toHaveBeenCalledWith('visible', 'initial');
+    sight.stop();
+  });
+
+  it('starts hidden when the tab is already backgrounded', async () => {
+    const { createSight } = await getModule();
+    Object.defineProperty(document, 'hidden', {
+      value: true,
+      writable: true,
+      configurable: true,
+    });
+
+    const sight = createSight({ target: document });
+
+    expect(sight.phase).toBe('hidden');
+    sight.stop();
+  });
+
+  it('follows document visibility', async () => {
+    const { createSight } = await getModule();
+    const phases: Array<[string, string]> = [];
+
+    const sight = createSight({
+      target: document,
+      onPhaseChange: (phase, reason) => phases.push([phase, reason]),
+    });
+
+    setDocumentHidden(true);
+    expect(sight.phase).toBe('hidden');
+
+    setDocumentHidden(false);
+    expect(sight.phase).toBe('visible');
+
+    expect(phases).toEqual([
+      ['visible', 'initial'],
+      ['hidden', 'document'],
+      ['visible', 'document'],
+    ]);
+    sight.stop();
+  });
+
+  it('restores on bfcache pageshow', async () => {
+    const { createSight } = await getModule();
+    const sight = createSight({ target: document });
+
+    setDocumentHidden(true);
+    expect(sight.phase).toBe('hidden');
+
+    Object.defineProperty(document, 'hidden', {
+      value: false,
+      writable: true,
+      configurable: true,
+    });
+    firePageShow(true);
+
+    expect(sight.phase).toBe('visible');
+    expect(sight.phaseReason).toBe('bfcache');
+    sight.stop();
+  });
+
+  it('stops cleanly and reports hidden', async () => {
+    const { createSight } = await getModule();
+    const onPhaseChange = vi.fn();
+    const sight = createSight({ target: document, onPhaseChange });
+    onPhaseChange.mockClear();
+
+    sight.stop();
+    expect(sight.phase).toBe('hidden');
+
+    setDocumentHidden(true);
+    expect(onPhaseChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('page target construction failure', () => {
+  it('releases listeners when the initial callback throws', async () => {
+    const { createSight } = await getModule();
+    const addSpy = vi.spyOn(document, 'addEventListener');
+    const removeSpy = vi.spyOn(document, 'removeEventListener');
+
+    expect(() =>
+      createSight({
+        target: document,
+        onPhaseChange: () => {
+          throw new Error('consumer blew up');
+        },
+      }),
+    ).toThrowError('consumer blew up');
+
+    // Construction failed, so the caller has no instance to stop with. The
+    // visibilitychange listener must not outlive the attempt.
+    const added = addSpy.mock.calls.filter(
+      ([type]) => type === 'visibilitychange',
+    ).length;
+    const removed = removeSpy.mock.calls.filter(
+      ([type]) => type === 'visibilitychange',
+    ).length;
+    expect(removed).toBe(added);
+
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
+  });
+});

@@ -33,6 +33,15 @@ function makeHidden(el: Element): void {
   mockIO.trigger(el, false);
 }
 
+function setDocumentHidden(hidden: boolean): void {
+  Object.defineProperty(document, 'hidden', {
+    value: hidden,
+    writable: true,
+    configurable: true,
+  });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
+
 function enableReducedMotion(): void {
   mockMM.setMatches('(prefers-reduced-motion: reduce)', true);
 }
@@ -270,5 +279,48 @@ describe('createLifecycle', () => {
       expect(() => createLifecycle({ target: el })).toThrow();
       vi.stubGlobal('document', origDocument);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Page anchor (document)
+// ---------------------------------------------------------------------------
+
+describe('page anchor', () => {
+  it('activates on the page with no observer', async () => {
+    const { createLifecycle } = await getModule();
+    const onPhaseChange = vi.fn();
+
+    const lifecycle = createLifecycle({ target: document, onPhaseChange });
+
+    expect(mockIO.instances).toHaveLength(0);
+    expect(lifecycle.phase).toBe('active');
+    expect(onPhaseChange).toHaveBeenCalledWith('active', 'started');
+    lifecycle.stop();
+  });
+
+  it('pauses on tab hide and resumes on show', async () => {
+    const { createLifecycle } = await getModule();
+    const lifecycle = createLifecycle({ target: document });
+    expect(lifecycle.phase).toBe('active');
+
+    setDocumentHidden(true);
+    expect(lifecycle.phase).toBe('paused');
+    expect(lifecycle.phaseReason).toBe('sight');
+
+    setDocumentHidden(false);
+    expect(lifecycle.phase).toBe('active');
+    lifecycle.stop();
+  });
+
+  it('still honors reduced motion on a page anchor', async () => {
+    const { createLifecycle } = await getModule();
+    enableReducedMotion();
+
+    const lifecycle = createLifecycle({ target: document });
+
+    expect(lifecycle.phase).toBe('paused');
+    expect(lifecycle.phaseReason).toBe('reduced-motion');
+    lifecycle.stop();
   });
 });

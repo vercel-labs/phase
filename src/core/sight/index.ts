@@ -1,4 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
+import { isDocument } from '../_internal/dom';
 import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 
@@ -15,7 +16,12 @@ export type SightReason =
   | 'all-hidden';
 
 export interface SightOptions {
-  target: Element;
+  /**
+   * Element to observe, or `document` to track the page. A page is never
+   * off-screen, so a Document target reports document visibility alone.
+   */
+  target: Element | Document;
+  /** Forwarded to the pooled observer. Ignored for `document`. */
   intersectionOptions?: IntersectionObserverInit;
   onPhaseChange?: (phase: SightPhase, reason: SightReason) => void;
   /** Abort signal that stops the observer when aborted. */
@@ -38,6 +44,9 @@ export interface Sight {
  * `phase` is `'visible'` only when both the document is visible (not backgrounded)
  * and the element is within the viewport. Uses a shared IntersectionObserver
  * pool. Multiple `createSight` calls with the same options share one observer.
+ *
+ * Pass `document` to anchor to the page instead. There is no viewport test to
+ * make, so no observer is created and `phase` follows document visibility.
  *
  * @example
  * const sight = createSight({
@@ -63,8 +72,10 @@ export function createSight(options: SightOptions): Sight {
   let _reason: SightReason = 'initial';
   let stopped = false;
 
+  const isPage = isDocument(target);
+
   let documentVisible: boolean = !document.hidden;
-  let elementInView = false;
+  let elementInView = isPage;
 
   function recompute(trigger: SightReason): void {
     if (stopped) return;
@@ -105,11 +116,30 @@ export function createSight(options: SightOptions): Sight {
 
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('pageshow', onPageShow);
-  const unobserveIO: () => void = observeIntersection({
-    element: target,
-    onIntersect: onIntersection,
-    ...intersectionOptions,
-  });
+
+  let unobserveIO: (() => void) | undefined;
+  if (isPage) {
+    // An element target gets its first phase from the observer's initial
+    // callback. A page has no observer, so report the starting phase here or
+    // consumers would wait on a transition that never comes.
+    //
+    // This is the only path where a consumer callback runs before the caller
+    // holds an instance to stop, so a throw here has to release the listeners
+    // itself or they outlive the failed construction.
+    try {
+      recompute('initial');
+    } catch (error) {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pageshow', onPageShow);
+      throw error;
+    }
+  } else {
+    unobserveIO = observeIntersection({
+      element: target,
+      onIntersect: onIntersection,
+      ...intersectionOptions,
+    });
+  }
 
   let unlinkAbort: (() => void) | undefined;
 
@@ -119,7 +149,7 @@ export function createSight(options: SightOptions): Sight {
     unlinkAbort?.();
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('pageshow', onPageShow);
-    unobserveIO();
+    unobserveIO?.();
     _phase = 'hidden';
     _reason = 'initial';
   }

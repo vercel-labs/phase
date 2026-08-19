@@ -1,5 +1,15 @@
 # phase
 
+## 0.3.0
+
+### Minor Changes
+
+- `createSight`, `createLifecycle`, and `createLoop` accept `document` as the `target`, anchoring to the page instead of an element. No `IntersectionObserver` is created and visibility follows the tab.
+- `useSight`, `useLifecycle`, and `useLoop` accept `target: 'page'`, mutually exclusive with `ref`. The hooks take a string rather than `document` because their options are built during render, which runs on the server for a client component.
+- `createSight` reports its initial phase in page mode, so `useSight({ target: 'page', observe: 'once' })` no longer throws during construction.
+- `createSight` and `createScroll` release the listeners they attached if a consumer callback throws during construction, which page mode reaches because it emits before the caller holds an instance to stop.
+- `createScroll` coalesces resize-driven geometry reads into its frame flush, so a burst of resize signals costs one layout read instead of one each. `measure()` is still synchronous.
+
 ## 0.2.0
 
 ### Minor Changes

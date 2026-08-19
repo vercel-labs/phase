@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 import { createMockMatchMedia } from '../../__mocks__/match-media';
@@ -98,5 +98,46 @@ describe('useLoop', () => {
     rerender({ enabled: true });
     // Should leave the disabled idle state once re-enabled
     expect(result.current.phase).not.toBe('idle');
+  });
+});
+
+describe('page target', () => {
+  it('runs a page-anchored loop with no observer', async () => {
+    const useLoop = await getHook();
+    const onTick = vi.fn();
+
+    const { result } = renderHook(() => useLoop({ target: 'page', onTick }));
+
+    expect(result.current.phase).toBe('running');
+    expect(mockIO.instances).toHaveLength(0);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(32);
+    });
+    expect(onTick).toHaveBeenCalled();
+  });
+
+  it('throws when both ref and target are given', async () => {
+    const useLoop = await getHook();
+    const { ref } = createRefWithElement();
+
+    expect(() =>
+      renderHook(() => useLoop({ ref, target: 'page', onTick: vi.fn() })),
+    ).toThrowError(/both ref and target/);
+  });
+});
+
+describe('page target is SSR-safe', () => {
+  it('rejects a Document at the type level and does not run', async () => {
+    const useLoop = await getHook();
+
+    const { result } = renderHook(() =>
+      // @ts-expect-error - Document is not assignable to target: 'page'
+      useLoop({ target: document, onTick: vi.fn() }),
+    );
+
+    // A literal `document` in hook options throws during server render, so the
+    // option is a string. Passing one anyway must not quietly start a loop.
+    expect(result.current.phase).not.toBe('running');
   });
 });

@@ -23,6 +23,7 @@ const { ref, phaseRef, phaseReasonRef } = useSight<T>({
 | Option               | Type                                               | Default        | Description                                                                                            |
 | -------------------- | -------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ |
 | `ref`                | `RefObject<T \| null>`                             | returned       | Bring your own ref                                                                                     |
+| `target`             | `'page'`                                           | —              | Anchor to the page; pass `'page'`. Mutually exclusive with `ref`                                       |
 | `observe`            | `'continuous' \| 'once'`                           | `'continuous'` | `'once'` freezes at `'visible'` after first intersection                                               |
 | `root`               | `Element \| null`                                  | —              | IO root element                                                                                        |
 | `rootMargin`         | `string`                                           | —              | IO root margin                                                                                         |

@@ -55,7 +55,7 @@ export function conflictingTargetError(fn: string): never {
   throw new PhaseError(`${fn}() received both ref and target.`, {
     code: 'conflicting_target',
     reason: 'A tracker has one anchor.',
-    fix: "Pass ref for an element, or target: 'page' for the page.",
+    fix: "Pass one: ref for an element, target: 'page' for the page.",
   });
 }
 

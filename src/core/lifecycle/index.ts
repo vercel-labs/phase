@@ -25,7 +25,8 @@ export type LifecycleReason =
 export type LifecycleReducedMotion = 'pause' | 'ignore';
 
 export interface LifecycleOptions {
-  target: Element;
+  /** Element to observe, or `document` to anchor to the page. */
+  target: Element | Document;
   reducedMotion?: LifecycleReducedMotion;
   intersectionOptions?: IntersectionObserverInit;
   start?: 'auto' | 'manual';

@@ -12,12 +12,12 @@ const sight = createSight(options: SightOptions): Sight;
 
 ### Options
 
-| Option                | Type                                               | Default  | Description                                   |
-| --------------------- | -------------------------------------------------- | -------- | --------------------------------------------- |
-| `target`              | `Element`                                          | required | Element to observe                            |
-| `intersectionOptions` | `IntersectionObserverInit`                         | —        | Forwarded to pooled IO                        |
-| `onPhaseChange`       | `(phase: SightPhase, reason: SightReason) => void` | —        | Called on visibility transitions              |
-| `signal`              | `AbortSignal`                                      | —        | Stops the observer when the signal is aborted |
+| Option                | Type                                               | Default  | Description                                    |
+| --------------------- | -------------------------------------------------- | -------- | ---------------------------------------------- |
+| `target`              | `Element \| Document`                              | required | Element to observe, or `document` for the page |
+| `intersectionOptions` | `IntersectionObserverInit`                         | —        | Forwarded to pooled IO. Ignored for `document` |
+| `onPhaseChange`       | `(phase: SightPhase, reason: SightReason) => void` | —        | Called on visibility transitions               |
+| `signal`              | `AbortSignal`                                      | —        | Stops the observer when the signal is aborted  |
 
 ### Return (Sight)
 
@@ -55,6 +55,22 @@ const sight = createSight(options: SightOptions): Sight;
 - **Don't use for animations directly.** `createSight` doesn't know about reduced motion. For animation gating, use `createLifecycle` which composes sight + reduced motion.
 - **Don't create raw `IntersectionObserver` instances.** Use `createSight` (or `createScrollProgress`) to benefit from the shared pool.
 - **Don't call in SSR.** Throws `PhaseError` with code `server_context`.
+
+## Page anchor
+
+Pass `document` to anchor to the page rather than an element:
+
+```ts
+const sight = createSight({
+  target: document,
+  onPhaseChange: (phase) =>
+    phase === 'visible' ? renderer.start() : renderer.stop(),
+});
+```
+
+A page is never off-screen, so there is no viewport test to run: no `IntersectionObserver` is created, `intersectionOptions` is ignored, and `phase` follows document visibility (plus bfcache `pageshow`) alone. Because no observer reports an initial state, the starting phase is emitted synchronously during construction rather than on the observer's first callback.
+
+This is what `createLifecycle` and `createLoop` compose when given `document`, which is how a page-level loop gets tab-visibility pausing without an element to observe.
 
 ## Reduced motion
 
