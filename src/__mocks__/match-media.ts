@@ -1,6 +1,8 @@
 export interface MockMatchMediaResult {
   mockMatchMedia: typeof matchMedia;
   setMatches: (query: string, matches: boolean) => void;
+  /** Change listeners currently attached for a query, for leak assertions. */
+  listenerCount: (query: string) => number;
 }
 
 export function createMockMatchMedia(): MockMatchMediaResult {
@@ -64,5 +66,13 @@ export function createMockMatchMedia(): MockMatchMediaResult {
     }
   }
 
-  return { mockMatchMedia: mockMatchMedia as typeof matchMedia, setMatches };
+  function listenerCount(query: string): number {
+    return queries.get(query)?.listeners.size ?? 0;
+  }
+
+  return {
+    mockMatchMedia: mockMatchMedia as typeof matchMedia,
+    setMatches,
+    listenerCount,
+  };
 }

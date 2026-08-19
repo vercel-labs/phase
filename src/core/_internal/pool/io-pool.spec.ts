@@ -1,4 +1,5 @@
 import { createMockIntersectionObserver } from '../../../__mocks__/intersection-observer';
+import { describePoolContract } from './pool-contract';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 
@@ -166,51 +167,43 @@ describe('cleanup', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Ownership safety
-// ---------------------------------------------------------------------------
-
-describe('ownership safety', () => {
-  it('second subscription on same element overwrites callback', async () => {
+describe('late subscribers', () => {
+  it('does not receive the initial entry for an already-observed element', async () => {
     const { observeIntersection } = await getModule();
     const el = document.createElement('div');
-    const cb1 = vi.fn();
-    const cb2 = vi.fn();
+    const early = vi.fn();
+    const late = vi.fn();
 
-    observeIntersection({ element: el, onIntersect: cb1 });
-    observeIntersection({ element: el, onIntersect: cb2 });
-
+    observeIntersection({ element: el, onIntersect: early });
     mockIO.trigger(el, true);
 
-    expect(cb1).not.toHaveBeenCalled();
-    expect(cb2).toHaveBeenCalledTimes(1);
-  });
-
-  it('first cleanup does NOT unobserve if second subscription replaced it', async () => {
-    const { observeIntersection } = await getModule();
-    const el = document.createElement('div');
-    const cleanup1 = observeIntersection({ element: el, onIntersect: vi.fn() });
-    const cb2 = vi.fn();
-    observeIntersection({ element: el, onIntersect: cb2 });
-
-    cleanup1();
-
-    // el should still be observed (owned by second subscription)
-    expect(firstInstance().observed.has(el)).toBe(true);
+    // `observe()` is a no-op for a target the observer already holds, so this
+    // subscriber waits for the next change rather than learning current state.
+    observeIntersection({ element: el, onIntersect: late });
+    expect(late).not.toHaveBeenCalled();
 
     mockIO.trigger(el, true);
-    expect(cb2).toHaveBeenCalledTimes(1);
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(early).toHaveBeenCalledTimes(2);
   });
+});
 
-  it('second cleanup correctly unobserves', async () => {
+// ---------------------------------------------------------------------------
+// Shared pool contract
+// ---------------------------------------------------------------------------
+
+describePoolContract<Element>({
+  keys: () => [document.createElement('div'), document.createElement('div')],
+  create: async () => {
     const { observeIntersection } = await getModule();
-    const el = document.createElement('div');
-    observeIntersection({ element: el, onIntersect: vi.fn() });
-    const cleanup2 = observeIntersection({ element: el, onIntersect: vi.fn() });
-
-    cleanup2();
-    expect(firstInstance().observed.has(el)).toBe(false);
-  });
+    return {
+      subscribe: (element, callback) =>
+        observeIntersection({ element, onIntersect: callback }),
+      notify: (element) => mockIO.trigger(element, true),
+      isBound: (element) =>
+        mockIO.instances.some((instance) => instance.observed.has(element)),
+    };
+  },
 });
 
 // ---------------------------------------------------------------------------

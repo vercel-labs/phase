@@ -1,4 +1,5 @@
 import { createMockResizeObserver } from '../../../__mocks__/resize-observer';
+import { describePoolContract } from './pool-contract';
 
 let mockRO: ReturnType<typeof createMockResizeObserver>;
 
@@ -117,43 +118,18 @@ describe('cleanup', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Ownership safety
+// Shared pool contract
 // ---------------------------------------------------------------------------
 
-describe('ownership safety', () => {
-  it('second subscription on same element overwrites callback', async () => {
+describePoolContract<Element>({
+  keys: () => [document.createElement('div'), document.createElement('div')],
+  create: async () => {
     const { observeResize } = await getModule();
-    const el = document.createElement('div');
-    const cb1 = vi.fn();
-    const cb2 = vi.fn();
-    observeResize(el, cb1);
-    observeResize(el, cb2);
-
-    mockRO.trigger(el, 100, 50);
-    expect(cb1).not.toHaveBeenCalled();
-    expect(cb2).toHaveBeenCalledTimes(1);
-  });
-
-  it('first cleanup does NOT unobserve if second subscription replaced it', async () => {
-    const { observeResize } = await getModule();
-    const el = document.createElement('div');
-    const cleanup1 = observeResize(el, vi.fn());
-    const cb2 = vi.fn();
-    observeResize(el, cb2);
-
-    cleanup1();
-    expect(firstInstance().observed.has(el)).toBe(true);
-
-    mockRO.trigger(el, 100, 50);
-    expect(cb2).toHaveBeenCalledTimes(1);
-  });
-
-  it('second cleanup correctly unobserves', async () => {
-    const { observeResize } = await getModule();
-    const el = document.createElement('div');
-    observeResize(el, vi.fn());
-    const cleanup2 = observeResize(el, vi.fn());
-    cleanup2();
-    expect(firstInstance().observed.has(el)).toBe(false);
-  });
+    return {
+      subscribe: (element, callback) => observeResize(element, callback),
+      notify: (element) => mockRO.trigger(element, 100, 50),
+      isBound: (element) =>
+        mockRO.instances.some((instance) => instance.observed.has(element)),
+    };
+  },
 });

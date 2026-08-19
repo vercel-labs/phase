@@ -273,3 +273,38 @@ describe('useSize with onResize (transient mode)', () => {
     expect(onResize).toHaveBeenLastCalledWith({ width: 300, height: 150 });
   });
 });
+
+describe('shared element', () => {
+  it('two hooks observing one element both receive sizes', async () => {
+    // Two components measuring the same node through a shared ref is ordinary
+    // composition; the pool must not let the later one silence the earlier.
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+
+    const first = renderHook(() => useSize({ ref }));
+    const second = renderHook(() => useSize({ ref }));
+
+    act(() => {
+      mockRO.trigger(el, 320, 240);
+    });
+
+    expect(first.result.current.size).toEqual({ width: 320, height: 240 });
+    expect(second.result.current.size).toEqual({ width: 320, height: 240 });
+  });
+
+  it('unmounting one hook leaves the other observing', async () => {
+    const useSize = await getHook();
+    const { ref, el } = createRefWithElement();
+
+    const first = renderHook(() => useSize({ ref }));
+    const second = renderHook(() => useSize({ ref }));
+
+    second.unmount();
+
+    act(() => {
+      mockRO.trigger(el, 500, 400);
+    });
+
+    expect(first.result.current.size).toEqual({ width: 500, height: 400 });
+  });
+});

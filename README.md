@@ -1236,15 +1236,15 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
 | `createTicker`            |             847 B |
-| `createSight`             |           1.01 kB |
-| `createLifecycle`         |           1.52 kB |
-| `createLoop`              |           2.65 kB |
-| `createScrollProgress`    |             869 B |
+| `createSight`             |           1.05 kB |
+| `createLifecycle`         |           1.55 kB |
+| `createLoop`              |           2.68 kB |
+| `createScrollProgress`    |             895 B |
 | `createRenderState`       |             490 B |
 | `createDevicePixelRatio`  |             544 B |
-| `createMutation`          |           1.17 kB |
-| `createPointer`           |           1.26 kB |
-| `createScroll`            |           1.56 kB |
+| `createMutation`          |           1.21 kB |
+| `createPointer`           |           1.29 kB |
+| `createScroll`            |           1.61 kB |
 | `createThrottle`          |             660 B |
 | `createDebounce`          |             558 B |
 | `whenIdle`                |             409 B |
@@ -1252,27 +1252,27 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           2.98 kB |
-| `useLifecycle`            |           1.81 kB |
-| `useSight`                |           1.33 kB |
-| `useCanvas`               |           3.51 kB |
-| `useMutation`             |           1.36 kB |
-| `usePointer`              |           1.47 kB |
-| `useScroll`               |            1.9 kB |
+| `useLoop`                 |              3 kB |
+| `useLifecycle`            |           1.83 kB |
+| `useSight`                |           1.36 kB |
+| `useCanvas`               |           3.58 kB |
+| `useMutation`             |           1.39 kB |
+| `usePointer`              |           1.51 kB |
+| `useScroll`               |           1.96 kB |
 | `useThrottledCallback`    |             804 B |
 | `useDebouncedCallback`    |             696 B |
 | `useTween`                |             680 B |
 | `usePresence`             |             591 B |
-| `useScrollProgress`       |             991 B |
-| `useSize`                 |             378 B |
-| `useContainerQuery`       |             384 B |
+| `useScrollProgress`       |           1.03 kB |
+| `useSize`                 |             418 B |
+| `useContainerQuery`       |             389 B |
 | `useMediaQuery`           |             246 B |
 | `usePrefersReducedMotion` |             272 B |
 | `useDevicePixelRatio`     |             231 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
 | `Presence`                |             741 B |
-| `WhenVisible`             |           1.57 kB |
+| `WhenVisible`             |           1.61 kB |
 | `WhenIdle`                |             596 B |
 | `Defer`                   |              86 B |
 | `useIdle`                 |             414 B |

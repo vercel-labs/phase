@@ -275,3 +275,38 @@ describe('page target is SSR-safe', () => {
     expect(result.current.phaseRef.current).toBe('unknown');
   });
 });
+
+describe('shared element', () => {
+  it('two hooks watching one element both see it enter view', async () => {
+    // A reveal animation and a lazy-load trigger on the same node is ordinary
+    // composition; the pool must not let the later one silence the earlier.
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+
+    const first = renderHook(() => useSight({ ref }));
+    const second = renderHook(() => useSight({ ref }));
+
+    act(() => {
+      mockIO.trigger(el, true);
+    });
+
+    expect(first.result.current.phase).toBe('visible');
+    expect(second.result.current.phase).toBe('visible');
+  });
+
+  it('unmounting one hook leaves the other watching', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+
+    const first = renderHook(() => useSight({ ref }));
+    const second = renderHook(() => useSight({ ref }));
+
+    second.unmount();
+
+    act(() => {
+      mockIO.trigger(el, true);
+    });
+
+    expect(first.result.current.phase).toBe('visible');
+  });
+});

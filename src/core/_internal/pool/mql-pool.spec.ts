@@ -1,4 +1,5 @@
 import { createMockMatchMedia } from '../../../__mocks__/match-media';
+import { describePoolContract } from './pool-contract';
 
 let mockMM: ReturnType<typeof createMockMatchMedia>;
 
@@ -136,4 +137,21 @@ describe('readMediaQuery', () => {
     mockMM.setMatches('(max-width: 600px)', true);
     expect(cb).not.toHaveBeenCalled();
   });
+});
+
+// ---------------------------------------------------------------------------
+// Shared pool contract
+// ---------------------------------------------------------------------------
+
+describePoolContract<string>({
+  keys: () => ['(min-width: 600px)', '(min-width: 900px)'],
+  create: async () => {
+    const { subscribeMediaQuery } = await getModule();
+    return {
+      subscribe: (query, callback) =>
+        subscribeMediaQuery(query, () => callback()),
+      notify: (query) => mockMM.setMatches(query, true),
+      isBound: (query) => mockMM.listenerCount(query) > 0,
+    };
+  },
 });
