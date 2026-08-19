@@ -773,6 +773,20 @@ export const SIGNAL_EXAMPLES = {
         content:
           'const width = surface.offsetWidth;\nreturn <canvas onPointerMove={this.handleCanvasPointerMove} onTouchMove={props.onTouchMove} />;\n',
       },
+      {
+        // Regression: an unspaced `<` comparison in an earlier prop must not
+        // read as a tag open — the prop belongs to a capitalized component.
+        file: 'src/gauge.tsx',
+        content:
+          "return <Overlay className={x <y ? 'a' : 'b'} onPointerMove={(e) => { const r = el.getBoundingClientRect(); move(r.left); }} />;\n",
+      },
+      {
+        // Regression: an arrow inside a call expression is render-time code,
+        // not the move handler.
+        file: 'src/registry.tsx',
+        content:
+          'return <div onPointerMove={handlers.find((h) => h.el.offsetWidth > 0)} />;\n',
+      },
     ],
   },
   'redundant-mutation-observers': {

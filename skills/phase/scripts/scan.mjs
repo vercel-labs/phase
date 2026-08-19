@@ -157,9 +157,9 @@ export function scanFile(relPath, content, diag = null) {
   const codeLines = maskStrings(uncommentedLines);
   const uncommentedContent = uncommentedLines.join('\n');
   const codeContent = codeLines.join('\n');
-  const analysis = analyzeFile(codeLines);
-  const moveAnalysis =
-    type === 'js' ? analyzeMoveHandlers(codeLines) : EMPTY_MOVE_ANALYSIS;
+  const sourceIndex = buildSourceIndex(codeLines, codeContent);
+  const analysis = analyzeFile(sourceIndex);
+  const moveAnalysis = analyzeMoveHandlers(type, sourceIndex);
 
   if (diag) diag.analyzed++;
 
@@ -1400,8 +1400,7 @@ const INTERVAL_CALL = /\bsetInterval\s*(?:\?\.)?\s*\(/;
  * setTimeout share the callback set and the cycle analysis, differing only in
  * the call pattern.
  */
-function analyzeFile(lines) {
-  const sourceIndex = buildSourceIndex(lines);
+function analyzeFile(sourceIndex) {
   const { callbacks, callbacksByName } = collectCallbacks(sourceIndex);
   const cycleOf = (pattern) =>
     analyzeSchedulingCycle(sourceIndex, callbacks, callbacksByName, pattern);
@@ -1519,6 +1518,14 @@ function analyzeSchedulingCycle(
 const EMPTY_MOVE_ANALYSIS = { propRanges: new Map(), handlerLines: new Set() };
 
 const MOVE_HANDLER_PROP = /\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/;
+const MOVE_HANDLER_PROPS = new RegExp(MOVE_HANDLER_PROP.source, 'g');
+
+// A prop value only counts as an inline handler when it starts as one:
+// a function expression, parenthesized arrow params, or a single-param
+// arrow. An arrow deeper in the value (`handlers.find(h => h.active)`)
+// belongs to render-time code, not to the move event.
+const INLINE_HANDLER_VALUE =
+  /^(?:async\s+)?(?:function\b|\([^)]*\)\s*(?::\s*[^=]+)?=>|[A-Za-z_$][\w$]*\s*=>)/;
 
 // A useCallback wrapper hides the arrow from collectCallbacks' declaration
 // patterns, and it is the standard way React code names a move handler.
@@ -1540,11 +1547,15 @@ const MOVE_HANDLER_TAG_WINDOW = 800;
  *
  * Returns prop line → handler line range, plus the set of lines inside any
  * associated handler body (used to rank findings there as per-frame).
+ *
+ * Gated on a cheap test: almost no file has a JSX move prop, and the full
+ * association is a second callback-collection pass over the source.
  */
-function analyzeMoveHandlers(lines) {
-  const sourceIndex = buildSourceIndex(lines);
+function analyzeMoveHandlers(type, sourceIndex) {
   const { source, lineStarts, bracePairs } = sourceIndex;
-  if (!MOVE_HANDLER_PROP.test(source)) return EMPTY_MOVE_ANALYSIS;
+  if (type !== 'js' || !MOVE_HANDLER_PROP.test(source)) {
+    return EMPTY_MOVE_ANALYSIS;
+  }
 
   const { callbacksByName } = collectCallbacks(sourceIndex);
   for (const match of source.matchAll(USE_CALLBACK_BINDING)) {
@@ -1556,9 +1567,7 @@ function analyzeMoveHandlers(lines) {
   const propRanges = new Map();
   const handlerLines = new Set();
 
-  for (const match of source.matchAll(
-    new RegExp(MOVE_HANDLER_PROP.source, 'g'),
-  )) {
+  for (const match of source.matchAll(MOVE_HANDLER_PROPS)) {
     if (!intrinsicTagOwns(source, match.index)) continue;
     const open = match.index + match[0].lastIndexOf('{');
     const close = bracePairs.get(open);
@@ -1574,7 +1583,7 @@ function analyzeMoveHandlers(lines) {
       if (!callback) continue;
       start = callback.start;
       end = callback.end;
-    } else if (/[=]>|^(?:async\s+)?function\b/.test(value)) {
+    } else if (INLINE_HANDLER_VALUE.test(value)) {
       // Inline handler: the prop's brace-balanced value is the body.
       start = open;
       end = close;
@@ -1600,13 +1609,24 @@ function analyzeMoveHandlers(lines) {
 // The prop must belong to an intrinsic JSX tag: a lowercase tag name proves a
 // DOM element, so the handler runs at DOM event frequency. A capitalized
 // component may debounce, transform, or never attach the prop. Walks back to
-// the nearest tag open, then forward tracking JSX expression braces: a `>`
-// at brace depth zero closes the tag, so a prop past it belongs elsewhere.
+// the nearest tag open at attribute level, then forward tracking JSX
+// expression braces: a `>` at brace depth zero closes the tag, so a prop past
+// it belongs elsewhere. The backward walk tracks braces too: a `<` inside an
+// earlier prop's expression (`className={x <y ? ...}`) is a comparison, not
+// the tag this prop belongs to.
 function intrinsicTagOwns(source, propIndex) {
   const from = Math.max(0, propIndex - MOVE_HANDLER_TAG_WINDOW);
   let tagStart = -1;
+  let backDepth = 0;
   for (let i = propIndex - 1; i >= from; i--) {
-    if (source[i] === '<' && /[A-Za-z]/.test(source[i + 1] ?? '')) {
+    const ch = source[i];
+    if (ch === '}') backDepth++;
+    else if (ch === '{') backDepth--;
+    else if (
+      ch === '<' &&
+      backDepth <= 0 &&
+      /[A-Za-z]/.test(source[i + 1] ?? '')
+    ) {
       tagStart = i;
       break;
     }
@@ -1623,8 +1643,8 @@ function intrinsicTagOwns(source, propIndex) {
   return /[a-z]/.test(source[tagStart + 1]);
 }
 
-function buildSourceIndex(lines) {
-  const source = lines.join('\n');
+function buildSourceIndex(lines, joined = null) {
+  const source = joined ?? lines.join('\n');
   const lineStarts = [0];
   for (let i = 0; i < source.length; i++) {
     if (source.charCodeAt(i) === 10) lineStarts.push(i + 1);
@@ -1907,12 +1927,8 @@ function scanSignal(
       // sit far outside the context window; the listener form keeps the
       // window. Both forms share one signal, so the match decides the policy.
       if (signal.moveHandlerReads && /^on[A-Z]/.test(match[0])) {
-        const range = moveAnalysis.propRanges.get(i);
-        if (!range) continue;
-        const body = uncommentedLines
-          .slice(range.start, range.end + 1)
-          .join('\n');
-        if (!signal.moveHandlerReads.test(body)) continue;
+        if (!matchesMoveHandlerBody(signal, i, moveAnalysis, uncommentedLines))
+          continue;
       } else {
         if (!matchesAnalysisPolicy(signal, match[0], matchLine, i, analysis))
           continue;
@@ -1943,6 +1959,19 @@ function scanSignal(
     if (signal.perFile) break;
   }
   return findings;
+}
+
+/**
+ * Whether a JSX move-prop line has an associated handler body containing a
+ * layout read (see analyzeMoveHandlers). Unassociated props — custom
+ * components, member-expression handlers, names the file does not define —
+ * never match.
+ */
+function matchesMoveHandlerBody(signal, line, moveAnalysis, uncommentedLines) {
+  const range = moveAnalysis.propRanges.get(line);
+  if (!range) return false;
+  const body = uncommentedLines.slice(range.start, range.end + 1).join('\n');
+  return signal.moveHandlerReads.test(body);
 }
 
 function matchesAnalysisPolicy(signal, match, matchLine, line, analysis) {
