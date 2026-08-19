@@ -270,7 +270,8 @@ export const SIGNAL_EXAMPLES = {
           "const mql = window.matchMedia('(min-width: 768px)');\nmql.addEventListener('change', onChange);\n",
       },
       {
-        // Legacy Safari subscription API; still a pooled-subscription miss.
+        // Deprecated MediaQueryList listener API; still a pooled-subscription
+        // miss.
         file: 'src/legacy.ts',
         content:
           "const mql = window.matchMedia('(pointer: coarse)');\nmql.addListener(onChange);\n",
@@ -295,9 +296,9 @@ export const SIGNAL_EXAMPLES = {
           "const coarse = window.matchMedia('(pointer: coarse)').matches;\n",
       },
       {
-        // Regression: a listener on an unrelated receiver is not evidence
-        // that the snapshot above subscribed. Whole-file listener vocabulary
-        // reported every file that happened to contain both.
+        // Regression: a listener on an unrelated receiver is not evidence that
+        // the snapshot above subscribed. Looking for listener vocabulary
+        // anywhere in the file would report this.
         file: 'src/form.ts',
         content:
           "const coarse = window.matchMedia('(pointer: coarse)').matches;\nsetLayout(coarse);\ninput.addEventListener('change', onInput);\n",
@@ -402,8 +403,8 @@ export const SIGNAL_EXAMPLES = {
           "setInterval(() => {\n  track.style.transform = 'translateX(' + offset + 'px)';\n}, 3000);\n",
       },
       {
-        // A timeout that reschedules itself is an interval spelled the long
-        // way, and keeps firing off-screen just the same.
+        // A timeout that reschedules itself recurs like an interval, and keeps
+        // firing off-screen the same way.
         file: 'src/pulse.ts',
         content:
           'function step() {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(step, 1000);\n}\ntimer = setTimeout(step, 1000);\n',

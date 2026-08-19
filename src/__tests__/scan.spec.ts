@@ -402,7 +402,7 @@ describe('media query subscription evidence', () => {
     expect(subscriptions(content)).toEqual([]);
   });
 
-  it('does not read an unrelated receiver as the snapshot subscribing', () => {
+  it('does not count a listener on an unrelated receiver', () => {
     expect(
       subscriptions(
         "const coarse = window.matchMedia('(pointer: coarse)').matches;\ninput.addEventListener('change', onInput);\n",
@@ -441,7 +441,15 @@ describe('recurring timer evidence', () => {
     expect(timers(content)).toEqual([]);
   });
 
-  it('still reports the style write a dropped timer finding covered', () => {
+  it('does not let a one-shot timeout suppress an interval on the same line', () => {
+    expect(
+      timers(
+        'let t;\nlet i;\nt = setTimeout(reset, 100); i = setInterval(() => { el.style.opacity = v(); }, 16);\n',
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('still reports the style write behind a dropped timer finding', () => {
     const signals = scanFile(
       'src/a.ts',
       "node.style.transform = 'scale(.98)';\nconst id = setTimeout(() => {\n  node.style.transform = '';\n}, 100);\n",
