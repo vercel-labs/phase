@@ -270,9 +270,15 @@ export const SIGNAL_EXAMPLES = {
           "const mql = window.matchMedia('(min-width: 768px)');\nmql.addEventListener('change', onChange);\n",
       },
       {
+        // Legacy Safari subscription API; still a pooled-subscription miss.
+        file: 'src/legacy.ts',
+        content:
+          "const mql = window.matchMedia('(pointer: coarse)');\nmql.addListener(onChange);\n",
+      },
+      {
         file: 'src/motion.ts',
         content:
-          "const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;\n",
+          "window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', sync);\n",
       },
     ],
     noMatch: [
@@ -280,6 +286,21 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/breakpoint.ts',
         content:
           "import { useMediaQuery } from 'phase/react';\nconst isWide = useMediaQuery('(min-width: 768px)');\n",
+      },
+      {
+        // Regression: a one-shot `.matches` read subscribes to nothing, so
+        // there is no listener to leak and nothing for the pool to key.
+        file: 'src/pointer.ts',
+        content:
+          "const coarse = window.matchMedia('(pointer: coarse)').matches;\n",
+      },
+      {
+        // Regression: a listener on an unrelated receiver is not evidence
+        // that the snapshot above subscribed. Whole-file listener vocabulary
+        // reported every file that happened to contain both.
+        file: 'src/form.ts',
+        content:
+          "const coarse = window.matchMedia('(pointer: coarse)').matches;\nsetLayout(coarse);\ninput.addEventListener('change', onInput);\n",
       },
     ],
   },
@@ -380,6 +401,13 @@ export const SIGNAL_EXAMPLES = {
         content:
           "setInterval(() => {\n  track.style.transform = 'translateX(' + offset + 'px)';\n}, 3000);\n",
       },
+      {
+        // A timeout that reschedules itself is an interval spelled the long
+        // way, and keeps firing off-screen just the same.
+        file: 'src/pulse.ts',
+        content:
+          'function step() {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(step, 1000);\n}\ntimer = setTimeout(step, 1000);\n',
+      },
     ],
     noMatch: [
       {
@@ -388,6 +416,21 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/queue.ts',
         content:
           'setTimeout(() => {\n  const position = queue.indexOf(job);\n  report(position);\n}, 1000);\n',
+      },
+      {
+        // Regression: a one-shot timeout that ends a transition runs once and
+        // stops. `js-opacity-transform` still covers the style write.
+        file: 'src/press.ts',
+        content:
+          "node.style.transform = 'scale(.98)';\nconst id = setTimeout(() => {\n  node.style.transform = '';\n}, 100);\n",
+      },
+      {
+        // Regression: a timeout backing up `transitionend` is a reliability
+        // fallback, not background animation, even surrounded by transform
+        // vocabulary.
+        file: 'src/reveal.ts',
+        content:
+          "node.style.transform = 'translateY(0)';\nnode.addEventListener('transitionend', onDone, { once: true });\nconst fallback = setTimeout(onDone, 320);\n",
       },
     ],
   },

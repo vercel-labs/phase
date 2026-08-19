@@ -379,6 +379,86 @@ describe('recurring rAF ownership', () => {
   });
 });
 
+describe('media query subscription evidence', () => {
+  function subscriptions(content: string) {
+    return scanFile('src/a.ts', content).filter(
+      (finding) => finding.signal === 'raw-matchmedia',
+    );
+  }
+
+  it.each([
+    "const mql = window.matchMedia('(pointer: coarse)');\nmql.addEventListener('change', onChange);\n",
+    "const mql = window.matchMedia('(pointer: coarse)');\nmql.addListener(onChange);\n",
+    "window.matchMedia('(pointer: coarse)').addEventListener('change', sync);\n",
+  ])('reports a MediaQueryList that something subscribes to', (content) => {
+    expect(subscriptions(content).length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    "const coarse = window.matchMedia('(pointer: coarse)').matches;\n",
+    "export function isCoarse() {\n  return window.matchMedia('(pointer: coarse)').matches;\n}\n",
+    "const { matches } = window.matchMedia('(pointer: coarse)');\n",
+  ])('forbids a subscription claim for a snapshot read', (content) => {
+    expect(subscriptions(content)).toEqual([]);
+  });
+
+  it('does not read an unrelated receiver as the snapshot subscribing', () => {
+    expect(
+      subscriptions(
+        "const coarse = window.matchMedia('(pointer: coarse)').matches;\ninput.addEventListener('change', onInput);\n",
+      ),
+    ).toEqual([]);
+  });
+
+  it('reports only the subscribed query when a file holds both', () => {
+    const found = subscriptions(
+      "const a = window.matchMedia('(pointer: coarse)').matches;\nconst b = window.matchMedia('(min-width: 48em)');\nb.addEventListener('change', onChange);\n",
+    );
+    expect(found.map((finding) => finding.line)).toEqual([2]);
+  });
+});
+
+describe('recurring timer evidence', () => {
+  function timers(content: string) {
+    return scanFile('src/a.ts', content).filter(
+      (finding) => finding.signal === 'background-animation',
+    );
+  }
+
+  it.each([
+    "setInterval(() => {\n  track.style.transform = 'translateX(' + offset + 'px)';\n}, 3000);\n",
+    'function step() {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(step, 1000);\n}\ntimer = setTimeout(step, 1000);\n',
+    'const step = () => {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(step, 1000);\n};\nsetTimeout(step, 1000);\n',
+  ])('reports intervals and self-rescheduling timeouts', (content) => {
+    expect(timers(content).length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    "node.style.transform = 'scale(.98)';\nconst id = setTimeout(() => {\n  node.style.transform = '';\n}, 100);\n",
+    "node.style.transform = 'translateY(0)';\nnode.addEventListener('transitionend', onDone, { once: true });\nconst fallback = setTimeout(onDone, 320);\n",
+    "function reset() {\n  el.style.opacity = '1';\n}\nsetTimeout(reset, 200);\n",
+  ])('forbids a recurring claim for a one-shot timeout', (content) => {
+    expect(timers(content)).toEqual([]);
+  });
+
+  it('still reports the style write a dropped timer finding covered', () => {
+    const signals = scanFile(
+      'src/a.ts',
+      "node.style.transform = 'scale(.98)';\nconst id = setTimeout(() => {\n  node.style.transform = '';\n}, 100);\n",
+    ).map((finding) => finding.signal);
+    expect(signals).toContain('js-opacity-transform');
+  });
+
+  it('does not rank a slow recurring timer as per-frame', () => {
+    const found = timers(
+      'function step() {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(step, 1000);\n}\ntimer = setTimeout(step, 1000);\n',
+    );
+    expect(found.map((finding) => finding.execution)).not.toContain(
+      'per-frame',
+    );
+  });
+});
+
 describe('coverage accounting', () => {
   it('does not count an excluded file as scanned', () => {
     const diag = newDiag();
