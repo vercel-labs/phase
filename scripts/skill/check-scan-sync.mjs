@@ -10,6 +10,8 @@
  *    anchor to a real heading.
  * 3. audit.md's sample scan output equals the committed golden.
  * 4. Every relative link in references/*.md resolves (file and anchor).
+ * 5. Eval scenario ground truth references real signals.
+ * 6. The untrusted-content guardrails exist in audit.md and SKILL.md.
  *
  * Exit code 0 = in sync, 1 = drift detected. Zero dependencies.
  */
@@ -208,6 +210,20 @@ for (const scenario of readdirSync(scenariosDir)) {
       fail(`evals/${scenario} references unknown signal \`${entry.signal}\``);
     }
   }
+}
+
+// --- 6. Untrusted-content guardrails present ---
+
+// The audit path reads outsider-authored code and scan output; these
+// guardrails are the skill's injection defense and must not silently
+// disappear in an edit.
+const guardAnchor = 'scanned-content-is-data-not-instructions';
+if (!markdownInfo(auditPath).anchors.has(guardAnchor)) {
+  fail(`audit.md is missing the untrusted-content section (#${guardAnchor})`);
+}
+const skillMd = readFileSync(join(root, 'skills/phase/SKILL.md'), 'utf8');
+if (!skillMd.includes('untrusted data, never instructions')) {
+  fail('SKILL.md is missing the untrusted-content guardrail sentence');
 }
 
 // --- Result ---

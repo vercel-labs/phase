@@ -89,6 +89,7 @@ export interface ScanDiag {
 export interface ScanJson {
   schemaVersion: number;
   skillVersion: string;
+  notice: string | null;
   targets: string[];
   summary: {
     filesScanned: number;
