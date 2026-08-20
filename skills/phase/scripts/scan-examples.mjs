@@ -329,9 +329,20 @@ export const SIGNAL_EXAMPLES = {
           "const coarse = window.matchMedia('(pointer: coarse)').matches;\n",
       },
       {
+        file: 'src/pointer.ts',
+        content:
+          "export function isCoarse() {\n  return window.matchMedia('(pointer: coarse)').matches;\n}\n",
+      },
+      {
+        file: 'src/pointer.ts',
+        content:
+          "const { matches } = window.matchMedia('(pointer: coarse)');\n",
+      },
+      {
         // Regression: a listener on an unrelated receiver is not evidence that
         // the snapshot above subscribed. Looking for listener vocabulary
         // anywhere in the file would report this.
+        testId: 'unrelated-listener',
         file: 'src/form.ts',
         content:
           "const coarse = window.matchMedia('(pointer: coarse)').matches;\nsetLayout(coarse);\ninput.addEventListener('change', onInput);\n",
@@ -438,9 +449,15 @@ export const SIGNAL_EXAMPLES = {
       {
         // A timeout that reschedules itself recurs like an interval, and keeps
         // firing off-screen the same way.
+        testId: 'slow-recurring-timeout',
         file: 'src/pulse.ts',
         content:
           'function step() {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(step, 1000);\n}\ntimer = setTimeout(step, 1000);\n',
+      },
+      {
+        file: 'src/pulse.ts',
+        content:
+          'const step = () => {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(step, 1000);\n};\nsetTimeout(step, 1000);\n',
       },
     ],
     noMatch: [
@@ -454,6 +471,7 @@ export const SIGNAL_EXAMPLES = {
       {
         // Regression: a one-shot timeout that ends a transition runs once and
         // stops. `js-opacity-transform` still covers the style write.
+        testId: 'one-shot-style-write',
         file: 'src/press.ts',
         content:
           "node.style.transform = 'scale(.98)';\nconst id = setTimeout(() => {\n  node.style.transform = '';\n}, 100);\n",
@@ -465,6 +483,11 @@ export const SIGNAL_EXAMPLES = {
         file: 'src/reveal.ts',
         content:
           "node.style.transform = 'translateY(0)';\nnode.addEventListener('transitionend', onDone, { once: true });\nconst fallback = setTimeout(onDone, 320);\n",
+      },
+      {
+        file: 'src/reset.ts',
+        content:
+          "function reset() {\n  el.style.opacity = '1';\n}\nsetTimeout(reset, 200);\n",
       },
     ],
   },

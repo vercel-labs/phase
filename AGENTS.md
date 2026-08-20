@@ -20,6 +20,7 @@ pnpm format            # Check formatting (oxfmt --check)
 pnpm format:fix        # Fix formatting (oxfmt)
 pnpm size              # Build and check bundle sizes (size-limit)
 pnpm size:readme       # Build and update README.md bundle size table
+pnpm goldens           # Regenerate scanner goldens and the audit sample
 pnpm validate          # Run typecheck, lint, format, test, and skill:check in parallel
 pnpm skill:check       # Verify every public export has a skill reference (drift guard)
 pnpm skill:build       # Regenerate skills/phase/metadata.json from SKILL.md
@@ -227,7 +228,7 @@ The audit scanner (`skills/phase/scripts/scan.mjs`) detects anti-pattern candida
    - **Severity is what it costs when real; execution is what it costs now.** The scanner classifies each JS finding as per-frame or incidental from the surrounding code and ranks accordingly, so a signal does not need a severity bump to be noticed in a hot path. Set severity for the worst case and let the ranking sort the rest.
 4. Probe, don't just read: run the scanner against a real repo (`node skills/phase/scripts/scan.mjs <path>`), hand-classify a sample of findings, and set the noise tier from what you observe. Record the provenance in the PR description.
 5. Add the row to audit.md's signal table. `pnpm skill:check` fails CI when the table or fix pointers drift from the catalog; `pnpm test` executes the examples and eval ground truth.
-6. If the signal fires on the planted-defect fixture (`skills/phase/evals/scenarios/audit-planted-defects/workspace`), regenerate the goldens (`scan.mjs workspace > expected-scan.txt`, `--json` likewise) and run `pnpm skill:build` (regenerates audit.md's sample block).
+6. If the signal fires on the planted-defect fixture (`skills/phase/evals/scenarios/audit-planted-defects/workspace`), run `pnpm goldens` to regenerate both goldens and audit.md's sample block in the required order.
 7. Run `pnpm format:fix && pnpm validate`.
 
 When a real-world audit failure surfaces (wrong recommendation, missed context), encode it as an eval scenario under `skills/phase/evals/scenarios/` (see `ssr-semantics-guard` for the pattern) so it can never regress silently. Put everything machine-checkable in the scenario's `scan.assertions` block (`required`, `requiredAbsent`, `context`): `src/__tests__/scan.spec.ts` executes those assertions against the fixture workspace on every run, so a claim recorded there is a gate, not a note. If a fixture workspace needs a `package.json`, keep it free of `scripts` and `dependencies`: pnpm's recursive runs discover nested projects, so a fixture script named `test` or `lint` would execute during `pnpm validate`.
