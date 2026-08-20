@@ -6,9 +6,13 @@
 
 import type { ScanExample } from './scan.d.mts';
 
+export interface SignalExample extends ScanExample {
+  testId?: string;
+}
+
 export interface SignalExamples {
-  match: ScanExample[];
-  noMatch: ScanExample[];
+  match: SignalExample[];
+  noMatch: SignalExample[];
 }
 
 export declare const SIGNAL_EXAMPLES: Record<string, SignalExamples>;

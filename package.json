@@ -23,6 +23,7 @@
     "format:fix": "oxfmt .",
     "size": "size-limit",
     "size:readme": "node scripts/update-size-table.mjs",
+    "goldens": "node scripts/skill/regen-goldens.mjs",
     "prepublishOnly": "pnpm build",
     "prepare": "lefthook install || true",
     "validate": "pnpm run --parallel '/^(typecheck|lint|format|test|skill:check)$/'",

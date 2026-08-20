@@ -46,6 +46,26 @@ interface CliRun {
   stderr: string;
 }
 
+function signalExample(
+  signal: string,
+  kind: 'match' | 'noMatch',
+  testId: string,
+) {
+  const examples = SIGNAL_EXAMPLES[signal];
+  if (!examples) throw new Error(`Missing scanner examples for ${signal}`);
+  const example = examples[kind].find(
+    (candidate) => candidate.testId === testId,
+  );
+  if (!example) {
+    throw new Error(`Missing ${kind} example ${testId} for ${signal}`);
+  }
+  return example;
+}
+
+function normalizeSkillVersion(result: Record<string, unknown>) {
+  return { ...result, skillVersion: '<normalized>' };
+}
+
 function runCli(
   args: string[],
   cwd: string = SCENARIO_DIR,
@@ -419,26 +439,15 @@ describe('media query subscription evidence', () => {
     );
   }
 
-  it.each([
-    "const mql = window.matchMedia('(pointer: coarse)');\nmql.addEventListener('change', onChange);\n",
-    "const mql = window.matchMedia('(pointer: coarse)');\nmql.addListener(onChange);\n",
-    "window.matchMedia('(pointer: coarse)').addEventListener('change', sync);\n",
-  ])('reports a MediaQueryList that something subscribes to', (content) => {
-    expect(subscriptions(content).length).toBeGreaterThan(0);
-  });
-
-  it.each([
-    "const coarse = window.matchMedia('(pointer: coarse)').matches;\n",
-    "export function isCoarse() {\n  return window.matchMedia('(pointer: coarse)').matches;\n}\n",
-    "const { matches } = window.matchMedia('(pointer: coarse)');\n",
-  ])('forbids a subscription claim for a snapshot read', (content) => {
-    expect(subscriptions(content)).toEqual([]);
-  });
-
   it('does not count a listener on an unrelated receiver', () => {
+    const example = signalExample(
+      'raw-matchmedia',
+      'noMatch',
+      'unrelated-listener',
+    );
     expect(
-      subscriptions(
-        "const coarse = window.matchMedia('(pointer: coarse)').matches;\ninput.addEventListener('change', onInput);\n",
+      scanFile(example.file, example.content).filter(
+        (finding) => finding.signal === 'raw-matchmedia',
       ),
     ).toEqual([]);
   });
@@ -458,22 +467,6 @@ describe('recurring timer evidence', () => {
     );
   }
 
-  it.each([
-    "setInterval(() => {\n  track.style.transform = 'translateX(' + offset + 'px)';\n}, 3000);\n",
-    'function step() {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(step, 1000);\n}\ntimer = setTimeout(step, 1000);\n',
-    'const step = () => {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(step, 1000);\n};\nsetTimeout(step, 1000);\n',
-  ])('reports intervals and self-rescheduling timeouts', (content) => {
-    expect(timers(content).length).toBeGreaterThan(0);
-  });
-
-  it.each([
-    "node.style.transform = 'scale(.98)';\nconst id = setTimeout(() => {\n  node.style.transform = '';\n}, 100);\n",
-    "node.style.transform = 'translateY(0)';\nnode.addEventListener('transitionend', onDone, { once: true });\nconst fallback = setTimeout(onDone, 320);\n",
-    "function reset() {\n  el.style.opacity = '1';\n}\nsetTimeout(reset, 200);\n",
-  ])('forbids a recurring claim for a one-shot timeout', (content) => {
-    expect(timers(content)).toEqual([]);
-  });
-
   it('does not let a one-shot timeout suppress an interval on the same line', () => {
     expect(
       timers(
@@ -483,16 +476,25 @@ describe('recurring timer evidence', () => {
   });
 
   it('still reports the style write behind a dropped timer finding', () => {
-    const signals = scanFile(
-      'src/a.ts',
-      "node.style.transform = 'scale(.98)';\nconst id = setTimeout(() => {\n  node.style.transform = '';\n}, 100);\n",
-    ).map((finding) => finding.signal);
+    const example = signalExample(
+      'background-animation',
+      'noMatch',
+      'one-shot-style-write',
+    );
+    const signals = scanFile(example.file, example.content).map(
+      (finding) => finding.signal,
+    );
     expect(signals).toContain('js-opacity-transform');
   });
 
   it('does not rank a slow recurring timer as per-frame', () => {
-    const found = timers(
-      'function step() {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(step, 1000);\n}\ntimer = setTimeout(step, 1000);\n',
+    const example = signalExample(
+      'background-animation',
+      'match',
+      'slow-recurring-timeout',
+    );
+    const found = scanFile(example.file, example.content).filter(
+      (finding) => finding.signal === 'background-animation',
     );
     expect(found.map((finding) => finding.execution)).not.toContain(
       'per-frame',
@@ -881,7 +883,9 @@ describe('scan CLI', () => {
     const run = runCli(['--json', 'workspace']);
     expect(run.status).toBe(0);
     const actual = JSON.parse(run.stdout);
-    expect(actual).toEqual(golden);
+    expect(normalizeSkillVersion(actual)).toEqual(
+      normalizeSkillVersion(golden),
+    );
     const metadata = JSON.parse(readFileSync(METADATA, 'utf8'));
     expect(actual.skillVersion).toBe(metadata.version);
   });
