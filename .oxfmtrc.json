@@ -7,6 +7,7 @@
   "ignorePatterns": [
     "**/pnpm-lock.yaml",
     "**/skills/phase/evals/**",
+    "**/skills/phase/scripts/scan.mjs",
     "**/.cache/**",
     "**/.claude/**",
     "**/.git/**",

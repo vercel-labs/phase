@@ -19,7 +19,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { SIGNALS } from '../../skills/phase/scripts/scan.mjs';
+import { SIGNALS } from '../../scanner/scan.mjs';
 
 const root = resolve(import.meta.dirname, '..', '..');
 const refsDir = join(root, 'skills', 'phase', 'references');
