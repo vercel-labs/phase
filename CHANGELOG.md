@@ -1,5 +1,11 @@
 # phase
 
+## 0.3.2
+
+### Patch Changes
+
+- Give `useTween` a dedicated reduced-motion type and remove the unsupported `'pause'` mode.
+
 ## 0.3.1
 
 ### Patch Changes

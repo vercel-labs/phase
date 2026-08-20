@@ -12,14 +12,14 @@ const value: number = useTween(options);
 
 ### Options
 
-| Option          | Type                                | Default        | Description                            |
-| --------------- | ----------------------------------- | -------------- | -------------------------------------- |
-| `to`            | `number`                            | required       | Value to animate toward                |
-| `duration`      | `number`                            | `300`          | Animation duration in ms               |
-| `delay`         | `number`                            | `0`            | Delay before starting in ms            |
-| `easing`        | `(progress: number) => number`      | `easeOutCubic` | Easing function                        |
-| `enabled`       | `boolean`                           | `true`         | When `false`, jumps to the destination |
-| `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'complete'`   | Behavior under reduced motion          |
+| Option          | Type                           | Default        | Description                            |
+| --------------- | ------------------------------ | -------------- | -------------------------------------- |
+| `to`            | `number`                       | required       | Value to animate toward                |
+| `duration`      | `number`                       | `300`          | Animation duration in ms               |
+| `delay`         | `number`                       | `0`            | Delay before starting in ms            |
+| `easing`        | `(progress: number) => number` | `easeOutCubic` | Easing function                        |
+| `enabled`       | `boolean`                      | `true`         | When `false`, jumps to the destination |
+| `reducedMotion` | `'complete' \| 'ignore'`       | `'complete'`   | Behavior under reduced motion          |
 
 ### Return
 
@@ -60,7 +60,7 @@ Returns the current animated `number`.
 
 ## Reduced motion
 
-Default `'complete'`: jumps to the destination instantly. The value still arrives at its destination. The animation is skipped. This is the right default for tweens that must reach their final state.
+Default `'complete'` checks the preference when a tween starts and jumps to `to` when reduced motion is already preferred. `'ignore'` skips the preference read. `useTween` does not subscribe to preference changes while running because a tween is finite, bounded work. The exported `TweenReducedMotion` type is `'complete' | 'ignore'`; finite tweens do not support `'pause'` because freezing between endpoints leaves the value incomplete.
 
 ## See also
 

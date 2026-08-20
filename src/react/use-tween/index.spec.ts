@@ -1,6 +1,9 @@
 import { renderHook, act } from '@testing-library/react';
 
+import type { TweenReducedMotion } from '..';
 import { createMockMatchMedia } from '../../__mocks__/match-media';
+
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
 let mockMM: ReturnType<typeof createMockMatchMedia>;
 
@@ -12,6 +15,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.resetModules();
 });
@@ -22,6 +26,12 @@ async function getHook() {
 }
 
 describe('useTween', () => {
+  it('exports only the supported reduced-motion modes', () => {
+    expectTypeOf<TweenReducedMotion>().toEqualTypeOf<'complete' | 'ignore'>();
+    // @ts-expect-error useTween cannot pause a finite tween
+    expectTypeOf<'pause'>().toMatchTypeOf<TweenReducedMotion>();
+  });
+
   it('returns the initial value on first render (no animation)', async () => {
     const useTween = await getHook();
     const { result } = renderHook(() => useTween({ to: 100 }));
@@ -162,7 +172,8 @@ describe('useTween', () => {
   });
 
   it('reducedMotion complete jumps to the destination', async () => {
-    mockMM.setMatches('(prefers-reduced-motion: reduce)', true);
+    mockMM.setMatches(REDUCED_MOTION_QUERY, true);
+    const requestSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
     const useTween = await getHook();
     const { result, rerender } = renderHook(
       ({ to }: { to: number }) =>
@@ -171,12 +182,15 @@ describe('useTween', () => {
     );
 
     rerender({ to: 100 });
-    // Should jump immediately
     expect(result.current).toBe(100);
+    expect(requestSpy).not.toHaveBeenCalled();
   });
 
   it('reducedMotion ignore still animates', async () => {
-    mockMM.setMatches('(prefers-reduced-motion: reduce)', true);
+    mockMM.setMatches(REDUCED_MOTION_QUERY, true);
+    const matchMediaSpy = vi.fn(mockMM.mockMatchMedia);
+    vi.stubGlobal('matchMedia', matchMediaSpy);
+    vi.resetModules();
     const useTween = await getHook();
     const { result, rerender } = renderHook(
       ({ to }: { to: number }) =>
@@ -187,6 +201,22 @@ describe('useTween', () => {
     rerender({ to: 100 });
     act(() => vi.advanceTimersByTime(150));
     // Should be animating, not jumped
+    expect(result.current).toBeGreaterThan(0);
+    expect(result.current).toBeLessThan(100);
+    expect(matchMediaSpy).not.toHaveBeenCalled();
+  });
+
+  it('animates when matchMedia is unavailable', async () => {
+    vi.stubGlobal('matchMedia', undefined);
+    vi.resetModules();
+    const useTween = await getHook();
+    const { result, rerender } = renderHook(
+      ({ to }: { to: number }) => useTween({ to, duration: 300 }),
+      { initialProps: { to: 0 } },
+    );
+
+    expect(() => rerender({ to: 100 })).not.toThrow();
+    act(() => vi.advanceTimersByTime(150));
     expect(result.current).toBeGreaterThan(0);
     expect(result.current).toBeLessThan(100);
   });

@@ -748,7 +748,7 @@ const opacity = useTween({ to: isVisible ? 1 : 0, duration: 300 });
 
 Use `useTween` for single values where the render is cheap (counters, progress bars, opacity). Use `useLoop` when animating many elements or doing canvas work, since per-frame `setState` doesn't scale.
 
-Reduced motion default: `'complete'` (jumps to the destination instantly). The value still reaches its destination; it skips the animation.
+Reduced motion default: `'complete'` checks the preference when a tween starts and jumps to the destination when needed. Set `reducedMotion: 'ignore'` to skip the preference read. The exported `TweenReducedMotion` type is `'complete' | 'ignore'`; finite tweens do not support `'pause'` because freezing between endpoints leaves the value incomplete.
 
 ### usePresence
 
@@ -1259,23 +1259,23 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useMutation`             |           1.39 kB |
 | `usePointer`              |           1.51 kB |
 | `useScroll`               |           1.96 kB |
-| `useThrottledCallback`    |             804 B |
-| `useDebouncedCallback`    |             696 B |
-| `useTween`                |             680 B |
+| `useThrottledCallback`    |             795 B |
+| `useDebouncedCallback`    |             686 B |
+| `useTween`                |             654 B |
 | `usePresence`             |             591 B |
 | `useScrollProgress`       |           1.03 kB |
-| `useSize`                 |             418 B |
+| `useSize`                 |             430 B |
 | `useContainerQuery`       |             389 B |
 | `useMediaQuery`           |             246 B |
-| `usePrefersReducedMotion` |             272 B |
-| `useDevicePixelRatio`     |             231 B |
+| `usePrefersReducedMotion` |             274 B |
+| `useDevicePixelRatio`     |             230 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
 | `Presence`                |             741 B |
 | `WhenVisible`             |           1.61 kB |
 | `WhenIdle`                |             596 B |
-| `Defer`                   |              86 B |
-| `useIdle`                 |             414 B |
+| `Defer`                   |              85 B |
+| `useIdle`                 |             413 B |
 | `useWhenIdle`             |             445 B |
 | `useRenderState`          |             515 B |
 | `Swap`                    |           1.12 kB |

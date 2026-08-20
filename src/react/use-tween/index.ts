@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 
 import { invalidDurationError } from '../../core/_internal/errors';
-import type { ReducedMotionBehavior } from '../../core/loop';
 import { prefersReducedMotion } from '../../core/reduced-motion';
 import { clamp01, easeOutCubic } from '../../ease';
 import { useSyncedRef } from '../use-synced-ref';
+
+/** Reduced-motion behavior for a finite tween. Finite tweens complete or explicitly ignore the preference because pausing would leave their value between endpoints. */
+export type TweenReducedMotion = 'complete' | 'ignore';
 
 export interface UseTweenOptions {
   to: number;
@@ -13,7 +15,7 @@ export interface UseTweenOptions {
   easing?: (progress: number) => number;
   enabled?: boolean;
   /** Default: `'complete'`. Tweens jump straight to the destination under reduced motion. */
-  reducedMotion?: ReducedMotionBehavior;
+  reducedMotion?: TweenReducedMotion;
 }
 
 /**
