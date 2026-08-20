@@ -299,6 +299,39 @@ describe('output', () => {
     expect(finding?.text).toContain('transition-all');
     expect(finding?.text.startsWith('…')).toBe(true);
   });
+
+  it('strips ANSI escape sequences from excerpts', () => {
+    // Scanned code is untrusted: an escape sequence quoted verbatim can
+    // restyle or hide report text in the reader's terminal.
+    const [finding] = scanFile(
+      'src/evil.ts',
+      'const w = el.offsetWidth; // \u001b[8mconceal\u001b[0m \u001b]8;;https://evil.test\u0007link\u001b]8;;\u0007\n',
+    );
+    expect(finding?.text).toContain('conceal');
+    expect(finding?.text).not.toContain('\u001b');
+    expect(finding?.text).not.toContain('\u0007');
+  });
+
+  it('strips bidi overrides and stray control characters from excerpts', () => {
+    // A bidi override makes a quoted line read differently than it parses
+    // (trojan source); C0/C1 controls have no place in a one-line excerpt.
+    const [finding] = scanFile(
+      'src/evil.ts',
+      'const w = el.offsetWidth; // \u202Edetrevni\u202C and\u0000null\u009Fapc\n',
+    );
+    expect(finding?.text).toContain('detrevni');
+    expect(finding?.text).not.toMatch(
+      // oxlint-disable-next-line no-control-regex -- asserting controls were stripped
+      /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/,
+    );
+  });
+
+  it('opens findings-bearing text output with the untrusted-data notice', () => {
+    const notice = 'untrusted source data';
+    const text = render(scanFile('src/a.ts', 'const w = el.offsetWidth;\n'));
+    expect(text.split('\n')[0]).toContain(notice);
+    expect(render([])).not.toContain(notice);
+  });
 });
 
 describe('execution context', () => {
@@ -1057,6 +1090,11 @@ describe('scan CLI', () => {
     expect(actual.summary.perFrame).toBeGreaterThan(0);
   });
 
+  it('carries the untrusted-data notice in JSON output', () => {
+    const actual = JSON.parse(runCli(['--json', 'workspace']).stdout);
+    expect(actual.notice).toContain('untrusted source data');
+  });
+
   it('prints usage on --help', () => {
     const run = runCli(['--help']);
     expect(run.status).toBe(0);
@@ -1082,6 +1120,7 @@ describe('eval scenario ground truth', () => {
   interface ScanAssertions {
     required?: { signal: string; file?: string; count?: number }[];
     requiredAbsent?: { signal: string; reason: string }[];
+    outputExcludes?: { text: string; reason: string }[];
     context?: Partial<Record<string, unknown>>;
   }
 
@@ -1130,6 +1169,15 @@ describe('eval scenario ground truth', () => {
               expect(
                 result.findings.filter((f) => f.signal === expected.signal),
               ).toEqual([]);
+            });
+          }
+
+          for (const expected of assertions.outputExcludes ?? []) {
+            it(`keeps ${JSON.stringify(expected.text)} out of the report (${expected.reason})`, () => {
+              expect(formatText(result)).not.toContain(expected.text);
+              for (const finding of result.findings) {
+                expect(finding.text).not.toContain(expected.text);
+              }
             });
           }
 
