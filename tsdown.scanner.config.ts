@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsdown';
 
 /**
- * Bundles the scanner source (scanner/scan.mjs) into the shipped,
+ * Bundles the scanner source (scanner/cli.ts) into the shipped,
  * committed skill artifact at skills/phase/scripts/scan.mjs.
  *
  * Separate from the library build (tsdown.config.ts): the scanner is a
@@ -19,7 +19,7 @@ import { defineConfig } from 'tsdown';
 export default defineConfig({
   clean: false,
   dts: false,
-  entry: { scan: 'scanner/scan.mjs' },
+  entry: { scan: 'scanner/cli.ts' },
   fixedExtension: true,
   format: ['esm'],
   outDir: 'skills/phase/scripts',

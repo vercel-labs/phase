@@ -14,9 +14,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
     "noUncheckedIndexedAccess": true,
     "outDir": "dist"
   },
-  "include": ["src"],
+  "include": ["src", "scanner", "scripts/skill/check-scan-sync.mjs"],
   "exclude": ["node_modules", "dist"]
 }
