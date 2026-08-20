@@ -1,7 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 
+import type { TweenReducedMotion } from '..';
 import { createMockMatchMedia } from '../../__mocks__/match-media';
-import type { TweenReducedMotion } from '../index';
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
@@ -122,6 +122,35 @@ describe('useTween', () => {
     expect(result.current).toBe(100);
   });
 
+  it('changes reduced-motion behavior without restarting the active tween', async () => {
+    const useTween = await getHook();
+    const { result, rerender } = renderHook(
+      ({
+        to,
+        reducedMotion,
+      }: {
+        to: number;
+        reducedMotion: TweenReducedMotion;
+      }) =>
+        useTween({
+          to,
+          duration: 300,
+          easing: (progress) => progress,
+          reducedMotion,
+        }),
+      { initialProps: { to: 0, reducedMotion: 'ignore' } },
+    );
+
+    rerender({ to: 100, reducedMotion: 'ignore' });
+    act(() => vi.advanceTimersByTime(160));
+    expect(result.current).toBeGreaterThan(0);
+    expect(result.current).toBeLessThan(100);
+
+    rerender({ to: 100, reducedMotion: 'complete' });
+    act(() => vi.advanceTimersByTime(160));
+    expect(result.current).toBe(100);
+  });
+
   it('enabled=false jumps to the destination immediately', async () => {
     const useTween = await getHook();
     const { result, rerender } = renderHook(
@@ -209,12 +238,17 @@ describe('useTween', () => {
   it('completes an active tween when reduced motion turns on', async () => {
     const useTween = await getHook();
     const { result, rerender } = renderHook(
-      ({ to }: { to: number }) =>
-        useTween({ to, duration: 300, reducedMotion: 'complete' }),
-      { initialProps: { to: 0 } },
+      ({
+        to,
+        reducedMotion,
+      }: {
+        to: number;
+        reducedMotion: TweenReducedMotion;
+      }) => useTween({ to, duration: 300, reducedMotion }),
+      { initialProps: { to: 0, reducedMotion: 'complete' } },
     );
 
-    rerender({ to: 100 });
+    rerender({ to: 100, reducedMotion: 'complete' });
     act(() => vi.advanceTimersByTime(150));
     expect(result.current).toBeGreaterThan(0);
     expect(result.current).toBeLessThan(100);
@@ -222,6 +256,10 @@ describe('useTween', () => {
 
     act(() => mockMM.setMatches(REDUCED_MOTION_QUERY, true));
     expect(result.current).toBe(100);
+    expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(0);
+
+    rerender({ to: 100, reducedMotion: 'ignore' });
+    rerender({ to: 100, reducedMotion: 'complete' });
     expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(0);
   });
 

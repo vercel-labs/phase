@@ -1261,7 +1261,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useScroll`               |           1.96 kB |
 | `useThrottledCallback`    |             795 B |
 | `useDebouncedCallback`    |             686 B |
-| `useTween`                |             905 B |
+| `useTween`                |             971 B |
 | `usePresence`             |             595 B |
 | `useScrollProgress`       |           1.03 kB |
 | `useSize`                 |             430 B |
