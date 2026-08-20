@@ -157,7 +157,9 @@ export function scanFile(relPath, content, diag = null) {
   const codeLines = maskStrings(uncommentedLines);
   const uncommentedContent = uncommentedLines.join('\n');
   const codeContent = codeLines.join('\n');
-  const analysis = analyzeFile(codeLines);
+  const sourceIndex = buildSourceIndex(codeLines, codeContent);
+  const analysis = analyzeFile(sourceIndex);
+  const moveAnalysis = analyzeMoveHandlers(type, sourceIndex);
 
   if (diag) diag.analyzed++;
 
@@ -196,6 +198,7 @@ export function scanFile(relPath, content, diag = null) {
       type,
       diag,
       analysis,
+      moveAnalysis,
     );
 
     // A per-file finding needs a file-level suppression: a directive naming
@@ -472,6 +475,55 @@ const NON_COMPOSITOR_TRANSITION = new RegExp(
 const MATCH_MEDIA_CALL = /\bmatchMedia\s*(?:\?\.)?\s*\(/;
 const MATCH_MEDIA_CALLS = new RegExp(MATCH_MEDIA_CALL.source, 'g');
 
+// The scanner recognizes a layout read only through member access
+// (`el.offsetWidth`, `el?.offsetWidth`, or `el['offsetWidth']`) or a layout API
+// call. Bare-name matching treated JSX props such as
+// `<Overlay offsetLeft={12} />` as critical reflows, even though a property
+// name alone proves nothing about the DOM. Destructuring remains unmatched
+// because attributing the value to an element requires data-flow analysis.
+// Each signal keeps its own property list; this builder standardizes how the
+// scanner matches that list.
+function layoutReadPattern(properties, { computedStyle = false } = {}) {
+  const names = properties.join('|');
+  const forms = [
+    `(?:\\?\\.|\\.)\\s*(?:${names})\\b`,
+    `\\[\\s*['"](?:${names})['"]\\s*\\]`,
+    String.raw`(?:\?\.|\.)\s*getBoundingClientRect\s*(?:\?\.)?\s*\(`,
+    String.raw`\[\s*['"]getBoundingClientRect['"]\s*\]\s*(?:\?\.)?\s*\(`,
+  ];
+  if (computedStyle) forms.push(String.raw`\bgetComputedStyle\s*\(`);
+  return new RegExp(forms.join('|'));
+}
+
+const SIZE_READS = [
+  'offsetWidth',
+  'offsetHeight',
+  'scrollWidth',
+  'scrollHeight',
+  'clientWidth',
+  'clientHeight',
+];
+const POSITION_READS = ['offsetTop', 'offsetLeft'];
+const SCROLL_READS = ['scrollTop', 'scrollLeft'];
+
+const FORCED_REFLOW_READ = layoutReadPattern(
+  [...SIZE_READS, ...POSITION_READS],
+  { computedStyle: true },
+);
+const OBSERVED_LAYOUT_READ = layoutReadPattern(
+  [...SIZE_READS, ...SCROLL_READS],
+  { computedStyle: true },
+);
+const WINDOW_LISTENER_LAYOUT_READ = layoutReadPattern([
+  ...SIZE_READS,
+  ...SCROLL_READS,
+]);
+const POINTER_LAYOUT_READ = layoutReadPattern([
+  ...SIZE_READS,
+  ...POSITION_READS,
+  ...SCROLL_READS,
+]);
+
 export const SIGNALS = [
   {
     id: 'manual-raf',
@@ -524,8 +576,7 @@ export const SIGNALS = [
     noise: 'noisy',
     why: 'Synchronous layout; in a hot path it thrashes every frame.',
     fix: 'references/performance.md#no-forced-reflows-in-animation-paths',
-    pattern:
-      /getBoundingClientRect|offsetWidth|offsetHeight|offsetTop|offsetLeft|getComputedStyle|scrollWidth|scrollHeight|clientWidth|clientHeight/,
+    pattern: FORCED_REFLOW_READ,
   },
   {
     id: 'js-layout-write',
@@ -586,8 +637,9 @@ export const SIGNALS = [
     // Only flag when the observer watches inline style mutations or reads
     // layout nearby. Structural (childList) and plain attribute observation
     // (e.g. a class watcher) are legitimate and skipped.
-    contextPattern:
-      /attributeFilter:\s*\[[^\]]*['"]style['"]|getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight|getComputedStyle/,
+    contextPattern: new RegExp(
+      `attributeFilter:\\s*\\[[^\\]]*['"]style['"]|${OBSERVED_LAYOUT_READ.source}`,
+    ),
   },
   {
     id: 'js-opacity-transform',
@@ -719,8 +771,7 @@ export const SIGNALS = [
     why: 'A synchronous reflow per event, once per listening component.',
     fix: 'references/performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer',
     pattern: /addEventListener\s*\(\s*['"](?:resize|scroll)['"]/,
-    contextPattern:
-      /getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight/,
+    contextPattern: WINDOW_LISTENER_LAYOUT_READ,
   },
   {
     id: 'pointer-listener-layout-read',
@@ -730,10 +781,15 @@ export const SIGNALS = [
     noise: 'normal',
     why: 'A synchronous reflow per event; move events fire far above 60/sec.',
     fix: 'references/use-pointer.md',
+    // Raw listeners and intrinsic JSX move props can both read layout at event
+    // frequency. A raw listener requires a nearby layout read through
+    // contextPattern. A JSX prop requires a layout read inside the associated
+    // handler body. Lexical association lets a distant useCallback binding
+    // match without treating a custom-component prop as a DOM event.
     pattern:
-      /addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove)['"]/,
-    contextPattern:
-      /getBoundingClientRect|offsetWidth|offsetHeight|offsetTop|offsetLeft|scrollWidth|scrollHeight|scrollTop|scrollLeft|clientWidth|clientHeight/,
+      /addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove)['"]|\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/,
+    contextPattern: POINTER_LAYOUT_READ,
+    moveHandlerReads: POINTER_LAYOUT_READ,
   },
   {
     id: 'redundant-mutation-observers',
@@ -835,7 +891,7 @@ const BLOCK_SCAN_LINES = 20;
 // incidental here and is still reported, just below the ones that are
 // visibly per-frame — a heuristic may reorder findings, never hide them.
 const FRAME_DRIVER =
-  /\bonTick\b|\bonDraw\b|\bdraw\s*:|use(?:Loop|Canvas|Tween|Pointer|Scroll)\s*\(|create(?:Loop|Ticker|Pointer|Scroll)\s*\(|addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove|scroll|resize|wheel|drag)|new\s+(?:Intersection|Resize|Mutation)Observer|setInterval\s*\(/;
+  /\bonTick\b|\bonDraw\b|\bdraw\s*:|use(?:Loop|Canvas|Tween|Pointer|Scroll)\s*\(|create(?:Loop|Ticker|Pointer|Scroll)\s*\(|addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove|scroll|resize|wheel|drag)|\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{|new\s+(?:Intersection|Resize|Mutation)Observer|setInterval\s*\(/;
 
 const FRAME_DRIVER_WINDOW = 6;
 
@@ -1346,8 +1402,7 @@ const INTERVAL_CALL = /\bsetInterval\s*(?:\?\.)?\s*\(/;
  * setTimeout share the callback set and the cycle analysis, differing only in
  * the call pattern.
  */
-function analyzeFile(lines) {
-  const sourceIndex = buildSourceIndex(lines);
+function analyzeFile(sourceIndex) {
   const { callbacks, callbacksByName } = collectCallbacks(sourceIndex);
   const cycleOf = (pattern) =>
     analyzeSchedulingCycle(sourceIndex, callbacks, callbacksByName, pattern);
@@ -1462,8 +1517,135 @@ function analyzeSchedulingCycle(
   return summarizeSchedulingOwnership(sourceIndex, calls, recurringCallbacks);
 }
 
-function buildSourceIndex(lines) {
-  const source = lines.join('\n');
+const EMPTY_MOVE_ANALYSIS = { propRanges: new Map(), handlerLines: new Set() };
+
+const MOVE_HANDLER_PROP = /\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/;
+const MOVE_HANDLER_PROPS = new RegExp(MOVE_HANDLER_PROP.source, 'g');
+
+// A prop value counts as an inline handler only when it starts with a function
+// expression, parenthesized arrow parameters, or a single arrow parameter.
+// A nested arrow such as `handlers.find(h => h.active)` runs during render,
+// not during the move event.
+const INLINE_HANDLER_VALUE =
+  /^(?:async\s+)?(?:function\b|\([^)]*\)\s*(?::\s*[^=]+)?=>|[A-Za-z_$][\w$]*\s*=>)/;
+
+// A useCallback wrapper hides the arrow from collectCallbacks' declaration
+// patterns. React code commonly uses this wrapper for named move handlers.
+const USE_CALLBACK_BINDING =
+  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*useCallback\s*\(\s*(?:async\s+)?(?:function(?:\s+[A-Za-z_$][\w$]*)?\s*\([^)]*\)|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)\s*\{/g;
+
+// Limits how far the scanner looks for the JSX tag that owns a move prop. This
+// covers tags with several multi-line props. A longer tag loses the
+// specialized finding instead of producing an unrelated one.
+const MOVE_HANDLER_TAG_WINDOW = 800;
+
+/**
+ * Associates intrinsic JSX move props (onPointerMove/onMouseMove/onTouchMove)
+ * with their handler bodies, lexically. An inline handler's body is the
+ * prop's brace-balanced value; a named handler resolves one hop to a local
+ * function declaration, arrow binding, or useCallback binding. Props on
+ * capitalized components and handlers the file does not define are dropped:
+ * neither proves a DOM event will run the code.
+ *
+ * Maps each prop line to its handler line range and records the lines inside
+ * associated handler bodies for per-frame ranking.
+ *
+ * A regex gate skips the second callback-collection pass when the source has
+ * no JSX move prop.
+ */
+function analyzeMoveHandlers(type, sourceIndex) {
+  const { source, lineStarts, bracePairs } = sourceIndex;
+  if (type !== 'js' || !MOVE_HANDLER_PROP.test(source)) {
+    return EMPTY_MOVE_ANALYSIS;
+  }
+
+  const { callbacksByName } = collectCallbacks(sourceIndex);
+  for (const match of source.matchAll(USE_CALLBACK_BINDING)) {
+    const open = match.index + match[0].lastIndexOf('{');
+    const end = bracePairs.get(open);
+    if (end !== undefined) callbacksByName.set(match[1], { start: open, end });
+  }
+
+  const propRanges = new Map();
+  const handlerLines = new Set();
+
+  for (const match of source.matchAll(MOVE_HANDLER_PROPS)) {
+    if (!intrinsicTagOwns(source, match.index)) continue;
+    const open = match.index + match[0].lastIndexOf('{');
+    const close = bracePairs.get(open);
+    if (close === undefined) continue;
+
+    const value = source.slice(open + 1, close).trim();
+    let start;
+    let end;
+    if (/^[A-Za-z_$][\w$]*$/.test(value)) {
+      const callback = callbacksByName.get(value);
+      // Resolve one local hop only. Imported names and class methods reached
+      // through `this` remain out of scope.
+      if (!callback) continue;
+      start = callback.start;
+      end = callback.end;
+    } else if (INLINE_HANDLER_VALUE.test(value)) {
+      // The prop's brace-balanced value contains the inline handler body.
+      start = open;
+      end = close;
+    } else {
+      // Member expressions, ternaries, and call results do not prove a local
+      // handler, so the scanner does not associate them.
+      continue;
+    }
+
+    const range = {
+      start: lineAtOffset(lineStarts, start),
+      end: lineAtOffset(lineStarts, end),
+    };
+    propRanges.set(lineAtOffset(lineStarts, match.index), range);
+    for (let line = range.start; line <= range.end; line++) {
+      handlerLines.add(line);
+    }
+  }
+
+  return { propRanges, handlerLines };
+}
+
+// A lowercase JSX tag proves the prop belongs to a DOM element, so the handler
+// runs at DOM event frequency. A capitalized component may debounce,
+// transform, or omit the prop. The scanner walks backward to the nearest tag
+// opening at attribute level, then walks forward through JSX expression
+// braces. A `>` at brace depth zero closes the tag. During the backward walk,
+// brace depth prevents a comparison such as `className={x <y ? ...}` from
+// being mistaken for a tag opening.
+function intrinsicTagOwns(source, propIndex) {
+  const from = Math.max(0, propIndex - MOVE_HANDLER_TAG_WINDOW);
+  let tagStart = -1;
+  let backDepth = 0;
+  for (let i = propIndex - 1; i >= from; i--) {
+    const ch = source[i];
+    if (ch === '}') backDepth++;
+    else if (ch === '{') backDepth--;
+    else if (
+      ch === '<' &&
+      backDepth <= 0 &&
+      /[A-Za-z]/.test(source[i + 1] ?? '')
+    ) {
+      tagStart = i;
+      break;
+    }
+  }
+  if (tagStart === -1) return false;
+
+  let depth = 0;
+  for (let i = tagStart + 1; i < propIndex; i++) {
+    const ch = source[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') depth--;
+    else if (ch === '>' && depth === 0 && source[i - 1] !== '=') return false;
+  }
+  return /[a-z]/.test(source[tagStart + 1]);
+}
+
+function buildSourceIndex(lines, joined = null) {
+  const source = joined ?? lines.join('\n');
   const lineStarts = [0];
   for (let i = 0; i < source.length; i++) {
     if (source.charCodeAt(i) === 10) lineStarts.push(i + 1);
@@ -1725,6 +1907,7 @@ function scanSignal(
   type,
   diag,
   analysis,
+  moveAnalysis,
 ) {
   const findings = [];
   const matchLines = signal.codeOnly ? codeLines : uncommentedLines;
@@ -1741,10 +1924,18 @@ function scanSignal(
       if (!match) continue;
       matchIndex = match.index;
 
-      if (!matchesAnalysisPolicy(signal, match[0], matchLine, i, analysis))
-        continue;
-      if (!matchesSignalContext(signal, codeLines, uncommentedLines, i))
-        continue;
+      // A JSX move prop uses its associated handler body, which may sit beyond
+      // the context window. A raw listener keeps the window-based policy. The
+      // matched form selects the policy because both forms share one signal.
+      if (signal.moveHandlerReads && /^on[A-Z]/.test(match[0])) {
+        if (!matchesMoveHandlerBody(signal, i, moveAnalysis, uncommentedLines))
+          continue;
+      } else {
+        if (!matchesAnalysisPolicy(signal, match[0], matchLine, i, analysis))
+          continue;
+        if (!matchesSignalContext(signal, codeLines, uncommentedLines, i))
+          continue;
+      }
     }
 
     // Per-file signals are suppressed at the file level (see scanFile), not
@@ -1762,13 +1953,25 @@ function scanSignal(
         i + 1,
         line,
         matchIndex,
-        executionOf(codeLines, i, type, analysis.raf),
+        executionOf(codeLines, i, type, analysis.raf, moveAnalysis),
       ),
     );
 
     if (signal.perFile) break;
   }
   return findings;
+}
+
+/**
+ * Whether a JSX move-prop line has an associated handler body containing a
+ * layout read (see analyzeMoveHandlers). Custom components,
+ * member-expression handlers, and names the file does not define never match.
+ */
+function matchesMoveHandlerBody(signal, line, moveAnalysis, uncommentedLines) {
+  const range = moveAnalysis.propRanges.get(line);
+  if (!range) return false;
+  const body = uncommentedLines.slice(range.start, range.end + 1).join('\n');
+  return signal.moveHandlerReads.test(body);
 }
 
 function matchesAnalysisPolicy(signal, match, matchLine, line, analysis) {
@@ -2043,12 +2246,18 @@ function makeFinding(signal, file, line, text, matchIndex, execution) {
  * Whether a frame driver runs this line. Meaningless for stylesheets, which
  * report null.
  */
-function executionOf(lines, i, type, rafAnalysis) {
+function executionOf(lines, i, type, rafAnalysis, moveAnalysis) {
   if (type !== 'js') return null;
   if (
     rafAnalysis.recurringCallbackLines.has(i) ||
     rafAnalysis.recurringScheduleLines.has(i)
   ) {
+    return 'per-frame';
+  }
+  // A move event runs code inside an intrinsic JSX move handler. Rank the
+  // handler body and its prop line directly because the window below cannot
+  // see a handler defined far from its JSX.
+  if (moveAnalysis.handlerLines.has(i) || moveAnalysis.propRanges.has(i)) {
     return 'per-frame';
   }
   const from = Math.max(0, i - FRAME_DRIVER_WINDOW);
