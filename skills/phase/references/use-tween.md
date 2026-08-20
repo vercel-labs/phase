@@ -60,7 +60,7 @@ Returns the current animated `number`.
 
 ## Reduced motion
 
-Default `'complete'` checks the preference when a tween starts and jumps to `to` when reduced motion is already preferred. `'ignore'` skips the preference read. The exported `TweenReducedMotion` type is `'complete' | 'ignore'`; finite tweens do not support `'pause'` because freezing between endpoints leaves the value incomplete.
+Default `'complete'` checks the preference when a tween starts and jumps to `to` when reduced motion is already preferred. `'ignore'` skips the preference read. `useTween` does not subscribe to preference changes while running because a tween is finite, bounded work. The exported `TweenReducedMotion` type is `'complete' | 'ignore'`; finite tweens do not support `'pause'` because freezing between endpoints leaves the value incomplete.
 
 ## See also
 
