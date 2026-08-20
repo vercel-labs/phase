@@ -157,7 +157,7 @@ export function scanFile(relPath, content, diag = null) {
   const codeLines = maskStrings(uncommentedLines);
   const uncommentedContent = uncommentedLines.join('\n');
   const codeContent = codeLines.join('\n');
-  const rafAnalysis = analyzeRafScheduling(codeLines);
+  const analysis = analyzeFile(codeLines);
 
   if (diag) diag.analyzed++;
 
@@ -195,7 +195,7 @@ export function scanFile(relPath, content, diag = null) {
       overlong,
       type,
       diag,
-      rafAnalysis,
+      analysis,
     );
 
     // A per-file finding needs a file-level suppression: a directive naming
@@ -467,6 +467,11 @@ const NON_COMPOSITOR_TRANSITION = new RegExp(
   `${/(?<![\w-])transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/.source}|${BARE_DURATION_TRANSITION.source}`,
 );
 
+// Declared here because the catalog below reads it while this module
+// initializes. The global form finds every call in a file.
+const MATCH_MEDIA_CALL = /\bmatchMedia\s*(?:\?\.)?\s*\(/;
+const MATCH_MEDIA_CALLS = new RegExp(MATCH_MEDIA_CALL.source, 'g');
+
 export const SIGNALS = [
   {
     id: 'manual-raf',
@@ -561,7 +566,12 @@ export const SIGNALS = [
     noise: 'normal',
     why: 'Unpooled MediaQueryList subscriptions; phase pools them by query.',
     fix: 'references/use-media-query.md',
-    pattern: /\bmatchMedia\s*\(/,
+    pattern: MATCH_MEDIA_CALL,
+    // A `.matches` snapshot subscribes to nothing, so the finding needs a
+    // listener on the same receiver. Strings are masked out of the match so an
+    // inline pre-hydration script does not read as application code.
+    subscribedMediaQueryOnly: true,
+    codeOnly: true,
   },
   {
     id: 'mutationobserver-layout',
@@ -622,6 +632,7 @@ export const SIGNALS = [
     fix: 'references/timed-sequences.md',
     pattern: /setInterval|setTimeout/,
     contextPattern: /transform|opacity|translate|\banimate\b/,
+    recurringTimerOnly: true,
   },
   {
     id: 'manual-synced-ref',
@@ -1321,14 +1332,134 @@ function suppressedAnywhere(suppressions, signalId) {
   return false;
 }
 
-/** Builds the local rAF callback graph once for every scanned file. */
-function analyzeRafScheduling(lines) {
+const RAF_CALL = /\brequestAnimationFrame\s*(?:\?\.)?\s*\(/g;
+const TIMEOUT_CALL = /\bsetTimeout\s*(?:\?\.)?\s*\(/g;
+const INTERVAL_CALL = /\bsetInterval\s*(?:\?\.)?\s*\(/;
+
+/**
+ * What a signal can require beyond its own line, analyzed once per scanned file:
+ * which scheduling calls own recurring work, and which MediaQueryLists
+ * something subscribes to.
+ *
+ * A scheduler owns recurring work only when a callback it schedules can
+ * schedule another turn. That is one question asked of two APIs, so rAF and
+ * setTimeout share the callback set and the cycle analysis, differing only in
+ * the call pattern.
+ */
+function analyzeFile(lines) {
   const sourceIndex = buildSourceIndex(lines);
   const { callbacks, callbacksByName } = collectCallbacks(sourceIndex);
-  const calls = collectRafCalls(sourceIndex.source, callbacks, callbacksByName);
+  const cycleOf = (pattern) =>
+    analyzeSchedulingCycle(sourceIndex, callbacks, callbacksByName, pattern);
+  return {
+    raf: cycleOf(RAF_CALL),
+    timeout: cycleOf(TIMEOUT_CALL),
+    subscribedMediaQueries: subscribedMediaQueryLines(sourceIndex),
+  };
+}
+
+// `.addEventListener(` or `?.addEventListener(` directly on the result, matched
+// sticky from the closing paren so a wrapped chain still counts. The event name
+// is not checked: a MediaQueryList has only `change`, so the receiver is what
+// separates a subscription from an unrelated listener.
+const CHAINED_SUBSCRIBE =
+  /\s*(?:\?\.|\.)\s*(?:addEventListener|addListener)\s*\(/y;
+// `const mql =`, `let mql: MediaQueryList =`, `mql =`, `this.mql =`. The
+// lookbehind keeps comparisons (`===`, `!==`, `>=`) from reading as bindings.
+const MQL_DECLARATION =
+  /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]*)?=\s*(?:await\s+)?$/;
+const MQL_ASSIGNMENT =
+  /([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*)\s*(?<![=!<>])=\s*(?:await\s+)?$/;
+// The global the call hangs off (`window.`, `globalThis.`, `self.`), dropped so
+// the binding patterns can anchor on the initializer.
+const MQL_QUALIFIER = /(?:[A-Za-z_$][\w$]*\s*(?:\?\.|\.)\s*)+$/;
+// How far back to look for a binding. A declaration sits next to its
+// initializer, and an unbounded reverse scan would walk a minified statement.
+const MQL_BINDING_LOOKBEHIND = 400;
+
+/**
+ * Line indices constructing a MediaQueryList that something subscribes to.
+ *
+ * A `.matches` snapshot registers no listener: nothing accumulates, nothing
+ * needs cleanup, and there is no subscription for the pool to key by query.
+ * Only a listener on that same receiver counts, so a `change` listener
+ * elsewhere in the file does not implicate an unrelated snapshot.
+ */
+function subscribedMediaQueryLines(sourceIndex) {
+  const { source, lineStarts } = sourceIndex;
+  const subscribed = new Set();
+
+  for (const match of source.matchAll(MATCH_MEDIA_CALLS)) {
+    const open = match.index + match[0].lastIndexOf('(');
+    const close = matchingParen(source, open);
+    if (close === -1) continue;
+    CHAINED_SUBSCRIBE.lastIndex = close + 1;
+    if (
+      CHAINED_SUBSCRIBE.test(source) ||
+      subscribesViaBinding(source, match.index)
+    ) {
+      subscribed.add(lineAtOffset(lineStarts, match.index));
+    }
+  }
+
+  return subscribed;
+}
+
+/**
+ * Whether the MediaQueryList is stored in a binding that is later subscribed
+ * to. This reads only the statement holding the call, so it stays a local
+ * binding question rather than general data flow.
+ */
+function subscribesViaBinding(source, callStart) {
+  const from = Math.max(0, callStart - MQL_BINDING_LOOKBEHIND);
+  let statementStart = from;
+  for (let i = callStart - 1; i >= from; i--) {
+    if (source[i] === ';' || source[i] === '{' || source[i] === '}') {
+      statementStart = i + 1;
+      break;
+    }
+  }
+  const prefix = source
+    .slice(statementStart, callStart)
+    .replace(MQL_QUALIFIER, '');
+  const name = (MQL_DECLARATION.exec(prefix) ??
+    MQL_ASSIGNMENT.exec(prefix))?.[1];
+  if (!name) return false;
+
+  const receiver = name
+    .split('.')
+    .map((part) => escapeRegExp(part.trim()))
+    .join('\\s*\\.\\s*');
+  return new RegExp(
+    `\\b${receiver}\\s*(?:\\?\\.|\\.)\\s*(?:addEventListener|addListener)\\s*\\(`,
+  ).test(source);
+}
+
+/** Offset of the `)` closing the `(` at `open`, or -1 when unbalanced. */
+function matchingParen(source, open) {
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === '(') depth++;
+    else if (source[i] === ')' && --depth === 0) return i;
+  }
+  return -1;
+}
+
+function analyzeSchedulingCycle(
+  sourceIndex,
+  callbacks,
+  callbacksByName,
+  callPattern,
+) {
+  const calls = collectSchedulingCalls(
+    sourceIndex.source,
+    callbacks,
+    callbacksByName,
+    callPattern,
+  );
   const graph = buildCallbackGraph(callbacks, calls);
   const recurringCallbacks = cyclicCallbacks(graph);
-  return summarizeRafOwnership(sourceIndex, calls, recurringCallbacks);
+  return summarizeSchedulingOwnership(sourceIndex, calls, recurringCallbacks);
 }
 
 function buildSourceIndex(lines) {
@@ -1385,9 +1516,13 @@ function collectCallbacks(sourceIndex) {
   return { callbacks, callbacksByName };
 }
 
-function collectRafCalls(source, callbacks, callbacksByName) {
+function collectSchedulingCalls(
+  source,
+  callbacks,
+  callbacksByName,
+  callPattern,
+) {
   const calls = [];
-  const callPattern = /\brequestAnimationFrame\s*(?:\?\.)?\s*\(/g;
   for (const match of source.matchAll(callPattern)) {
     const open = match.index + match[0].lastIndexOf('(');
     const callbackName = firstArgumentIdentifier(source, open + 1);
@@ -1406,7 +1541,7 @@ function buildCallbackGraph(callbacks, calls) {
   return edges;
 }
 
-function summarizeRafOwnership(sourceIndex, calls, recurringCallbacks) {
+function summarizeSchedulingOwnership(sourceIndex, calls, recurringCallbacks) {
   const { source, lineStarts } = sourceIndex;
   const recurringScheduleLines = new Set();
   const stateScheduleLines = new Set();
@@ -1589,7 +1724,7 @@ function scanSignal(
   overlong,
   type,
   diag,
-  rafAnalysis,
+  analysis,
 ) {
   const findings = [];
   const matchLines = signal.codeOnly ? codeLines : uncommentedLines;
@@ -1606,7 +1741,8 @@ function scanSignal(
       if (!match) continue;
       matchIndex = match.index;
 
-      if (!matchesRafPolicy(signal, match[0], i, rafAnalysis)) continue;
+      if (!matchesAnalysisPolicy(signal, match[0], matchLine, i, analysis))
+        continue;
       if (!matchesSignalContext(signal, codeLines, uncommentedLines, i))
         continue;
     }
@@ -1626,7 +1762,7 @@ function scanSignal(
         i + 1,
         line,
         matchIndex,
-        executionOf(codeLines, i, type, rafAnalysis),
+        executionOf(codeLines, i, type, analysis.raf),
       ),
     );
 
@@ -1635,19 +1771,35 @@ function scanSignal(
   return findings;
 }
 
-function matchesRafPolicy(signal, match, line, rafAnalysis) {
-  const recurring = rafAnalysis.recurringScheduleLines.has(line);
+function matchesAnalysisPolicy(signal, match, matchLine, line, analysis) {
+  const { raf, timeout } = analysis;
+  const recurring = raf.recurringScheduleLines.has(line);
   if (signal.recurringRafOnly && !recurring) return false;
-  if (
-    signal.recurringRafStateOnly &&
-    !rafAnalysis.stateScheduleLines.has(line)
-  ) {
+  if (signal.recurringRafStateOnly && !raf.stateScheduleLines.has(line)) {
     return false;
   }
   if (
     signal.recurringRafBranch &&
     /requestAnimationFrame/.test(match) &&
     !recurring
+  ) {
+    return false;
+  }
+  // `setInterval` recurs by construction. A timeout only recurs when the
+  // callback it schedules can schedule another one, so transition-completion
+  // and `transitionend` fallbacks fire once and stop. The interval check reads
+  // the whole line, because a one-shot timeout earlier on it must not suppress
+  // an interval later on it.
+  if (
+    signal.recurringTimerOnly &&
+    !INTERVAL_CALL.test(matchLine) &&
+    !timeout.recurringScheduleLines.has(line)
+  ) {
+    return false;
+  }
+  if (
+    signal.subscribedMediaQueryOnly &&
+    !analysis.subscribedMediaQueries.has(line)
   ) {
     return false;
   }
