@@ -1,10 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 
 import { invalidDurationError } from '../../core/_internal/errors';
-import {
-  prefersReducedMotion,
-  subscribeReducedMotion,
-} from '../../core/reduced-motion';
+import { prefersReducedMotion } from '../../core/reduced-motion';
 import { clamp01, easeOutCubic } from '../../ease';
 import { useSyncedRef } from '../use-synced-ref';
 
@@ -53,8 +50,6 @@ export function useTween(options: UseTweenOptions): number {
   const fromRef = useRef(to);
   const currentRef = useRef(to);
   const isFirstRender = useRef(true);
-  const completeRef = useRef<(() => void) | null>(null);
-  const unsubscribeReducedMotionRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!Number.isFinite(duration) || duration <= 0) {
@@ -68,7 +63,8 @@ export function useTween(options: UseTweenOptions): number {
       return;
     }
 
-    if (!enabled) {
+    // Disabled or reduced motion: jump immediately.
+    if (!enabled || (reducedMotion !== 'ignore' && prefersReducedMotion())) {
       jumpToTarget({ to, fromRef, currentRef, setValue });
       return;
     }
@@ -77,30 +73,10 @@ export function useTween(options: UseTweenOptions): number {
     const from: number = currentRef.current;
     if (from === to) return;
 
-    let rafId: number | null = null;
+    let rafId: number;
     let startTime: number | null = null;
-    let completed = false;
-
-    function complete(): void {
-      if (completed) return;
-      completed = true;
-      completeRef.current = null;
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      rafId = null;
-      clearReducedMotionSubscription(unsubscribeReducedMotionRef);
-      jumpToTarget({ to, fromRef, currentRef, setValue });
-    }
-
-    completeRef.current = complete;
-    syncReducedMotionSubscription(
-      reducedMotion,
-      completeRef,
-      unsubscribeReducedMotionRef,
-    );
 
     function tick(now: number): void {
-      if (completed) return;
-      rafId = null;
       if (startTime === null) startTime = now;
       const elapsed: number = now - startTime - delay;
 
@@ -119,41 +95,19 @@ export function useTween(options: UseTweenOptions): number {
       if (progress < 1) {
         rafId = requestAnimationFrame(tick);
       } else {
-        completed = true;
-        completeRef.current = null;
-        clearReducedMotionSubscription(unsubscribeReducedMotionRef);
         fromRef.current = to;
       }
-    }
-
-    if (completed) {
-      completeRef.current = null;
-      return;
     }
 
     rafId = requestAnimationFrame(tick);
 
     return () => {
-      completed = true;
-      completeRef.current = null;
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      rafId = null;
-      clearReducedMotionSubscription(unsubscribeReducedMotionRef);
+      cancelAnimationFrame(rafId);
       // Preserve where we actually are so the next tween starts from here.
       fromRef.current = currentRef.current;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [to, duration, delay, enabled]);
-
-  useEffect(() => {
-    syncReducedMotionSubscription(
-      reducedMotion,
-      completeRef,
-      unsubscribeReducedMotionRef,
-    );
-
-    return () => clearReducedMotionSubscription(unsubscribeReducedMotionRef);
-  }, [reducedMotion]);
+  }, [to, duration, delay, enabled, reducedMotion]);
 
   return value;
 }
@@ -167,31 +121,6 @@ interface JumpToTargetOptions {
   fromRef: React.RefObject<number>;
   currentRef: React.RefObject<number>;
   setValue: (value: number) => void;
-}
-
-function syncReducedMotionSubscription(
-  reducedMotion: TweenReducedMotion,
-  completeRef: React.RefObject<(() => void) | null>,
-  unsubscribeRef: React.RefObject<(() => void) | null>,
-): void {
-  clearReducedMotionSubscription(unsubscribeRef);
-  if (reducedMotion !== 'complete' || completeRef.current === null) return;
-
-  if (prefersReducedMotion()) {
-    completeRef.current();
-    return;
-  }
-
-  unsubscribeRef.current = subscribeReducedMotion((matches) => {
-    if (matches) completeRef.current?.();
-  });
-}
-
-function clearReducedMotionSubscription(
-  unsubscribeRef: React.RefObject<(() => void) | null>,
-): void {
-  unsubscribeRef.current?.();
-  unsubscribeRef.current = null;
 }
 
 function jumpToTarget(options: JumpToTargetOptions): void {

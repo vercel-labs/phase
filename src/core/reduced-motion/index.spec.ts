@@ -35,26 +35,3 @@ describe('prefersReducedMotion()', () => {
     expect(prefersReducedMotion()).toBe(false);
   });
 });
-
-describe('subscribeReducedMotion()', () => {
-  it('does nothing when matchMedia is undefined', async () => {
-    vi.stubGlobal('matchMedia', undefined);
-    vi.resetModules();
-    const { subscribeReducedMotion } = await import('.');
-
-    expect(() => subscribeReducedMotion(vi.fn())()).not.toThrow();
-  });
-
-  it('forwards preference changes until disposed', async () => {
-    const { subscribeReducedMotion } = await import('.');
-    const callback = vi.fn();
-    const dispose = subscribeReducedMotion(callback);
-
-    mockMM.setMatches('(prefers-reduced-motion: reduce)', true);
-    expect(callback).toHaveBeenCalledWith(true);
-
-    dispose();
-    mockMM.setMatches('(prefers-reduced-motion: reduce)', false);
-    expect(callback).toHaveBeenCalledTimes(1);
-  });
-});

@@ -748,7 +748,7 @@ const opacity = useTween({ to: isVisible ? 1 : 0, duration: 300 });
 
 Use `useTween` for single values where the render is cheap (counters, progress bars, opacity). Use `useLoop` when animating many elements or doing canvas work, since per-frame `setState` doesn't scale.
 
-Reduced motion default: `'complete'` (jumps to the destination instantly). Active tweens also complete if reduced motion turns on. Set `reducedMotion: 'ignore'` to skip the preference read and subscription; the exported `TweenReducedMotion` type is `'complete' | 'ignore'`.
+Reduced motion default: `'complete'` checks the preference when a tween starts and jumps to the destination when needed. Set `reducedMotion: 'ignore'` to skip the preference read. The exported `TweenReducedMotion` type is `'complete' | 'ignore'`; finite tweens do not support `'pause'` because freezing between endpoints leaves the value incomplete.
 
 ### usePresence
 
@@ -1248,7 +1248,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `createThrottle`          |             660 B |
 | `createDebounce`          |             558 B |
 | `whenIdle`                |             409 B |
-| `prefersReducedMotion`    |             102 B |
+| `prefersReducedMotion`    |             101 B |
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
@@ -1261,8 +1261,8 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useScroll`               |           1.96 kB |
 | `useThrottledCallback`    |             795 B |
 | `useDebouncedCallback`    |             686 B |
-| `useTween`                |             971 B |
-| `usePresence`             |             595 B |
+| `useTween`                |             654 B |
+| `usePresence`             |             591 B |
 | `useScrollProgress`       |           1.03 kB |
 | `useSize`                 |             430 B |
 | `useContainerQuery`       |             389 B |
@@ -1271,14 +1271,14 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useDevicePixelRatio`     |             230 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             743 B |
-| `WhenVisible`             |            1.6 kB |
+| `Presence`                |             741 B |
+| `WhenVisible`             |           1.61 kB |
 | `WhenIdle`                |             596 B |
 | `Defer`                   |              85 B |
 | `useIdle`                 |             413 B |
 | `useWhenIdle`             |             445 B |
 | `useRenderState`          |             515 B |
-| `Swap`                    |           1.13 kB |
+| `Swap`                    |           1.12 kB |
 
 <!-- SIZE-TABLE:END -->
 

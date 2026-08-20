@@ -1,7 +1,4 @@
-import {
-  readMediaQuery,
-  subscribeMediaQuery,
-} from '../_internal/pool/mql-pool';
+import { readMediaQuery } from '../_internal/pool/mql-pool';
 
 export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
@@ -15,15 +12,4 @@ export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 export function prefersReducedMotion(): boolean {
   if (typeof matchMedia === 'undefined') return false;
   return readMediaQuery(REDUCED_MOTION_QUERY);
-}
-
-export function subscribeReducedMotion(
-  callback: (matches: boolean) => void,
-): () => void {
-  if (typeof matchMedia === 'undefined') return noop;
-  return subscribeMediaQuery(REDUCED_MOTION_QUERY, callback);
-}
-
-function noop(): void {
-  return undefined;
 }

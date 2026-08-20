@@ -122,35 +122,6 @@ describe('useTween', () => {
     expect(result.current).toBe(100);
   });
 
-  it('changes reduced-motion behavior without restarting the active tween', async () => {
-    const useTween = await getHook();
-    const { result, rerender } = renderHook(
-      ({
-        to,
-        reducedMotion,
-      }: {
-        to: number;
-        reducedMotion: TweenReducedMotion;
-      }) =>
-        useTween({
-          to,
-          duration: 300,
-          easing: (progress) => progress,
-          reducedMotion,
-        }),
-      { initialProps: { to: 0, reducedMotion: 'ignore' } },
-    );
-
-    rerender({ to: 100, reducedMotion: 'ignore' });
-    act(() => vi.advanceTimersByTime(160));
-    expect(result.current).toBeGreaterThan(0);
-    expect(result.current).toBeLessThan(100);
-
-    rerender({ to: 100, reducedMotion: 'complete' });
-    act(() => vi.advanceTimersByTime(160));
-    expect(result.current).toBe(100);
-  });
-
   it('enabled=false jumps to the destination immediately', async () => {
     const useTween = await getHook();
     const { result, rerender } = renderHook(
@@ -202,6 +173,7 @@ describe('useTween', () => {
 
   it('reducedMotion complete jumps to the destination', async () => {
     mockMM.setMatches(REDUCED_MOTION_QUERY, true);
+    const requestSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
     const useTween = await getHook();
     const { result, rerender } = renderHook(
       ({ to }: { to: number }) =>
@@ -210,8 +182,8 @@ describe('useTween', () => {
     );
 
     rerender({ to: 100 });
-    // Should jump immediately
     expect(result.current).toBe(100);
+    expect(requestSpy).not.toHaveBeenCalled();
   });
 
   it('reducedMotion ignore still animates', async () => {
@@ -232,35 +204,6 @@ describe('useTween', () => {
     expect(result.current).toBeGreaterThan(0);
     expect(result.current).toBeLessThan(100);
     expect(matchMediaSpy).not.toHaveBeenCalled();
-    expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(0);
-  });
-
-  it('completes an active tween when reduced motion turns on', async () => {
-    const useTween = await getHook();
-    const { result, rerender } = renderHook(
-      ({
-        to,
-        reducedMotion,
-      }: {
-        to: number;
-        reducedMotion: TweenReducedMotion;
-      }) => useTween({ to, duration: 300, reducedMotion }),
-      { initialProps: { to: 0, reducedMotion: 'complete' } },
-    );
-
-    rerender({ to: 100, reducedMotion: 'complete' });
-    act(() => vi.advanceTimersByTime(150));
-    expect(result.current).toBeGreaterThan(0);
-    expect(result.current).toBeLessThan(100);
-    expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(1);
-
-    act(() => mockMM.setMatches(REDUCED_MOTION_QUERY, true));
-    expect(result.current).toBe(100);
-    expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(0);
-
-    rerender({ to: 100, reducedMotion: 'ignore' });
-    rerender({ to: 100, reducedMotion: 'complete' });
-    expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(0);
   });
 
   it('animates when matchMedia is unavailable', async () => {
@@ -277,85 +220,4 @@ describe('useTween', () => {
     expect(result.current).toBeGreaterThan(0);
     expect(result.current).toBeLessThan(100);
   });
-
-  it('removes the reduced-motion listener on completion and unmount', async () => {
-    const useTween = await getHook();
-    const { rerender, unmount } = renderHook(
-      ({ to }: { to: number }) => useTween({ to, duration: 100 }),
-      { initialProps: { to: 0 } },
-    );
-
-    rerender({ to: 100 });
-    expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(1);
-    act(() => vi.advanceTimersByTime(200));
-    expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(0);
-
-    rerender({ to: 200 });
-    expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(1);
-    unmount();
-    expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(0);
-  });
-
-  it.each(['interrupt', 'disable'] as const)(
-    'cleans up the active reduced-motion listener on %s',
-    async (cleanup) => {
-      const useTween = await getHook();
-      const { result, rerender } = renderHook(
-        ({ to, enabled }: { to: number; enabled: boolean }) =>
-          useTween({ to, enabled, duration: 300 }),
-        { initialProps: { to: 0, enabled: true } },
-      );
-
-      rerender({ to: 100, enabled: true });
-      expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(1);
-
-      if (cleanup === 'interrupt') {
-        rerender({ to: 200, enabled: true });
-        expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(1);
-        act(() => mockMM.setMatches(REDUCED_MOTION_QUERY, true));
-        expect(result.current).toBe(200);
-      } else {
-        rerender({ to: 100, enabled: false });
-        expect(result.current).toBe(100);
-        expect(mockMM.listenerCount(REDUCED_MOTION_QUERY)).toBe(0);
-      }
-    },
-  );
-
-  it.each(['complete', 'unmount'] as const)(
-    'cancels rAF ID zero and ignores a pending callback after %s',
-    async (cleanup) => {
-      let pendingCallback: FrameRequestCallback | undefined;
-      const requestSpy = vi
-        .spyOn(globalThis, 'requestAnimationFrame')
-        .mockImplementation((callback) => {
-          pendingCallback = callback;
-          return 0;
-        });
-      const cancelSpy = vi.spyOn(globalThis, 'cancelAnimationFrame');
-      const easing = vi.fn((progress: number) => progress);
-      const useTween = await getHook();
-      const { result, rerender, unmount } = renderHook(
-        ({ to }: { to: number }) => useTween({ to, duration: 300, easing }),
-        { initialProps: { to: 0 } },
-      );
-
-      rerender({ to: 100 });
-      const callback = pendingCallback;
-      expect(callback).toBeDefined();
-
-      if (cleanup === 'complete') {
-        act(() => mockMM.setMatches(REDUCED_MOTION_QUERY, true));
-        expect(result.current).toBe(100);
-      } else {
-        unmount();
-      }
-
-      expect(cancelSpy).toHaveBeenCalledWith(0);
-      const easingCalls = easing.mock.calls.length;
-      act(() => callback?.(16));
-      expect(easing).toHaveBeenCalledTimes(easingCalls);
-      expect(requestSpy).toHaveBeenCalledTimes(1);
-    },
-  );
 });

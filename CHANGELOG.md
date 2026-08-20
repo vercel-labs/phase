@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- Complete active `useTween` animations when reduced motion turns on and remove the unsupported `'pause'` mode.
+- Give `useTween` a dedicated reduced-motion type and remove the unsupported `'pause'` mode.
 
 ## 0.3.1
 
