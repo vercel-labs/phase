@@ -1,5 +1,11 @@
 # phase
 
+## 0.3.3
+
+### Patch Changes
+
+- Split the audit scanner into typed TypeScript region modules without changing its detection behavior.
+
 ## 0.3.2
 
 ### Patch Changes
