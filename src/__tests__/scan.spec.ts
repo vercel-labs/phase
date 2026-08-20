@@ -11,8 +11,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { SIGNAL_EXAMPLES } from '../../skills/phase/scripts/scan-examples.mjs';
-import type { ScanFinding } from '../../skills/phase/scripts/scan.d.mts';
+import { SIGNAL_EXAMPLES } from '../../scanner/scan-examples.mjs';
+import type { ScanFinding } from '../../scanner/scan.d.mts';
 import {
   formatText,
   newDiag,
@@ -20,7 +20,7 @@ import {
   scanTargets,
   SEVERITY_ORDER,
   SIGNALS,
-} from '../../skills/phase/scripts/scan.mjs';
+} from '../../scanner/scan.mjs';
 
 /**
  * Executable-example suite for the audit scanner. Every signal in the
@@ -32,7 +32,9 @@ import {
 
 const NOISE_TIERS = new Set(['precise', 'normal', 'noisy']);
 
-// Vitest runs with the repo root as cwd.
+// Vitest runs with the repo root as cwd. CLI tests exercise the built
+// bundle (generated from scanner/scan.mjs by `pnpm skill:build`), which is
+// what ships in the skill; unit tests above import the scanner/ source.
 const SCRIPT = join(process.cwd(), 'skills/phase/scripts/scan.mjs');
 const SCENARIO_DIR = join(
   process.cwd(),
@@ -888,6 +890,37 @@ describe('scan CLI', () => {
     );
     const metadata = JSON.parse(readFileSync(METADATA, 'utf8'));
     expect(actual.skillVersion).toBe(metadata.version);
+  });
+
+  it('reads metadata.json relative to the installed built bundle', () => {
+    // The built artifact resolves ../metadata.json from its own
+    // import.meta.url; bundling must not break that layout contract.
+    const root = mkdtempSync(join(tmpdir(), 'phase-installed-skill-'));
+    const scripts = join(root, 'scripts');
+    const workspace = join(root, 'workspace');
+    mkdirSync(scripts);
+    mkdirSync(workspace);
+
+    try {
+      const installedScript = join(scripts, 'scan.mjs');
+      writeFileSync(installedScript, readFileSync(SCRIPT, 'utf8'));
+      writeFileSync(join(root, 'metadata.json'), '{ "version": "9.9.9" }\n');
+      writeFileSync(
+        join(workspace, 'clean.ts'),
+        'export const clean = true;\n',
+      );
+
+      const run = spawnSync(
+        process.execPath,
+        [installedScript, '--json', workspace],
+        { encoding: 'utf8' },
+      );
+
+      expect(run.status).toBe(0);
+      expect(JSON.parse(run.stdout).skillVersion).toBe('9.9.9');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('reads the installed skill version when metadata.json is absent', () => {

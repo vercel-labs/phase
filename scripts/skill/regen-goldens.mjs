@@ -11,6 +11,15 @@ const scenario = join(
 );
 const scanner = join(root, 'skills/phase/scripts/scan.mjs');
 
+// Goldens must reflect shipped output, so they come from the built bundle.
+// Rebuild it first, or a scanner/ edit would regenerate them from a stale one.
+const bundle = spawnSync(
+  'pnpm',
+  ['exec', 'tsdown', '-c', 'tsdown.scanner.config.ts'],
+  { cwd: root, stdio: 'inherit' },
+);
+if (bundle.status !== 0) process.exit(bundle.status ?? 1);
+
 function scan(args) {
   const run = spawnSync(process.execPath, [scanner, ...args, 'workspace'], {
     cwd: scenario,

@@ -28,7 +28,7 @@
     "prepare": "lefthook install || true",
     "validate": "pnpm run --parallel '/^(typecheck|lint|format|test|skill:check)$/'",
     "skill:check": "node scripts/skill/check-coverage.mjs && node scripts/skill/check-scan-sync.mjs",
-    "skill:build": "node scripts/skill/build-metadata.mjs && node scripts/skill/sync-scan-docs.mjs",
+    "skill:build": "tsdown -c tsdown.scanner.config.ts && node scripts/skill/build-metadata.mjs && node scripts/skill/sync-scan-docs.mjs",
     "skill:package": "node scripts/skill/package.mjs"
   },
   "peerDependencies": {

@@ -23,14 +23,14 @@ pnpm size:readme       # Build and update README.md bundle size table
 pnpm goldens           # Regenerate scanner goldens and the audit sample
 pnpm validate          # Run typecheck, lint, format, test, and skill:check in parallel
 pnpm skill:check       # Verify every public export has a skill reference (drift guard)
-pnpm skill:build       # Regenerate skills/phase/metadata.json from SKILL.md
+pnpm skill:build       # Bundle scanner/scan.mjs and regenerate skills/phase/metadata.json from SKILL.md
 pnpm skill:package     # Rebuild the deterministic skills/phase/dist/phase-skill.zip
 ```
 
 **When these run automatically:**
 
 - `skill:check` runs as part of `pnpm validate` and in CI on every PR.
-- `skill:build` + `skill:package` run on pre-commit (via lefthook) whenever a file under `skills/phase/` is staged, and Lefthook re-stages the regenerated `metadata.json` and zip automatically. You rarely need to run them by hand.
+- `skill:build` + `skill:package` run on pre-commit (via lefthook) whenever a file under `skills/phase/`, `scanner/`, or `scripts/skill/` is staged, and Lefthook re-stages the regenerated `metadata.json`, bundled `scripts/scan.mjs`, and zip automatically. You rarely need to run them by hand.
 - CI re-verifies all of these on every PR; the release workflow re-verifies them before publishing. A stale generated file fails the build.
 
 ## Architecture
@@ -218,15 +218,15 @@ Every export falls into one category. New exports must fit an existing category 
 
 ### New scanner signal (audit skill)
 
-The audit scanner (`skills/phase/scripts/scan.mjs`) detects anti-pattern candidates; every signal ships with executable examples and calibrated triage metadata. Check the signal against the skill's scope first (animation lifecycle, rendering gating, observer/listener hygiene, CSS animation cost — see audit.md "Scope and handoffs"); adjacent React/Next.js perf concerns belong to other skills, not new signals.
+The audit scanner lives at `scanner/scan.mjs` (source) and ships as a generated bundle at `skills/phase/scripts/scan.mjs` (built by `pnpm skill:build`, never hand-edited). It detects anti-pattern candidates; every signal ships with executable examples and calibrated triage metadata. Check the signal against the skill's scope first (animation lifecycle, rendering gating, observer/listener hygiene, CSS animation cost — see audit.md "Scope and handoffs"); adjacent React/Next.js perf concerns belong to other skills, not new signals.
 
-1. Add the catalog entry to `SIGNALS` in `scan.mjs`: kebab-case `id`, `label`, `severity` (`critical`/`high`/`medium`/`dedup`, per audit.md's weighting), `noise` (`precise`/`normal`/`noisy`), a one-line `why`, a one-line `replacement` naming what to use instead (both are printed in every report block), and a `fix` pointer to a real `references/<file>#anchor`. Detection is a `pattern` plus optional `contextPattern` (±5 lines by default; set `contextLines` only with a regression example), or a custom `matcher` (`(lines, i) => boolean`, pure). Optional: `fileTypes` (`css`/`jsx`/array), `supersedes`, `perFile`, `codeOnly`.
+1. Add the catalog entry to `SIGNALS` in `scanner/scan.mjs`: kebab-case `id`, `label`, `severity` (`critical`/`high`/`medium`/`dedup`, per audit.md's weighting), `noise` (`precise`/`normal`/`noisy`), a one-line `why`, a one-line `replacement` naming what to use instead (both are printed in every report block), and a `fix` pointer to a real `references/<file>#anchor`. Detection is a `pattern` plus optional `contextPattern` (±5 lines by default; set `contextLines` only with a regression example), or a custom `matcher` (`(lines, i) => boolean`, pure). Optional: `fileTypes` (`css`/`jsx`/array), `supersedes`, `perFile`, `codeOnly`.
    - **`negativePattern` is whole-file.** It suppresses the signal for every line in a file that matches it anywhere, so it only suits `perFile` signals. For a condition that belongs to one declaration or one enclosing rule, write a `matcher` — a file-wide negative silenced `permanent-will-change` on every stylesheet containing a `:hover` rule, which is to say all of them.
    - **Watch the regex for ambiguity.** A group that can match empty inside a quantifier (`(?:\s*,?\s*…)*`) makes a failing match exponential. Signals run over unknown third-party code; a pattern that can hang is a pattern that will.
-2. Add examples to `scan-examples.mjs` under the same id: at least one `match` and one `noMatch`, including a regression example for every false positive the signal must avoid. The suite fails structurally without them.
+2. Add examples to `scanner/scan-examples.mjs` under the same id: at least one `match` and one `noMatch`, including a regression example for every false positive the signal must avoid. The suite fails structurally without them.
 3. Write the examples to encode intended behavior before tuning the detection (red first): `pnpm vitest run src/__tests__/scan.spec.ts`.
    - **Severity is what it costs when real; execution is what it costs now.** The scanner classifies each JS finding as per-frame or incidental from the surrounding code and ranks accordingly, so a signal does not need a severity bump to be noticed in a hot path. Set severity for the worst case and let the ranking sort the rest.
-4. Probe, don't just read: run the scanner against a real repo (`node skills/phase/scripts/scan.mjs <path>`), hand-classify a sample of findings, and set the noise tier from what you observe. Record the provenance in the PR description.
+4. Probe, don't just read: run the scanner against a real repo (`pnpm skill:build && node skills/phase/scripts/scan.mjs <path>`), hand-classify a sample of findings, and set the noise tier from what you observe. Record the provenance in the PR description.
 5. Add the row to audit.md's signal table. `pnpm skill:check` fails CI when the table or fix pointers drift from the catalog; `pnpm test` executes the examples and eval ground truth.
 6. If the signal fires on the planted-defect fixture (`skills/phase/evals/scenarios/audit-planted-defects/workspace`), run `pnpm goldens` to regenerate both goldens and audit.md's sample block in the required order.
 7. Run `pnpm format:fix && pnpm validate`.
@@ -235,7 +235,7 @@ When a real-world audit failure surfaces (wrong recommendation, missed context),
 
 ### Recalibrating the scanner
 
-Noise tiers are evidence-backed: they come from hand-classifying findings on real code. The durable outcomes are encoded where they are enforceable — every confirmed false-positive class becomes a `noMatch` example in `scan-examples.mjs` (with the test suite executing it forever) and, where a cheap tightening kills the whole class, a detection fix. Recalibrate when a signal's detection changes (mandatory, at least for the changed signals), when a field report claims a false positive or negative, or before a release that touches the scanner.
+Noise tiers are evidence-backed: they come from hand-classifying findings on real code. The durable outcomes are encoded where they are enforceable — every confirmed false-positive class becomes a `noMatch` example in `scanner/scan-examples.mjs` (with the test suite executing it forever) and, where a cheap tightening kills the whole class, a detection fix. Recalibrate when a signal's detection changes (mandatory, at least for the changed signals), when a field report claims a false positive or negative, or before a release that touches the scanner.
 
 1. Shallow-clone 2-3 real, actively maintained open-source repos into `/tmp`, never into this repo. Pick by profile so the mix approximates consumers: a Tailwind-heavy component library, a canvas/whiteboard-style app (rAF and pointer heavy), and a production Next.js App Router app (ideally with PPR enabled, to exercise context detection). Add a repo likely to exercise the signal under calibration; repos resembling the actual consumer's codebase beat popular OSS. Pick apps, not animation/rendering engines (engines legitimately own raw rAF and observers internally, so their findings teach nothing about consumer code), and beware SDK-weighted monorepos: library internals skew the sample, and third-party state-machine APIs with their own `onTick` name-collide with `setstate-in-ontick`.
 2. Run `node skills/phase/scripts/scan.mjs --json /tmp/<repo>` per repo. Compare per-signal counts before and after your change; a count that moved without a corresponding scanner change is itself a finding.
@@ -253,7 +253,7 @@ Run this sequence before every commit. Lefthook covers some of it on pre-commit,
 pnpm lint:fix            # oxlint auto-fix
 pnpm format:fix          # oxfmt (including .md files)
 pnpm size:readme         # regenerate README bundle-size table
-pnpm skill:build         # regenerate metadata.json from SKILL.md
+pnpm skill:build         # bundle scanner/scan.mjs + regenerate metadata.json
 pnpm skill:package       # regenerate phase-skill.zip
 ```
 
@@ -285,7 +285,7 @@ The `skills/phase/` directory contains an agent skill that documents the public 
 ### Source of truth and generated files
 
 - **Hand-edit:** `SKILL.md` and `references/*.md`. Start new references from `skills/phase/references/_template.md`. `SKILL.md` frontmatter is the single source of truth for the skill's `name`, `description`, `license`, `version`, `author`, and `abstract`.
-- **Never hand-edit (generated by `skill:build` / `skill:package`):** `metadata.json`, `dist/phase-skill.zip`, and the scan-golden sample block inside `references/audit.md` (spliced from `evals/scenarios/audit-planted-defects/expected-scan.txt` by `scripts/skill/sync-scan-docs.mjs`). To change the version, edit `SKILL.md` frontmatter and rebuild.
+- **Never hand-edit (generated by `skill:build` / `skill:package`):** `metadata.json`, `dist/phase-skill.zip`, `scripts/scan.mjs` (bundled from `scanner/scan.mjs` by tsdown; edit the source, not the artifact), and the scan-golden sample block inside `references/audit.md` (spliced from `evals/scenarios/audit-planted-defects/expected-scan.txt` by `scripts/skill/sync-scan-docs.mjs`). To change the version, edit `SKILL.md` frontmatter and rebuild.
 - The skill `version` is intentionally independent of the package `version`. They evolve on different cadences. Don't sync them.
 
 ### When to update skill references
@@ -303,7 +303,7 @@ After any change to:
 ```bash
 pnpm format:fix               # format everything including markdown
 pnpm skill:check              # verify no drift between barrels and references
-pnpm skill:build              # regenerate skills/phase/metadata.json
+pnpm skill:build              # bundle scanner + regenerate skills/phase/metadata.json
 pnpm skill:package            # regenerate skills/phase/dist/phase-skill.zip
 ```
 

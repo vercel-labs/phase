@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
-  "ignorePatterns": ["skills/phase/evals/**"],
+  "ignorePatterns": ["skills/phase/evals/**", "skills/phase/scripts/scan.mjs"],
   "categories": {
     "correctness": "error",
     "suspicious": "warn",
