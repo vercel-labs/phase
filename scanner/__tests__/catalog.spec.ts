@@ -1,9 +1,28 @@
-import { NOISE_TIERS, SEVERITY_ORDER, SIGNALS } from '../signals.ts';
+import {
+  NOISE_TIERS,
+  SEVERITY_ORDER,
+  SIGNALS,
+  validateSignalEvidence,
+} from '../signals.ts';
+import type { ScanSignal } from '../signals.ts';
 
 describe('scan signal catalog', () => {
   it('has unique ids', () => {
     const ids = SIGNALS.map((signal) => signal.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('rejects an unknown evidence name with the signal id', () => {
+    // @ts-expect-error Evidence names are closed over the analysis registry.
+    const unknownEvidence: NonNullable<ScanSignal['evidence']> =
+      'unknown-evidence';
+    expect(() =>
+      validateSignalEvidence([
+        { id: 'broken-signal', evidence: unknownEvidence },
+      ]),
+    ).toThrow(
+      "Signal 'broken-signal' names unknown evidence 'unknown-evidence'",
+    );
   });
 
   for (const signal of SIGNALS) {

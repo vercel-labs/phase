@@ -1,3 +1,12 @@
+import {
+  EVIDENCE_REGISTRY,
+  FORCED_REFLOW_READ,
+  MATCH_MEDIA_CALL,
+  OBSERVED_LAYOUT_READ,
+  STATE_UPDATE_CONTEXT,
+  WINDOW_LISTENER_LAYOUT_READ,
+} from './analysis.ts';
+import type { EvidenceName } from './analysis.ts';
 import { escapeRegExp, maskStrings } from './lex.ts';
 
 export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'dedup'] as const;
@@ -31,12 +40,7 @@ interface ScanSignalBase {
   contextPattern?: RegExp;
   contextLines?: number;
   contextScope?: 'block';
-  moveHandlerReads?: RegExp;
-  recurringRafOnly?: boolean;
-  recurringRafStateOnly?: boolean;
-  recurringRafBranch?: boolean;
-  recurringTimerOnly?: boolean;
-  subscribedMediaQueryOnly?: boolean;
+  evidence?: EvidenceName;
 }
 
 export type ScanSignal = ScanSignalBase &
@@ -44,16 +48,6 @@ export type ScanSignal = ScanSignalBase &
     | { pattern: RegExp; matcher?: never }
     | { matcher: ScanMatcher; pattern?: never }
   );
-
-// Context pattern for state updates. Excludes DOM/timer/canvas setters that
-// are legitimate inside frame callbacks. The exclusions accept rare false
-// negatives when a React setter shares a DOM setter name (e.g. setSelection,
-// setTransform): missing one candidate beats flagging the recommended pattern.
-// Known accepted FP class (calibrated): non-React `dispatch(` from editor or
-// store libraries (e.g. a CodeMirror transaction) near a rAF; the noise tier
-// covers it, and distinguishing them line-based is not worth the complexity.
-export const STATE_UPDATE_CONTEXT =
-  /\bsetState\s*\(|\bdispatch\s*\(|\bset(?!Timeout\b|Interval\b|Immediate\b|Attribute|Property\b|PointerCapture\b|Item\b|Selection|RangeText\b|CustomValidity\b|Transform\b|LineDash\b|SinkId\b|RequestHeader\b)[A-Z]\w*\s*\(/;
 
 // Bare-duration transition shorthand (no property named, so it animates all).
 // The lookbehind skips vendor-prefixed forms (-webkit-transition:): prefixed
@@ -69,63 +63,6 @@ const NON_COMPOSITOR_TRANSITION = new RegExp(
   `${/(?<![\w-])transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/.source}|${BARE_DURATION_TRANSITION.source}`,
 );
 
-// Declared here because the catalog below reads it while this module
-// initializes. The global form finds every call in a file.
-const MATCH_MEDIA_CALL = /\bmatchMedia\s*(?:\?\.)?\s*\(/;
-export const MATCH_MEDIA_CALLS = new RegExp(MATCH_MEDIA_CALL.source, 'g');
-
-// The scanner recognizes a layout read only through member access
-// (`el.offsetWidth`, `el?.offsetWidth`, or `el['offsetWidth']`) or a layout API
-// call. Bare-name matching treated JSX props such as
-// `<Overlay offsetLeft={12} />` as critical reflows, even though a property
-// name alone proves nothing about the DOM. Destructuring remains unmatched
-// because attributing the value to an element requires data-flow analysis.
-// Each signal keeps its own property list; this builder standardizes how the
-// scanner matches that list.
-function layoutReadPattern(
-  properties: string[],
-  { computedStyle = false }: { computedStyle?: boolean } = {},
-): RegExp {
-  const names = properties.join('|');
-  const forms = [
-    `(?:\\?\\.|\\.)\\s*(?:${names})\\b`,
-    `\\[\\s*['"](?:${names})['"]\\s*\\]`,
-    String.raw`(?:\?\.|\.)\s*getBoundingClientRect\s*(?:\?\.)?\s*\(`,
-    String.raw`\[\s*['"]getBoundingClientRect['"]\s*\]\s*(?:\?\.)?\s*\(`,
-  ];
-  if (computedStyle) forms.push(String.raw`\bgetComputedStyle\s*\(`);
-  return new RegExp(forms.join('|'));
-}
-
-const SIZE_READS = [
-  'offsetWidth',
-  'offsetHeight',
-  'scrollWidth',
-  'scrollHeight',
-  'clientWidth',
-  'clientHeight',
-];
-const POSITION_READS = ['offsetTop', 'offsetLeft'];
-const SCROLL_READS = ['scrollTop', 'scrollLeft'];
-
-const FORCED_REFLOW_READ = layoutReadPattern(
-  [...SIZE_READS, ...POSITION_READS],
-  { computedStyle: true },
-);
-const OBSERVED_LAYOUT_READ = layoutReadPattern(
-  [...SIZE_READS, ...SCROLL_READS],
-  { computedStyle: true },
-);
-const WINDOW_LISTENER_LAYOUT_READ = layoutReadPattern([
-  ...SIZE_READS,
-  ...SCROLL_READS,
-]);
-const POINTER_LAYOUT_READ = layoutReadPattern([
-  ...SIZE_READS,
-  ...POSITION_READS,
-  ...SCROLL_READS,
-]);
-
 const SIGNAL_CATALOG = [
   {
     id: 'manual-raf',
@@ -140,7 +77,7 @@ const SIGNAL_CATALOG = [
     fix: 'references/audit.md#common-replacements',
     pattern: /requestAnimationFrame/,
     codeOnly: true,
-    recurringRafOnly: true,
+    evidence: 'recurring-raf-cycle',
   },
   {
     id: 'setstate-in-raf',
@@ -155,7 +92,7 @@ const SIGNAL_CATALOG = [
     supersedes: 'manual-raf',
     pattern: /requestAnimationFrame/,
     codeOnly: true,
-    recurringRafStateOnly: true,
+    evidence: 'recurring-raf-state',
   },
   {
     id: 'setstate-in-ontick',
@@ -234,7 +171,7 @@ const SIGNAL_CATALOG = [
     // A `.matches` snapshot subscribes to nothing, so the finding needs a
     // listener on the same receiver. Strings are masked out of the match so an
     // inline pre-hydration script does not read as application code.
-    subscribedMediaQueryOnly: true,
+    evidence: 'subscribed-media-query',
     codeOnly: true,
   },
   {
@@ -288,7 +225,7 @@ const SIGNAL_CATALOG = [
     negativeCodeOnly: true,
     fileTypes: ['js', 'css'],
     codeOnly: true,
-    recurringRafBranch: true,
+    evidence: 'recurring-raf-branch',
     // The gap is a property of the whole file, not of each animating line.
     perFile: true,
   },
@@ -305,7 +242,7 @@ const SIGNAL_CATALOG = [
     fix: 'references/timed-sequences.md',
     pattern: /setInterval|setTimeout/,
     contextPattern: /transform|opacity|translate|\banimate\b/,
-    recurringTimerOnly: true,
+    evidence: 'recurring-timer',
   },
   {
     id: 'manual-synced-ref',
@@ -421,8 +358,7 @@ const SIGNAL_CATALOG = [
     // match without treating a custom-component prop as a DOM event.
     pattern:
       /addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove)['"]|\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/,
-    contextPattern: POINTER_LAYOUT_READ,
-    moveHandlerReads: POINTER_LAYOUT_READ,
+    evidence: 'move-handler-layout-read',
   },
   {
     id: 'redundant-mutation-observers',
@@ -517,6 +453,25 @@ const SIGNAL_CATALOG = [
 ] satisfies ScanSignal[];
 
 export type ScanSignalId = (typeof SIGNAL_CATALOG)[number]['id'];
+
+interface SignalEvidenceEntry {
+  id: string;
+  evidence?: string;
+}
+
+export function validateSignalEvidence(
+  signals: readonly SignalEvidenceEntry[],
+): void {
+  for (const signal of signals) {
+    if (signal.evidence && !Object.hasOwn(EVIDENCE_REGISTRY, signal.evidence)) {
+      throw new Error(
+        `Signal '${signal.id}' names unknown evidence '${signal.evidence}'`,
+      );
+    }
+  }
+}
+
+validateSignalEvidence(SIGNAL_CATALOG);
 
 export const SIGNALS: ScanSignal[] = SIGNAL_CATALOG;
 
