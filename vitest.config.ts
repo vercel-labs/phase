@@ -4,6 +4,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['src/**/*.spec.{ts,tsx}', 'scanner/**/*.spec.ts'],
+    include: [
+      'src/**/*.spec.{ts,tsx}',
+      'scanner/**/*.spec.ts',
+      'scripts/skill/**/*.spec.mjs',
+    ],
   },
 });

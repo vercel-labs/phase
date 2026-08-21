@@ -4,14 +4,12 @@
  * Verifies the audit skill's documentation stays in sync with the scanner
  * and that reference links resolve:
  *
- * 1. audit.md's signal table lists exactly the SIGNALS in scan.mjs, with
- *    matching severity and noise tiers.
+ * 1. audit.md's generated signal table and sample scan output are fresh.
  * 2. Every signal's fix pointer resolves to a real reference file, and its
  *    anchor to a real heading.
- * 3. audit.md's sample scan output equals the committed golden.
- * 4. Every relative link in references/*.md resolves (file and anchor).
- * 5. Eval scenario ground truth references real signals.
- * 6. The untrusted-content guardrails exist in audit.md and SKILL.md.
+ * 3. Every relative link in references/*.md resolves (file and anchor).
+ * 4. Eval scenario ground truth references real signals.
+ * 5. The untrusted-content guardrails exist in audit.md and SKILL.md.
  *
  * Exit code 0 = in sync, 1 = drift detected. Zero dependencies.
  */
@@ -19,7 +17,9 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { SIGNALS } from '../../scanner/signals.ts';
+import { NOISE_TIERS, SEVERITY_ORDER, SIGNALS } from '../../scanner/signals.ts';
+import { readMarkerBlock } from './marker-block.mjs';
+import { isSignalTableFresh } from './scan-docs.mjs';
 
 const root = resolve(import.meta.dirname, '..', '..');
 const refsDir = join(root, 'skills', 'phase', 'references');
@@ -74,52 +74,32 @@ function markdownInfo(path) {
   return markdownCache.get(path);
 }
 
-// --- 1. Signal table matches SIGNALS ---
+// --- 1. Generated regions are fresh ---
 
 const audit = readFileSync(auditPath, 'utf8');
-const tableRows = new Map();
-const rowRe =
-  /^\| `([a-z-]+)`\s+\| (critical|high|medium|dedup)\s+\| (precise|normal|noisy)\s+\|.*\|\s+\[[^\]]+\]\(([^)]+)\)\s+\|$/gm;
-let row;
-while ((row = rowRe.exec(audit)) !== null) {
-  const target = row[4];
-  const fix = target.startsWith('#')
-    ? `references/audit.md${target}`
-    : `references/${target.replace(/^\.\//, '')}`;
-  tableRows.set(row[1], { severity: row[2], noise: row[3], fix });
-}
 
-for (const signal of SIGNALS) {
-  const documented = tableRows.get(signal.id);
-  if (!documented) {
-    fail(`audit.md signal table is missing \`${signal.id}\``);
-    continue;
+try {
+  if (!isSignalTableFresh(audit, SIGNALS, SEVERITY_ORDER)) {
+    fail('audit.md signal table is stale (run pnpm skill:build)');
   }
-  if (documented.severity !== signal.severity) {
-    fail(
-      `audit.md lists ${signal.id} as ${documented.severity}, scan.mjs says ${signal.severity}`,
-    );
+
+  const golden = readFileSync(goldenPath, 'utf8');
+  if (readMarkerBlock(audit, 'scan-golden', { fence: '```' }) !== golden) {
+    fail('audit.md sample scan output is stale (run pnpm skill:build)');
   }
-  if (documented.noise !== signal.noise) {
-    fail(
-      `audit.md lists ${signal.id} noise as ${documented.noise}, scan.mjs says ${signal.noise}`,
-    );
-  }
-  if (documented.fix !== signal.fix) {
-    fail(
-      `audit.md links ${signal.id} to ${documented.fix}, scan.mjs says ${signal.fix}`,
-    );
-  }
-}
-for (const id of tableRows.keys()) {
-  if (!SIGNALS.some((s) => s.id === id)) {
-    fail(`audit.md signal table lists \`${id}\`, which scan.mjs does not have`);
-  }
+} catch (error) {
+  fail(error.message);
 }
 
 // --- 2. Fix pointers resolve ---
 
 for (const signal of SIGNALS) {
+  if (!SEVERITY_ORDER.includes(signal.severity)) {
+    fail(`${signal.id} has unknown severity: ${signal.severity}`);
+  }
+  if (!NOISE_TIERS.includes(signal.noise)) {
+    fail(`${signal.id} has unknown noise tier: ${signal.noise}`);
+  }
   const match = /^references\/([\w./-]+?)(?:#([\w-]+))?$/.exec(signal.fix);
   if (!match) {
     fail(`${signal.id} fix pointer is malformed: ${signal.fix}`);
@@ -136,24 +116,7 @@ for (const signal of SIGNALS) {
   }
 }
 
-// --- 3. Golden sample in audit.md matches the committed golden ---
-
-const goldenBlock =
-  /<!-- scan-golden:begin -->\s*\n```\n([\s\S]*?)```\s*\n<!-- scan-golden:end -->/.exec(
-    audit,
-  );
-if (!goldenBlock) {
-  fail('audit.md is missing the scan-golden block');
-} else {
-  const golden = readFileSync(goldenPath, 'utf8');
-  if (goldenBlock[1] !== golden) {
-    fail(
-      'audit.md sample scan output differs from expected-scan.txt (regenerate the block from the golden)',
-    );
-  }
-}
-
-// --- 4. Relative links in references resolve ---
+// --- 3. Relative links in references resolve ---
 
 // Underscore-prefixed files are templates with placeholder links.
 const referenceFiles = readdirSync(refsDir).filter(
@@ -186,7 +149,7 @@ for (const fileName of referenceFiles) {
   }
 }
 
-// --- 5. Eval scenario ground truth references real signals ---
+// --- 4. Eval scenario ground truth references real signals ---
 
 const scenariosDir = join(root, 'skills/phase/evals/scenarios');
 for (const scenario of readdirSync(scenariosDir)) {
@@ -212,7 +175,7 @@ for (const scenario of readdirSync(scenariosDir)) {
   }
 }
 
-// --- 6. Untrusted-content guardrails present ---
+// --- 5. Untrusted-content guardrails present ---
 
 // The audit path reads outsider-authored code and scan output; these
 // guardrails are the skill's injection defense and must not silently
