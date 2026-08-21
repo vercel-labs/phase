@@ -11,6 +11,7 @@ describe('scan signal catalog', () => {
       it('declares complete triage metadata', () => {
         expect(SEVERITY_ORDER).toContain(signal.severity);
         expect(NOISE_TIERS).toContain(signal.noise);
+        expect(signal.detects.length).toBeGreaterThan(0);
         expect(signal.why.length).toBeGreaterThan(0);
         expect(signal.replacement.length).toBeGreaterThan(0);
         expect(signal.fix.startsWith('references/')).toBe(true);

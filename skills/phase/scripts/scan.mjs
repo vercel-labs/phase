@@ -275,6 +275,12 @@ function noteEvidence(context, path) {
 }
 //#endregion
 //#region scanner/signals.ts
+const SEVERITY_ORDER = [
+	"critical",
+	"high",
+	"medium",
+	"dedup"
+];
 const NOISE_TIERS = [
 	"precise",
 	"normal",
@@ -320,6 +326,7 @@ const SIGNALS = [
 		label: "Manual requestAnimationFrame loop",
 		severity: "high",
 		noise: "noisy",
+		detects: "Proven raw rAF callback cycle: no visibility pause, shared clock, or cleanup",
 		why: "No visibility pausing, no shared clock, no cleanup.",
 		fix: "references/audit.md#common-replacements",
 		pattern: /requestAnimationFrame/,
@@ -332,6 +339,7 @@ const SIGNALS = [
 		label: "setState/dispatch inside rAF callback",
 		severity: "critical",
 		noise: "normal",
+		detects: "State update inside a recurring rAF callback (60 re-renders/sec)",
 		why: "60 re-renders/sec: React reconciles on every frame.",
 		fix: "references/performance.md#never-setstate-inside-ontick--draw",
 		supersedes: "manual-raf",
@@ -345,6 +353,7 @@ const SIGNALS = [
 		label: "setState/dispatch inside a phase onTick/onDraw/draw callback",
 		severity: "critical",
 		noise: "normal",
+		detects: "State update inside a phase `onTick`/`onDraw`/`draw` callback",
 		why: "60 re-renders/sec; write to refs or the DOM inside frame callbacks.",
 		fix: "references/performance.md#never-setstate-inside-ontick--draw",
 		pattern: /\bonTick\s*[:=(]|\bonDraw\s*[:=(]|\bdraw\s*:/,
@@ -359,6 +368,7 @@ const SIGNALS = [
 		label: "Forced reflow (getBoundingClientRect, offsetWidth, etc.)",
 		severity: "critical",
 		noise: "noisy",
+		detects: "Layout-reading member access or call (`getBoundingClientRect`, `.offset*`, `.scroll*`, `.client*`)",
 		why: "Synchronous layout; in a hot path it thrashes every frame.",
 		fix: "references/performance.md#no-forced-reflows-in-animation-paths",
 		pattern: FORCED_REFLOW_READ
@@ -369,6 +379,7 @@ const SIGNALS = [
 		label: "Potential layout-inducing JavaScript write",
 		severity: "high",
 		noise: "noisy",
+		detects: "JavaScript write to SVG geometry/transforms or CSS layout properties",
 		why: "Repeated SVG or CSS layout writes can cause layout and paint.",
 		fix: "references/performance.md#no-layout-inducing-writes-in-animation-paths",
 		matcher: matchesLayoutWrite
@@ -379,6 +390,7 @@ const SIGNALS = [
 		label: "Raw IntersectionObserver (not pooled)",
 		severity: "medium",
 		noise: "normal",
+		detects: "`new IntersectionObserver` outside the pool",
 		why: "Unpooled observer instances and manual cleanup leak over time.",
 		fix: "references/performance.md#observer-pooling",
 		pattern: /new\s+IntersectionObserver/
@@ -389,6 +401,7 @@ const SIGNALS = [
 		label: "Raw ResizeObserver (not pooled)",
 		severity: "medium",
 		noise: "normal",
+		detects: "`new ResizeObserver` outside the pool",
 		why: "Unpooled observer instances and manual cleanup leak over time.",
 		fix: "references/performance.md#observer-pooling",
 		pattern: /new\s+ResizeObserver/
@@ -399,6 +412,7 @@ const SIGNALS = [
 		label: "Raw matchMedia (not pooled)",
 		severity: "medium",
 		noise: "normal",
+		detects: "`matchMedia(` with a listener on the result, outside the pool",
 		why: "Unpooled MediaQueryList subscriptions; phase pools them by query.",
 		fix: "references/use-media-query.md",
 		pattern: MATCH_MEDIA_CALL,
@@ -411,6 +425,7 @@ const SIGNALS = [
 		label: "MutationObserver driving layout (reflow / style+subtree observation)",
 		severity: "critical",
 		noise: "normal",
+		detects: "MutationObserver watching inline styles or reading layout in its callback",
 		why: "Layout reads in MO callbacks force a reflow on every mutation.",
 		fix: "references/performance.md#never-drive-layout-from-a-mutationobserver",
 		pattern: /new\s+MutationObserver/,
@@ -422,6 +437,7 @@ const SIGNALS = [
 		label: "JS-driven opacity/transform (may be browser-driven)",
 		severity: "medium",
 		noise: "noisy",
+		detects: "`style.opacity`/`style.transform` writes (browser-driven candidate)",
 		why: "May be browser-driven; inspect whether JavaScript must compute live frames.",
 		fix: "references/decision-guide.md#tier-1-browser-driven-css-or-waapi",
 		pattern: /\.style\.(opacity|transform)\s*=/
@@ -432,6 +448,7 @@ const SIGNALS = [
 		label: "Animation without reduced-motion check",
 		severity: "critical",
 		noise: "noisy",
+		detects: "Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling",
 		why: "Accessibility gap: motion plays for users who asked for none.",
 		fix: "references/performance.md#reduced-motion-by-default",
 		pattern: /requestAnimationFrame|@keyframes|animation:(?!\s*none\b)/,
@@ -448,6 +465,7 @@ const SIGNALS = [
 		label: "setInterval/setTimeout for animation (no visibility check)",
 		severity: "high",
 		noise: "noisy",
+		detects: "`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity work",
 		why: "Timers keep firing off-screen and in background tabs.",
 		fix: "references/timed-sequences.md",
 		pattern: /setInterval|setTimeout/,
@@ -460,6 +478,7 @@ const SIGNALS = [
 		label: "Manual synced ref (dedup: useSyncedRef offers a shorthand)",
 		severity: "dedup",
 		noise: "precise",
+		detects: "`useRef(v)` + unconditional `ref.current = v` (shorthand exists)",
 		why: "Correct React idiom; useSyncedRef is a one-line shorthand.",
 		fix: "references/use-synced-ref.md",
 		matcher: matchesSyncedRef
@@ -470,6 +489,7 @@ const SIGNALS = [
 		label: "Manual stable callback (dedup: useStableCallback offers a shorthand)",
 		severity: "dedup",
 		noise: "precise",
+		detects: "`useCallback` with empty deps calling through a ref **(JSX)**",
 		why: "Correct React idiom; useStableCallback is a one-line shorthand.",
 		fix: "references/use-stable-callback.md",
 		matcher: matchesStableCallback,
@@ -481,6 +501,7 @@ const SIGNALS = [
 		label: "Global :has() selector (broad style invalidation)",
 		severity: "high",
 		noise: "precise",
+		detects: "`body:has`/`html:has`/`:root:has`/`*:has` in a stylesheet **(CSS)**",
 		why: "Re-checked on any mutation that could affect the argument.",
 		fix: "references/performance-recipes.md#recipe-delete-a-global-has-rule",
 		pattern: /body:has\(|html:has\(|:root:has\(|\*:has\(/,
@@ -492,6 +513,7 @@ const SIGNALS = [
 		label: "Permanent will-change (wastes GPU memory when idle)",
 		severity: "medium",
 		noise: "normal",
+		detects: "`will-change` never toggled with animation state **(CSS)**",
 		why: "A GPU layer is held even while nothing animates.",
 		fix: "references/performance.md#will-change-only-while-animating",
 		matcher: matchesPermanentWillChange,
@@ -503,6 +525,7 @@ const SIGNALS = [
 		label: "Animating a non-compositor property (layout/paint, not transform/opacity)",
 		severity: "high",
 		noise: "normal",
+		detects: "`transition: all`, layout properties, or bare-duration shorthand **(CSS)**",
 		why: "Layout + paint every frame, off the compositor.",
 		fix: "references/audit.md#step-15-css-loading-and-architecture-pass",
 		matcher: matchesNonCompositorTransition,
@@ -514,6 +537,7 @@ const SIGNALS = [
 		label: "Layout property animated inside @keyframes",
 		severity: "high",
 		noise: "normal",
+		detects: "Layout property (`width`/`height`/`top`/`left`) inside `@keyframes` **(CSS)**",
 		why: "Layout + paint every frame, off the compositor.",
 		fix: "references/audit.md#step-15-css-loading-and-architecture-pass",
 		matcher: matchesKeyframesLayoutProp,
@@ -525,6 +549,7 @@ const SIGNALS = [
 		label: "Bare resize/scroll listener with layout read",
 		severity: "critical",
 		noise: "normal",
+		detects: "resize/scroll listener with a layout read in the handler",
 		why: "A synchronous reflow per event, once per listening component.",
 		fix: "references/performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer",
 		pattern: /addEventListener\s*\(\s*['"](?:resize|scroll)['"]/,
@@ -536,6 +561,7 @@ const SIGNALS = [
 		label: "Pointer/mouse/touch move listener with layout read",
 		severity: "critical",
 		noise: "normal",
+		detects: "pointermove/mousemove/touchmove listener, or intrinsic JSX move prop, with a layout read per event",
 		why: "A synchronous reflow per event; move events fire far above 60/sec.",
 		fix: "references/use-pointer.md",
 		pattern: /addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove)['"]|\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/,
@@ -548,6 +574,7 @@ const SIGNALS = [
 		label: "MutationObserver on html/documentElement (coalesce into one useMutation)",
 		severity: "medium",
 		noise: "normal",
+		detects: "MutationObserver on `<html>`/`documentElement`",
 		why: "N observers on one target each fire per mutation; one suffices.",
 		fix: "references/performance-recipes.md#recipe-collapse-an-observer-storm-on-html",
 		pattern: /new\s+MutationObserver/,
@@ -559,6 +586,7 @@ const SIGNALS = [
 		label: "Tailwind transition-all class (animates layout properties)",
 		severity: "high",
 		noise: "noisy",
+		detects: "`transition-all` utility class, in JSX or a variant module",
 		why: "Transitions whatever changes, including layout, off the compositor.",
 		fix: "references/audit.md#step-15-css-loading-and-architecture-pass",
 		pattern: /\btransition-all\b/
@@ -569,6 +597,7 @@ const SIGNALS = [
 		label: "Tailwind will-change-transform class not toggled with state",
 		severity: "medium",
 		noise: "noisy",
+		detects: "`will-change-transform` class not toggled with state",
 		why: "A GPU layer is held even while nothing animates.",
 		fix: "references/performance.md#will-change-only-while-animating",
 		matcher: matchesPermanentWillChangeClass
@@ -579,6 +608,7 @@ const SIGNALS = [
 		label: "reducedMotion: 'ignore' (bypasses the user preference)",
 		severity: "medium",
 		noise: "precise",
+		detects: "`reducedMotion: 'ignore'` (bypasses the user preference)",
 		why: "Only justified for non-decorative motion (data viz, games).",
 		fix: "references/performance.md#reduced-motion-by-default",
 		pattern: /reducedMotion:\s*['"]ignore['"]/
@@ -589,6 +619,7 @@ const SIGNALS = [
 		label: "Core phase primitive in a component (hook likely fits better)",
 		severity: "medium",
 		noise: "noisy",
+		detects: "`createLoop`/`createTicker`/`createLifecycle`/`createSight` in a component **(JSX)**",
 		why: "Hooks manage refs, teardown, and enabled automatically.",
 		fix: "references/decision-guide.md#common-mistakes",
 		pattern: /\bcreate(?:Loop|Ticker|Lifecycle|Sight)\s*\(/,
@@ -600,6 +631,7 @@ const SIGNALS = [
 		label: "Phase loop may be a browser-keyframe candidate",
 		severity: "medium",
 		noise: "noisy",
+		detects: "Phase loop combining `frame.elapsed` with transform/opacity-style writes",
 		why: "An elapsed-only transform/opacity timeline may not need per-frame JS.",
 		fix: "references/decision-guide.md#browser-driven-timelines-css-or-waapi",
 		matcher: matchesPhaseLoopBrowserKeyframes,
@@ -611,18 +643,12 @@ const SIGNALS = [
 		label: "WhenVisible/WhenIdle without a fallback (verify mount geometry)",
 		severity: "high",
 		noise: "noisy",
+		detects: "`WhenVisible`/`WhenIdle` without a fallback; verify whether mount changes in-flow size **(JSX)**",
 		why: "Children are absent until triggered; unreserved in-flow size can shift layout.",
 		fix: "references/rendering-recipes.md",
 		matcher: matchesUngatedLazyMount,
 		fileTypes: "jsx"
 	}
-];
-/** Severity display and ranking order, most severe first. */
-const SEVERITY_ORDER = [
-	"critical",
-	"high",
-	"medium",
-	"dedup"
 ];
 const BLOCK_SCAN_LINES = 20;
 const STYLE_LAYOUT_PROPERTY = /^(?:width|height|minWidth|maxWidth|minHeight|maxHeight|inlineSize|minInlineSize|maxInlineSize|blockSize|minBlockSize|maxBlockSize|top|right|bottom|left|inset|insetBlock|insetBlockStart|insetBlockEnd|insetInline|insetInlineStart|insetInlineEnd|margin|marginTop|marginRight|marginBottom|marginLeft|marginBlock|marginBlockStart|marginBlockEnd|marginInline|marginInlineStart|marginInlineEnd|padding|paddingTop|paddingRight|paddingBottom|paddingLeft|paddingBlock|paddingBlockStart|paddingBlockEnd|paddingInline|paddingInlineStart|paddingInlineEnd)$/;
