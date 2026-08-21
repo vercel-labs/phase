@@ -1,3 +1,14 @@
+import type { ScanExample, ScanSignalId } from './signals.ts';
+
+export interface SignalExample extends ScanExample {
+  testId?: string;
+}
+
+export interface SignalExamples {
+  match: SignalExample[];
+  noMatch: SignalExample[];
+}
+
 /**
  * Executable examples for every scanner signal, keyed by signal id.
  * Contributor tooling only: not shipped in the skill zip. The test suite
@@ -6,7 +17,7 @@
  * as does an example keyed to a signal that no longer exists.
  */
 
-export const SIGNAL_EXAMPLES = {
+const SIGNAL_EXAMPLE_CATALOG = {
   'manual-raf': {
     match: [
       {
@@ -998,4 +1009,7 @@ export const SIGNAL_EXAMPLES = {
       },
     ],
   },
-};
+} satisfies Record<ScanSignalId, SignalExamples>;
+
+export const SIGNAL_EXAMPLES: Record<string, SignalExamples> =
+  SIGNAL_EXAMPLE_CATALOG;
