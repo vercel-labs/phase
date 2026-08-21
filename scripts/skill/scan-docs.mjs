@@ -2,6 +2,7 @@ import { readMarkerBlock } from './marker-block.mjs';
 
 const HEADERS = ['Signal', 'Severity', 'Noise', 'Detects', 'Fix reference'];
 
+/** Returns whether audit.md's generated signal table exactly matches the catalog. */
 export function isSignalTableFresh(source, signals, severityOrder) {
   return (
     readMarkerBlock(source, 'signal-table') ===
@@ -9,6 +10,10 @@ export function isSignalTableFresh(source, signals, severityOrder) {
   );
 }
 
+/**
+ * Renders signal catalog metadata as a padded Markdown table.
+ * Signals retain catalog order unless a severity order is provided.
+ */
 export function renderSignalTable(signals, severityOrder) {
   const ordered = severityOrder
     ? [...signals].toSorted(

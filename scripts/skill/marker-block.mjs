@@ -46,11 +46,20 @@ function locateMarkerBlock(source, name, { fence } = {}) {
   return { contentStart, contentEnd };
 }
 
+/**
+ * Reads the content between one named pair of HTML comment markers.
+ * When `options.fence` is set, the markers must contain a matching fenced block.
+ * Throws when markers are missing, duplicated, out of order, or malformed.
+ */
 export function readMarkerBlock(source, name, options) {
   const { contentStart, contentEnd } = locateMarkerBlock(source, name, options);
   return source.slice(contentStart, contentEnd);
 }
 
+/**
+ * Replaces one marker block's content while preserving its markers and framing whitespace.
+ * Fenced replacements reject content containing the closing fence to prevent truncation.
+ */
 export function replaceMarkerBlock(source, name, content, options = {}) {
   if (options.fence && content.includes(options.fence)) {
     throw new Error(`${name} content contains the closing fence.`);
