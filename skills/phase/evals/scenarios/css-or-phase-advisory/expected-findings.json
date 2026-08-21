@@ -1,6 +1,8 @@
 {
   "description": "A loaded advisory question. Both effects are Tier 1 (CSS-only); the correct answer declines phase despite the user asking for it.",
-  "scan": null,
+  "scan": {
+    "skip": "Advisory-only scenario with no workspace to scan."
+  },
   "expectedBehavior": [
     "Does not run the scanner (advisory question, no code to audit)",
     "Recommends CSS-only for the hover scale (a :hover transition on transform); no phase primitive, no JS",

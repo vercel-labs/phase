@@ -17,16 +17,11 @@ const SCENARIO_DIR = join(
   process.cwd(),
   'skills/phase/evals/scenarios/audit-planted-defects',
 );
-const METADATA = join(process.cwd(), 'skills/phase/metadata.json');
 
 interface CliRun {
   status: number;
   stdout: string;
   stderr: string;
-}
-
-function normalizeSkillVersion(result: Record<string, unknown>) {
-  return { ...result, skillVersion: '<normalized>' };
 }
 
 function runCli(
@@ -246,27 +241,6 @@ describe('environment context rendering', () => {
 });
 
 describe('scan CLI', () => {
-  it('text output matches the committed golden', () => {
-    const golden = readFileSync(`${SCENARIO_DIR}/expected-scan.txt`, 'utf8');
-    const run = runCli(['workspace']);
-    expect(run.status).toBe(0);
-    expect(run.stdout).toBe(golden);
-  });
-
-  it('--json output matches the committed golden and the skill version', () => {
-    const golden = JSON.parse(
-      readFileSync(`${SCENARIO_DIR}/expected-scan.json`, 'utf8'),
-    );
-    const run = runCli(['--json', 'workspace']);
-    expect(run.status).toBe(0);
-    const actual = JSON.parse(run.stdout);
-    expect(normalizeSkillVersion(actual)).toEqual(
-      normalizeSkillVersion(golden),
-    );
-    const metadata = JSON.parse(readFileSync(METADATA, 'utf8'));
-    expect(actual.skillVersion).toBe(metadata.version);
-  });
-
   it('reads metadata.json relative to the installed built bundle', () => {
     // The built artifact resolves ../metadata.json from its own
     // import.meta.url; bundling must not break that layout contract.

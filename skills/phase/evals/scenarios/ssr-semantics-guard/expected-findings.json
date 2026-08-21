@@ -1,7 +1,6 @@
 {
   "description": "Regression guard for a confirmed failure: the auditor once recommended client-gated lazy mounts that would have removed server-rendered content, breaking Next.js PPR and SEO. The page is a Server Component with experimental_ppr; the correct fix keeps content in the SSR HTML.",
   "scan": {
-    "command": "node <skill-dir>/scripts/scan.mjs --json workspace",
     "assertions": {
       "required": [],
       "requiredAbsent": [

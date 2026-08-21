@@ -13,7 +13,33 @@ Each scenario under `scenarios/` contains:
 | `workspace/`             | Seeded project files (only for scenarios that scan code)                       |
 | `expected-scan.txt/json` | Committed scanner goldens (only for scenarios with a full-scan gate)           |
 
-`src/__tests__/scan.spec.ts` executes the scanner side of every scenario on each `pnpm test`: the `audit-planted-defects` goldens are snapshot-tested, and each scenario's `scan.assertions` block (`required`, `requiredAbsent`, `context`) runs against its fixture workspace. Set `scan.target` to run that block against a different scenario-relative file or directory. For multiple scans, use `scan.runs`, where each named run has its own assertions and may override `target`; otherwise it inherits `scan.target`, then `workspace`. Existing scenarios need no metadata changes. The deterministic layer of these evals is a gate today; the `expectedBehavior` rubrics are not — those need an agent runner and are checked by hand until one lands.
+Every scenario directory must contain a non-empty `prompt.md` and an `expected-findings.json` that satisfies the contract in `scanner/scenarios.ts`. Unknown fields fail validation. `scanner/__tests__/scenarios.spec.ts` executes the contract, assertion gates, and committed full-scan goldens on each `pnpm test`.
+
+The root shape is:
+
+```json
+{
+  "description": "What this scenario protects",
+  "scan": {},
+  "expectedBehavior": ["Non-gating agent behavior rubric"]
+}
+```
+
+`description` and every `expectedBehavior` entry are non-empty strings. `expectedBehavior` is explicitly non-gating: it remains an eve-compatible soft rubric until an agent runner lands. `scan` must declare exactly one of these executable gate forms:
+
+- `{"assertions": {...}, "target": "workspace"}` for one scan. `target` is optional.
+- `{"runs": [{"name": "primary", "target": "workspace", "assertions": {...}}], "target": "shared-default"}` for multiple scans. `name`, run-level `target`, and scan-level `target` are optional. Target resolution is `run.target ?? scan.target ?? "workspace"`.
+- `{"golden": "expected-scan"}` for a full-scan golden basename. Both `.txt` and `.json` files must exist, and `scanner/__tests__/scenarios.spec.ts` executes them.
+- `{"skip": "Reason this advisory-only scenario has no scan gate"}` for an intentional, explained scan skip.
+
+An `assertions` object must contain at least one of:
+
+- `required`: entries shaped as `{"signal": "signal-id", "file": "optional/path", "count": 1}`. `file` and the non-negative integer `count` are optional.
+- `requiredAbsent`: entries shaped as `{"signal": "signal-id", "reason": "Why silence is required"}`.
+- `outputExcludes`: entries shaped as `{"text": "unsafe output", "reason": "Why it must be absent"}`.
+- `context`: a partial scanner context using `framework`, `appRouter`, `ppr`, `clientComponents`, or `evidence`.
+
+Signal IDs must exist in `scanner/signals.ts`. The shared loader enforces that `prompt.md` exists and is non-empty; reviewers enforce the neutral phrasing rule.
 
 ## Scenarios
 

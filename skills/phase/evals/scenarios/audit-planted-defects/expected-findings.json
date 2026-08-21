@@ -1,8 +1,7 @@
 {
   "description": "Audit of a workspace with one planted defect per major signal. The scan gate is the committed golden; the rubric checks ladder classification.",
   "scan": {
-    "command": "node <skill-dir>/scripts/scan.mjs --json workspace",
-    "golden": "expected-scan.json"
+    "golden": "expected-scan"
   },
   "expectedBehavior": [
     "Runs the bundled scanner (scripts/scan.mjs) on the workspace before classifying, instead of eyeballing files",

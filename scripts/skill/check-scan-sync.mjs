@@ -10,7 +10,7 @@
  *    anchor to a real heading.
  * 3. audit.md's sample scan output equals the committed golden.
  * 4. Every relative link in references/*.md resolves (file and anchor).
- * 5. Eval scenario ground truth references real signals.
+ * 5. Every eval scenario satisfies the shared scenario contract.
  * 6. The untrusted-content guardrails exist in audit.md and SKILL.md.
  *
  * Exit code 0 = in sync, 1 = drift detected. Zero dependencies.
@@ -19,6 +19,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { loadEvalScenario } from '../../scanner/scenarios.ts';
 import { SIGNALS } from '../../scanner/signals.ts';
 
 const root = resolve(import.meta.dirname, '..', '..');
@@ -186,29 +187,17 @@ for (const fileName of referenceFiles) {
   }
 }
 
-// --- 5. Eval scenario ground truth references real signals ---
+// --- 5. Eval scenarios satisfy the shared contract ---
 
 const scenariosDir = join(root, 'skills/phase/evals/scenarios');
-for (const scenario of readdirSync(scenariosDir)) {
-  const findingsPath = join(scenariosDir, scenario, 'expected-findings.json');
-  if (!existsSync(findingsPath)) continue;
-  let expected;
+const scenarios = readdirSync(scenariosDir);
+for (const scenario of scenarios) {
   try {
-    expected = JSON.parse(readFileSync(findingsPath, 'utf8'));
-  } catch {
-    fail(`evals/${scenario}/expected-findings.json is not valid JSON`);
-    continue;
-  }
-  const assertionSets = expected.scan?.runs
-    ? expected.scan.runs.map((run) => run.assertions)
-    : [expected.scan?.assertions];
-  const referenced = assertionSets.flatMap((assertions) =>
-    (assertions?.required ?? []).concat(assertions?.requiredAbsent ?? []),
-  );
-  for (const entry of referenced) {
-    if (!SIGNALS.some((s) => s.id === entry.signal)) {
-      fail(`evals/${scenario} references unknown signal \`${entry.signal}\``);
-    }
+    loadEvalScenario(join(scenariosDir, scenario));
+  } catch (error) {
+    fail(
+      error instanceof Error ? error.message : `evals/${scenario} is invalid`,
+    );
   }
 }
 
@@ -233,6 +222,6 @@ if (errors > 0) {
   process.exit(1);
 } else {
   console.log(
-    `✓ Signal table (${SIGNALS.length} signals), fix pointers, golden sample, and reference links are in sync.`,
+    `✓ Signal table (${SIGNALS.length} signals), ${scenarios.length} eval scenarios, fix pointers, golden sample, and reference links are in sync.`,
   );
 }
