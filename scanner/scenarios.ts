@@ -7,6 +7,10 @@ import { SIGNALS } from './signals.ts';
 
 const SIGNAL_IDS = new Set<string>(SIGNALS.map((signal) => signal.id));
 
+/**
+ * Loads and validates an eval scenario directory. Requires non-empty
+ * `prompt.md` and valid `expected-findings.json` files.
+ */
 export function loadEvalScenario(directory: string): EvalScenario {
   const promptPath = join(directory, 'prompt.md');
   if (!existsSync(promptPath))
@@ -28,6 +32,10 @@ export function loadEvalScenario(directory: string): EvalScenario {
   return parseEvalScenario(basename(directory), value);
 }
 
+/**
+ * Validates an unknown value against the eval scenario contract. Rejects
+ * unknown fields, invalid signal IDs, and scan gates that perform no checks.
+ */
 export function parseEvalScenario(name: string, value: unknown): EvalScenario {
   const scenario = expectObject(name, value);
   rejectUnknownFields(name, scenario, [
@@ -46,6 +54,11 @@ export function parseEvalScenario(name: string, value: unknown): EvalScenario {
   };
 }
 
+/**
+ * Normalizes assertion and multi-run scan gates into executable runs. Targets
+ * inherit from the scan and default to `workspace`. Golden and skip gates
+ * return no runs.
+ */
 export function evalScenarioRuns(scan: EvalScenarioScan): EvalScenarioRun[] {
   if ('skip' in scan || 'golden' in scan) return [];
   const runs: EvalScenarioRunSpec[] =
@@ -122,6 +135,7 @@ interface EvalScenarioRunSpec {
   assertions: EvalScanAssertions;
 }
 
+/** Selects and validates exactly one supported scan gate variant. */
 function parseScan(name: string, value: unknown): EvalScenarioScan {
   const path = `${name}.scan`;
   const scan = expectObject(path, value);
@@ -169,6 +183,10 @@ function parseRun(path: string, value: unknown): EvalScenarioRunSpec {
   };
 }
 
+/**
+ * Validates assertion fields and rejects structurally valid gates that would
+ * execute no checks, such as empty arrays or an empty context object.
+ */
 function parseAssertions(path: string, value: unknown): EvalScanAssertions {
   const assertions = expectObject(path, value);
   rejectUnknownFields(path, assertions, [
@@ -250,6 +268,7 @@ function parseOutputExclusion(
   };
 }
 
+/** Validates the subset of scanner context that a scenario may assert. */
 function parseContext(path: string, value: unknown): Partial<ScanContext> {
   const context = expectObject(path, value);
   rejectUnknownFields(path, context, [
@@ -291,6 +310,7 @@ function parseContext(path: string, value: unknown): Partial<ScanContext> {
   return result;
 }
 
+/** Narrows a validated string to an ID from the runtime signal catalog. */
 function expectSignal(path: string, value: unknown): ScanSignalId {
   const signal = expectString(path, value);
   if (!SIGNAL_IDS.has(signal)) {
