@@ -1,7 +1,6 @@
 {
   "description": "Legitimate code that pattern-matches several signals. The scan gate asserts which signals must stay silent; the rubric checks surviving candidates get classified honestly.",
   "scan": {
-    "command": "node <skill-dir>/scripts/scan.mjs --json workspace",
     "assertions": {
       "required": [
         { "signal": "manual-raf", "file": "src/meter.ts", "count": 2 },

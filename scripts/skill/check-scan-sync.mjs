@@ -8,7 +8,7 @@
  * 2. Every signal's fix pointer resolves to a real reference file, and its
  *    anchor to a real heading.
  * 3. Every relative link in references/*.md resolves (file and anchor).
- * 4. Eval scenario ground truth references real signals.
+ * 4. Every eval scenario satisfies the shared scenario contract.
  * 5. The untrusted-content guardrails exist in audit.md and SKILL.md.
  *
  * Exit code 0 = in sync, 1 = drift detected. Zero dependencies.
@@ -17,6 +17,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { loadEvalScenario } from '../../scanner/scenarios.ts';
 import { NOISE_TIERS, SEVERITY_ORDER, SIGNALS } from '../../scanner/signals.ts';
 import { readMarkerBlock } from './marker-block.mjs';
 import { isSignalTableFresh } from './scan-docs.mjs';
@@ -149,29 +150,17 @@ for (const fileName of referenceFiles) {
   }
 }
 
-// --- 4. Eval scenario ground truth references real signals ---
+// --- 4. Eval scenarios satisfy the shared contract ---
 
 const scenariosDir = join(root, 'skills/phase/evals/scenarios');
-for (const scenario of readdirSync(scenariosDir)) {
-  const findingsPath = join(scenariosDir, scenario, 'expected-findings.json');
-  if (!existsSync(findingsPath)) continue;
-  let expected;
+const scenarios = readdirSync(scenariosDir);
+for (const scenario of scenarios) {
   try {
-    expected = JSON.parse(readFileSync(findingsPath, 'utf8'));
-  } catch {
-    fail(`evals/${scenario}/expected-findings.json is not valid JSON`);
-    continue;
-  }
-  const assertionSets = expected.scan?.runs
-    ? expected.scan.runs.map((run) => run.assertions)
-    : [expected.scan?.assertions];
-  const referenced = assertionSets.flatMap((assertions) =>
-    (assertions?.required ?? []).concat(assertions?.requiredAbsent ?? []),
-  );
-  for (const entry of referenced) {
-    if (!SIGNALS.some((s) => s.id === entry.signal)) {
-      fail(`evals/${scenario} references unknown signal \`${entry.signal}\``);
-    }
+    loadEvalScenario(join(scenariosDir, scenario));
+  } catch (error) {
+    fail(
+      error instanceof Error ? error.message : `evals/${scenario} is invalid`,
+    );
   }
 }
 
@@ -196,6 +185,6 @@ if (errors > 0) {
   process.exit(1);
 } else {
   console.log(
-    `✓ Signal table (${SIGNALS.length} signals), fix pointers, golden sample, and reference links are in sync.`,
+    `✓ Signal table (${SIGNALS.length} signals), ${scenarios.length} eval scenarios, fix pointers, golden sample, and reference links are in sync.`,
   );
 }

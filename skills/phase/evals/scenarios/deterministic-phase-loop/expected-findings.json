@@ -1,7 +1,6 @@
 {
   "description": "Regression guard for a confirmed miss: an audit kept a deterministic elapsed-time logo sequence in useLoop even though the browser could own its transform/opacity keyframes.",
   "scan": {
-    "command": "node <skill-dir>/scripts/scan.mjs --json workspace",
     "assertions": {
       "required": [
         {
