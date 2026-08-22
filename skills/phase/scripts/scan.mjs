@@ -278,47 +278,23 @@ function noteEvidence(context, path) {
 const STATE_UPDATE_CONTEXT = /\bsetState\s*\(|\bdispatch\s*\(|\bset(?!Timeout\b|Interval\b|Immediate\b|Attribute|Property\b|PointerCapture\b|Item\b|Selection|RangeText\b|CustomValidity\b|Transform\b|LineDash\b|SinkId\b|RequestHeader\b)[A-Z]\w*\s*\(/;
 const MATCH_MEDIA_CALL = /\bmatchMedia\s*(?:\?\.)?\s*\(/;
 const MATCH_MEDIA_CALLS = new RegExp(MATCH_MEDIA_CALL.source, "g");
-const FORCED_REFLOW_READ = layoutReadPattern([
+const SIZE_READS = [
 	"offsetWidth",
 	"offsetHeight",
 	"scrollWidth",
 	"scrollHeight",
 	"clientWidth",
-	"clientHeight",
-	"offsetTop",
-	"offsetLeft"
-], { computedStyle: true });
-const OBSERVED_LAYOUT_READ = layoutReadPattern([
-	"offsetWidth",
-	"offsetHeight",
-	"scrollWidth",
-	"scrollHeight",
-	"clientWidth",
-	"clientHeight",
-	"scrollTop",
-	"scrollLeft"
-], { computedStyle: true });
-const WINDOW_LISTENER_LAYOUT_READ = layoutReadPattern([
-	"offsetWidth",
-	"offsetHeight",
-	"scrollWidth",
-	"scrollHeight",
-	"clientWidth",
-	"clientHeight",
-	"scrollTop",
-	"scrollLeft"
-]);
+	"clientHeight"
+];
+const POSITION_READS = ["offsetTop", "offsetLeft"];
+const SCROLL_READS = ["scrollTop", "scrollLeft"];
+const FORCED_REFLOW_READ = layoutReadPattern([...SIZE_READS, ...POSITION_READS], { computedStyle: true });
+const OBSERVED_LAYOUT_READ = layoutReadPattern([...SIZE_READS, ...SCROLL_READS], { computedStyle: true });
+const WINDOW_LISTENER_LAYOUT_READ = layoutReadPattern([...SIZE_READS, ...SCROLL_READS]);
 const POINTER_LAYOUT_READ = layoutReadPattern([
-	"offsetWidth",
-	"offsetHeight",
-	"scrollWidth",
-	"scrollHeight",
-	"clientWidth",
-	"clientHeight",
-	"offsetTop",
-	"offsetLeft",
-	"scrollTop",
-	"scrollLeft"
+	...SIZE_READS,
+	...POSITION_READS,
+	...SCROLL_READS
 ]);
 const RAF_CALL = /\brequestAnimationFrame\s*(?:\?\.)?\s*\(/g;
 const TIMEOUT_CALL = /\bsetTimeout\s*(?:\?\.)?\s*\(/g;

@@ -13,53 +13,33 @@ export const STATE_UPDATE_CONTEXT =
 export const MATCH_MEDIA_CALL = /\bmatchMedia\s*(?:\?\.)?\s*\(/;
 const MATCH_MEDIA_CALLS = new RegExp(MATCH_MEDIA_CALL.source, 'g');
 
+const SIZE_READS = [
+  'offsetWidth',
+  'offsetHeight',
+  'scrollWidth',
+  'scrollHeight',
+  'clientWidth',
+  'clientHeight',
+];
+const POSITION_READS = ['offsetTop', 'offsetLeft'];
+const SCROLL_READS = ['scrollTop', 'scrollLeft'];
+
 export const FORCED_REFLOW_READ = layoutReadPattern(
-  [
-    'offsetWidth',
-    'offsetHeight',
-    'scrollWidth',
-    'scrollHeight',
-    'clientWidth',
-    'clientHeight',
-    'offsetTop',
-    'offsetLeft',
-  ],
+  [...SIZE_READS, ...POSITION_READS],
   { computedStyle: true },
 );
 export const OBSERVED_LAYOUT_READ = layoutReadPattern(
-  [
-    'offsetWidth',
-    'offsetHeight',
-    'scrollWidth',
-    'scrollHeight',
-    'clientWidth',
-    'clientHeight',
-    'scrollTop',
-    'scrollLeft',
-  ],
+  [...SIZE_READS, ...SCROLL_READS],
   { computedStyle: true },
 );
 export const WINDOW_LISTENER_LAYOUT_READ = layoutReadPattern([
-  'offsetWidth',
-  'offsetHeight',
-  'scrollWidth',
-  'scrollHeight',
-  'clientWidth',
-  'clientHeight',
-  'scrollTop',
-  'scrollLeft',
+  ...SIZE_READS,
+  ...SCROLL_READS,
 ]);
 const POINTER_LAYOUT_READ = layoutReadPattern([
-  'offsetWidth',
-  'offsetHeight',
-  'scrollWidth',
-  'scrollHeight',
-  'clientWidth',
-  'clientHeight',
-  'offsetTop',
-  'offsetLeft',
-  'scrollTop',
-  'scrollLeft',
+  ...SIZE_READS,
+  ...POSITION_READS,
+  ...SCROLL_READS,
 ]);
 
 export interface SourceIndex {
