@@ -2,7 +2,90 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import {
+  detectAppRouterRoot,
+  detectProjectRoot,
+  updateContext,
+} from '../context.ts';
+import type { ScanContext } from '../context.ts';
 import { scanTargets } from '../index.ts';
+
+function emptyContext(): ScanContext {
+  return {
+    framework: null,
+    appRouter: false,
+    ppr: false,
+    clientComponents: 0,
+    evidence: [],
+  };
+}
+
+describe('context', () => {
+  it('sets framework and App Router from an app-root path', () => {
+    const context = emptyContext();
+
+    updateContext('app/dashboard/page.tsx', '', context, 'page.tsx', 'app');
+
+    expect(context).toEqual({
+      framework: 'next',
+      appRouter: true,
+      ppr: false,
+      clientComponents: 0,
+      evidence: ['page.tsx'],
+    });
+  });
+
+  it('sets framework and PPR from a route-segment export', () => {
+    const context = emptyContext();
+
+    updateContext(
+      'routes/page.tsx',
+      'export const experimental_ppr = true;',
+      context,
+      'page.tsx',
+    );
+
+    expect(context.framework).toBe('next');
+    expect(context.appRouter).toBe(false);
+    expect(context.ppr).toBe(true);
+    expect(context.evidence).toEqual(['page.tsx']);
+  });
+
+  it('counts client components without inferring a framework', () => {
+    const context = emptyContext();
+
+    updateContext('components/chart.tsx', "'use client';", context);
+
+    expect(context.framework).toBe(null);
+    expect(context.clientComponents).toBe(1);
+  });
+
+  it('does not treat an app-root prefix collision as App Router context', () => {
+    const context = emptyContext();
+    updateContext('application/page.tsx', '', context, 'page.tsx', 'app');
+    expect(context.appRouter).toBe(false);
+  });
+
+  it('detects project and router roots with thin filesystem fixtures', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-context-'));
+    try {
+      mkdirSync(join(root, 'src', 'app', 'dashboard'), { recursive: true });
+      writeFileSync(
+        join(root, 'next.config.ts'),
+        'export default { cacheComponents: true };',
+      );
+      writeFileSync(join(root, 'src', 'app', 'dashboard', 'page.tsx'), '');
+      const context = emptyContext();
+
+      expect(detectProjectRoot(join(root, 'src', 'app'), context)).toBe(root);
+      expect(context.framework).toBe('next');
+      expect(context.ppr).toBe(true);
+      expect(detectAppRouterRoot(root)).toBe('src/app');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('environment context', () => {
   it('detects Next.js App Router and PPR from the ssr-semantics workspace', () => {
