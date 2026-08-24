@@ -1,0 +1,82 @@
+[
+  {
+    "query": "I'm still ideating on the hero animation in app/home/hero.tsx. Try a few timings and movement directions so I can compare what feels right.",
+    "should_trigger": false
+  },
+  {
+    "query": "Try three visual variants of this card entrance animation and make one of them bouncier. We are just playing with the concept in a sandbox before deciding whether to keep it.",
+    "should_trigger": false
+  },
+  {
+    "query": "Keep iterating on the feel of this animation in prototype/logo-editor.tsx. The file already imports useLoop, but for now I only want to compare different motion directions and durations.",
+    "should_trigger": false
+  },
+  {
+    "query": "Mock up two scroll reveal ideas for the marketing header. I need quick concepts for a design critique this afternoon.",
+    "should_trigger": false
+  },
+  {
+    "query": "In this throwaway CodeSandbox, experiment with a few canvas particle styles and color transitions. Focus on the visual idea rather than production architecture.",
+    "should_trigger": false
+  },
+  {
+    "query": "Can you brainstorm how this menu might enter and leave, then sketch the simplest prototype? I have not chosen an interaction yet.",
+    "should_trigger": false
+  },
+  {
+    "query": "The current component happens to use phase's Presence export. Change the easing and distance until the transition feels less formal.",
+    "should_trigger": false
+  },
+  {
+    "query": "Build a rough animated background for a stakeholder demo tomorrow. It will be discarded after the demo, so prioritize speed of iteration.",
+    "should_trigger": false
+  },
+  {
+    "query": "I am exploring whether the illustration should pulse, rotate, or stay static. Implement quick versions of all three so the designer can choose a direction.",
+    "should_trigger": false
+  },
+  {
+    "query": "Adjust this prototype's hover animation to feel more playful. We are comparing a few directions with the designer this week.",
+    "should_trigger": false
+  },
+  {
+    "query": "This production hero animation drops frames on mid-range Android devices. Profile the frame loop, find per-frame allocations or layout reads, and make it ready for the next release.",
+    "should_trigger": true
+  },
+  {
+    "query": "Audit the animation and rendering performance of app/pricing before we open the PR. Check reduced motion, off-screen pausing, forced reflows, and unnecessary React renders.",
+    "should_trigger": true
+  },
+  {
+    "query": "Review this canvas animation before it ships. It uses requestAnimationFrame directly; decide whether browser-driven animation, phase useCanvas, or another approach is the correct production tier.",
+    "should_trigger": true
+  },
+  {
+    "query": "How does phase's useLoop behave when the browser tab is hidden, and what cleanup does it perform when the React component unmounts?",
+    "should_trigger": true
+  },
+  {
+    "query": "Our below-the-fold testimonials are expensive to render. Recommend whether Defer, WhenVisible, or WhenIdle preserves SSR semantics while reducing initial rendering work.",
+    "should_trigger": true
+  },
+  {
+    "query": "The modal exit animation keeps running after it leaves the viewport and ignores prefers-reduced-motion. Fix the lifecycle behavior for production.",
+    "should_trigger": true
+  },
+  {
+    "query": "Should this shipping interaction use CSS animation, WAAPI, phase, or Motion? It has gesture input plus a live per-frame value, and I want the cheapest correct tier before implementation.",
+    "should_trigger": true
+  },
+  {
+    "query": "Audit our long documentation page for deferred rendering opportunities. We need to avoid painting off-screen sections without removing server-rendered content from the DOM.",
+    "should_trigger": true
+  },
+  {
+    "query": "This React animation calls setState on every requestAnimationFrame tick and triggers a render storm. Refactor it so the production UI stays smooth and pauses when unseen.",
+    "should_trigger": true
+  },
+  {
+    "query": "Prepare this mount and unmount transition for release. Verify interruption behavior, reduced-motion handling, and whether phase Presence or a browser-native transition is the right implementation.",
+    "should_trigger": true
+  }
+]

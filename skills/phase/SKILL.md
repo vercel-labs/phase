@@ -1,10 +1,10 @@
 ---
 name: phase
-description: "Use when building, reviewing, or optimizing web animations OR rendering performance (frame loops, scroll/viewport reveals, mount/unmount transitions, canvas/WebGL lifecycles, reduced-motion handling, lazy rendering, deferring off-screen or non-critical work) with the phase library. Also use when auditing existing animation or rendering code to decide between browser-driven CSS/WAAPI, minimal JS, phase, or a heavier library like motion. Trigger on janky animations, per-frame allocations, forced reflows, re-renders from animation loops, animations that don't pause off-screen, missing reduced-motion support, content-visibility, lazy-mounting on viewport or idle, requestIdleCallback, deferring rendering of long pages, or questions like 'should I use CSS or JS for this animation' or 'how do I render this off-screen content faster'. Always use this skill when you mention phase or any phase export."
+description: 'Use when optimizing, auditing, or preparing to ship web animations or rendering performance work: frame loops, scroll/viewport reveals, mount/unmount transitions, canvas/WebGL lifecycles, reduced motion, lazy rendering, and deferred off-screen work. Use for jank, per-frame allocations, forced reflows, render loops, animations that do not pause off-screen, content-visibility, requestIdleCallback, or choosing between browser-driven CSS/WAAPI, minimal JS, phase, and Motion/GSAP. Use when the user explicitly asks about phase APIs or behavior. Do not use during exploratory animation ideation, prototyping, visual iteration, or trying variants, even when the code already imports phase; wait until the user asks for performance guidance, an audit, production implementation, ship-readiness review, or about phase itself.'
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.30'
+  version: '0.0.31'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library.'
 ---
 
@@ -15,6 +15,14 @@ Before recommending phase imports, check the **consumer project's** `package.jso
 # phase
 
 This skill teaches you to implement phase primitives correctly, preserve performance guarantees, and audit animation code. Phase is the lifecycle-aware performance layer for the web: it composes visibility, reduced motion, and frame budget signals so animations pause when unseen, respect user preferences, and never force a reflow.
+
+## Stay passive during exploration
+
+Exploratory animation work optimizes for rapid visual learning, not production rigor: premature audits interrupt the iteration loop and spend effort on code that may be discarded. Signals include requests to ideate, prototype, play, try variants, or adjust how motion feels rather than its correctness, performance, or release readiness, especially in scratch files and sandboxes.
+
+If the skill is loaded during exploration, answer phase questions when asked and keep any requested code on the cheapest suitable animation-ladder tier, but do not volunteer audits, rewrite prototypes into phase primitives, or produce unsolicited recommendation lists. You may mention once that phase can audit or optimize the work when it is ready to ship.
+
+Apply the full guidance when the user asks for optimization, an audit, production implementation, or ship-readiness review, including preparing or reviewing a PR. Jank, reduced motion, off-screen behavior, rendering cost, and explicit phase API questions are also production signals.
 
 ## The animation ladder
 

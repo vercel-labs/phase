@@ -4,6 +4,8 @@ Seed scenarios for evaluating an agent using the phase skill. Contributor toolin
 
 Control characters in adversarial fixtures are committed as placeholder tokens defined by `CONTROL_CHARACTER_TOKENS` in `scanner/scenarios.ts` (`{{ESC}}`, `{{BEL}}`, `{{RLO}}`, `{{PDF}}`). The scenario harness materializes those bytes in a temporary copy before scanning, so repository-wide security tools never interpret test payloads as live content. The golden scenario (`audit-planted-defects`) must stay token-free: `pnpm goldens` scans its committed fixture directly and fails if a token appears there.
 
+`trigger-evals.json` is the balanced description-trigger dataset. It covers production animation and rendering work that should load the skill plus nearby exploratory animation work that should not. Run it through a trigger harness (e.g. the skill-creator description optimization loop) after changing the `SKILL.md` description. Two harness requirements, both learned the hard way: register the candidate as a real `.claude/skills/<name>/SKILL.md` (slash commands are not skills and never trigger), and give every parallel run its own throwaway project root. Workers sharing one root see each other's identically described copies and invoke a sibling's, which scores as a miss.
+
 ## Structure
 
 Each scenario under `scenarios/` contains:
