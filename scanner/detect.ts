@@ -17,6 +17,7 @@ import {
 } from './lex.ts';
 import { SIGNALS } from './signals.ts';
 import type { ScanNoise, ScanSeverity, ScanSignal } from './signals.ts';
+import { FRAME_DRIVER } from './vocabulary.ts';
 import { EXCLUDED_PATHS, extOf, signalAppliesTo, typeOf } from './walk.ts';
 import type { ScanDiag, ScanSourceType } from './walk.ts';
 
@@ -142,9 +143,6 @@ export function scanFile(
 
   return dedup(findings);
 }
-
-const FRAME_DRIVER =
-  /\bonTick\b|\bonDraw\b|\bdraw\s*:|use(?:Loop|Canvas|Tween|Pointer|Scroll)\s*\(|create(?:Loop|Ticker|Pointer|Scroll)\s*\(|addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove|scroll|resize|wheel|drag)|\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{|new\s+(?:Intersection|Resize|Mutation)Observer|setInterval\s*\(/;
 
 const FRAME_DRIVER_WINDOW = 6;
 
