@@ -27,7 +27,7 @@ const refsDir = join(root, 'skills', 'phase', 'references');
 const auditPath = join(refsDir, 'audit.md');
 const goldenPath = join(
   root,
-  'skills/phase/evals/scenarios/audit-planted-defects/expected-scan.txt',
+  'evals/scenarios/audit-planted-defects/expected-scan.txt',
 );
 
 let errors = 0;
@@ -152,7 +152,7 @@ for (const fileName of referenceFiles) {
 
 // --- 4. Eval scenarios satisfy the shared contract ---
 
-const scenariosDir = join(root, 'skills/phase/evals/scenarios');
+const scenariosDir = join(root, 'evals/scenarios');
 const scenarios = readdirSync(scenariosDir);
 for (const scenario of scenarios) {
   try {

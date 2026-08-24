@@ -1,14 +1,24 @@
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { formatText, scanTargets } from '../index.ts';
 import type { EvalScenario } from '../scenarios.ts';
 import { evalScenarioRuns, loadEvalScenario } from '../scenarios.ts';
 
-const scenariosDir = join(process.cwd(), 'skills/phase/evals/scenarios');
+const scenariosDir = join(process.cwd(), 'evals/scenarios');
 const scannerScript = join(process.cwd(), 'skills/phase/scripts/scan.mjs');
 const metadataPath = join(process.cwd(), 'skills/phase/metadata.json');
+const temporaryTargets: string[] = [];
 const scenarios = readdirSync(scenariosDir)
   .toSorted()
   .map((name) => ({ name, directory: join(scenariosDir, name) }));
@@ -19,8 +29,13 @@ const scenarios = readdirSync(scenariosDir)
  * encodes a confirmed field failure has to fail the build when it regresses.
  */
 describe('eval scenario ground truth', () => {
+  afterAll(() => {
+    for (const target of temporaryTargets) rmSync(target, { recursive: true });
+  });
+
   for (const scenario of scenarios) {
     describe(scenario.name, () => {
+      const materializedDirectory = materializeScenario(scenario.directory);
       let contract: EvalScenario | undefined;
       let contractError: Error | undefined;
       try {
@@ -51,7 +66,7 @@ describe('eval scenario ground truth', () => {
             join(scenario.directory, `${scan.golden}.txt`),
             'utf8',
           );
-          const run = runCli(scenario.directory, ['workspace']);
+          const run = runCli(materializedDirectory, ['workspace']);
           expect(run.status).toBe(0);
           expect(run.stdout).toBe(expected);
         });
@@ -63,7 +78,7 @@ describe('eval scenario ground truth', () => {
               'utf8',
             ),
           );
-          const run = runCli(scenario.directory, ['--json', 'workspace']);
+          const run = runCli(materializedDirectory, ['--json', 'workspace']);
           expect(run.status).toBe(0);
           const actual = JSON.parse(run.stdout);
           expect(normalizeSkillVersion(actual)).toEqual(
@@ -77,11 +92,9 @@ describe('eval scenario ground truth', () => {
 
       for (const scanRun of evalScenarioRuns(scan)) {
         const runName = scanRun.name ?? scanRun.target;
+        const target = join(materializedDirectory, scanRun.target);
         let cachedResult: ReturnType<typeof scanTargets> | undefined;
-        const scanResult = () =>
-          (cachedResult ??= scanTargets([
-            join(scenario.directory, scanRun.target),
-          ]));
+        const scanResult = () => (cachedResult ??= scanTargets([target]));
 
         for (const expected of scanRun.assertions.required ?? []) {
           it(`${runName} reports ${expected.signal}${expected.file ? ` in ${expected.file}` : ''}`, () => {
@@ -142,4 +155,30 @@ function runCli(directory: string, args: string[]) {
 
 function normalizeSkillVersion(result: Record<string, unknown>) {
   return { ...result, skillVersion: '<normalized>' };
+}
+
+function materializeScenario(source: string): string {
+  const directory = mkdtempSync(join(tmpdir(), 'phase-eval-'));
+  const target = join(directory, 'scenario');
+  temporaryTargets.push(directory);
+  cpSync(source, target, { recursive: true });
+  decodeControlCharacterTokens(target);
+  return target;
+}
+
+function decodeControlCharacterTokens(path: string): void {
+  for (const entry of readdirSync(path)) {
+    const child = join(path, entry);
+    if (statSync(child).isDirectory()) {
+      decodeControlCharacterTokens(child);
+      continue;
+    }
+    const source = readFileSync(child, 'utf8');
+    const materialized = source
+      .replaceAll('{{ESC}}', '\u001b')
+      .replaceAll('{{BEL}}', '\u0007')
+      .replaceAll('{{RLO}}', '\u202e')
+      .replaceAll('{{PDF}}', '\u202c');
+    if (materialized !== source) writeFileSync(child, materialized);
+  }
 }

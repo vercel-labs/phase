@@ -121,7 +121,7 @@ const FILE_TYPE_EXTENSIONS = {
 	])
 };
 const JSX_EXTENSIONS = new Set([".tsx", ".jsx"]);
-const EXCLUDED_PATHS = /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__|\.agents\/|\.claude\/|\.cursor\/|\.yarn\/|skills\/phase\/(?:evals|scripts)\//;
+const EXCLUDED_PATHS = /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__|\.agents\/|\.claude\/|\.cursor\/|\.yarn\/|^evals\/|skills\/phase\/scripts\//;
 const SKIP_DIRS = new Set([
 	"node_modules",
 	".git",

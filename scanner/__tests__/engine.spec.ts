@@ -59,16 +59,19 @@ describe('file selection', () => {
   });
 
   it('excludes agent-config dirs, vendored tooling, and the skill itself', () => {
-    const raf = 'requestAnimationFrame(t);\n';
-    expect(scanFile('.agents/skills/phase/tool.ts', raf)).toEqual([]);
-    expect(scanFile('.cursor/rules/example.ts', raf)).toEqual([]);
-    expect(scanFile('.yarn/releases/yarn-4.13.0.cjs', raf)).toEqual([]);
-    expect(
-      scanFile('skills/phase/evals/scenarios/x/workspace/src/t.ts', raf),
-    ).toEqual([]);
+    const reflow = 'const width = el.offsetWidth;\n';
+    expect(scanFile('.agents/skills/phase/tool.ts', reflow)).toEqual([]);
+    expect(scanFile('.cursor/rules/example.ts', reflow)).toEqual([]);
+    expect(scanFile('.yarn/releases/yarn-4.13.0.cjs', reflow)).toEqual([]);
+    expect(scanFile('evals/scenarios/x/workspace/src/t.ts', reflow)).toEqual(
+      [],
+    );
+    expect(scanFile('packages/app/evals/runtime.ts', reflow)).not.toEqual([]);
     // The signal catalog is full of deliberate anti-patterns; a repo that
     // vendors the skill must not have them reported as its own.
-    expect(scanFile('skills/phase/scripts/scan-examples.mjs', raf)).toEqual([]);
+    expect(scanFile('skills/phase/scripts/scan-examples.mjs', reflow)).toEqual(
+      [],
+    );
   });
 });
 

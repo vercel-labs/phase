@@ -5,10 +5,7 @@ import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..', '..');
-const scenario = join(
-  root,
-  'skills/phase/evals/scenarios/audit-planted-defects',
-);
+const scenario = join(root, 'evals/scenarios/audit-planted-defects');
 const scanner = join(root, 'skills/phase/scripts/scan.mjs');
 
 // Goldens must reflect shipped output, so they come from the built bundle.

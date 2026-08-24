@@ -17,7 +17,7 @@ const root = resolve(import.meta.dirname, '..', '..');
 const auditPath = join(root, 'skills/phase/references/audit.md');
 const goldenPath = join(
   root,
-  'skills/phase/evals/scenarios/audit-planted-defects/expected-scan.txt',
+  'evals/scenarios/audit-planted-defects/expected-scan.txt',
 );
 
 const golden = readFileSync(goldenPath, 'utf8');

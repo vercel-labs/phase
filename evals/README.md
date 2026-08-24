@@ -1,6 +1,8 @@
 # phase skill evals
 
-Seed scenarios for evaluating an agent using the phase skill. Contributor tooling only: this directory is excluded from the consumer zip, from lint, and from formatting (fixtures are frozen test data; the goldens pin `file:line` positions). Scanner noise tiers are calibrated against real codebases per the "Recalibrating the scanner" procedure in the repo's `AGENTS.md`; outcomes are encoded as executable `noMatch` examples and detection fixes, not committed as per-repo scorecards.
+Seed scenarios for evaluating an agent using the phase skill. Contributor tooling only: this repository-root directory sits outside `skills/phase/`, so skill installations and security audits do not include adversarial fixtures. It is also excluded from lint and formatting because fixtures are frozen test data and the goldens pin `file:line` positions. Scanner noise tiers are calibrated against real codebases per the "Recalibrating the scanner" procedure in the repo's `AGENTS.md`; outcomes are encoded as executable `noMatch` examples and detection fixes, not committed as per-repo scorecards.
+
+Control characters in adversarial fixtures are committed as `{{ESC}}`, `{{BEL}}`, `{{RLO}}`, and `{{PDF}}` tokens. The scenario harness materializes those bytes in a temporary copy before scanning, so repository-wide security tools never interpret test payloads as live content.
 
 ## Structure
 

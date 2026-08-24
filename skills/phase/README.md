@@ -93,7 +93,7 @@ Signal reference, output anatomy, and the full audit procedure: `references/audi
 
 ## Development
 
-Contributor tooling lives in the repository-level `scripts/skill/` directory. Start new references from `references/_template.md`. To add or change a scanner signal, follow "New scanner signal (audit skill)" in the repo's `AGENTS.md` (examples first, probe against real code, calibrate the noise tier). Eval scenarios and the scanner's calibration log live in [`evals/`](evals/) (repo-only, excluded from the shipped zip).
+Contributor tooling lives in the repository-level `scripts/skill/` directory. Start new references from `references/_template.md`. To add or change a scanner signal, follow "New scanner signal (audit skill)" in the repo's `AGENTS.md` (examples first, probe against real code, calibrate the noise tier). Eval scenarios live in [`evals/`](../../evals/) at the repository root so they are never included in skill installations.
 
 ```bash
 node scripts/skill/check-coverage.mjs   # verify barrels ↔ references
