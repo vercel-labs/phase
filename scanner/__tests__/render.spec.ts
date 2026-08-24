@@ -11,12 +11,10 @@ import { join } from 'node:path';
 
 import type { ScanFinding, ScanResult } from '../index.ts';
 import { formatJson, formatText, scanFile } from '../index.ts';
+import { GOLDEN_SCENARIO_DIR } from '../scenarios.ts';
 
 const SCRIPT = join(process.cwd(), 'skills/phase/scripts/scan.mjs');
-const SCENARIO_DIR = join(
-  process.cwd(),
-  'evals/scenarios/audit-planted-defects',
-);
+const SCENARIO_DIR = join(process.cwd(), GOLDEN_SCENARIO_DIR);
 
 interface CliRun {
   status: number;

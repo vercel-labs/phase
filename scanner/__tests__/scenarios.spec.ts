@@ -13,12 +13,16 @@ import { join } from 'node:path';
 
 import { formatText, scanTargets } from '../index.ts';
 import type { EvalScenario } from '../scenarios.ts';
-import { evalScenarioRuns, loadEvalScenario } from '../scenarios.ts';
+import {
+  CONTROL_CHARACTER_TOKENS,
+  evalScenarioRuns,
+  loadEvalScenario,
+} from '../scenarios.ts';
 
 const scenariosDir = join(process.cwd(), 'evals/scenarios');
 const scannerScript = join(process.cwd(), 'skills/phase/scripts/scan.mjs');
 const metadataPath = join(process.cwd(), 'skills/phase/metadata.json');
-const temporaryTargets: string[] = [];
+const temporaryDirectories: string[] = [];
 const scenarios = readdirSync(scenariosDir)
   .toSorted()
   .map((name) => ({ name, directory: join(scenariosDir, name) }));
@@ -30,7 +34,9 @@ const scenarios = readdirSync(scenariosDir)
  */
 describe('eval scenario ground truth', () => {
   afterAll(() => {
-    for (const target of temporaryTargets) rmSync(target, { recursive: true });
+    for (const directory of temporaryDirectories) {
+      rmSync(directory, { recursive: true });
+    }
   });
 
   for (const scenario of scenarios) {
@@ -160,7 +166,7 @@ function normalizeSkillVersion(result: Record<string, unknown>) {
 function materializeScenario(source: string): string {
   const directory = mkdtempSync(join(tmpdir(), 'phase-eval-'));
   const target = join(directory, 'scenario');
-  temporaryTargets.push(directory);
+  temporaryDirectories.push(directory);
   cpSync(source, target, { recursive: true });
   decodeControlCharacterTokens(target);
   return target;
@@ -174,11 +180,10 @@ function decodeControlCharacterTokens(path: string): void {
       continue;
     }
     const source = readFileSync(child, 'utf8');
-    const materialized = source
-      .replaceAll('{{ESC}}', '\u001b')
-      .replaceAll('{{BEL}}', '\u0007')
-      .replaceAll('{{RLO}}', '\u202e')
-      .replaceAll('{{PDF}}', '\u202c');
+    let materialized = source;
+    for (const [token, byte] of Object.entries(CONTROL_CHARACTER_TOKENS)) {
+      materialized = materialized.replaceAll(token, byte);
+    }
     if (materialized !== source) writeFileSync(child, materialized);
   }
 }

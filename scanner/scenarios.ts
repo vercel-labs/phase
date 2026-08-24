@@ -8,6 +8,25 @@ import { SIGNALS } from './signals.ts';
 const SIGNAL_IDS = new Set<string>(SIGNALS.map((signal) => signal.id));
 
 /**
+ * Placeholder tokens for control characters in committed eval fixtures,
+ * mapped to the bytes they stand for. Fixtures never contain the raw bytes;
+ * the scenario harness decodes these tokens into a temporary copy before
+ * scanning.
+ */
+export const CONTROL_CHARACTER_TOKENS = {
+  '{{ESC}}': '\u001b',
+  '{{BEL}}': '\u0007',
+  '{{RLO}}': '\u202e',
+  '{{PDF}}': '\u202c',
+} as const;
+
+/**
+ * The scenario whose full-scan output is committed as the golden sample and
+ * spliced into audit.md. Relative to the repository root.
+ */
+export const GOLDEN_SCENARIO_DIR = 'evals/scenarios/audit-planted-defects';
+
+/**
  * Loads and validates an eval scenario directory. Requires non-empty
  * `prompt.md` and valid `expected-findings.json` files.
  */

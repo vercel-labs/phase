@@ -1,12 +1,37 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import {
+  CONTROL_CHARACTER_TOKENS,
+  GOLDEN_SCENARIO_DIR,
+} from '../../scanner/scenarios.ts';
+
 const root = resolve(import.meta.dirname, '..', '..');
-const scenario = join(root, 'evals/scenarios/audit-planted-defects');
+const scenario = join(root, GOLDEN_SCENARIO_DIR);
 const scanner = join(root, 'skills/phase/scripts/scan.mjs');
+
+// This script scans the committed fixture directly, without the token
+// materialization the scenario test harness performs, so the golden scenario
+// must stay token-free or the goldens would diverge from what the tests scan.
+for (const file of readdirSync(join(scenario, 'workspace'), {
+  recursive: true,
+  withFileTypes: true,
+})) {
+  if (!file.isFile()) continue;
+  const path = join(file.parentPath, file.name);
+  const content = readFileSync(path, 'utf8');
+  for (const token of Object.keys(CONTROL_CHARACTER_TOKENS)) {
+    if (content.includes(token)) {
+      console.error(
+        `${path} contains ${token}: the golden scenario is scanned without token materialization, so move tokenized fixtures to a different scenario`,
+      );
+      process.exit(1);
+    }
+  }
+}
 
 // Goldens must reflect shipped output, so they come from the built bundle.
 // Rebuild it first, or a scanner/ edit would regenerate them from a stale one.

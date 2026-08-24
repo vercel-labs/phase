@@ -17,7 +17,10 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { loadEvalScenario } from '../../scanner/scenarios.ts';
+import {
+  GOLDEN_SCENARIO_DIR,
+  loadEvalScenario,
+} from '../../scanner/scenarios.ts';
 import { NOISE_TIERS, SEVERITY_ORDER, SIGNALS } from '../../scanner/signals.ts';
 import { readMarkerBlock } from './marker-block.mjs';
 import { isSignalTableFresh } from './scan-docs.mjs';
@@ -25,10 +28,7 @@ import { isSignalTableFresh } from './scan-docs.mjs';
 const root = resolve(import.meta.dirname, '..', '..');
 const refsDir = join(root, 'skills', 'phase', 'references');
 const auditPath = join(refsDir, 'audit.md');
-const goldenPath = join(
-  root,
-  'evals/scenarios/audit-planted-defects/expected-scan.txt',
-);
+const goldenPath = join(root, GOLDEN_SCENARIO_DIR, 'expected-scan.txt');
 
 let errors = 0;
 

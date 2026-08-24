@@ -9,16 +9,14 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { GOLDEN_SCENARIO_DIR } from '../../scanner/scenarios.ts';
 import { SEVERITY_ORDER, SIGNALS } from '../../scanner/signals.ts';
 import { replaceMarkerBlock } from './marker-block.mjs';
 import { renderSignalTable } from './scan-docs.mjs';
 
 const root = resolve(import.meta.dirname, '..', '..');
 const auditPath = join(root, 'skills/phase/references/audit.md');
-const goldenPath = join(
-  root,
-  'evals/scenarios/audit-planted-defects/expected-scan.txt',
-);
+const goldenPath = join(root, GOLDEN_SCENARIO_DIR, 'expected-scan.txt');
 
 const golden = readFileSync(goldenPath, 'utf8');
 const audit = readFileSync(auditPath, 'utf8');
