@@ -5,9 +5,12 @@ pre-commit:
       glob: '**/*.{ts,tsx,json,jsonc,md}'
       # Generated files are formatted + staged by skill-sync (which runs in
       # parallel); excluding them here avoids a read-during-write race. CI's
-      # repo-wide `pnpm format` still verifies them.
+      # repo-wide `pnpm format` still verifies them. The evals dir mirrors the
+      # .oxfmtrc.json ignore (frozen fixtures); without the exclusion, a commit
+      # staging only evals files hands oxfmt zero targets and it exits 2.
       exclude:
         - 'skills/phase/metadata.json'
+        - 'evals/**'
       run: pnpm oxfmt --check {staged_files}
     lint:
       glob: '**/*.{ts,tsx}'

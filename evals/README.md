@@ -6,6 +6,8 @@ Control characters in adversarial fixtures are committed as placeholder tokens d
 
 `trigger-evals.json` is the balanced description-trigger dataset. It covers production animation and rendering work that should load the skill plus nearby exploratory animation work that should not. Run it through a trigger harness (e.g. the skill-creator description optimization loop) after changing the `SKILL.md` description. Two harness requirements, both learned the hard way: register the candidate as a real `.claude/skills/<name>/SKILL.md` (slash commands are not skills and never trigger), and give every parallel run its own throwaway project root. Workers sharing one root see each other's identically described copies and invoke a sibling's, which scores as a miss.
 
+The last five should-trigger queries (extending or refactoring code that already uses phase APIs) are a known triggering ceiling, not a wording bug: measured at 3 runs/query, every description tested, including one that listed the exports verbatim and the pre-0.0.30 "always use when you mention any phase export" catch-all, passed at most 2-3 of them, with individual queries flipping between rounds. Agents only consult a skill when the task looks beyond them, and routine edits to phase-calling code do not. Treat those rows as the target for future description work, and do not accept a description change that trades them against the exploratory negatives. Consumer repos that want deterministic coverage should add a repo-rule (CLAUDE.md/AGENTS.md) to load the phase skill whenever editing a file that imports phase.
+
 ## Structure
 
 Each scenario under `scenarios/` contains:

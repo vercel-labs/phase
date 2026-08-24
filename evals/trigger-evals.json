@@ -78,5 +78,25 @@
   {
     "query": "Prepare this mount and unmount transition for release. Verify interruption behavior, reduced-motion handling, and whether phase Presence or a browser-native transition is the right implementation.",
     "should_trigger": true
+  },
+  {
+    "query": "In app/components/logo.tsx we animate the logo with phase's useLoop. Add a second element that counter-rotates in the same frame loop.",
+    "should_trigger": true
+  },
+  {
+    "query": "This dashboard chart uses useCanvas from phase. Extend the draw callback to render a moving average line as well.",
+    "should_trigger": true
+  },
+  {
+    "query": "Our drawer uses phase's Presence for enter/exit. Add an exit animation for the backdrop overlay too, matching the drawer timing.",
+    "should_trigger": true
+  },
+  {
+    "query": "Refactor use-hero-ticker.ts, which is built on phase's useLifecycle, so the WebGL loop also pauses while the tab is backgrounded.",
+    "should_trigger": true
+  },
+  {
+    "query": "Migrate this component's hand-rolled requestAnimationFrame loop to phase's useLoop like the rest of the codebase.",
+    "should_trigger": true
   }
 ]
