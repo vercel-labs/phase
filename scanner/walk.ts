@@ -33,6 +33,9 @@ const JSX_EXTENSIONS = new Set(['.tsx', '.jsx']);
 // fixtures and generated scanner contain code nobody will edit or deliberately
 // bad example code; scanning them buries real findings. The skill script path
 // is matched as a substring so it is skipped wherever the skill was installed.
+// ^evals/ is anchored to the scan root: it hides a scanned repo's top-level
+// evals/ directory (accepted, to keep this repo's fixtures silent) while a
+// nested one such as packages/app/evals/ still scans.
 export const EXCLUDED_PATHS =
   /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__|\.agents\/|\.claude\/|\.cursor\/|\.yarn\/|^evals\/|skills\/phase\/scripts\//;
 
