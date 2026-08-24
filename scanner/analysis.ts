@@ -1,5 +1,46 @@
 import { escapeRegExp } from './lex.ts';
-import { MATCH_MEDIA_CALLS, STATE_UPDATE_CONTEXT } from './signals.ts';
+
+// Context pattern for state updates. Excludes DOM/timer/canvas setters that
+// are legitimate inside frame callbacks. The exclusions accept rare false
+// negatives when a React setter shares a DOM setter name (e.g. setSelection,
+// setTransform): missing one candidate beats flagging the recommended pattern.
+// Known accepted FP class (calibrated): non-React `dispatch(` from editor or
+// store libraries (e.g. a CodeMirror transaction) near a rAF; the noise tier
+// covers it, and distinguishing them line-based is not worth the complexity.
+export const STATE_UPDATE_CONTEXT =
+  /\bsetState\s*\(|\bdispatch\s*\(|\bset(?!Timeout\b|Interval\b|Immediate\b|Attribute|Property\b|PointerCapture\b|Item\b|Selection|RangeText\b|CustomValidity\b|Transform\b|LineDash\b|SinkId\b|RequestHeader\b)[A-Z]\w*\s*\(/;
+
+export const MATCH_MEDIA_CALL = /\bmatchMedia\s*(?:\?\.)?\s*\(/;
+const MATCH_MEDIA_CALLS = new RegExp(MATCH_MEDIA_CALL.source, 'g');
+
+const SIZE_READS = [
+  'offsetWidth',
+  'offsetHeight',
+  'scrollWidth',
+  'scrollHeight',
+  'clientWidth',
+  'clientHeight',
+];
+const POSITION_READS = ['offsetTop', 'offsetLeft'];
+const SCROLL_READS = ['scrollTop', 'scrollLeft'];
+
+export const FORCED_REFLOW_READ = layoutReadPattern(
+  [...SIZE_READS, ...POSITION_READS],
+  { computedStyle: true },
+);
+export const OBSERVED_LAYOUT_READ = layoutReadPattern(
+  [...SIZE_READS, ...SCROLL_READS],
+  { computedStyle: true },
+);
+export const WINDOW_LISTENER_LAYOUT_READ = layoutReadPattern([
+  ...SIZE_READS,
+  ...SCROLL_READS,
+]);
+const POINTER_LAYOUT_READ = layoutReadPattern([
+  ...SIZE_READS,
+  ...POSITION_READS,
+  ...SCROLL_READS,
+]);
 
 export interface SourceIndex {
   source: string;
@@ -17,6 +58,8 @@ export interface FileAnalysis {
   raf: SchedulingOwnership;
   timeout: SchedulingOwnership;
   subscribedMediaQueries: Set<number>;
+  moveHandlers: MoveAnalysis;
+  uncommentedLines: string[];
 }
 
 export interface LineRange {
@@ -44,7 +87,7 @@ interface CallbackCollection {
 
 const RAF_CALL = /\brequestAnimationFrame\s*(?:\?\.)?\s*\(/g;
 const TIMEOUT_CALL = /\bsetTimeout\s*(?:\?\.)?\s*\(/g;
-export const INTERVAL_CALL = /\bsetInterval\s*(?:\?\.)?\s*\(/;
+const INTERVAL_CALL = /\bsetInterval\s*(?:\?\.)?\s*\(/;
 
 /**
  * What a signal can require beyond its own line, analyzed once per scanned file:
@@ -56,7 +99,11 @@ export const INTERVAL_CALL = /\bsetInterval\s*(?:\?\.)?\s*\(/;
  * setTimeout share the callback set and the cycle analysis, differing only in
  * the call pattern.
  */
-export function analyzeFile(sourceIndex: SourceIndex): FileAnalysis {
+export function analyzeFile(
+  type: 'js' | 'css',
+  sourceIndex: SourceIndex,
+  uncommentedLines: string[],
+): FileAnalysis {
   const { callbacks, callbacksByName } = collectCallbacks(sourceIndex);
   const cycleOf = (pattern: RegExp) =>
     analyzeSchedulingCycle(sourceIndex, callbacks, callbacksByName, pattern);
@@ -64,6 +111,8 @@ export function analyzeFile(sourceIndex: SourceIndex): FileAnalysis {
     raf: cycleOf(RAF_CALL),
     timeout: cycleOf(TIMEOUT_CALL),
     subscribedMediaQueries: subscribedMediaQueryLines(sourceIndex),
+    moveHandlers: analyzeMoveHandlers(type, sourceIndex),
+    uncommentedLines,
   };
 }
 
@@ -606,4 +655,79 @@ export function enclosingBlock(
     }
   }
   return best;
+}
+
+type EvidencePredicate = (
+  analysis: FileAnalysis,
+  line: number,
+  match: RegExpExecArray,
+) => boolean;
+
+export const EVIDENCE_REGISTRY = {
+  'recurring-raf-cycle': (analysis, line) =>
+    analysis.raf.recurringScheduleLines.has(line),
+  'recurring-raf-state': (analysis, line) =>
+    analysis.raf.stateScheduleLines.has(line),
+  'subscribed-media-query': (analysis, line) =>
+    analysis.subscribedMediaQueries.has(line),
+  'recurring-raf-branch': matchesRecurringRafBranch,
+  'recurring-timer': (analysis, line) =>
+    INTERVAL_CALL.test(analysis.uncommentedLines[line] ?? '') ||
+    analysis.timeout.recurringScheduleLines.has(line),
+  'move-handler-layout-read': matchesMoveHandlerLayoutRead,
+} satisfies Record<string, EvidencePredicate>;
+
+export type EvidenceName = keyof typeof EVIDENCE_REGISTRY;
+
+function matchesRecurringRafBranch(
+  analysis: FileAnalysis,
+  line: number,
+  match: RegExpExecArray,
+): boolean {
+  // Coupled to missing-reduced-motion's pattern alternatives: only its rAF
+  // branch requires cycle evidence; CSS animation branches pass directly.
+  return (
+    !/requestAnimationFrame/.test(match[0]) ||
+    analysis.raf.recurringScheduleLines.has(line)
+  );
+}
+
+function matchesMoveHandlerLayoutRead(
+  analysis: FileAnalysis,
+  line: number,
+  match: RegExpExecArray,
+): boolean {
+  // Coupled to pointer-listener-layout-read's pattern alternatives: JSX move
+  // props use their associated handler, while raw listeners use local context.
+  if (/^on[A-Z]/.test(match[0])) {
+    const range = analysis.moveHandlers.propRanges.get(line);
+    if (!range) return false;
+    return POINTER_LAYOUT_READ.test(
+      analysis.uncommentedLines.slice(range.start, range.end + 1).join('\n'),
+    );
+  }
+
+  const radius = 5;
+  return POINTER_LAYOUT_READ.test(
+    analysis.uncommentedLines
+      .slice(Math.max(0, line - radius), line + radius + 1)
+      .join('\n'),
+  );
+}
+
+function layoutReadPattern(
+  properties: string[],
+  { computedStyle = false }: { computedStyle?: boolean } = {},
+): RegExp {
+  // Member access or a layout API call proves a read. Bare names would treat
+  // JSX props such as `<Overlay offsetLeft={12} />` as forced reflows.
+  const names = properties.join('|');
+  const forms = [
+    `(?:\\?\\.|\\.)\\s*(?:${names})\\b`,
+    `\\[\\s*['"](?:${names})['"]\\s*\\]`,
+    String.raw`(?:\?\.|\.)\s*getBoundingClientRect\s*(?:\?\.)?\s*\(`,
+    String.raw`\[\s*['"]getBoundingClientRect['"]\s*\]\s*(?:\?\.)?\s*\(`,
+  ];
+  if (computedStyle) forms.push(String.raw`\bgetComputedStyle\s*\(`);
+  return new RegExp(forms.join('|'));
 }

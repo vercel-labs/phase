@@ -274,33 +274,10 @@ function noteEvidence(context, path) {
 	if (!context.evidence.includes(path)) context.evidence.push(path);
 }
 //#endregion
-//#region scanner/signals.ts
-const SEVERITY_ORDER = [
-	"critical",
-	"high",
-	"medium",
-	"dedup"
-];
-const NOISE_TIERS = [
-	"precise",
-	"normal",
-	"noisy"
-];
+//#region scanner/analysis.ts
 const STATE_UPDATE_CONTEXT = /\bsetState\s*\(|\bdispatch\s*\(|\bset(?!Timeout\b|Interval\b|Immediate\b|Attribute|Property\b|PointerCapture\b|Item\b|Selection|RangeText\b|CustomValidity\b|Transform\b|LineDash\b|SinkId\b|RequestHeader\b)[A-Z]\w*\s*\(/;
-const NON_COMPOSITOR_TRANSITION = new RegExp(`${/(?<![\w-])transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/.source}|${/(?<![\w-])transition:\s*[\d.]+m?s(?:(?:\s*,\s*|\s+)(?:[\d.]+m?s|ease[\w-]*|linear|step[\w-]*|steps\([^)]*\)|cubic-bezier\([^)]*\)))*\s*(?:;|!|$)/.source}`);
 const MATCH_MEDIA_CALL = /\bmatchMedia\s*(?:\?\.)?\s*\(/;
 const MATCH_MEDIA_CALLS = new RegExp(MATCH_MEDIA_CALL.source, "g");
-function layoutReadPattern(properties, { computedStyle = false } = {}) {
-	const names = properties.join("|");
-	const forms = [
-		`(?:\\?\\.|\\.)\\s*(?:${names})\\b`,
-		`\\[\\s*['"](?:${names})['"]\\s*\\]`,
-		String.raw`(?:\?\.|\.)\s*getBoundingClientRect\s*(?:\?\.)?\s*\(`,
-		String.raw`\[\s*['"]getBoundingClientRect['"]\s*\]\s*(?:\?\.)?\s*\(`
-	];
-	if (computedStyle) forms.push(String.raw`\bgetComputedStyle\s*\(`);
-	return new RegExp(forms.join("|"));
-}
 const SIZE_READS = [
 	"offsetWidth",
 	"offsetHeight",
@@ -319,514 +296,6 @@ const POINTER_LAYOUT_READ = layoutReadPattern([
 	...POSITION_READS,
 	...SCROLL_READS
 ]);
-const SIGNALS = [
-	{
-		id: "manual-raf",
-		replacement: "CSS/WAAPI if browser-animatable; otherwise useLoop/useCanvas for lifecycle + cleanup",
-		label: "Manual requestAnimationFrame loop",
-		severity: "high",
-		noise: "noisy",
-		detects: "Proven raw rAF callback cycle: no visibility pause, shared clock, or cleanup",
-		why: "No visibility pausing, no shared clock, no cleanup.",
-		fix: "references/audit.md#common-replacements",
-		pattern: /requestAnimationFrame/,
-		codeOnly: true,
-		recurringRafOnly: true
-	},
-	{
-		id: "setstate-in-raf",
-		replacement: "useLoop writing to a ref or the DOM; useTween for one value into render",
-		label: "setState/dispatch inside rAF callback",
-		severity: "critical",
-		noise: "normal",
-		detects: "State update inside a recurring rAF callback (60 re-renders/sec)",
-		why: "60 re-renders/sec: React reconciles on every frame.",
-		fix: "references/performance.md#never-setstate-inside-ontick--draw",
-		supersedes: "manual-raf",
-		pattern: /requestAnimationFrame/,
-		codeOnly: true,
-		recurringRafStateOnly: true
-	},
-	{
-		id: "setstate-in-ontick",
-		replacement: "write to a ref or the DOM in the callback; lift state changes out of the frame",
-		label: "setState/dispatch inside a phase onTick/onDraw/draw callback",
-		severity: "critical",
-		noise: "normal",
-		detects: "State update inside a phase `onTick`/`onDraw`/`draw` callback",
-		why: "60 re-renders/sec; write to refs or the DOM inside frame callbacks.",
-		fix: "references/performance.md#never-setstate-inside-ontick--draw",
-		pattern: /\bonTick\s*[:=(]|\bonDraw\s*[:=(]|\bdraw\s*:/,
-		contextPattern: STATE_UPDATE_CONTEXT,
-		codeOnly: true,
-		contextLines: 30,
-		contextScope: "block"
-	},
-	{
-		id: "forced-reflow",
-		replacement: "useSize (ResizeObserver, async) or cache the geometry and re-read on resize",
-		label: "Forced reflow (getBoundingClientRect, offsetWidth, etc.)",
-		severity: "critical",
-		noise: "noisy",
-		detects: "Layout-reading member access or call (`getBoundingClientRect`, `.offset*`, `.scroll*`, `.client*`)",
-		why: "Synchronous layout; in a hot path it thrashes every frame.",
-		fix: "references/performance.md#no-forced-reflows-in-animation-paths",
-		pattern: FORCED_REFLOW_READ
-	},
-	{
-		id: "js-layout-write",
-		replacement: "animate transform/opacity on an HTML wrapper when possible",
-		label: "Potential layout-inducing JavaScript write",
-		severity: "high",
-		noise: "noisy",
-		detects: "JavaScript write to SVG geometry/transforms or CSS layout properties",
-		why: "Repeated SVG or CSS layout writes can cause layout and paint.",
-		fix: "references/performance.md#no-layout-inducing-writes-in-animation-paths",
-		matcher: matchesLayoutWrite
-	},
-	{
-		id: "raw-io",
-		replacement: "useSight or useLifecycle (pooled IntersectionObserver)",
-		label: "Raw IntersectionObserver (not pooled)",
-		severity: "medium",
-		noise: "normal",
-		detects: "`new IntersectionObserver` outside the pool",
-		why: "Unpooled observer instances and manual cleanup leak over time.",
-		fix: "references/performance.md#observer-pooling",
-		pattern: /new\s+IntersectionObserver/
-	},
-	{
-		id: "raw-ro",
-		replacement: "useSize (pooled ResizeObserver)",
-		label: "Raw ResizeObserver (not pooled)",
-		severity: "medium",
-		noise: "normal",
-		detects: "`new ResizeObserver` outside the pool",
-		why: "Unpooled observer instances and manual cleanup leak over time.",
-		fix: "references/performance.md#observer-pooling",
-		pattern: /new\s+ResizeObserver/
-	},
-	{
-		id: "raw-matchmedia",
-		replacement: "useMediaQuery, or usePrefersReducedMotion for the motion query",
-		label: "Raw matchMedia (not pooled)",
-		severity: "medium",
-		noise: "normal",
-		detects: "`matchMedia(` with a listener on the result, outside the pool",
-		why: "Unpooled MediaQueryList subscriptions; phase pools them by query.",
-		fix: "references/use-media-query.md",
-		pattern: MATCH_MEDIA_CALL,
-		subscribedMediaQueryOnly: true,
-		codeOnly: true
-	},
-	{
-		id: "mutationobserver-layout",
-		replacement: "useMutation (rAF-batched); useSize/useSight for geometry",
-		label: "MutationObserver driving layout (reflow / style+subtree observation)",
-		severity: "critical",
-		noise: "normal",
-		detects: "MutationObserver watching inline styles or reading layout in its callback",
-		why: "Layout reads in MO callbacks force a reflow on every mutation.",
-		fix: "references/performance.md#never-drive-layout-from-a-mutationobserver",
-		pattern: /new\s+MutationObserver/,
-		contextPattern: new RegExp(`attributeFilter:\\s*\\[[^\\]]*['"]style['"]|${OBSERVED_LAYOUT_READ.source}`)
-	},
-	{
-		id: "js-opacity-transform",
-		replacement: "CSS/WAAPI if browser-animatable; useLoop only for required live per-frame JS",
-		label: "JS-driven opacity/transform (may be browser-driven)",
-		severity: "medium",
-		noise: "noisy",
-		detects: "`style.opacity`/`style.transform` writes (browser-driven candidate)",
-		why: "May be browser-driven; inspect whether JavaScript must compute live frames.",
-		fix: "references/decision-guide.md#tier-1-browser-driven-css-or-waapi",
-		pattern: /\.style\.(opacity|transform)\s*=/
-	},
-	{
-		id: "missing-reduced-motion",
-		replacement: "a prefers-reduced-motion media query, or a phase hook (handles it automatically)",
-		label: "Animation without reduced-motion check",
-		severity: "critical",
-		noise: "noisy",
-		detects: "Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling",
-		why: "Accessibility gap: motion plays for users who asked for none.",
-		fix: "references/performance.md#reduced-motion-by-default",
-		pattern: /requestAnimationFrame|@keyframes|animation:(?!\s*none\b)/,
-		negativePattern: /prefers-reduced-motion|reducedMotion/,
-		negativeCodeOnly: true,
-		fileTypes: ["js", "css"],
-		codeOnly: true,
-		recurringRafBranch: true,
-		perFile: true
-	},
-	{
-		id: "background-animation",
-		replacement: "CSS/WAAPI when predetermined and keyframe-friendly; otherwise useLoop with elapsed steps",
-		label: "setInterval/setTimeout for animation (no visibility check)",
-		severity: "high",
-		noise: "noisy",
-		detects: "`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity work",
-		why: "Timers keep firing off-screen and in background tabs.",
-		fix: "references/timed-sequences.md",
-		pattern: /setInterval|setTimeout/,
-		contextPattern: /transform|opacity|translate|\banimate\b/,
-		recurringTimerOnly: true
-	},
-	{
-		id: "manual-synced-ref",
-		replacement: "useSyncedRef(value)",
-		label: "Manual synced ref (dedup: useSyncedRef offers a shorthand)",
-		severity: "dedup",
-		noise: "precise",
-		detects: "`useRef(v)` + unconditional `ref.current = v` (shorthand exists)",
-		why: "Correct React idiom; useSyncedRef is a one-line shorthand.",
-		fix: "references/use-synced-ref.md",
-		matcher: matchesSyncedRef
-	},
-	{
-		id: "manual-stable-callback",
-		replacement: "useStableCallback(fn)",
-		label: "Manual stable callback (dedup: useStableCallback offers a shorthand)",
-		severity: "dedup",
-		noise: "precise",
-		detects: "`useCallback` with empty deps calling through a ref **(JSX)**",
-		why: "Correct React idiom; useStableCallback is a one-line shorthand.",
-		fix: "references/use-stable-callback.md",
-		matcher: matchesStableCallback,
-		fileTypes: "jsx"
-	},
-	{
-		id: "global-has-selector",
-		replacement: "scope the rule to a subtree, or drive it from a data attribute",
-		label: "Global :has() selector (broad style invalidation)",
-		severity: "high",
-		noise: "precise",
-		detects: "`body:has`/`html:has`/`:root:has`/`*:has` in a stylesheet **(CSS)**",
-		why: "Re-checked on any mutation that could affect the argument.",
-		fix: "references/performance-recipes.md#recipe-delete-a-global-has-rule",
-		pattern: /body:has\(|html:has\(|:root:has\(|\*:has\(/,
-		fileTypes: "css"
-	},
-	{
-		id: "permanent-will-change",
-		replacement: "toggle will-change with animation state, or drop it",
-		label: "Permanent will-change (wastes GPU memory when idle)",
-		severity: "medium",
-		noise: "normal",
-		detects: "`will-change` never toggled with animation state **(CSS)**",
-		why: "A GPU layer is held even while nothing animates.",
-		fix: "references/performance.md#will-change-only-while-animating",
-		matcher: matchesPermanentWillChange,
-		fileTypes: "css"
-	},
-	{
-		id: "non-compositor-animation",
-		replacement: "name the properties and transition transform/opacity",
-		label: "Animating a non-compositor property (layout/paint, not transform/opacity)",
-		severity: "high",
-		noise: "normal",
-		detects: "`transition: all`, layout properties, or bare-duration shorthand **(CSS)**",
-		why: "Layout + paint every frame, off the compositor.",
-		fix: "references/audit.md#step-15-css-loading-and-architecture-pass",
-		matcher: matchesNonCompositorTransition,
-		fileTypes: "css"
-	},
-	{
-		id: "keyframes-layout-animation",
-		replacement: "keyframe transform/opacity; grid-template-rows for expand/collapse",
-		label: "Layout property animated inside @keyframes",
-		severity: "high",
-		noise: "normal",
-		detects: "Layout property (`width`/`height`/`top`/`left`) inside `@keyframes` **(CSS)**",
-		why: "Layout + paint every frame, off the compositor.",
-		fix: "references/audit.md#step-15-css-loading-and-architecture-pass",
-		matcher: matchesKeyframesLayoutProp,
-		fileTypes: "css"
-	},
-	{
-		id: "bare-window-listener",
-		replacement: "useSize or useMediaQuery for size, useScroll for scroll position",
-		label: "Bare resize/scroll listener with layout read",
-		severity: "critical",
-		noise: "normal",
-		detects: "resize/scroll listener with a layout read in the handler",
-		why: "A synchronous reflow per event, once per listening component.",
-		fix: "references/performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer",
-		pattern: /addEventListener\s*\(\s*['"](?:resize|scroll)['"]/,
-		contextPattern: WINDOW_LISTENER_LAYOUT_READ
-	},
-	{
-		id: "pointer-listener-layout-read",
-		replacement: "usePointer (one rAF-batched read per frame, not per event)",
-		label: "Pointer/mouse/touch move listener with layout read",
-		severity: "critical",
-		noise: "normal",
-		detects: "pointermove/mousemove/touchmove listener, or intrinsic JSX move prop, with a layout read per event",
-		why: "A synchronous reflow per event; move events fire far above 60/sec.",
-		fix: "references/use-pointer.md",
-		pattern: /addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove)['"]|\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/,
-		contextPattern: POINTER_LAYOUT_READ,
-		moveHandlerReads: POINTER_LAYOUT_READ
-	},
-	{
-		id: "redundant-mutation-observers",
-		replacement: "one useMutation with a coalesced callback",
-		label: "MutationObserver on html/documentElement (coalesce into one useMutation)",
-		severity: "medium",
-		noise: "normal",
-		detects: "MutationObserver on `<html>`/`documentElement`",
-		why: "N observers on one target each fire per mutation; one suffices.",
-		fix: "references/performance-recipes.md#recipe-collapse-an-observer-storm-on-html",
-		pattern: /new\s+MutationObserver/,
-		contextPattern: /document\.documentElement|<html|\.observe\s*\(\s*document\s*\./
-	},
-	{
-		id: "tailwind-transition-all",
-		replacement: "name the properties: transition-colors, transition-transform",
-		label: "Tailwind transition-all class (animates layout properties)",
-		severity: "high",
-		noise: "noisy",
-		detects: "`transition-all` utility class, in JSX or a variant module",
-		why: "Transitions whatever changes, including layout, off the compositor.",
-		fix: "references/audit.md#step-15-css-loading-and-architecture-pass",
-		pattern: /\btransition-all\b/
-	},
-	{
-		id: "tailwind-permanent-will-change",
-		replacement: "toggle the class with animation state, or drop it",
-		label: "Tailwind will-change-transform class not toggled with state",
-		severity: "medium",
-		noise: "noisy",
-		detects: "`will-change-transform` class not toggled with state",
-		why: "A GPU layer is held even while nothing animates.",
-		fix: "references/performance.md#will-change-only-while-animating",
-		matcher: matchesPermanentWillChangeClass
-	},
-	{
-		id: "reduced-motion-ignored",
-		replacement: "reducedMotion: 'respect' unless the motion is non-decorative",
-		label: "reducedMotion: 'ignore' (bypasses the user preference)",
-		severity: "medium",
-		noise: "precise",
-		detects: "`reducedMotion: 'ignore'` (bypasses the user preference)",
-		why: "Only justified for non-decorative motion (data viz, games).",
-		fix: "references/performance.md#reduced-motion-by-default",
-		pattern: /reducedMotion:\s*['"]ignore['"]/
-	},
-	{
-		id: "core-primitive-in-component",
-		replacement: "the matching hook (useLoop, useSight, useLifecycle)",
-		label: "Core phase primitive in a component (hook likely fits better)",
-		severity: "medium",
-		noise: "noisy",
-		detects: "`createLoop`/`createTicker`/`createLifecycle`/`createSight` in a component **(JSX)**",
-		why: "Hooks manage refs, teardown, and enabled automatically.",
-		fix: "references/decision-guide.md#common-mistakes",
-		pattern: /\bcreate(?:Loop|Ticker|Lifecycle|Sight)\s*\(/,
-		fileTypes: "jsx"
-	},
-	{
-		id: "phase-loop-browser-keyframes",
-		replacement: "CSS or WAAPI keyframes for playback; useLifecycle only to play/pause",
-		label: "Phase loop may be a browser-keyframe candidate",
-		severity: "medium",
-		noise: "noisy",
-		detects: "Phase loop combining `frame.elapsed` with transform/opacity-style writes",
-		why: "An elapsed-only transform/opacity timeline may not need per-frame JS.",
-		fix: "references/decision-guide.md#browser-driven-timelines-css-or-waapi",
-		matcher: matchesPhaseLoopBrowserKeyframes,
-		perFile: true
-	},
-	{
-		id: "when-visible-no-fallback",
-		replacement: "reserve the final in-flow footprint when it is nonzero",
-		label: "WhenVisible/WhenIdle without a fallback (verify mount geometry)",
-		severity: "high",
-		noise: "noisy",
-		detects: "`WhenVisible`/`WhenIdle` without a fallback; verify whether mount changes in-flow size **(JSX)**",
-		why: "Children are absent until triggered; unreserved in-flow size can shift layout.",
-		fix: "references/rendering-recipes.md",
-		matcher: matchesUngatedLazyMount,
-		fileTypes: "jsx"
-	}
-];
-const BLOCK_SCAN_LINES = 20;
-const STYLE_LAYOUT_PROPERTY = /^(?:width|height|minWidth|maxWidth|minHeight|maxHeight|inlineSize|minInlineSize|maxInlineSize|blockSize|minBlockSize|maxBlockSize|top|right|bottom|left|inset|insetBlock|insetBlockStart|insetBlockEnd|insetInline|insetInlineStart|insetInlineEnd|margin|marginTop|marginRight|marginBottom|marginLeft|marginBlock|marginBlockStart|marginBlockEnd|marginInline|marginInlineStart|marginInlineEnd|padding|paddingTop|paddingRight|paddingBottom|paddingLeft|paddingBlock|paddingBlockStart|paddingBlockEnd|paddingInline|paddingInlineStart|paddingInlineEnd)$/;
-const CSS_LAYOUT_PROPERTY = /^(?:width|height|min-width|max-width|min-height|max-height|inline-size|min-inline-size|max-inline-size|block-size|min-block-size|max-block-size|top|right|bottom|left|inset|inset-block|inset-block-start|inset-block-end|inset-inline|inset-inline-start|inset-inline-end|margin|margin-top|margin-right|margin-bottom|margin-left|margin-block|margin-block-start|margin-block-end|margin-inline|margin-inline-start|margin-inline-end|padding|padding-top|padding-right|padding-bottom|padding-left|padding-block|padding-block-start|padding-block-end|padding-inline|padding-inline-start|padding-inline-end)$/;
-const SVG_LAYOUT_ATTRIBUTE = /^(?:x|y|width|height|cx|cy|r|d|points|x1|y1|x2|y2|transform)$/;
-/** JavaScript writes that may invalidate layout or paint when repeated. */
-function matchesLayoutWrite(lines, i) {
-	const code = maskStrings([lines[i] ?? ""])[0] ?? "";
-	const callSource = lines.slice(i, i + 3).join("\n");
-	if (/\.set(?:Translate|Scale|Rotate|SkewX|SkewY|Matrix)\s*\(/.test(code)) return true;
-	const directStyle = /\.style\.([A-Za-z_$][\w$]*)\s*=/.exec(code);
-	if (directStyle && STYLE_LAYOUT_PROPERTY.test(directStyle[1] ?? "")) return true;
-	return hasLayoutPropertyCall(callSource, code, ".style.setProperty", CSS_LAYOUT_PROPERTY) || hasLayoutPropertyCall(callSource, code, ".setAttribute", SVG_LAYOUT_ATTRIBUTE);
-}
-/** Matches a quoted first argument only when the method itself is real code. */
-function hasLayoutPropertyCall(source, code, method, properties) {
-	let from = 0;
-	while (from < code.length) {
-		const index = code.indexOf(method, from);
-		if (index === -1) return false;
-		const args = source.slice(index + method.length);
-		const property = /^\s*\(\s*(['"])([^'"]+)\1/.exec(args)?.[2];
-		if (property && properties.test(property)) return true;
-		from = index + method.length;
-	}
-	return false;
-}
-/**
-* Flags the manual synced-ref idiom that useSyncedRef shortens:
-*   const xRef = useRef(v);   // line i
-*   xRef.current = v;         // next non-blank line, same initializer
-*
-* Matching the same initializer keeps false positives near zero: useRef(null),
-* a different value, or a conditional write all miss.
-*/
-function matchesSyncedRef(lines, i) {
-	const decl = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*useRef\s*(?:<[^>]*>)?\s*\(([^)]*)\)/.exec(lines[i] ?? "");
-	if (!decl) return false;
-	const name = decl[1] ?? "";
-	const initial = (decl[2] ?? "").trim();
-	if (initial === "") return false;
-	let j = i + 1;
-	while (j < lines.length) {
-		const t = (lines[j] ?? "").trim();
-		if (t === "" || t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) j++;
-		else break;
-	}
-	if (j >= lines.length) return false;
-	const assign = new RegExp(`^${escapeRegExp(name)}\\.current\\s*=\\s*(.+?);?$`).exec((lines[j] ?? "").trim());
-	if (!assign) return false;
-	return (assign[1] ?? "").trim() === initial;
-}
-/**
-* `will-change` that no state gates. The gate lives in the enclosing rule,
-* not the file: a `:hover` rule elsewhere in the stylesheet says nothing
-* about this declaration, and a whole-file negative pattern silenced the
-* signal on essentially every production stylesheet.
-*/
-function matchesPermanentWillChange(lines, i) {
-	if (!/will-change:(?!\s*auto\b)/.test(lines[i] ?? "")) return false;
-	for (let j = i + 1; j < lines.length && j - i < BLOCK_SCAN_LINES; j++) {
-		const line = lines[j] ?? "";
-		if (/animation-play-state/.test(line)) return false;
-		if (line.includes("}")) break;
-	}
-	for (let j = i; j >= 0 && i - j < BLOCK_SCAN_LINES; j--) {
-		const line = lines[j] ?? "";
-		if (/animation-play-state/.test(line)) return false;
-		if (line.includes("{")) return !/\[data-|\[aria-|:hover|:focus|:active/.test(line);
-	}
-	return true;
-}
-/** Matches a complete transition declaration, including multiline values. */
-function matchesNonCompositorTransition(lines, i) {
-	if (!/(?<![\w-])transition(?:-property)?:\s*/.test(lines[i] ?? "")) return false;
-	let declaration = lines[i] ?? "";
-	for (let j = i + 1; j < lines.length && j <= i + 10 && !/[;}]/.test(declaration); j++) declaration += ` ${(lines[j] ?? "").trim()}`;
-	return NON_COMPOSITOR_TRANSITION.test(declaration);
-}
-/**
-* The stable-callback idiom that useStableCallback shortens: a useCallback
-* with empty deps whose body calls through a ref, so the identity never
-* changes while the behavior stays current.
-*
-* Requiring all three parts (useCallback, the ref call, empty deps) keeps
-* this off ordinary memoized callbacks.
-*/
-function matchesStableCallback(lines, i) {
-	if (!/useCallback\s*(?:<[^>]*>)?\s*\(/.test(lines[i] ?? "")) return false;
-	const window = lines.slice(i, i + 8).join("\n");
-	return /\.current\s*(?:\?\.|\.call|\.apply)?\s*\(/.test(window) && /\[\s*\]\s*,?\s*\)/.test(window);
-}
-/** Always-on will-change-transform class; a ternary or && guard means toggled. */
-function matchesPermanentWillChangeClass(lines, i) {
-	if (!/\bwill-change-transform\b/.test(lines[i] ?? "")) return false;
-	return !/\?|&&/.test(lines[i] ?? "");
-}
-/**
-* A phase loop whose visible output may be fully describable up front as
-* browser keyframes. This is deliberately noisy: the audit must still verify
-* that the timeline has no live inputs, physics, layout reads, or required JS
-* side effects. The signal exists to force that cheaper-tier question.
-*/
-function matchesPhaseLoopBrowserKeyframes(lines, i) {
-	if (!/\b(?:useLoop|createLoop)(?:\s*<[^;{]*>)?\s*\(/.test(lines[i] ?? "")) return false;
-	const source = lines.join("\n");
-	const derivesFromElapsed = /[A-Za-z_$][\w$]*\.elapsed\b/.test(source) || /\(\s*\{[^}]*\belapsed\b[^}]*\}\s*(?::[^)]*)?\)\s*(?:=>|\{)/.test(source);
-	const writesKeyframeFriendlyOutput = /\.style\.(?:opacity|transform)\s*=|\.style\.setProperty\(\s*['"](?:opacity|transform)['"]|\.setAttribute\(\s*['"](?:opacity|transform)['"]|\.set(?:Translate|Scale|Rotate|SkewX|SkewY)\s*\(/.test(source);
-	return derivesFromElapsed && writesKeyframeFriendlyOutput;
-}
-/**
-* Layout property inside a @keyframes block. Handles single-line frames
-* (`from { left: 0; }`) and fully inlined blocks
-* (`@keyframes k { from { left: 0; } }`), where the at-rule sits on the
-* property's own line.
-*
-* The enclosing @keyframes ranges are computed once per file in a single
-* forward pass (see keyframeRanges); walking braces backwards from every
-* candidate line made this quadratic in file size — 1.4s on 4k lines.
-*/
-function matchesKeyframesLayoutProp(lines, i) {
-	if (!/(?:^|[{;])\s*(?:width|height|top|left|right|bottom|margin|padding|inset)[a-z-]*\s*:/.test(lines[i] ?? "")) return false;
-	return keyframeRanges(lines).has(i);
-}
-const keyframeRangeCache = /* @__PURE__ */ new WeakMap();
-/** Line indices that sit inside (or open) a @keyframes block. */
-function keyframeRanges(lines) {
-	const cached = keyframeRangeCache.get(lines);
-	if (cached) return cached;
-	const inside = /* @__PURE__ */ new Set();
-	let depth = 0;
-	let keyframesDepth = -1;
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i] ?? "";
-		if (keyframesDepth === -1 && /@(?:-\w+-)?keyframes/.test(line)) keyframesDepth = depth;
-		if (keyframesDepth !== -1) inside.add(i);
-		for (let k = 0; k < line.length; k++) if (line[k] === "{") depth++;
-		else if (line[k] === "}") {
-			depth--;
-			if (keyframesDepth !== -1 && depth <= keyframesDepth) keyframesDepth = -1;
-		}
-	}
-	keyframeRangeCache.set(lines, inside);
-	return inside;
-}
-/**
-* WhenVisible/WhenIdle opening tag without a fallback prop. Reads up to 30
-* lines forward to capture multi-line JSX tags.
-*
-* The tag ends at the first `>` outside a prop expression: a comparison in
-* a prop (`rootMargin={a > b ? x : y}`) used to end it early and hide a
-* `fallback` declared further down.
-*/
-function matchesUngatedLazyMount(lines, i) {
-	const open = /<When(?:Visible|Idle)\b/.exec(lines[i] ?? "");
-	if (!open) return false;
-	let tag = "";
-	let depth = 0;
-	for (let j = i; j < Math.min(lines.length, i + 30); j++) {
-		const sourceLine = lines[j] ?? "";
-		const line = j === i ? sourceLine.slice(open.index) : sourceLine;
-		tag += `${line}\n`;
-		let closed = false;
-		for (let k = 0; k < line.length; k++) {
-			const ch = line[k];
-			if (ch === "{") depth++;
-			else if (ch === "}") depth--;
-			else if (ch === ">" && depth === 0 && line[k - 1] !== "=") {
-				closed = true;
-				break;
-			}
-		}
-		if (closed) break;
-	}
-	return !/\bfallback\s*=/.test(tag);
-}
-//#endregion
-//#region scanner/analysis.ts
 const RAF_CALL = /\brequestAnimationFrame\s*(?:\?\.)?\s*\(/g;
 const TIMEOUT_CALL = /\bsetTimeout\s*(?:\?\.)?\s*\(/g;
 const INTERVAL_CALL = /\bsetInterval\s*(?:\?\.)?\s*\(/;
@@ -840,13 +309,15 @@ const INTERVAL_CALL = /\bsetInterval\s*(?:\?\.)?\s*\(/;
 * setTimeout share the callback set and the cycle analysis, differing only in
 * the call pattern.
 */
-function analyzeFile(sourceIndex) {
+function analyzeFile(type, sourceIndex, uncommentedLines) {
 	const { callbacks, callbacksByName } = collectCallbacks(sourceIndex);
 	const cycleOf = (pattern) => analyzeSchedulingCycle(sourceIndex, callbacks, callbacksByName, pattern);
 	return {
 		raf: cycleOf(RAF_CALL),
 		timeout: cycleOf(TIMEOUT_CALL),
-		subscribedMediaQueries: subscribedMediaQueryLines(sourceIndex)
+		subscribedMediaQueries: subscribedMediaQueryLines(sourceIndex),
+		moveHandlers: analyzeMoveHandlers(type, sourceIndex),
+		uncommentedLines
 	};
 }
 const CHAINED_SUBSCRIBE = /\s*(?:\?\.|\.)\s*(?:addEventListener|addListener)\s*\(/y;
@@ -1187,6 +658,561 @@ function enclosingBlock(lines, lineIndex) {
 	}
 	return best;
 }
+const EVIDENCE_REGISTRY = {
+	"recurring-raf-cycle": (analysis, line) => analysis.raf.recurringScheduleLines.has(line),
+	"recurring-raf-state": (analysis, line) => analysis.raf.stateScheduleLines.has(line),
+	"subscribed-media-query": (analysis, line) => analysis.subscribedMediaQueries.has(line),
+	"recurring-raf-branch": matchesRecurringRafBranch,
+	"recurring-timer": (analysis, line) => INTERVAL_CALL.test(analysis.uncommentedLines[line] ?? "") || analysis.timeout.recurringScheduleLines.has(line),
+	"move-handler-layout-read": matchesMoveHandlerLayoutRead
+};
+function matchesRecurringRafBranch(analysis, line, match) {
+	return !/requestAnimationFrame/.test(match[0]) || analysis.raf.recurringScheduleLines.has(line);
+}
+function matchesMoveHandlerLayoutRead(analysis, line, match) {
+	if (/^on[A-Z]/.test(match[0])) {
+		const range = analysis.moveHandlers.propRanges.get(line);
+		if (!range) return false;
+		return POINTER_LAYOUT_READ.test(analysis.uncommentedLines.slice(range.start, range.end + 1).join("\n"));
+	}
+	const radius = 5;
+	return POINTER_LAYOUT_READ.test(analysis.uncommentedLines.slice(Math.max(0, line - radius), line + radius + 1).join("\n"));
+}
+function layoutReadPattern(properties, { computedStyle = false } = {}) {
+	const names = properties.join("|");
+	const forms = [
+		`(?:\\?\\.|\\.)\\s*(?:${names})\\b`,
+		`\\[\\s*['"](?:${names})['"]\\s*\\]`,
+		String.raw`(?:\?\.|\.)\s*getBoundingClientRect\s*(?:\?\.)?\s*\(`,
+		String.raw`\[\s*['"]getBoundingClientRect['"]\s*\]\s*(?:\?\.)?\s*\(`
+	];
+	if (computedStyle) forms.push(String.raw`\bgetComputedStyle\s*\(`);
+	return new RegExp(forms.join("|"));
+}
+//#endregion
+//#region scanner/signals.ts
+const SEVERITY_ORDER = [
+	"critical",
+	"high",
+	"medium",
+	"dedup"
+];
+const NOISE_TIERS = [
+	"precise",
+	"normal",
+	"noisy"
+];
+const NON_COMPOSITOR_TRANSITION = new RegExp(`${/(?<![\w-])transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/.source}|${/(?<![\w-])transition:\s*[\d.]+m?s(?:(?:\s*,\s*|\s+)(?:[\d.]+m?s|ease[\w-]*|linear|step[\w-]*|steps\([^)]*\)|cubic-bezier\([^)]*\)))*\s*(?:;|!|$)/.source}`);
+const SIGNAL_CATALOG = [
+	{
+		id: "manual-raf",
+		replacement: "CSS/WAAPI if browser-animatable; otherwise useLoop/useCanvas for lifecycle + cleanup",
+		label: "Manual requestAnimationFrame loop",
+		severity: "high",
+		noise: "noisy",
+		detects: "Proven raw rAF callback cycle: no visibility pause, shared clock, or cleanup",
+		why: "No visibility pausing, no shared clock, no cleanup.",
+		fix: "references/audit.md#common-replacements",
+		pattern: /requestAnimationFrame/,
+		codeOnly: true,
+		evidence: "recurring-raf-cycle"
+	},
+	{
+		id: "setstate-in-raf",
+		replacement: "useLoop writing to a ref or the DOM; useTween for one value into render",
+		label: "setState/dispatch inside rAF callback",
+		severity: "critical",
+		noise: "normal",
+		detects: "State update inside a recurring rAF callback (60 re-renders/sec)",
+		why: "60 re-renders/sec: React reconciles on every frame.",
+		fix: "references/performance.md#never-setstate-inside-ontick--draw",
+		supersedes: "manual-raf",
+		pattern: /requestAnimationFrame/,
+		codeOnly: true,
+		evidence: "recurring-raf-state"
+	},
+	{
+		id: "setstate-in-ontick",
+		replacement: "write to a ref or the DOM in the callback; lift state changes out of the frame",
+		label: "setState/dispatch inside a phase onTick/onDraw/draw callback",
+		severity: "critical",
+		noise: "normal",
+		detects: "State update inside a phase `onTick`/`onDraw`/`draw` callback",
+		why: "60 re-renders/sec; write to refs or the DOM inside frame callbacks.",
+		fix: "references/performance.md#never-setstate-inside-ontick--draw",
+		pattern: /\bonTick\s*[:=(]|\bonDraw\s*[:=(]|\bdraw\s*:/,
+		contextPattern: STATE_UPDATE_CONTEXT,
+		codeOnly: true,
+		contextLines: 30,
+		contextScope: "block"
+	},
+	{
+		id: "forced-reflow",
+		replacement: "useSize (ResizeObserver, async) or cache the geometry and re-read on resize",
+		label: "Forced reflow (getBoundingClientRect, offsetWidth, etc.)",
+		severity: "critical",
+		noise: "noisy",
+		detects: "Layout-reading member access or call (`getBoundingClientRect`, `.offset*`, `.scroll*`, `.client*`)",
+		why: "Synchronous layout; in a hot path it thrashes every frame.",
+		fix: "references/performance.md#no-forced-reflows-in-animation-paths",
+		pattern: FORCED_REFLOW_READ
+	},
+	{
+		id: "js-layout-write",
+		replacement: "animate transform/opacity on an HTML wrapper when possible",
+		label: "Potential layout-inducing JavaScript write",
+		severity: "high",
+		noise: "noisy",
+		detects: "JavaScript write to SVG geometry/transforms or CSS layout properties",
+		why: "Repeated SVG or CSS layout writes can cause layout and paint.",
+		fix: "references/performance.md#no-layout-inducing-writes-in-animation-paths",
+		matcher: matchesLayoutWrite
+	},
+	{
+		id: "raw-io",
+		replacement: "useSight or useLifecycle (pooled IntersectionObserver)",
+		label: "Raw IntersectionObserver (not pooled)",
+		severity: "medium",
+		noise: "normal",
+		detects: "`new IntersectionObserver` outside the pool",
+		why: "Unpooled observer instances and manual cleanup leak over time.",
+		fix: "references/performance.md#observer-pooling",
+		pattern: /new\s+IntersectionObserver/
+	},
+	{
+		id: "raw-ro",
+		replacement: "useSize (pooled ResizeObserver)",
+		label: "Raw ResizeObserver (not pooled)",
+		severity: "medium",
+		noise: "normal",
+		detects: "`new ResizeObserver` outside the pool",
+		why: "Unpooled observer instances and manual cleanup leak over time.",
+		fix: "references/performance.md#observer-pooling",
+		pattern: /new\s+ResizeObserver/
+	},
+	{
+		id: "raw-matchmedia",
+		replacement: "useMediaQuery, or usePrefersReducedMotion for the motion query",
+		label: "Raw matchMedia (not pooled)",
+		severity: "medium",
+		noise: "normal",
+		detects: "`matchMedia(` with a listener on the result, outside the pool",
+		why: "Unpooled MediaQueryList subscriptions; phase pools them by query.",
+		fix: "references/use-media-query.md",
+		pattern: MATCH_MEDIA_CALL,
+		evidence: "subscribed-media-query",
+		codeOnly: true
+	},
+	{
+		id: "mutationobserver-layout",
+		replacement: "useMutation (rAF-batched); useSize/useSight for geometry",
+		label: "MutationObserver driving layout (reflow / style+subtree observation)",
+		severity: "critical",
+		noise: "normal",
+		detects: "MutationObserver watching inline styles or reading layout in its callback",
+		why: "Layout reads in MO callbacks force a reflow on every mutation.",
+		fix: "references/performance.md#never-drive-layout-from-a-mutationobserver",
+		pattern: /new\s+MutationObserver/,
+		contextPattern: new RegExp(`attributeFilter:\\s*\\[[^\\]]*['"]style['"]|${OBSERVED_LAYOUT_READ.source}`)
+	},
+	{
+		id: "js-opacity-transform",
+		replacement: "CSS/WAAPI if browser-animatable; useLoop only for required live per-frame JS",
+		label: "JS-driven opacity/transform (may be browser-driven)",
+		severity: "medium",
+		noise: "noisy",
+		detects: "`style.opacity`/`style.transform` writes (browser-driven candidate)",
+		why: "May be browser-driven; inspect whether JavaScript must compute live frames.",
+		fix: "references/decision-guide.md#tier-1-browser-driven-css-or-waapi",
+		pattern: /\.style\.(opacity|transform)\s*=/
+	},
+	{
+		id: "missing-reduced-motion",
+		replacement: "a prefers-reduced-motion media query, or a phase hook (handles it automatically)",
+		label: "Animation without reduced-motion check",
+		severity: "critical",
+		noise: "noisy",
+		detects: "Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling",
+		why: "Accessibility gap: motion plays for users who asked for none.",
+		fix: "references/performance.md#reduced-motion-by-default",
+		pattern: /requestAnimationFrame|@keyframes|animation:(?!\s*none\b)/,
+		negativePattern: /prefers-reduced-motion|reducedMotion/,
+		negativeCodeOnly: true,
+		fileTypes: ["js", "css"],
+		codeOnly: true,
+		evidence: "recurring-raf-branch",
+		perFile: true
+	},
+	{
+		id: "background-animation",
+		replacement: "CSS/WAAPI when predetermined and keyframe-friendly; otherwise useLoop with elapsed steps",
+		label: "setInterval/setTimeout for animation (no visibility check)",
+		severity: "high",
+		noise: "noisy",
+		detects: "`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity work",
+		why: "Timers keep firing off-screen and in background tabs.",
+		fix: "references/timed-sequences.md",
+		pattern: /setInterval|setTimeout/,
+		contextPattern: /transform|opacity|translate|\banimate\b/,
+		evidence: "recurring-timer"
+	},
+	{
+		id: "manual-synced-ref",
+		replacement: "useSyncedRef(value)",
+		label: "Manual synced ref (dedup: useSyncedRef offers a shorthand)",
+		severity: "dedup",
+		noise: "precise",
+		detects: "`useRef(v)` + unconditional `ref.current = v` (shorthand exists)",
+		why: "Correct React idiom; useSyncedRef is a one-line shorthand.",
+		fix: "references/use-synced-ref.md",
+		matcher: matchesSyncedRef
+	},
+	{
+		id: "manual-stable-callback",
+		replacement: "useStableCallback(fn)",
+		label: "Manual stable callback (dedup: useStableCallback offers a shorthand)",
+		severity: "dedup",
+		noise: "precise",
+		detects: "`useCallback` with empty deps calling through a ref **(JSX)**",
+		why: "Correct React idiom; useStableCallback is a one-line shorthand.",
+		fix: "references/use-stable-callback.md",
+		matcher: matchesStableCallback,
+		fileTypes: "jsx"
+	},
+	{
+		id: "global-has-selector",
+		replacement: "scope the rule to a subtree, or drive it from a data attribute",
+		label: "Global :has() selector (broad style invalidation)",
+		severity: "high",
+		noise: "precise",
+		detects: "`body:has`/`html:has`/`:root:has`/`*:has` in a stylesheet **(CSS)**",
+		why: "Re-checked on any mutation that could affect the argument.",
+		fix: "references/performance-recipes.md#recipe-delete-a-global-has-rule",
+		pattern: /body:has\(|html:has\(|:root:has\(|\*:has\(/,
+		fileTypes: "css"
+	},
+	{
+		id: "permanent-will-change",
+		replacement: "toggle will-change with animation state, or drop it",
+		label: "Permanent will-change (wastes GPU memory when idle)",
+		severity: "medium",
+		noise: "normal",
+		detects: "`will-change` never toggled with animation state **(CSS)**",
+		why: "A GPU layer is held even while nothing animates.",
+		fix: "references/performance.md#will-change-only-while-animating",
+		matcher: matchesPermanentWillChange,
+		fileTypes: "css"
+	},
+	{
+		id: "non-compositor-animation",
+		replacement: "name the properties and transition transform/opacity",
+		label: "Animating a non-compositor property (layout/paint, not transform/opacity)",
+		severity: "high",
+		noise: "normal",
+		detects: "`transition: all`, layout properties, or bare-duration shorthand **(CSS)**",
+		why: "Layout + paint every frame, off the compositor.",
+		fix: "references/audit.md#step-15-css-loading-and-architecture-pass",
+		matcher: matchesNonCompositorTransition,
+		fileTypes: "css"
+	},
+	{
+		id: "keyframes-layout-animation",
+		replacement: "keyframe transform/opacity; grid-template-rows for expand/collapse",
+		label: "Layout property animated inside @keyframes",
+		severity: "high",
+		noise: "normal",
+		detects: "Layout property (`width`/`height`/`top`/`left`) inside `@keyframes` **(CSS)**",
+		why: "Layout + paint every frame, off the compositor.",
+		fix: "references/audit.md#step-15-css-loading-and-architecture-pass",
+		matcher: matchesKeyframesLayoutProp,
+		fileTypes: "css"
+	},
+	{
+		id: "bare-window-listener",
+		replacement: "useSize or useMediaQuery for size, useScroll for scroll position",
+		label: "Bare resize/scroll listener with layout read",
+		severity: "critical",
+		noise: "normal",
+		detects: "resize/scroll listener with a layout read in the handler",
+		why: "A synchronous reflow per event, once per listening component.",
+		fix: "references/performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer",
+		pattern: /addEventListener\s*\(\s*['"](?:resize|scroll)['"]/,
+		contextPattern: WINDOW_LISTENER_LAYOUT_READ
+	},
+	{
+		id: "pointer-listener-layout-read",
+		replacement: "usePointer (one rAF-batched read per frame, not per event)",
+		label: "Pointer/mouse/touch move listener with layout read",
+		severity: "critical",
+		noise: "normal",
+		detects: "pointermove/mousemove/touchmove listener, or intrinsic JSX move prop, with a layout read per event",
+		why: "A synchronous reflow per event; move events fire far above 60/sec.",
+		fix: "references/use-pointer.md",
+		pattern: /addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove)['"]|\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/,
+		evidence: "move-handler-layout-read"
+	},
+	{
+		id: "redundant-mutation-observers",
+		replacement: "one useMutation with a coalesced callback",
+		label: "MutationObserver on html/documentElement (coalesce into one useMutation)",
+		severity: "medium",
+		noise: "normal",
+		detects: "MutationObserver on `<html>`/`documentElement`",
+		why: "N observers on one target each fire per mutation; one suffices.",
+		fix: "references/performance-recipes.md#recipe-collapse-an-observer-storm-on-html",
+		pattern: /new\s+MutationObserver/,
+		contextPattern: /document\.documentElement|<html|\.observe\s*\(\s*document\s*\./
+	},
+	{
+		id: "tailwind-transition-all",
+		replacement: "name the properties: transition-colors, transition-transform",
+		label: "Tailwind transition-all class (animates layout properties)",
+		severity: "high",
+		noise: "noisy",
+		detects: "`transition-all` utility class, in JSX or a variant module",
+		why: "Transitions whatever changes, including layout, off the compositor.",
+		fix: "references/audit.md#step-15-css-loading-and-architecture-pass",
+		pattern: /\btransition-all\b/
+	},
+	{
+		id: "tailwind-permanent-will-change",
+		replacement: "toggle the class with animation state, or drop it",
+		label: "Tailwind will-change-transform class not toggled with state",
+		severity: "medium",
+		noise: "noisy",
+		detects: "`will-change-transform` class not toggled with state",
+		why: "A GPU layer is held even while nothing animates.",
+		fix: "references/performance.md#will-change-only-while-animating",
+		matcher: matchesPermanentWillChangeClass
+	},
+	{
+		id: "reduced-motion-ignored",
+		replacement: "reducedMotion: 'respect' unless the motion is non-decorative",
+		label: "reducedMotion: 'ignore' (bypasses the user preference)",
+		severity: "medium",
+		noise: "precise",
+		detects: "`reducedMotion: 'ignore'` (bypasses the user preference)",
+		why: "Only justified for non-decorative motion (data viz, games).",
+		fix: "references/performance.md#reduced-motion-by-default",
+		pattern: /reducedMotion:\s*['"]ignore['"]/
+	},
+	{
+		id: "core-primitive-in-component",
+		replacement: "the matching hook (useLoop, useSight, useLifecycle)",
+		label: "Core phase primitive in a component (hook likely fits better)",
+		severity: "medium",
+		noise: "noisy",
+		detects: "`createLoop`/`createTicker`/`createLifecycle`/`createSight` in a component **(JSX)**",
+		why: "Hooks manage refs, teardown, and enabled automatically.",
+		fix: "references/decision-guide.md#common-mistakes",
+		pattern: /\bcreate(?:Loop|Ticker|Lifecycle|Sight)\s*\(/,
+		fileTypes: "jsx"
+	},
+	{
+		id: "phase-loop-browser-keyframes",
+		replacement: "CSS or WAAPI keyframes for playback; useLifecycle only to play/pause",
+		label: "Phase loop may be a browser-keyframe candidate",
+		severity: "medium",
+		noise: "noisy",
+		detects: "Phase loop combining `frame.elapsed` with transform/opacity-style writes",
+		why: "An elapsed-only transform/opacity timeline may not need per-frame JS.",
+		fix: "references/decision-guide.md#browser-driven-timelines-css-or-waapi",
+		matcher: matchesPhaseLoopBrowserKeyframes,
+		perFile: true
+	},
+	{
+		id: "when-visible-no-fallback",
+		replacement: "reserve the final in-flow footprint when it is nonzero",
+		label: "WhenVisible/WhenIdle without a fallback (verify mount geometry)",
+		severity: "high",
+		noise: "noisy",
+		detects: "`WhenVisible`/`WhenIdle` without a fallback; verify whether mount changes in-flow size **(JSX)**",
+		why: "Children are absent until triggered; unreserved in-flow size can shift layout.",
+		fix: "references/rendering-recipes.md",
+		matcher: matchesUngatedLazyMount,
+		fileTypes: "jsx"
+	}
+];
+function validateSignalEvidence(signals) {
+	for (const signal of signals) if (signal.evidence && !Object.hasOwn(EVIDENCE_REGISTRY, signal.evidence)) throw new Error(`Signal '${signal.id}' names unknown evidence '${signal.evidence}'`);
+}
+validateSignalEvidence(SIGNAL_CATALOG);
+const SIGNALS = SIGNAL_CATALOG;
+const BLOCK_SCAN_LINES = 20;
+const STYLE_LAYOUT_PROPERTY = /^(?:width|height|minWidth|maxWidth|minHeight|maxHeight|inlineSize|minInlineSize|maxInlineSize|blockSize|minBlockSize|maxBlockSize|top|right|bottom|left|inset|insetBlock|insetBlockStart|insetBlockEnd|insetInline|insetInlineStart|insetInlineEnd|margin|marginTop|marginRight|marginBottom|marginLeft|marginBlock|marginBlockStart|marginBlockEnd|marginInline|marginInlineStart|marginInlineEnd|padding|paddingTop|paddingRight|paddingBottom|paddingLeft|paddingBlock|paddingBlockStart|paddingBlockEnd|paddingInline|paddingInlineStart|paddingInlineEnd)$/;
+const CSS_LAYOUT_PROPERTY = /^(?:width|height|min-width|max-width|min-height|max-height|inline-size|min-inline-size|max-inline-size|block-size|min-block-size|max-block-size|top|right|bottom|left|inset|inset-block|inset-block-start|inset-block-end|inset-inline|inset-inline-start|inset-inline-end|margin|margin-top|margin-right|margin-bottom|margin-left|margin-block|margin-block-start|margin-block-end|margin-inline|margin-inline-start|margin-inline-end|padding|padding-top|padding-right|padding-bottom|padding-left|padding-block|padding-block-start|padding-block-end|padding-inline|padding-inline-start|padding-inline-end)$/;
+const SVG_LAYOUT_ATTRIBUTE = /^(?:x|y|width|height|cx|cy|r|d|points|x1|y1|x2|y2|transform)$/;
+/** JavaScript writes that may invalidate layout or paint when repeated. */
+function matchesLayoutWrite(lines, i) {
+	const code = maskStrings([lines[i] ?? ""])[0] ?? "";
+	const callSource = lines.slice(i, i + 3).join("\n");
+	if (/\.set(?:Translate|Scale|Rotate|SkewX|SkewY|Matrix)\s*\(/.test(code)) return true;
+	const directStyle = /\.style\.([A-Za-z_$][\w$]*)\s*=/.exec(code);
+	if (directStyle && STYLE_LAYOUT_PROPERTY.test(directStyle[1] ?? "")) return true;
+	return hasLayoutPropertyCall(callSource, code, ".style.setProperty", CSS_LAYOUT_PROPERTY) || hasLayoutPropertyCall(callSource, code, ".setAttribute", SVG_LAYOUT_ATTRIBUTE);
+}
+/** Matches a quoted first argument only when the method itself is real code. */
+function hasLayoutPropertyCall(source, code, method, properties) {
+	let from = 0;
+	while (from < code.length) {
+		const index = code.indexOf(method, from);
+		if (index === -1) return false;
+		const args = source.slice(index + method.length);
+		const property = /^\s*\(\s*(['"])([^'"]+)\1/.exec(args)?.[2];
+		if (property && properties.test(property)) return true;
+		from = index + method.length;
+	}
+	return false;
+}
+/**
+* Flags the manual synced-ref idiom that useSyncedRef shortens:
+*   const xRef = useRef(v);   // line i
+*   xRef.current = v;         // next non-blank line, same initializer
+*
+* Matching the same initializer keeps false positives near zero: useRef(null),
+* a different value, or a conditional write all miss.
+*/
+function matchesSyncedRef(lines, i) {
+	const decl = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*useRef\s*(?:<[^>]*>)?\s*\(([^)]*)\)/.exec(lines[i] ?? "");
+	if (!decl) return false;
+	const name = decl[1] ?? "";
+	const initial = (decl[2] ?? "").trim();
+	if (initial === "") return false;
+	let j = i + 1;
+	while (j < lines.length) {
+		const t = (lines[j] ?? "").trim();
+		if (t === "" || t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) j++;
+		else break;
+	}
+	if (j >= lines.length) return false;
+	const assign = new RegExp(`^${escapeRegExp(name)}\\.current\\s*=\\s*(.+?);?$`).exec((lines[j] ?? "").trim());
+	if (!assign) return false;
+	return (assign[1] ?? "").trim() === initial;
+}
+/**
+* `will-change` that no state gates. The gate lives in the enclosing rule,
+* not the file: a `:hover` rule elsewhere in the stylesheet says nothing
+* about this declaration, and a whole-file negative pattern silenced the
+* signal on essentially every production stylesheet.
+*/
+function matchesPermanentWillChange(lines, i) {
+	if (!/will-change:(?!\s*auto\b)/.test(lines[i] ?? "")) return false;
+	for (let j = i + 1; j < lines.length && j - i < BLOCK_SCAN_LINES; j++) {
+		const line = lines[j] ?? "";
+		if (/animation-play-state/.test(line)) return false;
+		if (line.includes("}")) break;
+	}
+	for (let j = i; j >= 0 && i - j < BLOCK_SCAN_LINES; j--) {
+		const line = lines[j] ?? "";
+		if (/animation-play-state/.test(line)) return false;
+		if (line.includes("{")) return !/\[data-|\[aria-|:hover|:focus|:active/.test(line);
+	}
+	return true;
+}
+/** Matches a complete transition declaration, including multiline values. */
+function matchesNonCompositorTransition(lines, i) {
+	if (!/(?<![\w-])transition(?:-property)?:\s*/.test(lines[i] ?? "")) return false;
+	let declaration = lines[i] ?? "";
+	for (let j = i + 1; j < lines.length && j <= i + 10 && !/[;}]/.test(declaration); j++) declaration += ` ${(lines[j] ?? "").trim()}`;
+	return NON_COMPOSITOR_TRANSITION.test(declaration);
+}
+/**
+* The stable-callback idiom that useStableCallback shortens: a useCallback
+* with empty deps whose body calls through a ref, so the identity never
+* changes while the behavior stays current.
+*
+* Requiring all three parts (useCallback, the ref call, empty deps) keeps
+* this off ordinary memoized callbacks.
+*/
+function matchesStableCallback(lines, i) {
+	if (!/useCallback\s*(?:<[^>]*>)?\s*\(/.test(lines[i] ?? "")) return false;
+	const window = lines.slice(i, i + 8).join("\n");
+	return /\.current\s*(?:\?\.|\.call|\.apply)?\s*\(/.test(window) && /\[\s*\]\s*,?\s*\)/.test(window);
+}
+/** Always-on will-change-transform class; a ternary or && guard means toggled. */
+function matchesPermanentWillChangeClass(lines, i) {
+	if (!/\bwill-change-transform\b/.test(lines[i] ?? "")) return false;
+	return !/\?|&&/.test(lines[i] ?? "");
+}
+/**
+* A phase loop whose visible output may be fully describable up front as
+* browser keyframes. This is deliberately noisy: the audit must still verify
+* that the timeline has no live inputs, physics, layout reads, or required JS
+* side effects. The signal exists to force that cheaper-tier question.
+*/
+function matchesPhaseLoopBrowserKeyframes(lines, i) {
+	if (!/\b(?:useLoop|createLoop)(?:\s*<[^;{]*>)?\s*\(/.test(lines[i] ?? "")) return false;
+	const source = lines.join("\n");
+	const derivesFromElapsed = /[A-Za-z_$][\w$]*\.elapsed\b/.test(source) || /\(\s*\{[^}]*\belapsed\b[^}]*\}\s*(?::[^)]*)?\)\s*(?:=>|\{)/.test(source);
+	const writesKeyframeFriendlyOutput = /\.style\.(?:opacity|transform)\s*=|\.style\.setProperty\(\s*['"](?:opacity|transform)['"]|\.setAttribute\(\s*['"](?:opacity|transform)['"]|\.set(?:Translate|Scale|Rotate|SkewX|SkewY)\s*\(/.test(source);
+	return derivesFromElapsed && writesKeyframeFriendlyOutput;
+}
+/**
+* Layout property inside a @keyframes block. Handles single-line frames
+* (`from { left: 0; }`) and fully inlined blocks
+* (`@keyframes k { from { left: 0; } }`), where the at-rule sits on the
+* property's own line.
+*
+* The enclosing @keyframes ranges are computed once per file in a single
+* forward pass (see keyframeRanges); walking braces backwards from every
+* candidate line made this quadratic in file size — 1.4s on 4k lines.
+*/
+function matchesKeyframesLayoutProp(lines, i) {
+	if (!/(?:^|[{;])\s*(?:width|height|top|left|right|bottom|margin|padding|inset)[a-z-]*\s*:/.test(lines[i] ?? "")) return false;
+	return keyframeRanges(lines).has(i);
+}
+const keyframeRangeCache = /* @__PURE__ */ new WeakMap();
+/** Line indices that sit inside (or open) a @keyframes block. */
+function keyframeRanges(lines) {
+	const cached = keyframeRangeCache.get(lines);
+	if (cached) return cached;
+	const inside = /* @__PURE__ */ new Set();
+	let depth = 0;
+	let keyframesDepth = -1;
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i] ?? "";
+		if (keyframesDepth === -1 && /@(?:-\w+-)?keyframes/.test(line)) keyframesDepth = depth;
+		if (keyframesDepth !== -1) inside.add(i);
+		for (let k = 0; k < line.length; k++) if (line[k] === "{") depth++;
+		else if (line[k] === "}") {
+			depth--;
+			if (keyframesDepth !== -1 && depth <= keyframesDepth) keyframesDepth = -1;
+		}
+	}
+	keyframeRangeCache.set(lines, inside);
+	return inside;
+}
+/**
+* WhenVisible/WhenIdle opening tag without a fallback prop. Reads up to 30
+* lines forward to capture multi-line JSX tags.
+*
+* The tag ends at the first `>` outside a prop expression: a comparison in
+* a prop (`rootMargin={a > b ? x : y}`) used to end it early and hide a
+* `fallback` declared further down.
+*/
+function matchesUngatedLazyMount(lines, i) {
+	const open = /<When(?:Visible|Idle)\b/.exec(lines[i] ?? "");
+	if (!open) return false;
+	let tag = "";
+	let depth = 0;
+	for (let j = i; j < Math.min(lines.length, i + 30); j++) {
+		const sourceLine = lines[j] ?? "";
+		const line = j === i ? sourceLine.slice(open.index) : sourceLine;
+		tag += `${line}\n`;
+		let closed = false;
+		for (let k = 0; k < line.length; k++) {
+			const ch = line[k];
+			if (ch === "{") depth++;
+			else if (ch === "}") depth--;
+			else if (ch === ">" && depth === 0 && line[k - 1] !== "=") {
+				closed = true;
+				break;
+			}
+		}
+		if (closed) break;
+	}
+	return !/\bfallback\s*=/.test(tag);
+}
 //#endregion
 //#region scanner/detect.ts
 /** Diagnostics sink shared by scanTargets, walk, and scanFile. */
@@ -1228,9 +1254,7 @@ function scanFile(relPath, content, diag = null) {
 	const codeLines = maskStrings(uncommentedLines);
 	const uncommentedContent = uncommentedLines.join("\n");
 	const codeContent = codeLines.join("\n");
-	const sourceIndex = buildSourceIndex(codeLines, codeContent);
-	const analysis = analyzeFile(sourceIndex);
-	const moveAnalysis = analyzeMoveHandlers(type, sourceIndex);
+	const analysis = analyzeFile(type, buildSourceIndex(codeLines, codeContent), uncommentedLines);
 	if (diag) diag.analyzed++;
 	const overlong = /* @__PURE__ */ new Set();
 	for (let i = 0; i < lines.length; i++) if ((lines[i] ?? "").length > MAX_LINE_LENGTH) overlong.add(i);
@@ -1239,7 +1263,7 @@ function scanFile(relPath, content, diag = null) {
 	for (const signal of SIGNALS) {
 		if (!signalAppliesTo(signal, type, ext)) continue;
 		if (signal.negativePattern && signal.negativePattern.test(signal.negativeCodeOnly ? codeContent : uncommentedContent)) continue;
-		const signalFindings = scanSignal(signal, lines, uncommentedLines, codeLines, relPath, suppressions, overlong, type, diag, analysis, moveAnalysis);
+		const signalFindings = scanSignal(signal, lines, uncommentedLines, codeLines, relPath, suppressions, overlong, type, diag, analysis);
 		if (signal.perFile && signalFindings.length > 0 && suppressedAnywhere(suppressions, signal.id)) {
 			if (diag) diag.suppressed++;
 			continue;
@@ -1277,7 +1301,7 @@ function suppressedAnywhere(suppressions, signalId) {
 	return false;
 }
 /** Runs one signal over a file's lines, honoring suppressions and perFile. */
-function scanSignal(signal, lines, uncommentedLines, codeLines, relPath, suppressions, overlong, type, diag, analysis, moveAnalysis) {
+function scanSignal(signal, lines, uncommentedLines, codeLines, relPath, suppressions, overlong, type, diag, analysis) {
 	const findings = [];
 	const matchLines = signal.codeOnly ? codeLines : uncommentedLines;
 	for (let i = 0; i < lines.length; i++) {
@@ -1291,42 +1315,17 @@ function scanSignal(signal, lines, uncommentedLines, codeLines, relPath, suppres
 			const match = signal.pattern.exec(matchLine);
 			if (!match) continue;
 			matchIndex = match.index;
-			if (signal.moveHandlerReads && /^on[A-Z]/.test(match[0])) {
-				if (!matchesMoveHandlerBody(signal, i, moveAnalysis, uncommentedLines)) continue;
-			} else {
-				if (!matchesAnalysisPolicy(signal, match[0], matchLine, i, analysis)) continue;
-				if (!matchesSignalContext(signal, codeLines, uncommentedLines, i)) continue;
-			}
+			if (signal.evidence && !EVIDENCE_REGISTRY[signal.evidence](analysis, i, match)) continue;
+			if (!matchesSignalContext(signal, codeLines, uncommentedLines, i)) continue;
 		}
 		if (!signal.perFile && suppressions.get(i)?.has(signal.id)) {
 			if (diag) diag.suppressed++;
 			continue;
 		}
-		findings.push(makeFinding(signal, relPath, i + 1, line, matchIndex, executionOf(codeLines, i, type, analysis.raf, moveAnalysis)));
+		findings.push(makeFinding(signal, relPath, i + 1, line, matchIndex, executionOf(codeLines, i, type, analysis.raf, analysis.moveHandlers)));
 		if (signal.perFile) break;
 	}
 	return findings;
-}
-/**
-* Whether a JSX move-prop line has an associated handler body containing a
-* layout read (see analyzeMoveHandlers). Custom components,
-* member-expression handlers, and names the file does not define never match.
-*/
-function matchesMoveHandlerBody(signal, line, moveAnalysis, uncommentedLines) {
-	const range = moveAnalysis.propRanges.get(line);
-	if (!range) return false;
-	const body = uncommentedLines.slice(range.start, range.end + 1).join("\n");
-	return signal.moveHandlerReads?.test(body) ?? false;
-}
-function matchesAnalysisPolicy(signal, match, matchLine, line, analysis) {
-	const { raf, timeout } = analysis;
-	const recurring = raf.recurringScheduleLines.has(line);
-	if (signal.recurringRafOnly && !recurring) return false;
-	if (signal.recurringRafStateOnly && !raf.stateScheduleLines.has(line)) return false;
-	if (signal.recurringRafBranch && /requestAnimationFrame/.test(match) && !recurring) return false;
-	if (signal.recurringTimerOnly && !INTERVAL_CALL.test(matchLine) && !timeout.recurringScheduleLines.has(line)) return false;
-	if (signal.subscribedMediaQueryOnly && !analysis.subscribedMediaQueries.has(line)) return false;
-	return true;
 }
 function matchesSignalContext(signal, codeLines, uncommentedLines, line) {
 	if (!signal.contextPattern) return true;

@@ -1,9 +1,8 @@
 import {
   analyzeFile,
-  analyzeMoveHandlers,
   buildSourceIndex,
   enclosingBlock,
-  INTERVAL_CALL,
+  EVIDENCE_REGISTRY,
 } from './analysis.ts';
 import type {
   FileAnalysis,
@@ -83,8 +82,7 @@ export function scanFile(
   const uncommentedContent = uncommentedLines.join('\n');
   const codeContent = codeLines.join('\n');
   const sourceIndex = buildSourceIndex(codeLines, codeContent);
-  const analysis = analyzeFile(sourceIndex);
-  const moveAnalysis = analyzeMoveHandlers(type, sourceIndex);
+  const analysis = analyzeFile(type, sourceIndex, uncommentedLines);
 
   if (diag) diag.analyzed++;
 
@@ -123,7 +121,6 @@ export function scanFile(
       type,
       diag,
       analysis,
-      moveAnalysis,
     );
 
     // A per-file finding needs a file-level suppression: a directive naming
@@ -214,7 +211,6 @@ function scanSignal(
   type: ScanSourceType,
   diag: ScanDiag | null,
   analysis: FileAnalysis,
-  moveAnalysis: MoveAnalysis,
 ): ScanFinding[] {
   const findings: ScanFinding[] = [];
   const matchLines = signal.codeOnly ? codeLines : uncommentedLines;
@@ -231,18 +227,13 @@ function scanSignal(
       if (!match) continue;
       matchIndex = match.index;
 
-      // A JSX move prop uses its associated handler body, which may sit beyond
-      // the context window. A raw listener keeps the window-based policy. The
-      // matched form selects the policy because both forms share one signal.
-      if (signal.moveHandlerReads && /^on[A-Z]/.test(match[0])) {
-        if (!matchesMoveHandlerBody(signal, i, moveAnalysis, uncommentedLines))
-          continue;
-      } else {
-        if (!matchesAnalysisPolicy(signal, match[0], matchLine, i, analysis))
-          continue;
-        if (!matchesSignalContext(signal, codeLines, uncommentedLines, i))
-          continue;
-      }
+      if (
+        signal.evidence &&
+        !EVIDENCE_REGISTRY[signal.evidence](analysis, i, match)
+      )
+        continue;
+      if (!matchesSignalContext(signal, codeLines, uncommentedLines, i))
+        continue;
     }
 
     // Per-file signals are suppressed at the file level (see scanFile), not
@@ -260,71 +251,13 @@ function scanSignal(
         i + 1,
         line,
         matchIndex,
-        executionOf(codeLines, i, type, analysis.raf, moveAnalysis),
+        executionOf(codeLines, i, type, analysis.raf, analysis.moveHandlers),
       ),
     );
 
     if (signal.perFile) break;
   }
   return findings;
-}
-
-/**
- * Whether a JSX move-prop line has an associated handler body containing a
- * layout read (see analyzeMoveHandlers). Custom components,
- * member-expression handlers, and names the file does not define never match.
- */
-function matchesMoveHandlerBody(
-  signal: ScanSignal,
-  line: number,
-  moveAnalysis: MoveAnalysis,
-  uncommentedLines: string[],
-): boolean {
-  const range = moveAnalysis.propRanges.get(line);
-  if (!range) return false;
-  const body = uncommentedLines.slice(range.start, range.end + 1).join('\n');
-  return signal.moveHandlerReads?.test(body) ?? false;
-}
-
-function matchesAnalysisPolicy(
-  signal: ScanSignal,
-  match: string,
-  matchLine: string,
-  line: number,
-  analysis: FileAnalysis,
-): boolean {
-  const { raf, timeout } = analysis;
-  const recurring = raf.recurringScheduleLines.has(line);
-  if (signal.recurringRafOnly && !recurring) return false;
-  if (signal.recurringRafStateOnly && !raf.stateScheduleLines.has(line)) {
-    return false;
-  }
-  if (
-    signal.recurringRafBranch &&
-    /requestAnimationFrame/.test(match) &&
-    !recurring
-  ) {
-    return false;
-  }
-  // `setInterval` recurs by construction. A timeout only recurs when the
-  // callback it schedules can schedule another one, so transition-completion
-  // and `transitionend` fallbacks fire once and stop. The interval check reads
-  // the whole line, because a one-shot timeout earlier on it must not suppress
-  // an interval later on it.
-  if (
-    signal.recurringTimerOnly &&
-    !INTERVAL_CALL.test(matchLine) &&
-    !timeout.recurringScheduleLines.has(line)
-  ) {
-    return false;
-  }
-  if (
-    signal.subscribedMediaQueryOnly &&
-    !analysis.subscribedMediaQueries.has(line)
-  ) {
-    return false;
-  }
-  return true;
 }
 
 function matchesSignalContext(
