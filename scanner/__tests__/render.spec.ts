@@ -9,8 +9,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { ScanFinding } from '../index.ts';
-import { formatText, scanFile } from '../index.ts';
+import type { ScanFinding, ScanResult } from '../index.ts';
+import { formatJson, formatText, scanFile } from '../index.ts';
 
 const SCRIPT = join(process.cwd(), 'skills/phase/scripts/scan.mjs');
 const SCENARIO_DIR = join(
@@ -22,6 +22,48 @@ interface CliRun {
   status: number;
   stdout: string;
   stderr: string;
+}
+
+function findingOf(
+  file: string,
+  line: number,
+  execution: ScanFinding['execution'] = 'incidental',
+): ScanFinding {
+  return {
+    signal: 'forced-reflow',
+    severity: 'critical',
+    noise: 'precise',
+    execution,
+    file,
+    line,
+    text: 'const width = target.offsetWidth;',
+    fix: 'references/use-size.md',
+  };
+}
+
+function resultOf(findings: ScanFinding[]): ScanResult {
+  return {
+    targets: ['src'],
+    filesScanned: 1,
+    filesSkipped: {
+      excluded: 0,
+      unsupported: 0,
+      generated: 0,
+      unreadable: 0,
+      unreadableDirs: 0,
+    },
+    linesSkipped: 0,
+    findings,
+    suppressed: 0,
+    warnings: [],
+    context: {
+      framework: null,
+      appRouter: false,
+      ppr: false,
+      clientComponents: 0,
+      evidence: [],
+    },
+  };
 }
 
 function runCli(
@@ -37,29 +79,86 @@ function runCli(
   return { status: run.status ?? -1, stdout: run.stdout, stderr: run.stderr };
 }
 
+describe('render', () => {
+  it('caps a signal listing at twenty hand-built findings', () => {
+    const findings = Array.from({ length: 21 }, (_, index) =>
+      findingOf(`src/file-${index}.ts`, index + 1),
+    );
+    const text = formatText(resultOf(findings));
+
+    expect((text.match(/src\/file-\d+\.ts:/g) ?? []).length).toBe(20);
+    expect(text).toContain('and 1 more');
+  });
+
+  it('caps each file at four entries without hiding other files', () => {
+    const findings = [
+      ...Array.from({ length: 6 }, (_, index) =>
+        findingOf('src/busy.ts', index + 1),
+      ),
+      findingOf('src/other.ts', 1),
+    ];
+    const text = formatText(resultOf(findings));
+
+    expect((text.match(/src\/busy\.ts:/g) ?? []).length).toBe(4);
+    expect(text).toContain('src/other.ts:1');
+  });
+
+  it('orders per-frame findings first and labels only mixed execution groups', () => {
+    const mixed = formatText(
+      resultOf([
+        findingOf('src/cold.ts', 1),
+        findingOf('src/hot.ts', 2, 'per-frame'),
+      ]),
+    );
+    const allHot = formatText(
+      resultOf([findingOf('src/hot.ts', 2, 'per-frame')]),
+    );
+
+    expect(mixed.indexOf('src/hot.ts')).toBeLessThan(
+      mixed.indexOf('src/cold.ts'),
+    );
+    expect(mixed).toContain('↑ in a per-frame path:');
+    expect(mixed).toContain('· elsewhere:');
+    expect(allHot).not.toContain('↑ in a per-frame path:');
+  });
+
+  it('shows hotspots only once the report reaches the threshold', () => {
+    const four = Array.from({ length: 4 }, (_, index) =>
+      findingOf(index < 2 ? 'src/busy.ts' : `src/${index}.ts`, index + 1),
+    );
+    const five = [...four, findingOf('src/other.ts', 5)];
+
+    expect(formatText(resultOf(four))).not.toContain('## hotspots');
+    expect(formatText(resultOf(five))).toContain('## hotspots');
+  });
+
+  it('limits returned JSON without changing full-result summary counts', () => {
+    const json = formatJson(
+      resultOf([
+        findingOf('src/a.ts', 1, 'per-frame'),
+        findingOf('src/a.ts', 2),
+        findingOf('src/b.ts', 1),
+      ]),
+      1,
+    );
+
+    expect(json.findings).toHaveLength(1);
+    expect(json.summary).toMatchObject({
+      total: 3,
+      sites: 3,
+      returned: 1,
+      actionable: 3,
+      perFrame: 1,
+      bySeverity: { critical: 3, high: 0, medium: 0 },
+    });
+    expect(json.hotspots).toEqual([{ file: 'src/a.ts', count: 2 }]);
+  });
+});
+
 describe('output', () => {
   function render(findings: ScanFinding[], overrides = {}) {
     return formatText({
-      targets: ['.'],
-      filesScanned: 1,
-      filesSkipped: {
-        excluded: 0,
-        unsupported: 0,
-        generated: 0,
-        unreadable: 0,
-        unreadableDirs: 0,
-      },
-      linesSkipped: 0,
-      findings,
-      suppressed: 0,
-      warnings: [],
-      context: {
-        framework: null,
-        appRouter: false,
-        ppr: false,
-        clientComponents: 0,
-        evidence: [],
-      },
+      ...resultOf(findings),
       ...overrides,
     });
   }

@@ -207,3 +207,51 @@ describe('analysis evidence registry', () => {
     ).toBe(true);
   });
 });
+
+describe('analysis', () => {
+  it('identifies self-recursive rAF ownership by line', () => {
+    const analysis = analysisOf(
+      'function tick() {\n  requestAnimationFrame(tick);\n}\nrequestAnimationFrame(tick);',
+    );
+
+    expect([...analysis.raf.recurringScheduleLines]).toEqual([1, 3]);
+    expect([...analysis.raf.recurringCallbackLines]).toEqual([0, 1, 2]);
+  });
+
+  it('identifies mutually recursive scheduled callbacks', () => {
+    const analysis = analysisOf(
+      'function first() { requestAnimationFrame(second); }\nfunction second() { requestAnimationFrame(first); }\nrequestAnimationFrame(first);',
+    );
+
+    expect([...analysis.raf.recurringScheduleLines]).toEqual([0, 1, 2]);
+    expect([...analysis.raf.recurringCallbackLines]).toEqual([0, 1]);
+  });
+
+  it('does not classify a named one-shot callback as recurring', () => {
+    const analysis = analysisOf(
+      'function initialize() { mount(); }\nrequestAnimationFrame(initialize);',
+    );
+
+    expect(analysis.raf.recurringScheduleLines).toEqual(new Set());
+    expect(analysis.raf.recurringCallbackLines).toEqual(new Set());
+  });
+
+  it('reports only MediaQueryLists that are subscribed', () => {
+    const analysis = analysisOf(
+      "const snapshot = matchMedia('(hover: hover)').matches;\nconst query = matchMedia('(min-width: 48em)');\nquery.addEventListener('change', update);",
+    );
+
+    expect(analysis.subscribedMediaQueries).toEqual(new Set([1]));
+  });
+
+  it('maps intrinsic move props to their named handler lines', () => {
+    const analysis = analysisOf(
+      'function move() {\n  const width = target.offsetWidth;\n}\n<div onPointerMove={move} />;',
+    );
+
+    expect(analysis.moveHandlers.propRanges).toEqual(
+      new Map([[3, { start: 0, end: 2 }]]),
+    );
+    expect(analysis.moveHandlers.handlerLines).toEqual(new Set([0, 1, 2]));
+  });
+});
