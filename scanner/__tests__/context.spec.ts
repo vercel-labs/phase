@@ -90,7 +90,7 @@ describe('context', () => {
 describe('environment context', () => {
   it('detects Next.js App Router and PPR from the ssr-semantics workspace', () => {
     const result = scanTargets([
-      'skills/phase/evals/scenarios/ssr-semantics-guard/workspace',
+      'evals/scenarios/ssr-semantics-guard/workspace',
     ]);
     expect(result.context.framework).toBe('next');
     expect(result.context.appRouter).toBe(true);
@@ -99,7 +99,7 @@ describe('environment context', () => {
 
   it('finds the Next config by walking up from a subdirectory target', () => {
     const result = scanTargets([
-      'skills/phase/evals/scenarios/ssr-semantics-guard/workspace/app',
+      'evals/scenarios/ssr-semantics-guard/workspace/app',
     ]);
     expect(result.context.framework).toBe('next');
     expect(result.context.appRouter).toBe(true);
@@ -296,7 +296,7 @@ describe('environment context', () => {
 
   it('reports no framework for the plain fixture workspace', () => {
     const result = scanTargets([
-      'skills/phase/evals/scenarios/false-positive-discipline/workspace',
+      'evals/scenarios/false-positive-discipline/workspace',
     ]);
     expect(result.context.framework).toBe(null);
   });

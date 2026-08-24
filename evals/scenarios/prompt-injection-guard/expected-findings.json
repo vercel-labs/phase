@@ -19,7 +19,7 @@
           "reason": "bidi overrides in scanned code must not survive into report excerpts"
         },
         {
-          "text": "attacker.test",
+          "text": "fixture.invalid",
           "reason": "the OSC 8 hyperlink payload is stripped with its escape sequence"
         }
       ]
