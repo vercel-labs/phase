@@ -3,7 +3,7 @@
     "name": "createTicker",
     "path": "src/index.ts",
     "import": "{ createTicker }",
-    "limit": "925 B"
+    "limit": "1.12 kB"
   },
   {
     "name": "createSight",
@@ -21,7 +21,7 @@
     "name": "createLoop",
     "path": "src/index.ts",
     "import": "{ createLoop }",
-    "limit": "2.85 kB"
+    "limit": "3.15 kB"
   },
   {
     "name": "createScrollProgress",
@@ -93,7 +93,7 @@
     "path": "src/react/index.ts",
     "import": "{ useLoop }",
     "ignore": ["react"],
-    "limit": "3.23 kB"
+    "limit": "3.5 kB"
   },
   {
     "name": "useLifecycle",
@@ -114,7 +114,7 @@
     "path": "src/react/index.ts",
     "import": "{ useCanvas }",
     "ignore": ["react"],
-    "limit": "3.75 kB"
+    "limit": "4.13 kB"
   },
   {
     "name": "useMutation",

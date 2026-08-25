@@ -1,5 +1,14 @@
 # phase
 
+## 0.4.0
+
+### Minor Changes
+
+- `Ticker.setFps(fps?)` changes the FPS cap in place. `undefined` uncaps. Works while idle, running, or paused; never resets `FrameState`, frame count, elapsed, or pause accounting. On a stopped ticker it throws `ticker_stopped`.
+- A defined `fps` (constructor or `setFps`) must be finite and > 0. Invalid values throw the new `invalid_fps` error; an invalid `setFps` leaves the previous cap unchanged.
+- Capped delivery now paces on a deadline grid that retains the residual after late rAF frames. A 60 fps cap on integer-quantized 60 Hz timestamps no longer falls to ~30 fps, and long stalls forfeit missed slots instead of bursting to catch up.
+- Raised the `createTicker`, `createLoop`, `useLoop`, and `useCanvas` size budgets to cover `setFps` and the cadence fix and restore the documented headroom.
+
 ## 0.3.3
 
 ### Patch Changes

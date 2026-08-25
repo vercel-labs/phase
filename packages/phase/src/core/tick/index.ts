@@ -1,5 +1,9 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { serverContextError, tickerStoppedError } from '../_internal/errors';
+import {
+  invalidFpsError,
+  serverContextError,
+  tickerStoppedError,
+} from '../_internal/errors';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,6 +45,13 @@ export interface Ticker {
   stop(): void;
   pause(): void;
   resume(): void;
+  /**
+   * Change the FPS cap without resetting the timeline. `undefined` uncaps,
+   * matching `TickerOptions.fps`. The new cap takes effect on the next
+   * eligible source frame. Throws on a stopped ticker or an invalid fps,
+   * leaving the previous cap unchanged.
+   */
+  setFps(fps?: number): void;
   readonly phase: TickerPhase;
   readonly phaseReason: TickerReason;
 }
@@ -117,6 +128,13 @@ function resetFrameState(state: FrameState): void {
   state.frame = 0;
 }
 
+/** Validate an FPS cap and convert it to a minimum frame interval (0 = uncapped). */
+function resolveMinFrameTime(fn: string, fps: number | undefined): number {
+  if (fps === undefined) return 0;
+  if (!Number.isFinite(fps) || fps <= 0) invalidFpsError(fn, fps);
+  return 1000 / fps;
+}
+
 // ---------------------------------------------------------------------------
 // createTicker
 // ---------------------------------------------------------------------------
@@ -133,8 +151,8 @@ export function createTicker(options: TickerOptions): Ticker {
     serverContextError('createTicker');
   }
 
-  const { onTick, fps, signal } = options;
-  const minFrameTime: number = fps ? 1000 / fps : 0;
+  const { onTick, signal } = options;
+  let minFrameTime: number = resolveMinFrameTime('createTicker', options.fps);
 
   let _phase: TickerPhase = 'idle';
   let _reason: TickerReason = 'initial';
@@ -144,16 +162,38 @@ export function createTicker(options: TickerOptions): Ticker {
   let totalPausedTime = 0;
   let startTime = 0;
 
+  // Deadline for the next capped delivery. Advanced on the cap's grid (never
+  // re-anchored at delivery time) so late source frames retain the residual
+  // instead of drifting the effective rate downward. 0 while uncapped.
+  let nextDueTime = 0;
+
   // Pre-allocated, mutated in place each frame — zero allocations per tick.
   const frame: FrameState = { time: 0, delta: 0, elapsed: 0, frame: 0 };
 
   function tick(now: number): void {
-    // FPS throttle: skip this frame if we're ahead of the target interval.
-    if (minFrameTime > 0 && now - lastTickTime < minFrameTime) return;
+    // FPS throttle: skip this frame if the cap's deadline hasn't arrived.
+    if (now < nextDueTime) return;
 
-    const rawDelta: number =
-      lastTickTime === 0 ? DEFAULT_FIRST_DELTA_MS : now - lastTickTime;
+    const isFirstDelivery: boolean = lastTickTime === 0;
+    const rawDelta: number = isFirstDelivery
+      ? DEFAULT_FIRST_DELTA_MS
+      : now - lastTickTime;
     lastTickTime = now;
+
+    if (minFrameTime > 0) {
+      if (isFirstDelivery) {
+        // Anchor the cadence grid at the first delivery after (re)start.
+        nextDueTime = now + minFrameTime;
+      } else {
+        nextDueTime += minFrameTime;
+        const behind: number = now - nextDueTime;
+        if (behind >= minFrameTime) {
+          // A stall left whole slots unfilled. Forfeit them (no catch-up
+          // burst) while keeping the grid phase.
+          nextDueTime += Math.floor(behind / minFrameTime) * minFrameTime;
+        }
+      }
+    }
 
     frame.time = now;
     frame.delta = rawDelta > MAX_DELTA_MS ? MAX_DELTA_MS : rawDelta;
@@ -177,6 +217,7 @@ export function createTicker(options: TickerOptions): Ticker {
     _reason = 'started';
     startTime = performance.now();
     lastTickTime = 0;
+    nextDueTime = 0;
     totalPausedTime = 0;
     resetFrameState(frame);
 
@@ -199,12 +240,23 @@ export function createTicker(options: TickerOptions): Ticker {
     if (_phase !== 'paused') return;
 
     totalPausedTime += performance.now() - pauseStartTime;
-    // Reset so the first resumed tick gets a clean delta (not the pause gap).
+    // Reset so the first resumed tick gets a clean delta (not the pause gap)
+    // and delivers immediately, re-anchoring the cadence grid.
     lastTickTime = 0;
+    nextDueTime = 0;
 
     _phase = 'running';
     _reason = 'resumed';
     joinSharedClock(subscription);
+  }
+
+  function setFps(fps?: number): void {
+    if (_phase === 'stopped') tickerStoppedError();
+    minFrameTime = resolveMinFrameTime('setFps', fps);
+    // Re-derive the deadline from the last delivery so the new cap takes
+    // effect on the next eligible source frame without an uncapped
+    // transition frame. Timeline and last-delivery history are untouched.
+    nextDueTime = lastTickTime === 0 ? 0 : lastTickTime + minFrameTime;
   }
 
   function stop(): void {
@@ -226,6 +278,7 @@ export function createTicker(options: TickerOptions): Ticker {
     stop,
     pause,
     resume,
+    setFps,
     get phase() {
       return _phase;
     },
