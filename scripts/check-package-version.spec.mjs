@@ -53,20 +53,31 @@ function createRepository() {
 function movePackage(root) {
   const packageRoot = join(root, 'packages/phase');
   mkdirSync(packageRoot, { recursive: true });
-  for (const path of [
-    'package.json',
-    'src',
-    'tsconfig.json',
-    'tsdown.config.ts',
-  ]) {
+  for (const path of ['package.json', 'src', 'tsdown.config.ts']) {
     renameSync(join(root, path), join(packageRoot, path));
   }
+
+  writeJson(join(root, 'tsconfig.json'), {
+    extends: './tsconfig.base.json',
+    include: ['scanner'],
+  });
+  writeJson(join(packageRoot, 'tsconfig.json'), {
+    extends: '../../tsconfig.base.json',
+    include: ['src'],
+  });
 
   const manifestPath = join(packageRoot, 'package.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   manifest.scripts = { build: 'tsdown' };
   writeJson(manifestPath, manifest);
   runGit(root, 'add', '.');
+}
+
+function createMovedRepository() {
+  const { root } = createRepository();
+  movePackage(root);
+  runGit(root, 'commit', '--quiet', '-m', 'move package');
+  return { root, base: runGit(root, 'rev-parse', 'HEAD') };
 }
 
 function runCheck(root, base) {
@@ -95,10 +106,7 @@ describe('package release intent', () => {
   });
 
   it('accepts repository-only changes after the workspace move', () => {
-    const { root } = createRepository();
-    movePackage(root);
-    runGit(root, 'commit', '--quiet', '-m', 'move package');
-    const base = runGit(root, 'rev-parse', 'HEAD');
+    const { root, base } = createMovedRepository();
     writeFileSync(join(root, 'CONTRIBUTING.md'), '# Contributing\n');
 
     const run = runCheck(root, base);
@@ -108,14 +116,26 @@ describe('package release intent', () => {
   });
 
   it('rejects package source changes without a version bump', () => {
-    const { root } = createRepository();
-    movePackage(root);
-    runGit(root, 'commit', '--quiet', '-m', 'move package');
-    const base = runGit(root, 'rev-parse', 'HEAD');
+    const { root, base } = createMovedRepository();
     writeFileSync(
       join(root, 'packages/phase/src/index.ts'),
       'export const phase = 2;\n',
     );
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump',
+    );
+  });
+
+  it('rejects package config changes after the workspace move', () => {
+    const { root, base } = createMovedRepository();
+    writeJson(join(root, 'packages/phase/tsconfig.json'), {
+      extends: '../../tsconfig.base.json',
+      include: ['src', 'extra'],
+    });
 
     const run = runCheck(root, base);
 

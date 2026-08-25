@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 
 const base = process.argv[2];
 
@@ -7,10 +7,9 @@ if (!base) {
   throw new Error('Usage: node scripts/check-package-version.mjs <base-ref>');
 }
 
-const packagePath = existsSync('packages/phase/package.json')
-  ? 'packages/phase/package.json'
-  : 'package.json';
-const currentPackage = JSON.parse(readFileSync(packagePath, 'utf8'));
+const currentPackage = JSON.parse(
+  readFileSync('packages/phase/package.json', 'utf8'),
+);
 
 let basePackagePath = 'packages/phase/package.json';
 try {
@@ -20,6 +19,7 @@ try {
 } catch {
   basePackagePath = 'package.json';
 }
+const workspaceMigration = basePackagePath === 'package.json';
 const basePackage = JSON.parse(
   execFileSync('git', ['show', `${base}:${basePackagePath}`], {
     encoding: 'utf8',
@@ -46,6 +46,13 @@ const TEST_ONLY = /\.spec\.|\.test\.|__tests__\/|__mocks__\//;
 
 const packageSourceChanged = changedFiles.some(({ status, file }) => {
   if (!file || status === 'R100') return false;
+  if (
+    workspaceMigration &&
+    status === 'A' &&
+    file === 'packages/phase/tsconfig.json'
+  ) {
+    return false;
+  }
   return (
     (file.startsWith('packages/phase/src/') && !TEST_ONLY.test(file)) ||
     file === 'packages/phase/tsconfig.json' ||
