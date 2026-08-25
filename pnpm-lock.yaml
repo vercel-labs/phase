@@ -11,6 +11,33 @@ importers:
       '@size-limit/preset-small-lib':
         specifier: 12.1.0
         version: 12.1.0(size-limit@12.1.0)
+      '@types/node':
+        specifier: 25.6.0
+        version: 25.6.0
+      lefthook:
+        specifier: 2.1.5
+        version: 2.1.5
+      oxfmt:
+        specifier: 0.44.0
+        version: 0.44.0
+      oxlint:
+        specifier: 1.59.0
+        version: 1.59.0
+      tsdown:
+        specifier: 0.21.7
+        version: 0.21.7(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(typescript@6.0.2)
+      typescript:
+        specifier: 6.0.2
+        version: 6.0.2
+      vitest:
+        specifier: 4.1.4
+        version: 4.1.4(@types/node@25.6.0)(jsdom@23.2.0)(vite@8.0.16(@types/node@25.6.0)(esbuild@0.28.1))
+
+  packages/phase:
+    devDependencies:
+      '@size-limit/preset-small-lib':
+        specifier: 12.1.0
+        version: 12.1.0(size-limit@12.1.0)
       '@testing-library/dom':
         specifier: 10.4.1
         version: 10.4.1

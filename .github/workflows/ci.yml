@@ -5,6 +5,7 @@ on:
   # before the branch below them merges. Base-relative steps stay correct: the
   # release-intent check diffs against the PR's own base.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 # Cancel in-progress PR runs on new pushes; let main runs finish so the
 # release workflow's history stays uninterrupted.
@@ -50,7 +51,7 @@ jobs:
       - name: README bundle-size freshness
         run: |
           pnpm size:readme
-          git diff --exit-code README.md \
+          git diff --exit-code packages/phase/README.md \
             || (echo "README bundle-size table is stale. Run 'pnpm size:readme' and commit the result." && exit 1)
 
       - name: Unit tests

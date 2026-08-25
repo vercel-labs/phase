@@ -8,6 +8,8 @@ Animation infrastructure for the web. Lifecycle-aware primitives that compose vi
 
 Tech stack: TypeScript, tsdown (bundler), vitest (tests), oxlint (linting), oxfmt (formatting), lefthook (pre-commit hooks).
 
+Run commands from the repository root. Library paths such as `src/`, `.size-limit.json`, `README.md`, and `LICENSE` are relative to `packages/phase/`; scanner, skill, workflow, and contributor paths remain relative to the repository root.
+
 Scanner, audit, or eval changes: read `CONTEXT.md` for the canonical vocabulary.
 
 ## Commands
@@ -276,7 +278,7 @@ Package and skill versions are independent release signals:
 
 When asked to bump the version (patch, minor, or major):
 
-1. Bump `version` in `package.json`.
+1. Bump `version` in `packages/phase/package.json`.
 2. Bump `version` in `skills/phase/SKILL.md` frontmatter (skill version is independent, but bump it alongside package changes that alter the public API or skill references).
 3. **Prepend** a new section to `CHANGELOG.md` under the new version number. Keep all previous entries intact (newest first, oldest last). Follow the existing format: `## X.Y.Z`, then `### Patch Changes` / `### Minor Changes` / `### Major Changes`, then bullet points.
 4. **Keep entries short.** State what changed, not why. One line per change. Only elaborate if it directly affects how consumers use the API. Internal refactors, test infrastructure, and agent file updates get one line at most.

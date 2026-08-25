@@ -44,13 +44,16 @@ function extractExportNames(filePath) {
   return names;
 }
 
-const coreExports = extractExportNames('src/index.ts');
-const reactExports = extractExportNames('src/react/index.ts');
+const coreExports = extractExportNames('packages/phase/src/index.ts');
+const reactExports = extractExportNames('packages/phase/src/react/index.ts');
 
 // Ease exports are covered by a single ease.md (one tree-shaken entry point).
 // Identify them by reading the ease barrel source for `export function` declarations.
 const easeExports = new Set(['ease']);
-const easeSource = readFileSync(join(root, 'src/ease/index.ts'), 'utf8');
+const easeSource = readFileSync(
+  join(root, 'packages/phase/src/ease/index.ts'),
+  'utf8',
+);
 const easeFnRe = /export\s+function\s+(\w+)/g;
 let easeFnMatch;
 while ((easeFnMatch = easeFnRe.exec(easeSource)) !== null) {
