@@ -1,10 +1,10 @@
 # phase
 
-This glossary defines the scanner and audit language used by phase.
+This glossary defines the canonical domain language for phase. Terms are grouped by the system area that owns them.
 
 `CONTEXT.md` owns vocabulary. [`docs/adr/`](./docs/adr/README.md) records durable decisions. [`AGENTS.md`](./AGENTS.md) owns contributor procedures.
 
-## Language
+## Scanner and audit
 
 ### Scanner output
 
