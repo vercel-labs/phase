@@ -4,6 +4,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['scanner/**/*.spec.ts', 'scripts/**/*.spec.mjs'],
+    include: ['src/**/*.spec.{ts,tsx}'],
   },
 });

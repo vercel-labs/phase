@@ -3,9 +3,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const README = resolve(ROOT, 'README.md');
+const PACKAGE_ROOT = resolve(ROOT, 'packages', 'phase');
+const README = resolve(PACKAGE_ROOT, 'README.md');
 
-const SIZE_LIMIT_CONFIG = resolve(ROOT, '.size-limit.json');
+const SIZE_LIMIT_CONFIG = resolve(PACKAGE_ROOT, '.size-limit.json');
 
 const START = '<!-- SIZE-TABLE:START -->';
 const END = '<!-- SIZE-TABLE:END -->';
@@ -49,7 +50,7 @@ function buildTable(entries, config) {
 
 const config = JSON.parse(readFileSync(SIZE_LIMIT_CONFIG, 'utf8'));
 const json = execSync('pnpm exec size-limit --json', {
-  cwd: ROOT,
+  cwd: PACKAGE_ROOT,
   encoding: 'utf8',
 });
 const entries = JSON.parse(json);
@@ -69,4 +70,4 @@ ${readme.slice(endIdx)}`;
 
 writeFileSync(README, updated);
 execSync(`pnpm exec oxfmt ${README}`, { cwd: ROOT, stdio: 'inherit' });
-console.log('README.md size table updated.');
+console.log('packages/phase/README.md size table updated.');

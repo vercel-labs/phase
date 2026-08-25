@@ -22,5 +22,5 @@ pre-commit:
     # force a follow-up commit. Both outputs are deterministic — no spurious
     # churn. Runs only when a skill source or its maintainer tooling is staged.
     skill-sync:
-      glob: '{skills/phase/**/*,scanner/**/*,scripts/skill/**/*}'
+      glob: '{skills/phase/**/*,packages/phase/src/**/*,scanner/**/*,scripts/skill/**/*}'
       run: pnpm skill:build && pnpm skill:package && git add skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip

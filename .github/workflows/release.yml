@@ -96,8 +96,8 @@ jobs:
       - name: Check npm version
         id: release
         run: |
-          NAME=$(node -p "require('./package.json').name")
-          VERSION=$(node -p "require('./package.json').version")
+          NAME=$(node -p "require('./packages/phase/package.json').name")
+          VERSION=$(node -p "require('./packages/phase/package.json').version")
           PUBLISHED_VERSIONS=$(npm view "$NAME" versions --json)
 
           if VERSION="$VERSION" node -e \
@@ -116,4 +116,5 @@ jobs:
 
       - name: Publish to npm
         if: steps.release.outputs.should_publish == 'true'
+        working-directory: packages/phase
         run: npm publish

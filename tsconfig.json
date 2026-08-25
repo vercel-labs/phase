@@ -1,23 +1,8 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": ["node", "vitest/globals"],
-    "jsx": "react-jsx",
-    "strict": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "allowImportingTsExtensions": true,
-    "noUncheckedIndexedAccess": true,
-    "outDir": "dist"
+    "allowImportingTsExtensions": true
   },
-  "include": ["src", "scanner", "scripts/skill/check-scan-sync.mjs"],
+  "include": ["scanner", "scripts/skill/check-scan-sync.mjs"],
   "exclude": ["node_modules", "dist"]
 }

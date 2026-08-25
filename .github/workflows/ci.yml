@@ -50,7 +50,7 @@ jobs:
       - name: README bundle-size freshness
         run: |
           pnpm size:readme
-          git diff --exit-code README.md \
+          git diff --exit-code packages/phase/README.md \
             || (echo "README bundle-size table is stale. Run 'pnpm size:readme' and commit the result." && exit 1)
 
       - name: Unit tests

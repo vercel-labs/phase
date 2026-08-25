@@ -12,7 +12,7 @@
 .turbo
 .vercel
 node_modules/
-# Anchored to the repo root so it only ignores the build output — not the
-# packaged skill at skills/phase/dist/, which is committed for direct download.
-/dist/
+# Anchored to the package so it ignores library build output, not the packaged
+# skill at skills/phase/dist/, which is committed for direct download.
+/packages/phase/dist/
 public/

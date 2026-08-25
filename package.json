@@ -1,43 +1,23 @@
 {
-  "name": "phase",
-  "version": "0.3.3",
-  "description": "A lightweight, lifecycle-aware UI performance layer for the web. Includes tools to optimize render performance, build performant animations, and manage layout and off-screen resources",
-  "author": "Vercel",
-  "license": "MIT",
-  "repository": {
-    "url": "git+https://github.com/vercel-labs/phase.git"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
+  "name": "@usephase/workspace",
+  "private": true,
   "type": "module",
-  "sideEffects": false,
   "scripts": {
-    "build": "tsdown",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "build": "pnpm -r --filter phase build",
+    "test": "pnpm -r --filter phase test && vitest run",
+    "typecheck": "pnpm -r --filter phase typecheck && tsc --noEmit",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
     "format": "oxfmt --check",
     "format:fix": "oxfmt .",
-    "size": "size-limit",
+    "size": "pnpm -r --filter phase size",
     "size:readme": "node scripts/update-size-table.mjs",
     "goldens": "node scripts/skill/regen-goldens.mjs",
-    "prepublishOnly": "pnpm build",
     "prepare": "lefthook install || true",
-    "validate": "pnpm run --parallel '/^(typecheck|lint|format|test|skill:check)$/'",
+    "validate": "pnpm --filter @usephase/workspace run --parallel '/^(typecheck|lint|format|test|skill:check)$/'",
     "skill:check": "node scripts/skill/check-coverage.mjs && node scripts/skill/check-scan-sync.mjs",
     "skill:build": "tsdown -c tsdown.scanner.config.ts && node scripts/skill/build-metadata.mjs && node scripts/skill/sync-scan-docs.mjs",
     "skill:package": "node scripts/skill/package.mjs"
-  },
-  "peerDependencies": {
-    "react": ">=18"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@size-limit/preset-small-lib": "12.1.0",
@@ -56,25 +36,6 @@
     "tsdown": "0.21.7",
     "typescript": "6.0.2",
     "vitest": "4.1.4"
-  },
-  "files": [
-    "dist",
-    "LICENSE",
-    "README.md"
-  ],
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./ease": {
-      "types": "./dist/ease.d.ts",
-      "default": "./dist/ease.js"
-    },
-    "./react": {
-      "types": "./dist/react.d.ts",
-      "default": "./dist/react.js"
-    }
   },
   "engines": {
     "node": "24.x"
