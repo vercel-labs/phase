@@ -274,6 +274,66 @@ function noteEvidence(context, path) {
 	if (!context.evidence.includes(path)) context.evidence.push(path);
 }
 //#endregion
+//#region scanner/vocabulary.ts
+const FRAME_CALLBACK_NAMES = ["onTick", "onDraw"];
+const POINTER_MOVE_EVENT_NAMES = [
+	"pointermove",
+	"mousemove",
+	"touchmove"
+];
+const WINDOW_LAYOUT_EVENT_NAMES = ["resize", "scroll"];
+const OTHER_FRAME_EVENT_NAMES = ["wheel", "drag"];
+const MOVE_HANDLER_NAMES = [
+	"PointerMove",
+	"MouseMove",
+	"TouchMove"
+];
+const OBSERVER_NAMES = [
+	"Intersection",
+	"Resize",
+	"Mutation"
+];
+const TIMER_NAMES = ["setInterval", "setTimeout"];
+const [RESIZE_EVENT_NAME, SCROLL_EVENT_NAME] = WINDOW_LAYOUT_EVENT_NAMES;
+const [INTERSECTION_OBSERVER_NAME, RESIZE_OBSERVER_NAME, MUTATION_OBSERVER_NAME] = OBSERVER_NAMES;
+const [INTERVAL_TIMER_NAME] = TIMER_NAMES;
+const FRAME_CALLBACK_DEFINITION = new RegExp([...FRAME_CALLBACK_NAMES.map((name) => String.raw`\b${name}\s*[:=(]`), String.raw`\bdraw\s*:`].join("|"));
+const FRAME_CALLBACK_REFERENCE = new RegExp([...FRAME_CALLBACK_NAMES.map((name) => String.raw`\b${name}\b`), String.raw`\bdraw\s*:`].join("|"));
+const MOVE_HANDLER_PROP = new RegExp(String.raw`\bon(?:${MOVE_HANDLER_NAMES.join("|")})\s*=\s*\{`);
+const POINTER_MOVE_EVENT_LISTENER = listenerPattern(POINTER_MOVE_EVENT_NAMES);
+const POINTER_MOVE_LISTENER = new RegExp(`${POINTER_MOVE_EVENT_LISTENER.source}|${MOVE_HANDLER_PROP.source}`);
+const WINDOW_LAYOUT_LISTENER = listenerPattern(WINDOW_LAYOUT_EVENT_NAMES);
+const INTERSECTION_OBSERVER_CONSTRUCTOR = observerPattern(INTERSECTION_OBSERVER_NAME);
+const RESIZE_OBSERVER_CONSTRUCTOR = observerPattern(RESIZE_OBSERVER_NAME);
+const MUTATION_OBSERVER_CONSTRUCTOR = observerPattern(MUTATION_OBSERVER_NAME);
+const INTERVAL_CALL = new RegExp(String.raw`\b${INTERVAL_TIMER_NAME}\s*(?:\?\.)?\s*\(`);
+const TIMER_REFERENCE = new RegExp(TIMER_NAMES.join("|"));
+const FRAME_MOVE_EVENT_NAMES = [
+	...POINTER_MOVE_EVENT_NAMES,
+	SCROLL_EVENT_NAME,
+	RESIZE_EVENT_NAME,
+	...OTHER_FRAME_EVENT_NAMES
+];
+const FRAME_MOVE_LISTENER = new RegExp(String.raw`addEventListener\s*\(\s*['"](?:${FRAME_MOVE_EVENT_NAMES.join("|")})`);
+const OBSERVER_CONSTRUCTORS = new RegExp(String.raw`new\s+(?:${OBSERVER_NAMES.join("|")})Observer`);
+const INTERVAL_REFERENCE = new RegExp(String.raw`${INTERVAL_TIMER_NAME}\s*\(`);
+/** Vocabulary that makes nearby scanner findings execution-critical. */
+const FRAME_DRIVER = new RegExp([
+	FRAME_CALLBACK_REFERENCE.source,
+	String.raw`use(?:Loop|Canvas|Tween|Pointer|Scroll)\s*\(`,
+	String.raw`create(?:Loop|Ticker|Pointer|Scroll)\s*\(`,
+	FRAME_MOVE_LISTENER.source,
+	MOVE_HANDLER_PROP.source,
+	OBSERVER_CONSTRUCTORS.source,
+	INTERVAL_REFERENCE.source
+].join("|"));
+function listenerPattern(names) {
+	return new RegExp(String.raw`addEventListener\s*\(\s*['"](?:${names.join("|")})['"]`);
+}
+function observerPattern(name) {
+	return new RegExp(String.raw`new\s+${name}Observer`);
+}
+//#endregion
 //#region scanner/analysis.ts
 const STATE_UPDATE_CONTEXT = /\bsetState\s*\(|\bdispatch\s*\(|\bset(?!Timeout\b|Interval\b|Immediate\b|Attribute|Property\b|PointerCapture\b|Item\b|Selection|RangeText\b|CustomValidity\b|Transform\b|LineDash\b|SinkId\b|RequestHeader\b)[A-Z]\w*\s*\(/;
 const MATCH_MEDIA_CALL = /\bmatchMedia\s*(?:\?\.)?\s*\(/;
@@ -298,7 +358,6 @@ const POINTER_LAYOUT_READ = layoutReadPattern([
 ]);
 const RAF_CALL = /\brequestAnimationFrame\s*(?:\?\.)?\s*\(/g;
 const TIMEOUT_CALL = /\bsetTimeout\s*(?:\?\.)?\s*\(/g;
-const INTERVAL_CALL = /\bsetInterval\s*(?:\?\.)?\s*\(/;
 /**
 * What a signal can require beyond its own line, analyzed once per scanned file:
 * which scheduling calls own recurring work, and which MediaQueryLists
@@ -377,7 +436,6 @@ const EMPTY_MOVE_ANALYSIS = {
 	propRanges: /* @__PURE__ */ new Map(),
 	handlerLines: /* @__PURE__ */ new Set()
 };
-const MOVE_HANDLER_PROP = /\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/;
 const MOVE_HANDLER_PROPS = new RegExp(MOVE_HANDLER_PROP.source, "g");
 const INLINE_HANDLER_VALUE = /^(?:async\s+)?(?:function\b|\([^)]*\)\s*(?::\s*[^=]+)?=>|[A-Za-z_$][\w$]*\s*=>)/;
 const USE_CALLBACK_BINDING = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*useCallback\s*\(\s*(?:async\s+)?(?:function(?:\s+[A-Za-z_$][\w$]*)?\s*\([^)]*\)|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)\s*\{/g;
@@ -740,7 +798,7 @@ const SIGNAL_CATALOG = [
 		detects: "State update inside a phase `onTick`/`onDraw`/`draw` callback",
 		why: "60 re-renders/sec; write to refs or the DOM inside frame callbacks.",
 		fix: "references/performance.md#never-setstate-inside-ontick--draw",
-		pattern: /\bonTick\s*[:=(]|\bonDraw\s*[:=(]|\bdraw\s*:/,
+		pattern: FRAME_CALLBACK_DEFINITION,
 		contextPattern: STATE_UPDATE_CONTEXT,
 		codeOnly: true,
 		contextLines: 30,
@@ -777,7 +835,7 @@ const SIGNAL_CATALOG = [
 		detects: "`new IntersectionObserver` outside the pool",
 		why: "Unpooled observer instances and manual cleanup leak over time.",
 		fix: "references/performance.md#observer-pooling",
-		pattern: /new\s+IntersectionObserver/
+		pattern: INTERSECTION_OBSERVER_CONSTRUCTOR
 	},
 	{
 		id: "raw-ro",
@@ -788,7 +846,7 @@ const SIGNAL_CATALOG = [
 		detects: "`new ResizeObserver` outside the pool",
 		why: "Unpooled observer instances and manual cleanup leak over time.",
 		fix: "references/performance.md#observer-pooling",
-		pattern: /new\s+ResizeObserver/
+		pattern: RESIZE_OBSERVER_CONSTRUCTOR
 	},
 	{
 		id: "raw-matchmedia",
@@ -812,7 +870,7 @@ const SIGNAL_CATALOG = [
 		detects: "MutationObserver watching inline styles or reading layout in its callback",
 		why: "Layout reads in MO callbacks force a reflow on every mutation.",
 		fix: "references/performance.md#never-drive-layout-from-a-mutationobserver",
-		pattern: /new\s+MutationObserver/,
+		pattern: MUTATION_OBSERVER_CONSTRUCTOR,
 		contextPattern: new RegExp(`attributeFilter:\\s*\\[[^\\]]*['"]style['"]|${OBSERVED_LAYOUT_READ.source}`)
 	},
 	{
@@ -852,7 +910,7 @@ const SIGNAL_CATALOG = [
 		detects: "`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity work",
 		why: "Timers keep firing off-screen and in background tabs.",
 		fix: "references/timed-sequences.md",
-		pattern: /setInterval|setTimeout/,
+		pattern: TIMER_REFERENCE,
 		contextPattern: /transform|opacity|translate|\banimate\b/,
 		evidence: "recurring-timer"
 	},
@@ -936,7 +994,7 @@ const SIGNAL_CATALOG = [
 		detects: "resize/scroll listener with a layout read in the handler",
 		why: "A synchronous reflow per event, once per listening component.",
 		fix: "references/performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer",
-		pattern: /addEventListener\s*\(\s*['"](?:resize|scroll)['"]/,
+		pattern: WINDOW_LAYOUT_LISTENER,
 		contextPattern: WINDOW_LISTENER_LAYOUT_READ
 	},
 	{
@@ -948,7 +1006,7 @@ const SIGNAL_CATALOG = [
 		detects: "pointermove/mousemove/touchmove listener, or intrinsic JSX move prop, with a layout read per event",
 		why: "A synchronous reflow per event; move events fire far above 60/sec.",
 		fix: "references/use-pointer.md",
-		pattern: /addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove)['"]|\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/,
+		pattern: POINTER_MOVE_LISTENER,
 		evidence: "move-handler-layout-read"
 	},
 	{
@@ -960,7 +1018,7 @@ const SIGNAL_CATALOG = [
 		detects: "MutationObserver on `<html>`/`documentElement`",
 		why: "N observers on one target each fire per mutation; one suffices.",
 		fix: "references/performance-recipes.md#recipe-collapse-an-observer-storm-on-html",
-		pattern: /new\s+MutationObserver/,
+		pattern: MUTATION_OBSERVER_CONSTRUCTOR,
 		contextPattern: /document\.documentElement|<html|\.observe\s*\(\s*document\s*\./
 	},
 	{
@@ -1272,7 +1330,6 @@ function scanFile(relPath, content, diag = null) {
 	}
 	return dedup(findings);
 }
-const FRAME_DRIVER = /\bonTick\b|\bonDraw\b|\bdraw\s*:|use(?:Loop|Canvas|Tween|Pointer|Scroll)\s*\(|create(?:Loop|Ticker|Pointer|Scroll)\s*\(|addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove|scroll|resize|wheel|drag)|\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{|new\s+(?:Intersection|Resize|Mutation)Observer|setInterval\s*\(/;
 const FRAME_DRIVER_WINDOW = 6;
 const MAX_LINE_LENGTH = 1e3;
 const MAX_FINDING_TEXT = 120;

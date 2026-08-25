@@ -1,15 +1,21 @@
 import { escapeRegExp } from './lex.ts';
+import { INTERVAL_CALL, MOVE_HANDLER_PROP } from './vocabulary.ts';
 
-// Context pattern for state updates. Excludes DOM/timer/canvas setters that
-// are legitimate inside frame callbacks. The exclusions accept rare false
-// negatives when a React setter shares a DOM setter name (e.g. setSelection,
-// setTransform): missing one candidate beats flagging the recommended pattern.
-// Known accepted FP class (calibrated): non-React `dispatch(` from editor or
-// store libraries (e.g. a CodeMirror transaction) near a rAF; the noise tier
-// covers it, and distinguishing them line-based is not worth the complexity.
+// Consumers: setstate-in-ontick uses this as callback context; scheduling
+// analysis uses it to classify recurring rAF callbacks as state schedules.
+// Both consumers exclude legitimate DOM/timer/canvas setters and accept rare
+// false negatives when a React setter shares one of those names (for example,
+// setSelection or setTransform). Known accepted FP class for both: non-React
+// `dispatch(` from editor or store libraries near frame work. The normal noise
+// tier covers it; distinguishing those calls line-by-line is not worth the
+// complexity.
 export const STATE_UPDATE_CONTEXT =
   /\bsetState\s*\(|\bdispatch\s*\(|\bset(?!Timeout\b|Interval\b|Immediate\b|Attribute|Property\b|PointerCapture\b|Item\b|Selection|RangeText\b|CustomValidity\b|Transform\b|LineDash\b|SinkId\b|RequestHeader\b)[A-Z]\w*\s*\(/;
 
+// Consumers: raw-matchmedia detects calls; media-query analysis associates
+// each call with a listener on the same result. The call pattern accepts
+// optional chaining for both; analysis still drops `.matches` snapshots and
+// listeners attached to another receiver.
 export const MATCH_MEDIA_CALL = /\bmatchMedia\s*(?:\?\.)?\s*\(/;
 const MATCH_MEDIA_CALLS = new RegExp(MATCH_MEDIA_CALL.source, 'g');
 
@@ -36,6 +42,10 @@ export const WINDOW_LISTENER_LAYOUT_READ = layoutReadPattern([
   ...SIZE_READS,
   ...SCROLL_READS,
 ]);
+// Consumer branches: move-handler-layout-read checks associated JSX handler
+// bodies and the local context around raw pointer listeners with this pattern.
+// Both branches require member access or a layout API call, so bare prop names
+// remain excluded; the JSX branch also requires intrinsic-prop association.
 const POINTER_LAYOUT_READ = layoutReadPattern([
   ...SIZE_READS,
   ...POSITION_READS,
@@ -87,7 +97,6 @@ interface CallbackCollection {
 
 const RAF_CALL = /\brequestAnimationFrame\s*(?:\?\.)?\s*\(/g;
 const TIMEOUT_CALL = /\bsetTimeout\s*(?:\?\.)?\s*\(/g;
-const INTERVAL_CALL = /\bsetInterval\s*(?:\?\.)?\s*\(/;
 
 /**
  * What a signal can require beyond its own line, analyzed once per scanned file:
@@ -225,7 +234,6 @@ const EMPTY_MOVE_ANALYSIS: MoveAnalysis = {
   handlerLines: new Set(),
 };
 
-const MOVE_HANDLER_PROP = /\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/;
 const MOVE_HANDLER_PROPS = new RegExp(MOVE_HANDLER_PROP.source, 'g');
 
 // A prop value counts as an inline handler only when it starts with a function

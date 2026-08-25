@@ -8,6 +8,15 @@ import {
 } from './analysis.ts';
 import type { EvidenceName } from './analysis.ts';
 import { escapeRegExp, maskStrings } from './lex.ts';
+import {
+  FRAME_CALLBACK_DEFINITION,
+  INTERSECTION_OBSERVER_CONSTRUCTOR,
+  MUTATION_OBSERVER_CONSTRUCTOR,
+  POINTER_MOVE_LISTENER,
+  RESIZE_OBSERVER_CONSTRUCTOR,
+  TIMER_REFERENCE,
+  WINDOW_LAYOUT_LISTENER,
+} from './vocabulary.ts';
 
 export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'dedup'] as const;
 export const NOISE_TIERS = ['precise', 'normal', 'noisy'] as const;
@@ -104,7 +113,7 @@ const SIGNAL_CATALOG = [
     detects: 'State update inside a phase `onTick`/`onDraw`/`draw` callback',
     why: '60 re-renders/sec; write to refs or the DOM inside frame callbacks.',
     fix: 'references/performance.md#never-setstate-inside-ontick--draw',
-    pattern: /\bonTick\s*[:=(]|\bonDraw\s*[:=(]|\bdraw\s*:/,
+    pattern: FRAME_CALLBACK_DEFINITION,
     contextPattern: STATE_UPDATE_CONTEXT,
     codeOnly: true,
     contextLines: 30,
@@ -144,7 +153,7 @@ const SIGNAL_CATALOG = [
     detects: '`new IntersectionObserver` outside the pool',
     why: 'Unpooled observer instances and manual cleanup leak over time.',
     fix: 'references/performance.md#observer-pooling',
-    pattern: /new\s+IntersectionObserver/,
+    pattern: INTERSECTION_OBSERVER_CONSTRUCTOR,
   },
   {
     id: 'raw-ro',
@@ -155,7 +164,7 @@ const SIGNAL_CATALOG = [
     detects: '`new ResizeObserver` outside the pool',
     why: 'Unpooled observer instances and manual cleanup leak over time.',
     fix: 'references/performance.md#observer-pooling',
-    pattern: /new\s+ResizeObserver/,
+    pattern: RESIZE_OBSERVER_CONSTRUCTOR,
   },
   {
     id: 'raw-matchmedia',
@@ -185,7 +194,7 @@ const SIGNAL_CATALOG = [
       'MutationObserver watching inline styles or reading layout in its callback',
     why: 'Layout reads in MO callbacks force a reflow on every mutation.',
     fix: 'references/performance.md#never-drive-layout-from-a-mutationobserver',
-    pattern: /new\s+MutationObserver/,
+    pattern: MUTATION_OBSERVER_CONSTRUCTOR,
     // Only flag when the observer watches inline style mutations or reads
     // layout nearby. Structural (childList) and plain attribute observation
     // (e.g. a class watcher) are legitimate and skipped.
@@ -240,7 +249,7 @@ const SIGNAL_CATALOG = [
       '`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity work',
     why: 'Timers keep firing off-screen and in background tabs.',
     fix: 'references/timed-sequences.md',
-    pattern: /setInterval|setTimeout/,
+    pattern: TIMER_REFERENCE,
     contextPattern: /transform|opacity|translate|\banimate\b/,
     evidence: 'recurring-timer',
   },
@@ -338,7 +347,7 @@ const SIGNAL_CATALOG = [
     detects: 'resize/scroll listener with a layout read in the handler',
     why: 'A synchronous reflow per event, once per listening component.',
     fix: 'references/performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer',
-    pattern: /addEventListener\s*\(\s*['"](?:resize|scroll)['"]/,
+    pattern: WINDOW_LAYOUT_LISTENER,
     contextPattern: WINDOW_LISTENER_LAYOUT_READ,
   },
   {
@@ -356,8 +365,7 @@ const SIGNAL_CATALOG = [
     // contextPattern. A JSX prop requires a layout read inside the associated
     // handler body. Lexical association lets a distant useCallback binding
     // match without treating a custom-component prop as a DOM event.
-    pattern:
-      /addEventListener\s*\(\s*['"](?:pointermove|mousemove|touchmove)['"]|\bon(?:PointerMove|MouseMove|TouchMove)\s*=\s*\{/,
+    pattern: POINTER_MOVE_LISTENER,
     evidence: 'move-handler-layout-read',
   },
   {
@@ -370,7 +378,7 @@ const SIGNAL_CATALOG = [
     detects: 'MutationObserver on `<html>`/`documentElement`',
     why: 'N observers on one target each fire per mutation; one suffices.',
     fix: 'references/performance-recipes.md#recipe-collapse-an-observer-storm-on-html',
-    pattern: /new\s+MutationObserver/,
+    pattern: MUTATION_OBSERVER_CONSTRUCTOR,
     contextPattern:
       /document\.documentElement|<html|\.observe\s*\(\s*document\s*\./,
   },
