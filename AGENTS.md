@@ -8,6 +8,8 @@ Animation infrastructure for the web. Lifecycle-aware primitives that compose vi
 
 Tech stack: TypeScript, tsdown (bundler), vitest (tests), oxlint (linting), oxfmt (formatting), lefthook (pre-commit hooks).
 
+Scanner, audit, or eval changes: read `CONTEXT.md` for the canonical vocabulary.
+
 ## Commands
 
 ```bash
@@ -137,6 +139,8 @@ Minimal footprint is a core promise of phase. Every public export is individuall
 - **Zero runtime dependencies** shipped to consumers
 - Never add runtime dependencies without explicit approval
 - All dependencies pinned to exact versions
+
+Architecture decisions: follow [`docs/adr/README.md`](./docs/adr/README.md).
 
 ## Key design rules
 
