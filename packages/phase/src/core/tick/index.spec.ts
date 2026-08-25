@@ -648,29 +648,38 @@ describe('setFps', () => {
     const raf = stubRaf();
     const { createTicker } = await getModule();
     const frames: number[] = [];
-    const times: number[] = [];
+    const elapsed: number[] = [];
     const ticker = createTicker({
       fps: 60,
       onTick: (f) => {
         frames.push(f.frame);
-        times.push(f.time);
+        elapsed.push(f.elapsed);
       },
     });
     ticker.start();
     const step = 1000 / 60;
+    const pauseMs = 1000;
     let i = 1;
     for (; i <= 30; i++) raf.frame(i * step);
     ticker.pause();
     const framesBefore = frames.at(-1) as number;
+    const elapsedBefore = elapsed.at(-1) as number;
 
+    // Wall clock advances while paused; rAF timestamps resume shifted by it.
+    vi.advanceTimersByTime(pauseMs);
     ticker.setFps(30);
     expect(ticker.phase).toBe('paused');
     ticker.resume();
     const countBefore = frames.length;
-    for (; i <= 90; i++) raf.frame(i * step);
+    for (; i <= 90; i++) raf.frame(i * step + pauseMs);
 
     // Frame count continues from where it left off.
     expect(frames[countBefore]).toBe(framesBefore + 1);
+    // Pause accounting and start time survive the mutation: elapsed still
+    // excludes the paused second instead of jumping by it.
+    const elapsedAfter = elapsed[countBefore] as number;
+    expect(elapsedAfter - elapsedBefore).toBeGreaterThan(0);
+    expect(elapsedAfter - elapsedBefore).toBeLessThan(100);
     // Post-resume cadence follows the new 30fps cap (first resumed frame
     // delivers immediately and re-anchors, then ~30/s).
     const after = frames.length - countBefore;
