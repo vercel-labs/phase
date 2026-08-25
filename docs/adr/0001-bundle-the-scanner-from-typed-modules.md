@@ -2,18 +2,18 @@
 
 ## Context
 
-The scanner needed typed, testable internal seams without changing the installed skill's zero-dependency, single-file command or its relative metadata lookup.
+The scanner needed to be split into typed modules so its internal areas could be changed and tested safely. Users still needed one dependency-free script with the same installed layout.
 
 ## Decision
 
-Keep scanner source as TypeScript modules under `scanner/`. A pinned tsdown build emits the committed `skills/phase/scripts/scan.mjs` artifact, and CI checks that the artifact is fresh and deterministic. The consumer contract remains one ESM file runnable with `node scan.mjs`, using only `node:` builtins and resolving metadata at `../metadata.json`.
+Keep scanner source as TypeScript modules under `scanner/`. A pinned tsdown build creates the committed `skills/phase/scripts/scan.mjs` file, and CI verifies that the generated file is current and repeatable. Users still receive one ESM file runnable with `node scan.mjs`, using only `node:` builtins and reading metadata from `../metadata.json`.
 
 ## Reason
 
-Typed source removes hand-maintained declaration drift and permits deep internal seams while preserving the simple installed interface. The repository-root location was chosen because it was independent of both the installed skill layout and a potential workspace package boundary.
+Keeping types and code together prevents them from drifting apart and lets each internal area be tested independently. Keeping source at the repository root also avoided tying it to either the installed skill folder or a possible future package layout.
 
 ## Consequences
 
-The generated scanner is never hand-edited, and build determinism depends on the pinned bundler version. Scanner source is contributor tooling; consumers receive only the generated artifact.
+Contributors edit the TypeScript source, not the generated script. Updating the pinned bundler can change the output and requires review. Consumers receive only the generated file.
 
 Implemented by [PR #46](https://github.com/vercel-labs/phase/pull/46) and [PR #47](https://github.com/vercel-labs/phase/pull/47).

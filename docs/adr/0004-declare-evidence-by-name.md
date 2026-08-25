@@ -2,18 +2,18 @@
 
 ## Context
 
-Signals that needed facts beyond their matching line were coupled to signal-specific policy booleans and distant detection-engine branches. Changing one detection could require coordinated edits whose relationship was neither typed nor visible in the catalog.
+Some signals needed information beyond the line they matched. That requirement was spread across true/false fields and unrelated detection code, so changing one signal required coordinated edits whose connection was difficult to see and easy to break.
 
 ## Decision
 
-Signals declare a named evidence requirement from the analysis module's typed registry. The registry owns predicates beside the analysis that produces their facts, catalog loading rejects unknown names, and detection performs one generic lookup. Custom lexical matchers remain separate.
+Signals name any extra evidence they need. The analysis module maps each name to its yes/no check, unknown names fail validation, and the detector consults that map instead of containing signal-specific branches. Signals that need direct source logic can still use a custom matching function.
 
 ## Reason
 
-Named evidence makes each signal's dependency explicit while keeping analysis ownership local. It replaces cross-module policy flags with one constrained interface.
+The extra requirement is visible beside the signal, while its check stays beside the analysis facts it uses. One shared path applies every named check.
 
 ## Consequences
 
-New reusable analysis requirements extend the registry and its `EvidenceName` union. Signal-specific booleans interpreted by distant engine branches are not part of the scanner contract.
+New reusable evidence adds one entry to the registry and its `EvidenceName` type. The detection engine no longer accepts signal-specific flags.
 
 Implemented by [PR #50](https://github.com/vercel-labs/phase/pull/50).
