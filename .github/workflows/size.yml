@@ -4,6 +4,7 @@ on:
   # Every open PR, so a stacked PR is measured against the branch below it and
   # its reported delta is its own contribution rather than the whole stack's.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 concurrency:
   group: size-${{ github.workflow }}-${{ github.ref }}
@@ -11,11 +12,14 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   size:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      count: ${{ steps.measure.outputs.count }}
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
       - uses: pnpm/action-setup@fdbc4fdcf7d143a5d0a39e9a02e103b13e309024 # v6.0.4
@@ -31,12 +35,46 @@ jobs:
       # packages/phase does not exist. Keep the budget gate and report its result
       # directly; a later PR can restore base-relative deltas.
       - name: Check bundle size
-        run: pnpm --filter phase exec size-limit --json > "$RUNNER_TEMP/size-limit.json"
+        id: measure
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter phase exec size-limit --json | tee "$RUNNER_TEMP/size-limit.json"
+          COUNT=$(node -p "JSON.parse(require('node:fs').readFileSync(process.env.RUNNER_TEMP + '/size-limit.json', 'utf8')).length")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
 
+  comment:
+    needs: size
+    if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
       - name: Comment bundle-size result
+        continue-on-error: true
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          SIZE_RESULT: ${{ needs.size.result }}
+          COUNT: ${{ needs.size.outputs.count }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          COUNT=$(node -p "JSON.parse(require('node:fs').readFileSync(process.env.RUNNER_TEMP + '/size-limit.json', 'utf8')).length")
-          gh pr comment "${{ github.event.pull_request.number }}" --edit-last --create-if-none \
-            --body "Bundle-size budgets passed for ${COUNT} measured exports. Base-relative deltas resume after the package path exists on both sides of the comparison."
+          set -o pipefail
+          MARKER='<!-- phase-size-report -->'
+          if [[ "$SIZE_RESULT" == "success" ]]; then
+            MESSAGE="Bundle-size budgets passed for ${COUNT} measured exports. Base-relative deltas resume after the package path exists on both sides of the comparison."
+          else
+            MESSAGE="Bundle-size check failed. [View the workflow run]($RUN_URL) for details."
+          fi
+          BODY=$(printf '%s\n%s' "$MARKER" "$MESSAGE")
+
+          COMMENT_ID=$(gh api --paginate --slurp "repos/$REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" \
+            | jq -r 'map(.[]) | map(select(.user.login == "github-actions[bot]" and ((.body | startswith("<!-- phase-size-report -->")) or (.body | startswith("Bundle-size budgets "))))) | last | .id // empty')
+
+          if [[ -n "$COMMENT_ID" ]]; then
+            gh api --method PATCH "repos/$REPOSITORY/issues/comments/$COMMENT_ID" -f body="$BODY"
+          else
+            gh api --method POST "repos/$REPOSITORY/issues/$PR_NUMBER/comments" -f body="$BODY"
+          fi

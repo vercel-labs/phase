@@ -5,6 +5,7 @@ on:
   # before the branch below them merges. Base-relative steps stay correct: the
   # release-intent check diffs against the PR's own base.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 # Cancel in-progress PR runs on new pushes; let main runs finish so the
 # release workflow's history stays uninterrupted.

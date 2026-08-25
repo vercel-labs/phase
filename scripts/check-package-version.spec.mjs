@@ -61,6 +61,9 @@ function movePackage(root) {
     extends: './tsconfig.base.json',
     include: ['scanner'],
   });
+  writeJson(join(root, 'tsconfig.base.json'), {
+    compilerOptions: { target: 'ES2022' },
+  });
   writeJson(join(packageRoot, 'tsconfig.json'), {
     extends: '../../tsconfig.base.json',
     include: ['src'],
@@ -105,6 +108,22 @@ describe('package release intent', () => {
     expect(run.stderr).toBe('');
   });
 
+  it('rejects production source moved outside the package during migration', () => {
+    const { root, base } = createRepository();
+    movePackage(root);
+    const destination = join(root, 'apps/example/index.ts');
+    mkdirSync(dirname(destination), { recursive: true });
+    renameSync(join(root, 'packages/phase/src/index.ts'), destination);
+    runGit(root, 'add', '.');
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump',
+    );
+  });
+
   it('accepts repository-only changes after the workspace move', () => {
     const { root, base } = createMovedRepository();
     writeFileSync(join(root, 'CONTRIBUTING.md'), '# Contributing\n');
@@ -130,11 +149,56 @@ describe('package release intent', () => {
     );
   });
 
+  it('rejects package source renames after the workspace move', () => {
+    const { root, base } = createMovedRepository();
+    const destination = join(root, 'apps/example/index.ts');
+    mkdirSync(dirname(destination), { recursive: true });
+    renameSync(join(root, 'packages/phase/src/index.ts'), destination);
+    runGit(root, 'add', '.');
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump',
+    );
+  });
+
+  it('rejects package source paths that Git would quote', () => {
+    const { root, base } = createMovedRepository();
+    writeFileSync(
+      join(root, 'packages/phase/src/quoted-\u00fc.ts'),
+      'export const quoted = true;\n',
+    );
+    runGit(root, 'add', '.');
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump',
+    );
+  });
+
   it('rejects package config changes after the workspace move', () => {
     const { root, base } = createMovedRepository();
     writeJson(join(root, 'packages/phase/tsconfig.json'), {
       extends: '../../tsconfig.base.json',
       include: ['src', 'extra'],
+    });
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump',
+    );
+  });
+
+  it('rejects shared config changes after the workspace move', () => {
+    const { root, base } = createMovedRepository();
+    writeJson(join(root, 'tsconfig.base.json'), {
+      compilerOptions: { target: 'ES2021' },
     });
 
     const run = runCheck(root, base);

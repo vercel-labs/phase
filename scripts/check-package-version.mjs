@@ -26,38 +26,55 @@ const basePackage = JSON.parse(
   }),
 );
 
-const changedFiles = execFileSync(
+const diffTokens = execFileSync(
   'git',
-  ['diff', '--name-status', '--find-renames', base, '--'],
+  ['diff', '--name-status', '-z', '--find-renames', base, '--'],
   { encoding: 'utf8' },
 )
-  .trim()
-  .split('\n')
-  .filter(Boolean)
-  .map((line) => {
-    const [status, ...paths] = line.split('\t');
-    return { status, file: paths.at(-1) };
-  });
+  .split('\0')
+  .filter(Boolean);
+const changedFiles = [];
+for (let index = 0; index < diffTokens.length; ) {
+  const status = diffTokens[index++];
+  const renamed = status?.startsWith('R') || status?.startsWith('C');
+  const source = renamed ? diffTokens[index++] : undefined;
+  const file = diffTokens[index++];
+  changedFiles.push({ status, source, file });
+}
 
 // Tests and mocks never ship: the build bundles only the three barrel entry
 // points, and the published files are dist/LICENSE/README.md. A spec-only
 // change must not demand a version bump for an identical package.
 const TEST_ONLY = /\.spec\.|\.test\.|__tests__\/|__mocks__\//;
+const isPackageBuildInput = (path) =>
+  path &&
+  (((path.startsWith('packages/phase/src/') ||
+    (workspaceMigration && path.startsWith('src/'))) &&
+    !TEST_ONLY.test(path)) ||
+    path === 'packages/phase/tsconfig.json' ||
+    path === 'packages/phase/tsdown.config.ts' ||
+    path === 'tsconfig.base.json' ||
+    (workspaceMigration && path === 'tsdown.config.ts'));
 
-const packageSourceChanged = changedFiles.some(({ status, file }) => {
-  if (!file || status === 'R100') return false;
+const packageSourceChanged = changedFiles.some(({ status, source, file }) => {
+  if (!file) return false;
   if (
     workspaceMigration &&
-    status === 'A' &&
-    file === 'packages/phase/tsconfig.json'
+    status === 'R100' &&
+    ((source?.startsWith('src/') && file === `packages/phase/${source}`) ||
+      (source === 'tsdown.config.ts' &&
+        file === 'packages/phase/tsdown.config.ts'))
   ) {
     return false;
   }
-  return (
-    (file.startsWith('packages/phase/src/') && !TEST_ONLY.test(file)) ||
-    file === 'packages/phase/tsconfig.json' ||
-    file === 'packages/phase/tsdown.config.ts'
-  );
+  if (
+    workspaceMigration &&
+    status === 'A' &&
+    (file === 'packages/phase/tsconfig.json' || file === 'tsconfig.base.json')
+  ) {
+    return false;
+  }
+  return [source, file].some(isPackageBuildInput);
 });
 
 const publishedManifestFields = [
