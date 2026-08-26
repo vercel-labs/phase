@@ -2,11 +2,11 @@
 
 `@usephase/examples` is the main set of React examples used in documentation, browser tests, generated snippets, and tests of agent behavior. Each tool uses the same examples but keeps its own checks.
 
-[`CONTEXT.md`](../CONTEXT.md#examples) defines example, variant, example slug, manifest, example metadata, and predictable output.
+[`CONTEXT.md`](../../CONTEXT.md#examples) defines example, variant, example slug, manifest, example metadata, and predictable output.
 
 ## File rules
 
-- Give each phase export its own kebab-case directory: `examples/<export-kebab>/`.
+- Give each phase export its own kebab-case directory: `packages/examples/<export-kebab>/`.
 - Give each variant a kebab-case TSX file. Its example slug is `<export-kebab>/<variant>`, such as `use-loop/basic`.
 - Every variant starts with `'use client'` and exports one React component as its default.
 - Every component includes everything it needs, takes no props, and follows the predictable output rules.

@@ -1,5 +1,9 @@
 # Place publishable code in workspace packages
 
+## Status
+
+Partially superseded by [ADR 0010](./0010-keep-workspace-packages-under-packages.md). The examples package now lives at `packages/examples` instead of the repository root.
+
 ## Context
 
 The repository root combined the published library, repository orchestration, and the installable agent skill's source and artifacts. Adding examples and applications there would blur package ownership and let nested evaluation fixtures be discovered as workspaces.

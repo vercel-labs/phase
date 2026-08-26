@@ -48,8 +48,8 @@ jobs:
       - name: Check examples manifest
         run: |
           pnpm --filter @usephase/examples generate-manifest
-          git diff --exit-code examples/manifest.ts \
-            || (echo "examples/manifest.ts is out of date. Run 'pnpm --filter @usephase/examples generate-manifest' and commit the updated file." && exit 1)
+          git diff --exit-code packages/examples/manifest.ts \
+            || (echo "packages/examples/manifest.ts is out of date. Run 'pnpm --filter @usephase/examples generate-manifest' and commit the updated file." && exit 1)
 
       - name: README bundle-size freshness
         run: |

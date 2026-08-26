@@ -27,11 +27,11 @@ importers:
         specifier: 4.1.4
         version: 4.1.4(@types/node@25.6.0)(jsdom@23.2.0)(vite@8.0.16(@types/node@25.6.0)(esbuild@0.28.1))
 
-  examples:
+  packages/examples:
     dependencies:
       phase:
         specifier: workspace:*
-        version: link:../packages/phase
+        version: link:../phase
     devDependencies:
       '@types/react':
         specifier: 19.2.10
