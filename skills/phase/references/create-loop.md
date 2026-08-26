@@ -16,10 +16,10 @@ const loop = createLoop(options: LoopOptions): Loop;
 | --------------------- | ----------------------------------- | ------------ | ------------------------------------------------------ |
 | `target`              | `Element \| Document`               | required     | Element to observe, or `document` for the page         |
 | `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running                        |
-| `fps`                 | `number`                            | —            | Cap frames per second                                  |
+| `fps`                 | `number`                            | —            | Cap frames per second (finite, > 0)                    |
 | `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion              |
 | `degraded`            | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades                         |
-| `degradedFps`         | `number`                            | `30`         | FPS cap in degraded throttle mode                      |
+| `degradedFps`         | `number`                            | `30`         | FPS cap in degraded throttle mode (finite, > 0)        |
 | `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to the underlying IO. Ignored for `document` |
 | `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately                           |
 | `onPhaseChange`       | `(phase, reason) => void`           | —            | Called on every phase transition                       |
@@ -65,7 +65,7 @@ const loop = createLoop(options: LoopOptions): Loop;
   ```
 - Call `stop()` when the animation is permanently done (e.g. component unmounts, page navigates away).
 - Read `phase` and `phaseReason` to debug unexpected pauses.
-- Trust the timeline across quality changes: degrading and recovering FPS (e.g. blur/refocus) never resets `frame.frame`, `frame.elapsed`, or `FrameState` identity.
+- Keep accumulating across quality changes: FPS throttling and recovery (e.g. the tab losing and regaining focus) never reset `frame.frame`, `frame.elapsed`, or swap out the `frame` object, so position and progress variables need no re-sync.
 - Use `degraded: 'pause'` for heavy canvas/WebGL that can't gracefully degrade.
 
 ## Don't

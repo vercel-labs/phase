@@ -147,7 +147,8 @@ export function createLoop(options: LoopOptions): Loop {
   let ticker: Ticker | null = null;
 
   // Frame-budget threshold for the current effective FPS. Mutable so the
-  // once-created ticker callback always classifies against the live policy.
+  // once-created ticker callback always compares frame time against the
+  // current cap.
   let frameBudget = 1000 / 60;
 
   // Quality signal flags
@@ -197,7 +198,9 @@ export function createLoop(options: LoopOptions): Loop {
    * are still over budget, the next degrade reschedules this.
    */
   function scheduleBudgetRecovery(): void {
-    if (recoveryTimer !== null) return;
+    // A consumer callback may stop the loop between the degrade and this
+    // call; never arm a timer on a stopped loop.
+    if (_phase === 'stopped' || recoveryTimer !== null) return;
     recoveryTimer = setTimeout(() => {
       recoveryTimer = null;
       overBudgetCount = 0;
@@ -222,8 +225,8 @@ export function createLoop(options: LoopOptions): Loop {
 
   /**
    * Derive effective FPS and its frame budget together, then apply the cap to
-   * the live ticker. The ticker's timeline (FrameState identity, frame count,
-   * elapsed) is untouched — FPS policy changes update scheduling state only.
+   * the live ticker. The frame count, elapsed time, and frame object are
+   * untouched; only the delivery rate changes.
    */
   function applyFpsPolicy(): number | undefined {
     const targetFps: number | undefined = getEffectiveFps();
@@ -331,11 +334,15 @@ export function createLoop(options: LoopOptions): Loop {
     clearBudgetRecovery();
     // Enter the terminal phase before teardown: lifecycle.stop() fires
     // onPhaseChange -> reconcile() synchronously, and reconcile must see
-    // 'stopped' so it cannot resume or recreate the ticker mid-stop.
-    setPhase('stopped', 'disposed');
+    // 'stopped' so it cannot resume or recreate the ticker mid-stop. The
+    // consumer is notified last, after teardown has finished, so a throwing
+    // callback cannot leave the loop half-disposed.
+    _phase = 'stopped';
+    _reason = 'disposed';
     ticker?.stop();
     lifecycle.stop();
     unsubFocus();
+    onPhaseChange?.('stopped', 'disposed');
   }
 
   // Declared before assignment because an already-aborted signal makes
@@ -369,7 +376,7 @@ export function createLoop(options: LoopOptions): Loop {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/** Rejects a defined fps that is not a positive finite number. */
+/** Throws `invalid_fps` for a defined fps that is not a positive finite number. */
 function validateFps(fps: number | undefined): void {
   if (fps !== undefined && (!Number.isFinite(fps) || fps <= 0)) {
     invalidFpsError('createLoop', fps);

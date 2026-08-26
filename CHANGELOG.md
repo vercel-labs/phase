@@ -4,10 +4,10 @@
 
 ### Patch Changes
 
-- `createLoop` FPS policy changes (blur/refocus throttling, degraded quality) now use `Ticker.setFps()` instead of destroying and rebuilding the ticker, so `FrameState` identity, frame count, and elapsed time survive quality changes.
-- A quality change while the loop is paused now applies its FPS cap on resume.
+- `createLoop` no longer destroys and rebuilds its internal ticker when FPS throttling changes (e.g. tab blur/refocus). Frame count, elapsed time, and the `frame` object now survive those changes instead of restarting.
+- An FPS cap change while the loop is paused now takes effect on resume.
 - `createLoop` validates `fps` and `degradedFps` at construction; invalid values throw `invalid_fps`.
-- `stop()` marks the loop stopped before teardown, so reentrant reconciliation can no longer recreate a ticker mid-stop.
+- `stop()` on a running loop no longer recreates and leaks its internal ticker during teardown, and an `onPhaseChange` callback that throws on stop can no longer leave the loop half-disposed.
 
 ## 0.4.0
 

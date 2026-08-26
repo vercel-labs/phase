@@ -554,7 +554,7 @@ describe('timeline continuity across FPS policy changes', () => {
     clock.advance(16);
     clock.advance(16);
 
-    // One FrameState object across the entire run — the ticker was never replaced.
+    // One FrameState object across the entire run: the ticker was never replaced.
     expect(identities.size).toBe(1);
     // Frame count never resets: strictly +1 per delivery.
     let prevCount: number | undefined;
@@ -739,7 +739,7 @@ describe('FPS policy while paused', () => {
     clock.advance(16);
 
     // Elapsed excludes the paused 500ms and the resume delta is clean (no
-    // pause gap). Continuity only — exact delta bounds belong to the ticker.
+    // pause gap). Continuity only; exact delta bounds belong to the ticker.
     expect(lastElapsed - elapsedBeforePause).toBeLessThan(500);
     expect(lastDelta).toBeLessThan(500);
 
@@ -809,6 +809,60 @@ describe('stop is terminal for the ticker', () => {
     onTick.mockClear();
     for (let i = 0; i < 5; i++) clock.advance(16);
     expect(onTick).not.toHaveBeenCalled();
+    clock.restore();
+  });
+
+  it('a throwing onPhaseChange(stopped) does not abort teardown', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const onTick = vi.fn();
+    const loop = createLoop({
+      target: el,
+      onTick,
+      onPhaseChange: (phase) => {
+        if (phase === 'stopped') throw new Error('consumer bug');
+      },
+    });
+    makeSightVisible(el);
+    clock.advance(16);
+
+    expect(() => loop.stop()).toThrow('consumer bug');
+
+    // Teardown finished before the callback threw: no more deliveries.
+    onTick.mockClear();
+    for (let i = 0; i < 5; i++) clock.advance(16);
+    expect(onTick).not.toHaveBeenCalled();
+    expect(loop.phase).toBe('stopped');
+    clock.restore();
+  });
+
+  it('stop from a pause-mode degrade callback arms no recovery timer', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    let loop: ReturnType<typeof createLoop>;
+    loop = createLoop({
+      target: el,
+      onTick: vi.fn(),
+      degraded: 'pause',
+      onPhaseChange: (phase, reason) => {
+        if (phase === 'paused' && reason === 'degraded') loop.stop();
+      },
+    });
+    makeSightVisible(el);
+
+    // Three over-budget frames degrade; the callback stops the loop mid-degrade.
+    clock.advance(16);
+    clock.advance(35);
+    clock.advance(35);
+    clock.advance(35);
+    expect(loop.phase).toBe('stopped');
+
+    // No timer may fire after stop and mutate quality back to full.
+    await vi.advanceTimersByTimeAsync(RECOVERY_RETRY_MS);
+    expect(loop.quality).toBe('degraded');
+    expect(loop.phase).toBe('stopped');
     clock.restore();
   });
 
