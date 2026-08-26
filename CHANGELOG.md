@@ -1,5 +1,14 @@
 # phase
 
+## 0.4.1
+
+### Patch Changes
+
+- `createLoop` no longer destroys and rebuilds its internal ticker when FPS throttling changes (e.g. tab blur/refocus). Frame count, elapsed time, and the `frame` object now survive those changes instead of restarting.
+- An FPS cap change while the loop is paused now takes effect on resume.
+- `createLoop` validates `fps` and `degradedFps` at construction; invalid values throw `invalid_fps`.
+- `stop()` on a running loop no longer recreates and leaks its internal ticker during teardown, and an `onPhaseChange` callback that throws on stop can no longer leave the loop half-disposed.
+
 ## 0.4.0
 
 ### Minor Changes

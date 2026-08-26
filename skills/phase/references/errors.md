@@ -65,7 +65,7 @@ Not applicable. Errors are not affected by motion preferences.
 
 ## See also
 
-- [create-loop](./create-loop.md). Throws `server_context`, `no_target`
+- [create-loop](./create-loop.md). Throws `server_context`, `no_target`, `invalid_fps`
 - [create-ticker](./create-ticker.md). Throws `server_context`, `invalid_fps`, `ticker_stopped`
 - [use-tween](./use-tween.md). Throws `invalid_duration`
 - [swap](./swap.md). Throws `missing_context`

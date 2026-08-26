@@ -1,5 +1,9 @@
 import { linkAbortSignal } from '../_internal/abort';
-import { noTargetError, serverContextError } from '../_internal/errors';
+import {
+  invalidFpsError,
+  noTargetError,
+  serverContextError,
+} from '../_internal/errors';
 import { createLifecycle } from '../lifecycle';
 import { createTicker } from '../tick';
 import type { FrameState, Ticker } from '../tick';
@@ -125,6 +129,8 @@ export function createLoop(options: LoopOptions): Loop {
   };
 
   if (!target) noTargetError('createLoop');
+  validateFps(baseFps);
+  validateFps(configuredDegradedFps);
 
   const degradedFps: number | undefined =
     degraded === 'throttle' ? configuredDegradedFps : undefined;
@@ -139,6 +145,11 @@ export function createLoop(options: LoopOptions): Loop {
   let intentStarted = false;
   let overBudgetCount = 0;
   let ticker: Ticker | null = null;
+
+  // Frame-budget threshold for the current effective FPS. Mutable so the
+  // once-created ticker callback always compares frame time against the
+  // current cap.
+  let frameBudget = 1000 / 60;
 
   // Quality signal flags
   let focusDegraded = false;
@@ -163,9 +174,7 @@ export function createLoop(options: LoopOptions): Loop {
     if (!changed) return;
 
     if (degraded === 'throttle') {
-      if (ticker && _phase === 'running') {
-        queueMicrotask(rebuildTicker);
-      }
+      if (_phase !== 'stopped') applyFpsPolicy();
     } else if (degraded === 'pause') {
       reconcile();
     }
@@ -189,7 +198,9 @@ export function createLoop(options: LoopOptions): Loop {
    * are still over budget, the next degrade reschedules this.
    */
   function scheduleBudgetRecovery(): void {
-    if (recoveryTimer !== null) return;
+    // A consumer callback may stop the loop between the degrade and this
+    // call; never arm a timer on a stopped loop.
+    if (_phase === 'stopped' || recoveryTimer !== null) return;
     recoveryTimer = setTimeout(() => {
       recoveryTimer = null;
       overBudgetCount = 0;
@@ -212,35 +223,33 @@ export function createLoop(options: LoopOptions): Loop {
     return Math.min(baseFps, cap);
   }
 
-  function destroyTicker(): void {
-    if (!ticker) return;
-    ticker.stop();
-    ticker = null;
+  /**
+   * Derive effective FPS and its frame budget together, then apply the cap to
+   * the live ticker. The frame count, elapsed time, and frame object are
+   * untouched; only the delivery rate changes.
+   */
+  function applyFpsPolicy(): number | undefined {
+    const targetFps: number | undefined = getEffectiveFps();
+    frameBudget = 1000 / (targetFps ?? 60);
+    ticker?.setFps(targetFps);
+    return targetFps;
   }
 
-  function buildTicker(): void {
-    const targetFps: number | undefined = getEffectiveFps();
-    const budget: number = 1000 / (targetFps ?? 60);
+  // Created once and reused for the loop's lifetime (stable reference).
+  function loopTick(frame: FrameState): void {
+    checkFrameBudget(frame.delta);
+    onTick(frame);
+  }
 
-    destroyTicker();
-
-    ticker = createTicker({
-      fps: targetFps,
-      onTick: (frame) => {
-        checkFrameBudget(frame.delta, budget);
-        onTick(frame);
-      },
-    });
+  /** Lazily create the loop's single ticker. Never replaced before stop(). */
+  function ensureTicker(): void {
+    if (ticker) return;
+    ticker = createTicker({ fps: applyFpsPolicy(), onTick: loopTick });
     ticker.start();
   }
 
-  function rebuildTicker(): void {
-    if (_phase !== 'running' || !ticker) return;
-    buildTicker();
-  }
-
-  function checkFrameBudget(delta: number, budget: number): void {
-    if (delta <= budget * 1.5) {
+  function checkFrameBudget(delta: number): void {
+    if (delta <= frameBudget * 1.5) {
       overBudgetCount = 0;
       return;
     }
@@ -280,7 +289,7 @@ export function createLoop(options: LoopOptions): Loop {
     }
 
     if (!ticker) {
-      buildTicker();
+      ensureTicker();
       setPhase('running', _reason === 'initial' ? 'started' : 'resumed');
     } else if (_phase === 'paused') {
       ticker.resume();
@@ -323,10 +332,17 @@ export function createLoop(options: LoopOptions): Loop {
     if (_phase === 'stopped') return;
     unlinkAbort?.();
     clearBudgetRecovery();
-    destroyTicker();
+    // Enter the terminal phase before teardown: lifecycle.stop() fires
+    // onPhaseChange -> reconcile() synchronously, and reconcile must see
+    // 'stopped' so it cannot resume or recreate the ticker mid-stop. The
+    // consumer is notified last, after teardown has finished, so a throwing
+    // callback cannot leave the loop half-disposed.
+    _phase = 'stopped';
+    _reason = 'disposed';
+    ticker?.stop();
     lifecycle.stop();
     unsubFocus();
-    setPhase('stopped', 'disposed');
+    onPhaseChange?.('stopped', 'disposed');
   }
 
   // Declared before assignment because an already-aborted signal makes
@@ -359,6 +375,13 @@ export function createLoop(options: LoopOptions): Loop {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/** Throws `invalid_fps` for a defined fps that is not a positive finite number. */
+function validateFps(fps: number | undefined): void {
+  if (fps !== undefined && (!Number.isFinite(fps) || fps <= 0)) {
+    invalidFpsError('createLoop', fps);
+  }
+}
 
 function subscribeFocusTracking(onChange: () => void): () => void {
   window.addEventListener('focus', onChange);
