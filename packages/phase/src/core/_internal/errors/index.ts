@@ -3,6 +3,7 @@ export type PhaseErrorCode =
   | 'no_target'
   | 'conflicting_target'
   | 'invalid_duration'
+  | 'invalid_fps'
   | 'ticker_stopped'
   | 'missing_context';
 
@@ -64,6 +65,14 @@ export function invalidDurationError(fn: string, value: number): never {
     code: 'invalid_duration',
     reason: 'Duration must be a finite positive number.',
     fix: 'Pass a positive number (e.g., 300 for 300ms).',
+  });
+}
+
+export function invalidFpsError(fn: string, value: number): never {
+  throw new PhaseError(`${fn}() received an invalid fps: ${value}`, {
+    code: 'invalid_fps',
+    reason: 'fps must be a finite number greater than 0.',
+    fix: 'Pass a positive number (e.g. 30), or undefined to uncap.',
   });
 }
 

@@ -1,5 +1,14 @@
 # phase
 
+## 0.4.0
+
+### Minor Changes
+
+- `Ticker.setFps(fps?)` changes the FPS cap without restarting the ticker: the frame count, elapsed time, and pause accounting all continue. `undefined` removes the cap. A stopped ticker throws `ticker_stopped`.
+- An `fps` that is not a finite number greater than 0 now throws the new `invalid_fps` error, from both `createTicker` and `setFps`. A failed `setFps` keeps the previous cap. `fps: 0` previously meant uncapped; it now throws.
+- FPS caps now hold their target rate. A 60fps cap on a 60Hz display previously delivered ~30fps because rounded browser timestamps kept missing the eligibility window.
+- Raised the `createTicker`, `createLoop`, `useLoop`, and `useCanvas` size budgets to cover the new API and restore the documented headroom.
+
 ## 0.3.3
 
 ### Patch Changes
