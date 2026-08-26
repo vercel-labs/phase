@@ -1,8 +1,8 @@
 import type { ExampleMeta } from '../types.ts';
 
 export default {
-  title: 'Mount and unmount transition',
+  title: 'Animate showing and hiding content',
   description:
-    'Coordinates CSS enter and exit transitions through library-owned data attributes.',
+    'Presence adds data attributes that CSS uses to animate content as it appears and disappears.',
   exports: ['Presence'],
 } satisfies ExampleMeta;

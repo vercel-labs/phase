@@ -1,8 +1,8 @@
 import type { ExampleMeta } from '../types.ts';
 
 export default {
-  title: 'Off-screen render deferral',
+  title: 'Skip off-screen rendering',
   description:
-    'Keeps content in the DOM while the browser skips off-screen rendering work.',
+    'Keeps off-screen content on the page while the browser skips rendering it.',
   exports: ['Defer'],
 } satisfies ExampleMeta;

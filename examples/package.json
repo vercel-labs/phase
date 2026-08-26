@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "manifest": "node scripts/generate-manifest.mjs",
+    "generate-manifest": "node scripts/generate-manifest.mjs",
     "test": "node --test scripts/generate-manifest.spec.mjs",
     "typecheck": "tsc --noEmit"
   },

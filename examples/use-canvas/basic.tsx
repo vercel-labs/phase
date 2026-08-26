@@ -49,9 +49,9 @@ export default function UseCanvasBasic(): JSX.Element {
   return (
     <section className="phx-use-canvas-basic">
       <style>{styles}</style>
-      <strong>DPR-aware canvas</strong>
+      <strong>Canvas that resizes and stays sharp</strong>
       <div>
-        Phase: <output>{phase}</output>
+        Status: <output>{phase}</output>
       </div>
       <div ref={containerRef} className="phx-use-canvas-basic-canvas">
         <canvas ref={canvasRef} aria-label="Animated blue marker" />

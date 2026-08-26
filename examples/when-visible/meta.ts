@@ -1,8 +1,8 @@
 import type { ExampleMeta } from '../types.ts';
 
 export default {
-  title: 'Viewport-gated mount',
+  title: 'Show content as it nears the screen',
   description:
-    'Mounts content near the viewport while reserving its exact final height.',
+    'Shows content as it nears the screen without shifting the page.',
   exports: ['WhenVisible'],
 } satisfies ExampleMeta;

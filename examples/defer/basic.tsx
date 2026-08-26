@@ -37,22 +37,22 @@ export default function DeferBasic(): JSX.Element {
     <>
       <style>{styles}</style>
       <Defer estimatedHeight="360px" className="phx-defer-basic">
-        <strong>Content stays in the DOM</strong>
-        <p>
-          The browser can skip style, layout, and paint while this section is
-          off-screen.
-        </p>
+        <strong>Content stays on the page</strong>
+        <p>The browser skips rendering this section while it is off-screen.</p>
         <div className="phx-defer-basic-grid">
           <article>
-            <h3>Steady scroll range</h3>
+            <h3>Stable scrollbar size</h3>
             <p>
-              A realistic estimate keeps scrollbar proportions steady until
-              first render.
+              An estimated height keeps the scrollbar stable until the browser
+              renders this content.
             </p>
           </article>
           <article>
-            <h3>Real content</h3>
-            <p>Children remain server-rendered and available to crawlers.</p>
+            <h3>Search-friendly content</h3>
+            <p>
+              The server includes this content in the page, so search engines
+              can read it.
+            </p>
           </article>
         </div>
       </Defer>

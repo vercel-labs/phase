@@ -1,8 +1,8 @@
 import type { ExampleMeta } from '../types.ts';
 
 export default {
-  title: 'Responsive canvas loop',
+  title: 'Responsive canvas animation',
   description:
-    'Draws in CSS pixels while useCanvas owns resizing and device-pixel-ratio changes.',
+    "useCanvas resizes the canvas and keeps it sharp when the screen's pixel density changes.",
   exports: ['useCanvas'],
 } satisfies ExampleMeta;

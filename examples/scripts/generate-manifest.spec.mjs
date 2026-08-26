@@ -9,7 +9,7 @@ const scriptPath = fileURLToPath(
   new URL('./generate-manifest.mjs', import.meta.url),
 );
 
-test('generates a sorted lazy-import manifest from example slugs', async () => {
+test('writes manifest entries in alphabetical order and loads each example with import()', async () => {
   const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
 
   await writeExample(root, 'use-loop', 'basic');
@@ -34,7 +34,7 @@ export type ExampleSlug = keyof typeof manifest;
   );
 });
 
-test('rejects an example directory without metadata', async () => {
+test('reports a missing meta.ts file', async () => {
   const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
   const directory = join(root, 'use-loop');
   await mkdir(directory, { recursive: true });
@@ -46,7 +46,7 @@ test('rejects an example directory without metadata', async () => {
   await assert.rejects(runGenerator(root), /use-loop\/meta\.ts is required/);
 });
 
-test('rejects structural convention violations', async (context) => {
+test('reports invalid example files and folders', async (context) => {
   await context.test('non-kebab-case example directory', async () => {
     const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
     await writeExample(root, 'useLoop', 'basic');
@@ -63,11 +63,11 @@ test('rejects structural convention violations', async (context) => {
 
     await assert.rejects(
       runGenerator(root),
-      /variant "use-loop\/BasicExample" must be kebab-case/,
+      /use-loop\/BasicExample\.tsx must use a kebab-case file name/,
     );
   });
 
-  await context.test('metadata without a variant', async () => {
+  await context.test('folder with no .tsx example files', async () => {
     const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
     const directory = join(root, 'use-loop');
     await mkdir(directory, { recursive: true });
@@ -78,11 +78,11 @@ test('rejects structural convention violations', async (context) => {
 
     await assert.rejects(
       runGenerator(root),
-      /use-loop must contain at least one variant/,
+      /use-loop must contain at least one \.tsx example/,
     );
   });
 
-  await context.test('variant without a default export', async () => {
+  await context.test('example file without a default export', async () => {
     const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
     const directory = join(root, 'use-loop');
     await mkdir(directory, { recursive: true });
@@ -101,40 +101,49 @@ test('rejects structural convention violations', async (context) => {
     );
   });
 
-  await context.test('variant without a client directive', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
-    const directory = join(root, 'use-loop');
-    await mkdir(directory, { recursive: true });
-    await writeFile(
-      join(directory, 'meta.ts'),
-      `export default { title: 'use-loop', description: 'Example', exports: ['useLoop'] };\n`,
-    );
-    await writeFile(
-      join(directory, 'basic.tsx'),
-      `export default function Example() { return null; }\n`,
-    );
+  await context.test(
+    "example file without 'use client' at the start",
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
+      const directory = join(root, 'use-loop');
+      await mkdir(directory, { recursive: true });
+      await writeFile(
+        join(directory, 'meta.ts'),
+        `export default { title: 'use-loop', description: 'Example', exports: ['useLoop'] };\n`,
+      );
+      await writeFile(
+        join(directory, 'basic.tsx'),
+        `export default function Example() { return null; }\n`,
+      );
 
-    await assert.rejects(
-      runGenerator(root),
-      /use-loop\/basic\.tsx must start with 'use client'/,
-    );
-  });
+      await assert.rejects(
+        runGenerator(root),
+        /use-loop\/basic\.tsx must start with 'use client'/,
+      );
+    },
+  );
 
-  await context.test('invalid metadata', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
-    const directory = join(root, 'use-loop');
-    await mkdir(directory, { recursive: true });
-    await writeFile(
-      join(directory, 'meta.ts'),
-      `export default { title: '', description: 'Example', exports: [] };\n`,
-    );
-    await writeFile(
-      join(directory, 'basic.tsx'),
-      `'use client';\nexport default function Example() { return null; }\n`,
-    );
+  await context.test(
+    'meta.ts with an empty title and exports list',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
+      const directory = join(root, 'use-loop');
+      await mkdir(directory, { recursive: true });
+      await writeFile(
+        join(directory, 'meta.ts'),
+        `export default { title: '', description: 'Example', exports: [] };\n`,
+      );
+      await writeFile(
+        join(directory, 'basic.tsx'),
+        `'use client';\nexport default function Example() { return null; }\n`,
+      );
 
-    await assert.rejects(runGenerator(root), /use-loop\/meta\.ts is invalid/);
-  });
+      await assert.rejects(
+        runGenerator(root),
+        /use-loop\/meta\.ts must include a title, a description, and at least one export/,
+      );
+    },
+  );
 });
 
 async function writeExample(root, exportName, variant) {

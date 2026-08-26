@@ -35,7 +35,7 @@ export default function CreateLoopBasic(): JSX.Element {
 
     let value = 50;
     let direction = 0.04;
-    // phase-scan-ignore core-primitive-in-component -- This variant intentionally demonstrates createLoop teardown in React.
+    // phase-scan-ignore core-primitive-in-component -- This example uses createLoop in React and stops it when the component unmounts.
     const loop = createLoop({
       target,
       onTick(frame) {
@@ -60,9 +60,9 @@ export default function CreateLoopBasic(): JSX.Element {
   return (
     <section className="phx-create-loop-basic">
       <style>{styles}</style>
-      <strong>Core loop in a React lifecycle</strong>
+      <strong>createLoop in React</strong>
       <div>
-        Phase: <output ref={phaseRef}>idle</output>
+        Status: <output ref={phaseRef}>idle</output>
       </div>
       <progress ref={targetRef} max={100} aria-label="Animated progress" />
     </section>

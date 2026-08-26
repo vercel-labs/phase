@@ -1,32 +1,32 @@
-# Example conventions
+# Example rules
 
-`@usephase/examples` is the canonical renderable examples corpus for documentation, browser tests, generated snippets, and agent evaluations. The corpus shares examples across those adapters, but assertions stay in the adapters.
+`@usephase/examples` is the main set of React examples used in documentation, browser tests, generated snippets, and tests of agent behavior. Each tool uses the same examples but keeps its own checks.
 
-The repository vocabulary for an example, variant, example slug, manifest, example meta, and structural determinism lives in [`CONTEXT.md`](../CONTEXT.md#examples-corpus).
+[`CONTEXT.md`](../CONTEXT.md#examples) defines example, variant, example slug, manifest, example metadata, and predictable output.
 
-## File contract
+## File rules
 
 - Give each phase export its own kebab-case directory: `examples/<export-kebab>/`.
 - Give each variant a kebab-case TSX file. Its example slug is `<export-kebab>/<variant>`, such as `use-loop/basic`.
-- Every variant starts with `'use client'` and default-exports one React component.
-- Every component is self-contained, requires zero props, and is structurally deterministic.
-- Every directory has a `meta.ts` that default-exports an object satisfying `ExampleMeta`. Metadata names the title, description, and phase exports demonstrated. Variant names come from the files and generated manifest, not duplicated metadata.
-- Run `pnpm --filter @usephase/examples manifest` after adding, renaming, or removing a variant. The generator checks this structure and writes `manifest.ts` in example-slug order.
+- Every variant starts with `'use client'` and exports one React component as its default.
+- Every component includes everything it needs, takes no props, and follows the predictable output rules.
+- Every directory has a `meta.ts` file that exports one `ExampleMeta` object by default. It lists the title, description, and phase exports shown. Variant names come from filenames and the generated manifest, so do not repeat them in metadata.
+- Run `pnpm --filter @usephase/examples generate-manifest` after adding, renaming, or removing a variant. The command checks these rules and writes `manifest.ts` in example-slug order.
 
-## Rendering contract
+## Rendering rules
 
-- An example must render correctly inside an arbitrary MDX page and a bare harness page. Do not rely on a surrounding theme, layout, global stylesheet, or CSS build step.
-- Use inline styles or a scoped `<style>` element. Attribute-driven transitions use a deterministic, corpus-unique class such as `.phx-presence-basic`.
-- Do not use `Math.random()`, `Date.now()`, locale-dependent output, or timezone-dependent output. Frame elapsed time may change continuous animated values, but it must not change the DOM structure, attributes, class names, or text unpredictably.
-- Interactive examples expose visible, human-readable buttons. Do not add hidden controls, debug counters, `data-testid` attributes, or other test residue.
-- Library-owned `data-phase` and `data-enter` attributes are the contract surface for adapters. Examples do not add assertions.
-- Core primitive variants remain React components. Create the primitive in an effect and stop it in cleanup so every adapter mounts examples through the same interface.
+- An example must work in any MDX page and on a plain browser test page. It must not depend on a surrounding theme, layout, global stylesheet, or CSS build step.
+- Use inline styles or a scoped `<style>` element. For transitions controlled by attributes, use a stable class name that is unique within the examples package, such as `.phx-presence-basic`.
+- Do not use `Math.random()`, `Date.now()`, or text that changes with the user's locale or time zone. Numbers may change as an animation runs, but the rendered HTML, attributes, class names, and text must otherwise stay predictable.
+- Interactive examples must use visible buttons with clear labels. Do not add hidden controls, debug counters, `data-testid` attributes, or other code used only by tests.
+- Tools may inspect the `data-phase` and `data-enter` attributes added by the library. Examples must not contain test assertions.
+- Examples for core primitives must still export React components. Create the primitive in a React effect and stop it during cleanup so every tool renders examples in the same way.
 
-## Phase invariants
+## Phase rules
 
 - Keep frame callbacks allocation-free. Do not create objects, arrays, strings, or closures inside `onTick` or `draw`.
-- Never call React state setters from `onTick` or `draw`. Reactive phase readouts are allowed because phase changes are infrequent and occur outside the frame callback.
-- Never read synchronous layout in a frame callback. Use the dimensions phase provides.
+- Never call React state setters from `onTick` or `draw`. You may use React state to display status changes because those changes are infrequent and happen outside frame callbacks.
+- Never read element size or position in a frame callback because that can force the browser to recalculate layout. Use the dimensions provided by phase.
 - Keep reduced-motion behavior at the library default unless the example specifically demonstrates an override.
-- A `WhenVisible` fallback reserves the exact final in-flow height. A page or harness that needs to demonstrate scrolling supplies the surrounding spacer; the example remains the canonical consumer pattern.
-- A `Defer` example uses a realistic `estimatedHeight` and avoids decoration that paint containment would clip.
+- A `WhenVisible` fallback must reserve the exact height of the final content in normal page layout. If a page needs extra space to demonstrate scrolling, the page supplies that space instead of the example.
+- A `Defer` example uses an `estimatedHeight` close to its actual height and avoids decoration that extends outside the element and would be cut off.

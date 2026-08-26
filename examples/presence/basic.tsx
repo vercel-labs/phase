@@ -58,7 +58,8 @@ export default function PresenceBasic(): JSX.Element {
         exitDuration={250}
         className="phx-presence-basic-card"
       >
-        Presence keeps this mounted until its exit transition finishes.
+        Presence keeps this message on the page until its exit animation
+        finishes.
       </Presence>
     </section>
   );

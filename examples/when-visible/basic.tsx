@@ -43,7 +43,7 @@ const styles = `
 
 const fallback = (
   <div className="phx-when-visible-basic-fallback">
-    Content mounts near the viewport.
+    Content appears as you scroll closer.
   </div>
 );
 
@@ -57,7 +57,7 @@ export default function WhenVisibleBasic(): JSX.Element {
         className="phx-when-visible-basic"
       >
         <div className="phx-when-visible-basic-content">
-          <strong>Mounted without changing the reserved height.</strong>
+          <strong>The content appears without moving the page.</strong>
         </div>
       </WhenVisible>
     </>

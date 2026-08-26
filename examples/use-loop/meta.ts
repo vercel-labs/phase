@@ -1,8 +1,8 @@
 import type { ExampleMeta } from '../types.ts';
 
 export default {
-  title: 'DOM animation loop',
+  title: 'Animate a progress bar',
   description:
-    'Updates native progress without React renders and reports lifecycle phase changes.',
+    "Updates the progress bar without re-rendering the React component and reports when the loop's status changes.",
   exports: ['useLoop'],
 } satisfies ExampleMeta;

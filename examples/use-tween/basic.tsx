@@ -48,9 +48,12 @@ export default function UseTweenBasic(): JSX.Element {
     <section className="phx-use-tween-basic">
       <style>{styles}</style>
       <button type="button" onClick={() => setExpanded((current) => !current)}>
-        {expanded ? 'Contract progress' : 'Expand progress'}
+        {expanded ? 'Shrink bar' : 'Grow bar'}
       </button>
-      <div className="phx-use-tween-basic-track" aria-label="Tween progress">
+      <div
+        className="phx-use-tween-basic-track"
+        aria-label="Animated progress bar"
+      >
         <div
           className="phx-use-tween-basic-value"
           style={{ transform: `scaleX(${progress / 100})` }}

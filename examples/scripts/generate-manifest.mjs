@@ -36,14 +36,16 @@ async function discoverExamples(entry) {
     throw new Error(`${entry.name}/meta.ts is required`);
   }
   if (variants.length === 0) {
-    throw new Error(`${entry.name} must contain at least one variant`);
+    throw new Error(`${entry.name} must contain at least one .tsx example`);
   }
 
   const metaModule = await import(
     pathToFileURL(join(directory, 'meta.ts')).href
   );
   if (!isValidMeta(metaModule.default)) {
-    throw new Error(`${entry.name}/meta.ts is invalid`);
+    throw new Error(
+      `${entry.name}/meta.ts must include a title, a description, and at least one export`,
+    );
   }
 
   return Promise.all(
@@ -51,7 +53,7 @@ async function discoverExamples(entry) {
       const variant = file.name.slice(0, -4);
       if (!kebabCase.test(variant)) {
         throw new Error(
-          `variant "${entry.name}/${variant}" must be kebab-case`,
+          `${entry.name}/${file.name} must use a kebab-case file name`,
         );
       }
       const source = await readFile(join(directory, file.name), 'utf8');

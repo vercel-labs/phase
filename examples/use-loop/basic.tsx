@@ -48,9 +48,9 @@ export default function UseLoopBasic(): JSX.Element {
   return (
     <section className="phx-use-loop-basic">
       <style>{styles}</style>
-      <strong>Visibility-aware DOM loop</strong>
+      <strong>Animation that pauses off-screen</strong>
       <div>
-        Phase: <output>{phase}</output>
+        Status: <output>{phase}</output>
       </div>
       <progress ref={ref} max={100} aria-label="Animated progress" />
     </section>

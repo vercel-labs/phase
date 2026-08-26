@@ -25,6 +25,6 @@ pre-commit:
     skill-sync:
       glob: '{skills/phase/**/*,packages/skill/**/*}'
       run: pnpm skill:package && git add skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip
-    examples-sync:
+    generate-examples-manifest:
       glob: 'examples/**/*'
-      run: pnpm --filter @usephase/examples manifest && git add examples/manifest.ts
+      run: pnpm --filter @usephase/examples generate-manifest && git add examples/manifest.ts
