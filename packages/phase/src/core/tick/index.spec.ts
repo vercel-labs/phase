@@ -1,3 +1,5 @@
+import type { TickerOptions } from '.';
+
 beforeEach(() => {
   vi.useFakeTimers();
 });
@@ -35,6 +37,23 @@ function createRafDriver(firstId = 1, idStep = 1) {
   }
 
   return { request, cancel, frame, pending };
+}
+
+async function startDuplicateModuleTickers(
+  firstOnTick: TickerOptions['onTick'],
+  secondOnTick: TickerOptions['onTick'],
+) {
+  const raf = createRafDriver();
+  vi.stubGlobal('requestAnimationFrame', raf.request);
+  vi.stubGlobal('cancelAnimationFrame', raf.cancel);
+  const firstModule = await getModule();
+  vi.resetModules();
+  const secondModule = await getModule();
+  const first = firstModule.createTicker({ onTick: firstOnTick });
+  const second = secondModule.createTicker({ onTick: secondOnTick });
+  first.start();
+  second.start();
+  return { raf, first, second };
 }
 
 // ---------------------------------------------------------------------------
@@ -723,6 +742,51 @@ describe('setFps', () => {
 // ---------------------------------------------------------------------------
 
 describe('shared clock', () => {
+  it('shares one browser frame across duplicate module instances', async () => {
+    const firstTick = vi.fn();
+    const secondTick = vi.fn();
+    const { raf, first, second } = await startDuplicateModuleTickers(
+      (frame) => firstTick(frame.time),
+      (frame) => secondTick(frame.time),
+    );
+
+    try {
+      expect(raf.pending.size).toBe(1);
+      raf.frame(123.456);
+      expect(firstTick).toHaveBeenCalledWith(123.456);
+      expect(secondTick).toHaveBeenCalledWith(123.456);
+      expect(raf.pending.size).toBe(1);
+    } finally {
+      first.stop();
+      second.stop();
+    }
+  });
+
+  it.each(['first', 'second'] as const)(
+    'cancels the duplicate-copy clock when the %s ticker is the final subscriber',
+    async (finalCopy) => {
+      const { raf, first, second } = await startDuplicateModuleTickers(
+        vi.fn(),
+        vi.fn(),
+      );
+      const penultimate = finalCopy === 'first' ? second : first;
+      const final = finalCopy === 'first' ? first : second;
+
+      try {
+        penultimate.stop();
+        expect(raf.pending.size).toBe(1);
+        expect(raf.cancel).not.toHaveBeenCalled();
+
+        final.stop();
+        expect(raf.cancel).toHaveBeenCalledTimes(1);
+        expect(raf.pending.size).toBe(0);
+      } finally {
+        first.stop();
+        second.stop();
+      }
+    },
+  );
+
   it('two tickers see the same timestamp', async () => {
     const { createTicker } = await getModule();
     let time1 = 0;
