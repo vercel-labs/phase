@@ -1,0 +1,51 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "globalDependencies": ["tsconfig.base.json"],
+  "remoteCache": {
+    "enabled": false
+  },
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck", "//#typecheck:root"]
+    },
+    "test": {
+      "dependsOn": ["^test", "//#test:root"]
+    },
+    "size": {},
+    "skill:check": {
+      "dependsOn": ["//#skill:check:root"]
+    },
+    "skill:build": {
+      "dependsOn": ["//#skill:build:root"],
+      "cache": false
+    },
+    "skill:package": {
+      "dependsOn": ["skill:build", "//#skill:package:root"],
+      "cache": false
+    },
+    "goldens": {
+      "dependsOn": ["//#goldens:root"],
+      "cache": false
+    },
+    "validate": {
+      "dependsOn": ["build", "typecheck", "test", "size", "skill:package"]
+    },
+    "//#typecheck:root": {},
+    "//#test:root": {},
+    "//#skill:check:root": {},
+    "//#skill:build:root": {
+      "cache": false
+    },
+    "//#skill:package:root": {
+      "dependsOn": ["//#skill:build:root"],
+      "cache": false
+    },
+    "//#goldens:root": {
+      "cache": false
+    }
+  }
+}
