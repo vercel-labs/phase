@@ -70,9 +70,9 @@ const DEFAULT_FIRST_DELTA_MS = 16.67;
 // Shared frame-locked clock
 //
 // All ticker instances subscribe to a single rAF loop so they read the same
-// timestamp each frame. This prevents visual desync between multiple loops
-// on the same page. The clock starts when the first subscriber joins and
-// stops when the last one leaves.
+// timestamp each frame. Separately bundled copies in the same JavaScript
+// global share this clock. It starts when the first subscriber joins and stops
+// when the last one leaves.
 // ---------------------------------------------------------------------------
 
 interface SharedSubscription {
