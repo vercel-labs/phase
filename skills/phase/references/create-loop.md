@@ -65,6 +65,7 @@ const loop = createLoop(options: LoopOptions): Loop;
   ```
 - Call `stop()` when the animation is permanently done (e.g. component unmounts, page navigates away).
 - Read `phase` and `phaseReason` to debug unexpected pauses.
+- Trust the timeline across quality changes: degrading and recovering FPS (e.g. blur/refocus) never resets `frame.frame`, `frame.elapsed`, or `FrameState` identity.
 - Use `degraded: 'pause'` for heavy canvas/WebGL that can't gracefully degrade.
 
 ## Don't
@@ -74,6 +75,7 @@ const loop = createLoop(options: LoopOptions): Loop;
 - **Never store a reference to `frame`.** It's the same object every tick, mutated in place. Read values immediately.
 - **Don't call `start()` after `stop()`.** `stop()` is terminal. Create a new loop instance.
 - **Don't use `createLoop` without an element.** Throws `PhaseError` with code `no_target`.
+- **Don't pass a non-positive or non-finite `fps` or `degradedFps`.** Throws `PhaseError` with code `invalid_fps` at construction.
 
 ## Reduced motion
 
