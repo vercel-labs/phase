@@ -44,9 +44,10 @@ Every module must satisfy these contracts.
 ### Lifecycle
 
 - Strong pause cancels scheduling entirely with `cancelAnimationFrame()`.
-- All tickers use the same browser rAF timestamp.
-- `frame.elapsed` is the exact running sum of delivered `frame.delta` values, so strong pauses freeze the timeline and resume from the same position.
-- Bound `frame.delta` to 40ms when uncapped or the active FPS interval plus 40ms when capped. First and resumed frames use 16.67ms uncapped or the active FPS interval.
+- All tickers use the same browser `requestAnimationFrame` timestamp.
+- Keep elapsed time in a private running total and publish it through the reused `FrameState` object. Callback changes to that object must not alter later frames.
+- After a delayed callback, limit `frame.delta` to 40ms without an FPS limit or one configured interval plus 40ms with a limit.
+- The first callback after `start()` or `resume()` uses 16.67ms without a limit or one configured interval with a limit.
 
 ### Browser APIs
 

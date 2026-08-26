@@ -131,7 +131,7 @@ return (
 - **No flash on first entry.** Elements start at `scaleX(0)` in CSS, matching the animation's start state, so there's no visible snap when the loop fires its first tick.
 - **`frame.elapsed` freezes during pause.** Scroll away, come back — the sequence picks up exactly where it stopped. No restart on re-entry.
 - **`fps: 2` (or `fps: 1`) keeps CPU near zero.** Step transitions happen on second or half-second boundaries. You don't need 60fps to check which step you're in.
-- **Stalls do not skip the whole sequence.** At `fps: 2`, one delivered frame advances by at most 540ms. Repeated jank can delay a step instead of teleporting across several steps.
+- **A delayed callback cannot skip the whole sequence.** At `fps: 2`, one callback advances the sequence by at most 540ms rather than by the full delay.
 - **Zero re-renders.** `onTick` writes to the DOM directly via refs. React never reconciles.
 - **Visibility-aware by default.** The loop pauses off-screen and under reduced motion. No manual `IntersectionObserver` needed.
 

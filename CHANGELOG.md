@@ -4,8 +4,8 @@
 
 ### Minor Changes
 
-- `frame.elapsed` is now the running sum of delivered `frame.delta` values, keeping elapsed- and delta-driven consumers synchronized through stalls.
-- `frame.delta` now uses an FPS-aware stall bound and the active FPS interval on first and resumed frames, so low-FPS tickers report their delivered cadence instead of 40ms.
+- `frame.elapsed` now advances by exactly the `frame.delta` delivered to each callback, including after delayed frames.
+- A delayed callback now advances `frame.delta` by at most 40ms without an FPS limit, or one configured FPS interval plus 40ms with a limit. The first callback after `start()` or `resume()` uses 16.67ms without a limit, or one configured interval with a limit.
 
 ## 0.4.2
 

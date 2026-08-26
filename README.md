@@ -123,7 +123,7 @@ One string replaces `if (running && visible && !paused && !prefersReducedMotion 
 
 Each of those signals is also a CPU and battery decision. Animating while off-screen, ignoring reduced motion, or running after unmount is what burns cycles and causes jank. `phase` composes them once, correctly, instead of leaving each call site to get the conjunction right.
 
-Safe behavior is automatic. Visibility awareness, reduced motion, observer cleanup, and FPS-aware stall smoothing are defaults, not opt-ins. Bypassing reduced motion requires an explicit `reducedMotion: 'ignore'` in the diff.
+Safe behavior is automatic. Visibility awareness, reduced motion, observer cleanup, and limits on animation-time jumps after delayed frames are defaults, not opt-ins. Bypassing reduced motion requires an explicit `reducedMotion: 'ignore'` in the diff.
 
 ## Scope
 
@@ -179,10 +179,10 @@ import { createLoop } from 'phase';
 const loop = createLoop({
   target: el,
   onTick: (frame) => {
-    // frame.time    — browser rAF timestamp
-    // frame.delta   — ms since last delivered frame, with stall smoothing
-    // frame.elapsed — running sum of delivered deltas
-    // frame.frame   — frame count
+    // frame.time    — browser requestAnimationFrame timestamp
+    // frame.delta   — milliseconds to advance this frame
+    // frame.elapsed — sum of all delivered deltas
+    // frame.frame   — delivered frame count
   },
 });
 
@@ -251,7 +251,7 @@ createLoop({
 
 ### createTicker
 
-The low-level rAF clock underneath `createLoop`. Use it when you need a frame loop without visibility management (background processing, audio sync, non-visual timing).
+The low-level `requestAnimationFrame` clock underneath `createLoop`. Use it when you need a frame loop without visibility management (background processing, audio sync, non-visual timing).
 
 ```ts
 import { createTicker } from 'phase';
@@ -267,7 +267,9 @@ ticker.start();
 
 All tickers share a single `requestAnimationFrame` loop. Every subscriber receives the same browser-supplied timestamp each frame, so independent animations stay in visual sync.
 
-`frame.elapsed` is the running sum of delivered `frame.delta` values. An uncapped stall can advance the timeline by at most 40ms; a capped stall can advance it by at most one FPS interval plus 40ms. `frame.time` remains the raw browser timestamp for synchronization with non-phase rAF code.
+`frame.delta` is how many milliseconds an animation should advance on each callback. After a delayed callback, it is at most 40ms without an FPS limit, or one configured FPS interval plus 40ms with a limit. `frame.elapsed` increases by exactly the same `delta`.
+
+The first callback after `start()` or `resume()` uses 16.67ms without an FPS limit, or one configured interval with a limit. `frame.time` always reports the browser's unmodified `requestAnimationFrame` timestamp so non-phase animation code can use the same source time.
 
 #### Ticker phases
 
@@ -323,7 +325,7 @@ lifecycle.resume();
 lifecycle.stop();
 ```
 
-`createLoop` is built on `createLifecycle` (it adds a ticker and quality signals on top). Loop-level optimizations (shared clock, zero-allocation `FrameState`, FPS-aware stall smoothing, FPS cap, strong pause) only apply when `phase` drives the loop. Lifecycle-level optimizations (pooled observers, composed document-visibility + bfcache + viewport, reduced motion) carry over to consumer-owned loops.
+`createLoop` adds timing and quality controls to `createLifecycle`. Frame scheduling, `FrameState` reuse, FPS limits, and bounded time advances apply only when phase runs the loop. Observer pooling, visibility handling, and reduced-motion handling also apply to consumer-owned loops.
 
 #### Lifecycle phases
 
@@ -1202,11 +1204,9 @@ The rAF loop never triggers a React re-render. All per-frame state lives in refs
 
 All tickers share one `requestAnimationFrame` loop and receive the same browser-supplied timestamp each frame, keeping multiple animations on the same page in visual sync.
 
-### Coherent frame timeline
+### Frame timing
 
-`frame.elapsed` is the exact running sum of delivered `frame.delta` values. Strong pauses freeze both; first and resumed frames advance by 16.67ms when uncapped or by one active FPS interval when capped.
-
-Visible stalls are smoothed so animations never teleport: an uncapped frame advances by at most 40ms, while a capped frame advances by at most one FPS interval plus 40ms. Repeated jank can make the animation run briefly slower than wall clock. `frame.time` stays the raw browser timestamp.
+See [`createTicker`](#createticker) for how `delta`, `elapsed`, and `time` behave after delayed frames and pauses.
 
 ## Errors
 
@@ -1240,10 +1240,10 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |           1.09 kB |
+| `createTicker`            |            1.1 kB |
 | `createSight`             |           1.05 kB |
 | `createLifecycle`         |           1.55 kB |
-| `createLoop`              |           2.97 kB |
+| `createLoop`              |           2.96 kB |
 | `createScrollProgress`    |             895 B |
 | `createRenderState`       |             490 B |
 | `createDevicePixelRatio`  |             544 B |
@@ -1257,10 +1257,10 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           3.27 kB |
+| `useLoop`                 |           3.28 kB |
 | `useLifecycle`            |           1.83 kB |
 | `useSight`                |           1.36 kB |
-| `useCanvas`               |           3.83 kB |
+| `useCanvas`               |           3.84 kB |
 | `useMutation`             |           1.38 kB |
 | `usePointer`              |           1.51 kB |
 | `useScroll`               |           1.97 kB |

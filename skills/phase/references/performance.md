@@ -186,11 +186,11 @@ requestAnimationFrame(function loop2() {
 
 **Do:** Use multiple `createTicker` / `useLoop` instances — they automatically share the clock.
 
-### Coherent frame timeline
+### Frame time after delays
 
-`frame.elapsed` is the exact running sum of delivered `frame.delta` values. An uncapped frame advances by at most 40ms; a capped frame advances by at most one active FPS interval plus 40ms. The first delivered frame, including the first after resume, uses 16.67ms when uncapped or one active FPS interval when capped.
+`frame.elapsed` increases by exactly the `frame.delta` delivered to each callback. After a delayed callback, `delta` is at most 40ms without an FPS limit, or one configured interval plus 40ms with a limit. The first callback after `start()` or `resume()` uses 16.67ms without a limit, or one configured interval with a limit.
 
-This smoothing means a visible stall or repeated jank can make an animation run briefly slower than wall clock instead of teleporting. Strong pauses freeze the timeline. `frame.time` remains the raw browser rAF timestamp for synchronization with non-phase frame code.
+Repeated delays can make an animation advance more slowly than real time instead of jumping by the full delay. Pausing stops elapsed time from advancing. `frame.time` remains the browser's unmodified `requestAnimationFrame` timestamp so non-phase code can use the same source time.
 
 **Don't:**
 
@@ -198,11 +198,11 @@ This smoothing means a visible stall or repeated jank can make an animation run 
 onTick: (frame) => {
   // Using raw time difference instead of frame.delta
   const dt = performance.now() - lastTime; // can be 10000ms after tab switch
-  position += velocity * dt; // TELEPORT
+  position += velocity * dt; // large jump
 };
 ```
 
-**Do:** Use `frame.delta` and `frame.elapsed` for animation progress. Both account for strong pauses and stall smoothing, and they always describe the same timeline.
+**Do:** Use `frame.delta` and `frame.elapsed` for animation progress. Elapsed time advances by the delivered delta and does not advance while paused.
 
 ### Observer pooling
 

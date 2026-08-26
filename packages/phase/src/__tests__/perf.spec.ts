@@ -83,7 +83,11 @@ describe('frame-budget', () => {
     });
     ticker.start();
 
-    const driveFrame = (): void => rafCallback?.(0);
+    let timestamp = 0;
+    const driveFrame = (): void => {
+      timestamp += 1000 / 60;
+      rafCallback?.(timestamp);
+    };
 
     // Warm up the JIT on the real dispatch path.
     for (let i = 0; i < 1000; i++) driveFrame();
