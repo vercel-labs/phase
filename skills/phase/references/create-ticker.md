@@ -12,11 +12,11 @@ const ticker = createTicker(options: TickerOptions): Ticker;
 
 ### Options
 
-| Option   | Type                          | Default      | Description                                                     |
-| -------- | ----------------------------- | ------------ | --------------------------------------------------------------- |
-| `fps`    | `number`                      | — (uncapped) | Cap frame rate. Must be finite and > 0, or throws `invalid_fps` |
-| `onTick` | `(frame: FrameState) => void` | required     | Called every frame                                              |
-| `signal` | `AbortSignal`                 | —            | Stops the ticker when the signal is aborted                     |
+| Option   | Type                          | Default      | Description                                 |
+| -------- | ----------------------------- | ------------ | ------------------------------------------- |
+| `fps`    | `number`                      | — (uncapped) | Cap frame rate (finite, > 0)                |
+| `onTick` | `(frame: FrameState) => void` | required     | Called every frame                          |
+| `signal` | `AbortSignal`                 | —            | Stops the ticker when the signal is aborted |
 
 ### Return (Ticker)
 
@@ -32,10 +32,10 @@ const ticker = createTicker(options: TickerOptions): Ticker;
 
 ### FPS cap semantics
 
-- A defined `fps` (constructor or `setFps`) must be finite and > 0. Invalid values (`0`, negatives, `NaN`, `±Infinity`) throw `PhaseError` code `invalid_fps`. An invalid `setFps` leaves the previous cap unchanged.
-- `setFps` works while idle, running, or paused. On a stopped ticker it throws `ticker_stopped` (that error takes precedence over fps validation).
-- `setFps` never resets the timeline: `FrameState` identity, frame count, `elapsed`, start time, and pause accounting all continue. The new cap takes effect on the next eligible source frame, never as an uncapped transition frame.
-- Capped delivery paces on a deadline grid: late rAF frames retain the residual, so an integer-quantized 60 Hz timestamp stream under a 60 fps cap delivers ~60 fps, not ~30. A cap at or above the display refresh rate delivers every source frame.
+- `fps` must be a finite number greater than 0, both at construction and in `setFps`. Anything else throws `invalid_fps`; a failed `setFps` keeps the previous cap.
+- `setFps` works while idle, running, or paused, and never restarts the timeline: `FrameState` identity, frame count, `elapsed`, and pause accounting all continue. On a stopped ticker it throws `ticker_stopped`, even when the fps is also invalid.
+- A new cap applies from the next frame, and never sooner than the new interval allows.
+- The cap holds its target rate on real browser timestamps: a 60fps cap on a 60Hz display delivers ~60fps even though timestamps are rounded. A cap at or above the display rate delivers every frame; delivery never exceeds the display rate.
 
 ### FrameState
 
@@ -62,7 +62,7 @@ const ticker = createTicker(options: TickerOptions): Ticker;
 
 ## Do
 
-- Use `setFps()` to change the FPS cap on a live ticker. It keeps the timeline (frame count, elapsed, `FrameState` identity) instead of destroying and rebuilding.
+- Use `setFps()` to change the FPS cap on a live ticker instead of destroying and rebuilding it.
 - Use `pause()` / `resume()` for intentional suspension (e.g. user pauses a game).
 - Rely on the shared clock: all tickers receive the same browser rAF timestamp, so multiple animations stay in sync.
 - Trust delta clamping: after a long pause, `frame.delta` is clamped to 40ms. No teleporting.

@@ -46,10 +46,10 @@ export interface Ticker {
   pause(): void;
   resume(): void;
   /**
-   * Change the FPS cap without resetting the timeline. `undefined` uncaps,
-   * matching `TickerOptions.fps`. The new cap takes effect on the next
-   * eligible source frame. Throws on a stopped ticker or an invalid fps,
-   * leaving the previous cap unchanged.
+   * Change the FPS cap. `undefined` removes it. The running timeline is
+   * untouched: frame count, elapsed, and pause accounting all continue.
+   * Throws on a stopped ticker or an fps that is not a finite number
+   * greater than 0, leaving the previous cap in place.
    */
   setFps(fps?: number): void;
   readonly phase: TickerPhase;
@@ -135,6 +135,24 @@ function resolveMinFrameTime(fn: string, fps: number | undefined): number {
   return 1000 / fps;
 }
 
+/**
+ * Advance a capped delivery deadline by one interval. Deadlines move in whole
+ * intervals from a fixed anchor, so a slightly-late browser frame never pushes
+ * later deadlines back (that drift is how a 60fps cap decays to ~30fps).
+ */
+function advanceDeadline(
+  deadline: number,
+  now: number,
+  interval: number,
+): number {
+  const next: number = deadline + interval;
+  const behind: number = now - next;
+  if (behind < interval) return next;
+  // A stall left whole intervals unfilled. Skip them, so delivery resumes at
+  // the cap's pace instead of bursting to catch up.
+  return next + Math.floor(behind / interval) * interval;
+}
+
 // ---------------------------------------------------------------------------
 // createTicker
 // ---------------------------------------------------------------------------
@@ -162,9 +180,8 @@ export function createTicker(options: TickerOptions): Ticker {
   let totalPausedTime = 0;
   let startTime = 0;
 
-  // Deadline for the next capped delivery. Advanced on the cap's grid (never
-  // re-anchored at delivery time) so late source frames retain the residual
-  // instead of drifting the effective rate downward. 0 while uncapped.
+  // When the next capped delivery becomes eligible (see advanceDeadline).
+  // 0 while uncapped.
   let nextDueTime = 0;
 
   // Pre-allocated, mutated in place each frame — zero allocations per tick.
@@ -181,18 +198,9 @@ export function createTicker(options: TickerOptions): Ticker {
     lastTickTime = now;
 
     if (minFrameTime > 0) {
-      if (isFirstDelivery) {
-        // Anchor the cadence grid at the first delivery after (re)start.
-        nextDueTime = now + minFrameTime;
-      } else {
-        nextDueTime += minFrameTime;
-        const behind: number = now - nextDueTime;
-        if (behind >= minFrameTime) {
-          // A stall left whole slots unfilled. Forfeit them (no catch-up
-          // burst) while keeping the grid phase.
-          nextDueTime += Math.floor(behind / minFrameTime) * minFrameTime;
-        }
-      }
+      nextDueTime = isFirstDelivery
+        ? now + minFrameTime // the first delivery after (re)start anchors the deadlines
+        : advanceDeadline(nextDueTime, now, minFrameTime);
     }
 
     frame.time = now;
@@ -253,9 +261,8 @@ export function createTicker(options: TickerOptions): Ticker {
   function setFps(fps?: number): void {
     if (_phase === 'stopped') tickerStoppedError();
     minFrameTime = resolveMinFrameTime('setFps', fps);
-    // Re-derive the deadline from the last delivery so the new cap takes
-    // effect on the next eligible source frame without an uncapped
-    // transition frame. Timeline and last-delivery history are untouched.
+    // Base the next deadline on the last delivery: the new cap applies from
+    // the next frame, and never sooner than the new interval allows.
     nextDueTime = lastTickTime === 0 ? 0 : lastTickTime + minFrameTime;
   }
 
