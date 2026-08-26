@@ -1,5 +1,12 @@
 # phase
 
+## 0.4.2
+
+### Patch Changes
+
+- `createTicker` now shares one frame clock across duplicate phase copies in the same JavaScript global that use the same clock protocol.
+- Raised the `createTicker`, `createLoop`, `useLoop`, and `useCanvas` size budgets to cover the shared registry and restore headroom.
+
 ## 0.4.1
 
 ### Patch Changes

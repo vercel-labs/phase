@@ -70,9 +70,9 @@ const DEFAULT_FIRST_DELTA_MS = 16.67;
 // Shared frame-locked clock
 //
 // All ticker instances subscribe to a single rAF loop so they read the same
-// timestamp each frame. This prevents visual desync between multiple loops
-// on the same page. The clock starts when the first subscriber joins and
-// stops when the last one leaves.
+// timestamp each frame. Separately bundled copies in the same JavaScript
+// global share this clock. It starts when the first subscriber joins and stops
+// when the last one leaves.
 // ---------------------------------------------------------------------------
 
 interface SharedSubscription {
@@ -80,40 +80,57 @@ interface SharedSubscription {
   joinedFrame: number;
 }
 
-let sharedRafId: number | null = null;
-let sharedFrame = 0;
-let sharedTime = 0;
-const sharedSubscribers = new Set<SharedSubscription>();
+interface SharedClock {
+  rafId: number | null;
+  frame: number;
+  time: number;
+  subscribers: Set<SharedSubscription>;
+}
+
+let sharedClock: SharedClock;
+
+function getSharedClock(): SharedClock {
+  const registry = globalThis as unknown as Record<
+    symbol,
+    SharedClock | undefined
+  >;
+  return (registry[Symbol.for('phase.clock@1')] ??= {
+    rafId: null,
+    frame: 0,
+    time: 0,
+    subscribers: new Set<SharedSubscription>(),
+  });
+}
 
 function dispatchSharedSubscription(subscription: SharedSubscription): void {
-  if (subscription.joinedFrame < sharedFrame) {
-    subscription.callback(sharedTime);
+  if (subscription.joinedFrame < sharedClock.frame) {
+    subscription.callback(sharedClock.time);
   }
 }
 
 function sharedTick(time: number): void {
-  sharedTime = time;
-  sharedFrame++;
-  sharedRafId = requestAnimationFrame(sharedTick);
+  sharedClock.time = time;
+  sharedClock.frame++;
+  sharedClock.rafId = requestAnimationFrame(sharedTick);
   // eslint-disable-next-line unicorn/no-array-for-each -- Set#forEach avoids a per-frame iterator.
-  sharedSubscribers.forEach(dispatchSharedSubscription);
+  sharedClock.subscribers.forEach(dispatchSharedSubscription);
 }
 
 function joinSharedClock(subscription: SharedSubscription): void {
-  const wasEmpty: boolean = sharedSubscribers.size === 0;
-  subscription.joinedFrame = sharedFrame;
-  sharedSubscribers.add(subscription);
+  const wasEmpty: boolean = sharedClock.subscribers.size === 0;
+  subscription.joinedFrame = sharedClock.frame;
+  sharedClock.subscribers.add(subscription);
 
   if (wasEmpty) {
-    sharedRafId = requestAnimationFrame(sharedTick);
+    sharedClock.rafId = requestAnimationFrame(sharedTick);
   }
 }
 
 function leaveSharedClock(subscription: SharedSubscription): void {
-  sharedSubscribers.delete(subscription);
-  if (sharedSubscribers.size === 0 && sharedRafId !== null) {
-    cancelAnimationFrame(sharedRafId);
-    sharedRafId = null;
+  sharedClock.subscribers.delete(subscription);
+  if (sharedClock.subscribers.size === 0 && sharedClock.rafId !== null) {
+    cancelAnimationFrame(sharedClock.rafId);
+    sharedClock.rafId = null;
   }
 }
 
@@ -168,6 +185,7 @@ export function createTicker(options: TickerOptions): Ticker {
   if (typeof requestAnimationFrame === 'undefined') {
     serverContextError('createTicker');
   }
+  sharedClock ??= getSharedClock();
 
   const { onTick, signal } = options;
   let minFrameTime: number = resolveMinFrameTime('createTicker', options.fps);

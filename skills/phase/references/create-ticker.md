@@ -64,7 +64,7 @@ const ticker = createTicker(options: TickerOptions): Ticker;
 
 - Use `setFps()` to change the FPS cap on a live ticker instead of destroying and rebuilding it.
 - Use `pause()` / `resume()` for intentional suspension (e.g. user pauses a game).
-- Rely on the shared clock: all tickers receive the same browser rAF timestamp, so multiple animations stay in sync.
+- Rely on the shared clock: all tickers receive the same browser rAF timestamp, even when the same JavaScript global loads duplicate phase copies that use the same clock protocol.
 - Trust delta clamping: after a long pause, `frame.delta` is clamped to 40ms. No teleporting.
 
 ## Don't
