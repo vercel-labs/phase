@@ -312,16 +312,21 @@ describe('frame timeline', () => {
     ticker.stop();
   });
 
-  it('restores elapsed after a callback changes the reused frame object', async () => {
+  it('restores internal values after a callback changes the reused frame object', async () => {
     const raf = stubRaf();
     const { createTicker } = await getModule();
-    const frames: Array<{ delta: number; elapsed: number }> = [];
+    const frames: Array<{ delta: number; elapsed: number; frame: number }> = [];
     const ticker = createTicker({
       onTick: (frame) => {
-        frames.push({ delta: frame.delta, elapsed: frame.elapsed });
+        frames.push({
+          delta: frame.delta,
+          elapsed: frame.elapsed,
+          frame: frame.frame,
+        });
         if (frames.length === 1) {
           frame.delta = 1000;
           frame.elapsed = 1000;
+          frame.frame = 1000;
         }
       },
     });
@@ -331,8 +336,8 @@ describe('frame timeline', () => {
     raf.frame(26);
 
     expect(frames).toEqual([
-      { delta: 16.67, elapsed: 16.67 },
-      { delta: 16, elapsed: 32.67 },
+      { delta: 16.67, elapsed: 16.67, frame: 1 },
+      { delta: 16, elapsed: 32.67, frame: 2 },
     ]);
     ticker.stop();
   });

@@ -265,7 +265,7 @@ const ticker = createTicker({
 ticker.start();
 ```
 
-All tickers share a single `requestAnimationFrame` loop. Every subscriber receives the same browser-supplied timestamp each frame, so independent animations stay in visual sync.
+Ticker instances within one JavaScript global, such as a page or worker, share one browser `requestAnimationFrame` loop and timestamp. This includes instances created by separately bundled copies of phase.
 
 `frame.delta` is how many milliseconds an animation should advance on each callback. After a delayed callback, it is at most 40ms without an FPS limit, or one configured FPS interval plus 40ms with a limit. `frame.elapsed` increases by exactly the same `delta`.
 
@@ -1202,7 +1202,7 @@ The rAF loop never triggers a React re-render. All per-frame state lives in refs
 
 ### Frame-locked shared clock
 
-All tickers share one `requestAnimationFrame` loop and receive the same browser-supplied timestamp each frame, keeping multiple animations on the same page in visual sync.
+Ticker instances within one JavaScript global share one browser `requestAnimationFrame` loop and timestamp. See [`createTicker`](#createticker) for the duplicate-copy behavior.
 
 ### Frame timing
 
@@ -1240,10 +1240,10 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |            1.1 kB |
+| `createTicker`            |           1.11 kB |
 | `createSight`             |           1.05 kB |
 | `createLifecycle`         |           1.55 kB |
-| `createLoop`              |           2.96 kB |
+| `createLoop`              |           2.98 kB |
 | `createScrollProgress`    |             895 B |
 | `createRenderState`       |             490 B |
 | `createDevicePixelRatio`  |             544 B |
@@ -1257,10 +1257,10 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           3.28 kB |
+| `useLoop`                 |           3.29 kB |
 | `useLifecycle`            |           1.83 kB |
 | `useSight`                |           1.36 kB |
-| `useCanvas`               |           3.84 kB |
+| `useCanvas`               |           3.85 kB |
 | `useMutation`             |           1.38 kB |
 | `usePointer`              |           1.51 kB |
 | `useScroll`               |           1.97 kB |

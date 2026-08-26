@@ -6,7 +6,7 @@ Impact-ranked do's and don'ts for writing performant animation code with phase. 
 
 - **Critical.** Zero per-frame allocations | Never setState in onTick | No forced reflows | No layout-inducing writes
 - **High.** Strong pause | Reduced motion by default | Stable function references
-- **Medium.** Frame-locked shared clock | Coherent frame timeline | Observer pooling | Never drive layout from a MutationObserver | will-change lifecycle | No getBoundingClientRect for visibility
+- **Medium.** Frame-locked shared clock | Frame time after delays | Observer pooling | Never drive layout from a MutationObserver | will-change lifecycle | No getBoundingClientRect for visibility
 - **Low.** Don't store FrameState refs | No try/catch in onTick | No debug logging in hot path
 
 ## Critical (per-frame violations cause visible jank)

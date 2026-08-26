@@ -69,7 +69,7 @@ After a delayed callback, `delta` is at most 40ms without an FPS limit, or one c
 
 - Use `setFps()` to change the FPS cap on a live ticker instead of destroying and rebuilding it.
 - Use `pause()` / `resume()` for intentional suspension (e.g. user pauses a game).
-- Rely on the shared clock: all tickers receive the same browser `requestAnimationFrame` timestamp, even when the same JavaScript global loads duplicate phase copies that use the same clock protocol.
+- Rely on the shared clock: ticker instances within one JavaScript global, such as a page or worker, receive the same browser `requestAnimationFrame` timestamp. This includes instances from separately bundled copies of phase.
 - Use `frame.delta` and `frame.elapsed` for animation progress. Elapsed time advances by the delivered delta and does not advance while paused.
 
 ## Don't

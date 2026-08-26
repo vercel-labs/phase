@@ -44,8 +44,8 @@ Every module must satisfy these contracts.
 ### Lifecycle
 
 - Strong pause cancels scheduling entirely with `cancelAnimationFrame()`.
-- All tickers use the same browser `requestAnimationFrame` timestamp.
-- Keep elapsed time in a private running total and publish it through the reused `FrameState` object. Callback changes to that object must not alter later frames.
+- Tickers within one JavaScript global, such as a page or worker, share one browser `requestAnimationFrame` loop and timestamp. This includes separately bundled copies of phase.
+- Keep elapsed time and delivered frame count in private numbers, then publish them through the reused `FrameState` object. Callback changes to that object must not alter later frames.
 - After a delayed callback, limit `frame.delta` to 40ms without an FPS limit or one configured interval plus 40ms with a limit.
 - The first callback after `start()` or `resume()` uses 16.67ms without a limit or one configured interval with a limit.
 

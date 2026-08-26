@@ -12,7 +12,7 @@ import {
 export interface FrameState {
   /** Current browser requestAnimationFrame timestamp. */
   time: number;
-  /** Milliseconds to advance this frame. Delayed frames are limited. */
+  /** Milliseconds to advance this frame. At most 40ms, or one FPS interval plus 40ms. */
   delta: number;
   /** Sum of delivered deltas since start. */
   elapsed: number;
@@ -196,6 +196,7 @@ export function createTicker(options: TickerOptions): Ticker {
 
   let lastTickTime = -1;
   let elapsedTime = 0;
+  let frameCount = 0;
 
   // When the next capped delivery becomes eligible (see advanceDeadline).
   // 0 while uncapped.
@@ -224,7 +225,8 @@ export function createTicker(options: TickerOptions): Ticker {
     frame.delta = rawDelta > maxDeltaTime ? maxDeltaTime : rawDelta;
     elapsedTime += frame.delta;
     frame.elapsed = elapsedTime;
-    frame.frame++;
+    frameCount++;
+    frame.frame = frameCount;
 
     onTick(frame);
   }
@@ -244,6 +246,7 @@ export function createTicker(options: TickerOptions): Ticker {
     lastTickTime = -1;
     nextDueTime = 0;
     elapsedTime = 0;
+    frameCount = 0;
     resetFrameState(frame);
 
     joinSharedClock(subscription);
