@@ -1,0 +1,23 @@
+{
+  "name": "@usephase/skill",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "goldens": "node scripts/skill/regen-goldens.mjs",
+    "skill:build": "tsdown -c tsdown.scanner.config.ts && node scripts/skill/build-metadata.mjs && node scripts/skill/sync-scan-docs.mjs",
+    "skill:check": "node scripts/skill/check-distribution.mjs && node scripts/skill/check-coverage.mjs && node scripts/skill/check-scan-sync.mjs",
+    "skill:package": "node scripts/skill/package.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0",
+    "es-module-lexer": "2.1.0",
+    "tsdown": "0.21.7",
+    "typescript": "6.0.2",
+    "vitest": "4.1.4"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

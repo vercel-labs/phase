@@ -1,5 +1,9 @@
 # Orchestrate workspace tasks with Turborepo
 
+## Status
+
+Partially superseded by [ADR 0008](./0008-enforce-the-skill-distribution-boundary.md). Committed-file generators remain uncached, but the private skill package now owns their Turbo tasks.
+
 ## Context
 
 The pnpm workspace needs one task graph that later packages and applications can join. Recursive pnpm commands run package scripts, but do not describe dependencies between them or reuse successful local work.

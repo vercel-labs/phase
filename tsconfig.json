@@ -1,8 +1,0 @@
-{
-  "extends": "./tsconfig.base.json",
-  "compilerOptions": {
-    "allowImportingTsExtensions": true
-  },
-  "include": ["scanner", "scripts/skill/check-scan-sync.mjs"],
-  "exclude": ["node_modules", "dist"]
-}

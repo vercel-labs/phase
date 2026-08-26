@@ -21,8 +21,9 @@ import {
 } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 
-const root = resolve(import.meta.dirname, '..', '..');
-const skillDir = join(root, 'skills', 'phase');
+const packageRoot = resolve(import.meta.dirname, '..', '..');
+const repoRoot = resolve(packageRoot, '..', '..');
+const skillDir = join(repoRoot, 'skills', 'phase');
 const distDir = join(skillDir, 'dist');
 const outPath = join(distDir, 'phase-skill.zip');
 

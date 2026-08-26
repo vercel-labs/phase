@@ -1,1 +1,1 @@
-See [AGENTS.md](AGENTS.md) for agent instructions, architecture, performance contracts, and conventions.
+See [AGENTS.md](AGENTS.md) for repository instructions and its package-specific instruction pointers.

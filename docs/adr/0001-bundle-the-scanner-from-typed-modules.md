@@ -1,5 +1,9 @@
 # Bundle the scanner from typed modules
 
+## Status
+
+Partially superseded by [ADR 0008](./0008-enforce-the-skill-distribution-boundary.md). The typed-source and single-bundle decisions remain; scanner source no longer lives at the repository root.
+
 ## Context
 
 The scanner needed to be split into typed modules so its internal areas could be changed and tested safely. Users still needed one dependency-free script with the same installed layout.

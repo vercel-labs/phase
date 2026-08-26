@@ -2,7 +2,7 @@ import { defineConfig } from 'tsdown';
 
 /**
  * Bundles the scanner source (scanner/cli.ts) into the shipped,
- * committed skill artifact at skills/phase/scripts/scan.mjs.
+ * committed skill artifact at ../../skills/phase/scripts/scan.mjs.
  *
  * Separate from the library build (tsdown.config.ts): the scanner is a
  * standalone zero-dependency CLI, not a package entry point. The output
@@ -14,14 +14,15 @@ import { defineConfig } from 'tsdown';
  * The output is generated and committed (like metadata.json and
  * dist/phase-skill.zip) and must be byte-deterministic so CI can verify
  * freshness via `git diff`. Determinism is only guaranteed for the
- * pinned tsdown version in package.json.
+ * pinned tsdown version in this package's package.json.
  */
 export default defineConfig({
   clean: false,
+  cwd: import.meta.dirname,
   dts: false,
   entry: { scan: 'scanner/cli.ts' },
   fixedExtension: true,
   format: ['esm'],
-  outDir: 'skills/phase/scripts',
+  outDir: '../../skills/phase/scripts',
   sourcemap: false,
 });

@@ -4,7 +4,7 @@ description: 'Use when optimizing, auditing, or preparing to ship web animations
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.33'
+  version: '0.0.34'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library.'
 ---
 
@@ -209,13 +209,14 @@ Each export has its own reference file. Read the relevant file when implementing
 For concepts that span multiple references, grep is faster than guessing which file to open.
 
 ```bash
-grep -ri "reduced motion" skills/phase/references/   # every export's motion behavior
-grep -ri "data-phase" skills/phase/references/        # which components stamp phase attributes
-grep -ri "cleanup\|unmount\|stop()" skills/phase/references/  # teardown behavior across hooks
-grep -ri "pooled\|observer" skills/phase/references/  # which exports use shared observer pools
-grep -ri "will-change" skills/phase/references/       # GPU layer guidance across contexts
-grep -ri "FrameState\|frame\.delta\|frame\.elapsed" skills/phase/references/  # frame timing across loop primitives
-grep -ri "starting:opacity\|data-\[phase=exiting\]" skills/phase/references/  # the canonical CSS transition pattern
+cd <skill-dir>
+grep -ri "reduced motion" references/   # every export's motion behavior
+grep -ri "data-phase" references/        # which components stamp phase attributes
+grep -ri "cleanup\|unmount\|stop()" references/  # teardown behavior across hooks
+grep -ri "pooled\|observer" references/  # which exports use shared observer pools
+grep -ri "will-change" references/       # GPU layer guidance across contexts
+grep -ri "FrameState\|frame\.delta\|frame\.elapsed" references/  # frame timing across loop primitives
+grep -ri "starting:opacity\|data-\[phase=exiting\]" references/  # the canonical CSS transition pattern
 ```
 
 ## Cross-cutting references

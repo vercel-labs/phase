@@ -52,7 +52,7 @@ This costs a minute and is what separates a recommendation from a guess.
 
 ## Step 1: Scan for candidates
 
-Run exactly this command. The script lives at `scripts/scan.mjs` relative to this skill's directory; resolve it from wherever the skill is installed (e.g. `skills/phase/scripts/scan.mjs` in the phase repo, or `.agents/skills/phase/scripts/scan.mjs` in a consuming project). Do not modify the command beyond the paths:
+Run exactly this command. The script lives at `scripts/scan.mjs` relative to the directory containing this `SKILL.md`; resolve that installed skill directory first. Do not modify the command beyond the paths:
 
 ```bash
 node <skill-dir>/scripts/scan.mjs <target-dir>

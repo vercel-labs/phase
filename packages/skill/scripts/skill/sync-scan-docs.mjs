@@ -14,9 +14,10 @@ import { SEVERITY_ORDER, SIGNALS } from '../../scanner/signals.ts';
 import { replaceMarkerBlock } from './marker-block.mjs';
 import { renderSignalTable } from './scan-docs.mjs';
 
-const root = resolve(import.meta.dirname, '..', '..');
-const auditPath = join(root, 'skills/phase/references/audit.md');
-const goldenPath = join(root, GOLDEN_SCENARIO_DIR, 'expected-scan.txt');
+const packageRoot = resolve(import.meta.dirname, '..', '..');
+const repoRoot = resolve(packageRoot, '..', '..');
+const auditPath = join(repoRoot, 'skills/phase/references/audit.md');
+const goldenPath = join(packageRoot, GOLDEN_SCENARIO_DIR, 'expected-scan.txt');
 
 const golden = readFileSync(goldenPath, 'utf8');
 const audit = readFileSync(auditPath, 'utf8');
