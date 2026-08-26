@@ -7,14 +7,16 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import type { ScanFinding, ScanResult } from '../index.ts';
 import { formatJson, formatText, scanFile } from '../index.ts';
 import { GOLDEN_SCENARIO_DIR } from '../scenarios.ts';
 
-const SCRIPT = join(process.cwd(), 'skills/phase/scripts/scan.mjs');
-const SCENARIO_DIR = join(process.cwd(), GOLDEN_SCENARIO_DIR);
+const PACKAGE_ROOT = resolve(import.meta.dirname, '..', '..');
+const REPO_ROOT = resolve(PACKAGE_ROOT, '..', '..');
+const SCRIPT = join(REPO_ROOT, 'skills/phase/scripts/scan.mjs');
+const SCENARIO_DIR = join(PACKAGE_ROOT, GOLDEN_SCENARIO_DIR);
 
 interface CliRun {
   status: number;
@@ -417,7 +419,7 @@ describe('scan CLI', () => {
 
   it('distinguishes a clean scan from scanning nothing', () => {
     // skills/phase/dist contains only the zip: zero scannable files.
-    const empty = runCli(['../../../skills/phase/dist']);
+    const empty = runCli([join(REPO_ROOT, 'skills/phase/dist')]);
     expect(empty.status).toBe(0);
     expect(empty.stdout).toContain('No scannable files found');
     expect(empty.stdout).not.toContain('✓');
@@ -443,7 +445,7 @@ describe('scan CLI', () => {
   it('applies path exclusions to file targets (diff-scoped scans)', () => {
     // Excluded-directory context must survive when the file is passed
     // directly, as in the documented `git diff ... -z | scan --stdin0`.
-    const run = runCli(['--json', '../../../scanner/__tests__/render.spec.ts']);
+    const run = runCli(['--json', import.meta.filename]);
     expect(run.status).toBe(0);
     expect(JSON.parse(run.stdout).findings).toEqual([]);
   });

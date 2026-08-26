@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { formatText, scanTargets } from '../index.ts';
 import type { EvalScenario } from '../scenarios.ts';
@@ -19,9 +19,11 @@ import {
   loadEvalScenario,
 } from '../scenarios.ts';
 
-const scenariosDir = join(process.cwd(), 'evals/scenarios');
-const scannerScript = join(process.cwd(), 'skills/phase/scripts/scan.mjs');
-const metadataPath = join(process.cwd(), 'skills/phase/metadata.json');
+const packageRoot = resolve(import.meta.dirname, '..', '..');
+const repoRoot = resolve(packageRoot, '..', '..');
+const scenariosDir = join(packageRoot, 'evals/scenarios');
+const scannerScript = join(repoRoot, 'skills/phase/scripts/scan.mjs');
+const metadataPath = join(repoRoot, 'skills/phase/metadata.json');
 const temporaryDirectories: string[] = [];
 const scenarios = readdirSync(scenariosDir)
   .toSorted()

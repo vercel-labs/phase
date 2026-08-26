@@ -31,6 +31,7 @@ function createRepository() {
   runGit(root, 'init', '--quiet');
   runGit(root, 'config', 'user.email', 'phase@example.com');
   runGit(root, 'config', 'user.name', 'phase test');
+  runGit(root, 'config', 'commit.gpgsign', 'false');
 
   writeJson(join(root, 'package.json'), {
     name: 'phase',

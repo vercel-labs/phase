@@ -93,15 +93,9 @@ Signal reference, output anatomy, and the full audit procedure: `references/audi
 
 ## Development
 
-Contributor tooling lives in the repository-level `scripts/skill/` directory. Start new references from `references/_template.md`. To add or change a scanner signal, follow "New scanner signal (audit skill)" in the repo's `AGENTS.md` (examples first, probe against real code, calibrate the noise tier). Eval scenarios live in [`evals/`](../../evals/) at the repository root so they are never included in skill installations.
+Contributor tooling and eval scenarios live in the private [`packages/skill`](https://github.com/vercel-labs/phase/tree/main/packages/skill) workspace so they never enter skill installations. Start new references from `references/_template.md`. Follow the package's [`AGENTS.md`](https://github.com/vercel-labs/phase/blob/main/packages/skill/AGENTS.md) when changing scanner signals, evals, or generated artifacts.
 
-```bash
-node scripts/skill/check-coverage.mjs   # verify barrels ↔ references
-node scripts/skill/build-metadata.mjs   # regenerate metadata.json
-node scripts/skill/package.mjs          # produce dist/phase-skill.zip
-```
-
-Or via package.json scripts (from repo root):
+Run the stable contributor commands from the repository root:
 
 ```bash
 pnpm skill:check

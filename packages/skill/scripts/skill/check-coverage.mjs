@@ -16,13 +16,15 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const root = resolve(import.meta.dirname, '..', '..');
-const refsDir = join(root, 'skills', 'phase', 'references');
+const packageRoot = resolve(import.meta.dirname, '..', '..');
+const repoRoot = resolve(packageRoot, '..', '..');
+const phaseRoot = resolve(packageRoot, '..', 'phase');
+const refsDir = join(repoRoot, 'skills', 'phase', 'references');
 
 // --- Parse exports from barrel files ---
 
 function extractExportNames(filePath) {
-  const content = readFileSync(join(root, filePath), 'utf8');
+  const content = readFileSync(filePath, 'utf8');
   const names = new Set();
 
   // Match: export { name1, name2 } from '...'
@@ -44,16 +46,13 @@ function extractExportNames(filePath) {
   return names;
 }
 
-const coreExports = extractExportNames('packages/phase/src/index.ts');
-const reactExports = extractExportNames('packages/phase/src/react/index.ts');
+const coreExports = extractExportNames(join(phaseRoot, 'src/index.ts'));
+const reactExports = extractExportNames(join(phaseRoot, 'src/react/index.ts'));
 
 // Ease exports are covered by a single ease.md (one tree-shaken entry point).
 // Identify them by reading the ease barrel source for `export function` declarations.
 const easeExports = new Set(['ease']);
-const easeSource = readFileSync(
-  join(root, 'packages/phase/src/ease/index.ts'),
-  'utf8',
-);
+const easeSource = readFileSync(join(phaseRoot, 'src/ease/index.ts'), 'utf8');
 const easeFnRe = /export\s+function\s+(\w+)/g;
 let easeFnMatch;
 while ((easeFnMatch = easeFnRe.exec(easeSource)) !== null) {

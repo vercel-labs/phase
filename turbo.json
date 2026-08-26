@@ -10,41 +10,30 @@
       "outputs": ["dist/**"]
     },
     "typecheck": {
-      "dependsOn": ["^typecheck", "//#typecheck:root"]
+      "dependsOn": ["^typecheck"]
     },
     "test": {
       "dependsOn": ["^test", "//#test:root"]
     },
     "size": {},
     "skill:check": {
-      "dependsOn": ["//#skill:check:root"]
+      "cache": false
     },
     "skill:build": {
-      "dependsOn": ["//#skill:build:root"],
       "cache": false
     },
     "skill:package": {
-      "dependsOn": ["skill:build", "//#skill:package:root"],
+      "dependsOn": ["skill:build"],
       "cache": false
     },
     "goldens": {
-      "dependsOn": ["//#goldens:root"],
       "cache": false
     },
     "validate": {
-      "dependsOn": ["build", "typecheck", "test", "size", "skill:package"]
+      "dependsOn": ["build", "typecheck", "test", "size", "skill:check"]
     },
-    "//#typecheck:root": {},
     "//#test:root": {},
-    "//#skill:check:root": {},
-    "//#skill:build:root": {
-      "cache": false
-    },
-    "//#skill:package:root": {
-      "dependsOn": ["//#skill:build:root"],
-      "cache": false
-    },
-    "//#goldens:root": {
+    "@usephase/skill#test": {
       "cache": false
     }
   }

@@ -12,8 +12,9 @@ import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const root = resolve(import.meta.dirname, '..', '..');
-const skillDir = join(root, 'skills', 'phase');
+const packageRoot = resolve(import.meta.dirname, '..', '..');
+const repoRoot = resolve(packageRoot, '..', '..');
+const skillDir = join(repoRoot, 'skills', 'phase');
 
 const skillMd = readFileSync(join(skillDir, 'SKILL.md'), 'utf8');
 
@@ -43,7 +44,7 @@ writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
 
 // Normalize the generated file so it passes `oxfmt --check` everywhere.
 execSync(`pnpm exec oxfmt ${metadataPath}`, {
-  cwd: root,
+  cwd: repoRoot,
   stdio: 'inherit',
 });
 

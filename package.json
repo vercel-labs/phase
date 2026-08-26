@@ -5,9 +5,8 @@
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
-    "test:root": "vitest run",
+    "test:root": "vitest run --globals scripts/check-package-version.spec.mjs",
     "typecheck": "turbo run typecheck",
-    "typecheck:root": "tsc --noEmit",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
     "format": "oxfmt --check",
@@ -15,25 +14,18 @@
     "size": "turbo run size",
     "size:readme": "node scripts/update-size-table.mjs",
     "goldens": "turbo run goldens",
-    "goldens:root": "node scripts/skill/regen-goldens.mjs",
     "prepare": "lefthook install || true",
-    "validate": "pnpm --filter @usephase/workspace run --parallel '/^(lint|format)$/' && turbo run validate && pnpm skill:check:root",
+    "validate": "pnpm --filter @usephase/workspace run --parallel '/^(lint|format)$/' && turbo run validate && pnpm skill:package",
     "skill:check": "turbo run skill:check",
-    "skill:check:root": "node scripts/skill/check-coverage.mjs && node scripts/skill/check-scan-sync.mjs",
     "skill:build": "turbo run skill:build",
-    "skill:build:root": "tsdown -c tsdown.scanner.config.ts && node scripts/skill/build-metadata.mjs && node scripts/skill/sync-scan-docs.mjs",
-    "skill:package": "turbo run skill:package",
-    "skill:package:root": "node scripts/skill/package.mjs"
+    "skill:package": "turbo run skill:package"
   },
   "devDependencies": {
     "@size-limit/preset-small-lib": "12.1.0",
-    "@types/node": "25.6.0",
     "lefthook": "2.1.5",
     "oxfmt": "0.44.0",
     "oxlint": "1.59.0",
-    "tsdown": "0.21.7",
     "turbo": "2.10.11",
-    "typescript": "6.0.2",
     "vitest": "4.1.4"
   },
   "engines": {

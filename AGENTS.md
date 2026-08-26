@@ -4,319 +4,71 @@
 
 ## Repository overview
 
-Animation infrastructure for the web. Lifecycle-aware primitives that compose visibility, timing, reduced motion, and quality signals into coherent state machines with debuggable transitions.
+Animation infrastructure for the web. Lifecycle-aware primitives compose visibility, timing, reduced motion, and quality signals into coherent state machines with debuggable transitions.
 
-Tech stack: TypeScript, tsdown (bundler), vitest (tests), oxlint (linting), oxfmt (formatting), lefthook (pre-commit hooks).
+Run commands from the repository root. The repository has three ownership boundaries:
 
-Run commands from the repository root. Library paths such as `src/`, `.size-limit.json`, `README.md`, and `LICENSE` are relative to `packages/phase/`; scanner, skill, workflow, and contributor paths remain relative to the repository root.
+- [`packages/phase/`](./packages/phase/AGENTS.md) owns the published library, performance contracts, and library implementation rules.
+- [`packages/skill/`](./packages/skill/AGENTS.md) owns scanner source, evals, and skill-maintainer tooling.
+- `skills/phase/` contains only installable skill content and committed generated artifacts.
 
-Scanner, audit, or eval changes: read `CONTEXT.md` for the canonical vocabulary.
+Scanner, audit, or eval changes must use the canonical vocabulary in [`CONTEXT.md`](./CONTEXT.md). Durable architecture decisions live in [`docs/adr/`](./docs/adr/README.md).
 
 ## Commands
 
 ```bash
-pnpm build             # Build (tsdown)
-pnpm test              # Run tests (vitest)
-pnpm typecheck         # Type check (tsc --noEmit)
-pnpm lint              # Lint (oxlint)
-pnpm lint:fix          # Lint and auto-fix (oxlint --fix)
-pnpm format            # Check formatting (oxfmt --check)
-pnpm format:fix        # Fix formatting (oxfmt)
-pnpm size              # Build and check bundle sizes (size-limit)
-pnpm size:readme       # Build and update README.md bundle size table
+pnpm build             # Build workspace packages
+pnpm test              # Run all tests
+pnpm typecheck         # Type check workspace packages
+pnpm lint              # Lint the repository
+pnpm lint:fix          # Lint and auto-fix
+pnpm format            # Check formatting
+pnpm format:fix        # Fix formatting
+pnpm size              # Check library bundle sizes
+pnpm size:readme       # Update the library README bundle-size table
 pnpm goldens           # Regenerate scanner goldens and the audit sample
-pnpm validate          # Run typecheck, lint, format, test, and skill:check in parallel
-pnpm skill:check       # Verify every public export has a skill reference (drift guard)
-pnpm skill:build       # Bundle scanner/cli.ts and regenerate skills/phase/metadata.json from SKILL.md
-pnpm skill:package     # Rebuild the deterministic skills/phase/dist/phase-skill.zip
+pnpm validate          # Run the complete local validation gate
+pnpm skill:check       # Check skill coverage, sync, and distribution safety
+pnpm skill:build       # Bundle the scanner and regenerate skill metadata/docs
+pnpm skill:package     # Rebuild the deterministic skill zip
 ```
 
-**When these run automatically:**
+## Automation
 
 - `skill:check` runs as part of `pnpm validate` and in CI on every PR.
-- `skill:build` + `skill:package` run on pre-commit (via lefthook) whenever a file under `skills/phase/`, `scanner/`, or `scripts/skill/` is staged, and Lefthook re-stages the regenerated `metadata.json`, bundled `scripts/scan.mjs`, and zip automatically. You rarely need to run them by hand.
-- CI re-verifies all of these on every PR; the release workflow re-verifies them before publishing. A stale generated file fails the build.
-
-## Architecture
-
-Two-layer design: core primitives (framework-agnostic) and React bindings.
-
-### Top-level folders
-
-| Folder       | Purpose                                                                                                                                                                                |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ease/`      | Pure math (easing functions, clamping, interpolation). No browser APIs, no React. Safe anywhere.                                                                                       |
-| `core/`      | Framework-agnostic primitives (ticker, sight, loop). Browser APIs live here. `_internal/` holds shared infrastructure (error factory, observer pools) that is never exported publicly. |
-| `react/`     | React hooks and components. Each hook or component gets its own folder. Depends on `core/` for the underlying primitives. `_internal/` holds shared hooks not exported publicly.       |
-| `__tests__/` | Cross-cutting suites that belong to no single module (performance budgets, the audit scanner). Shared mock factories for IO/RO/MQL live in `__mocks__/`.                               |
-
-### File organization conventions
-
-- **One folder per module.** Each function, hook, or component lives in a named kebab-case folder with `index.ts` (implementation) and `index.spec.ts` (tests) co-located.
-- **Barrel files.** Only three exist: `src/index.ts`, `src/ease/index.ts`, `src/react/index.ts`. These serve as entry points. Don't add more.
-- **`_internal/` directories.** Keep `_internal/` helpers within their layer. Don't export them publicly or import them across layers.
-- **New modules follow the existing pattern.** Look at any sibling folder. Match the structure.
-
-### Entry points
-
-| Export    | Source               | Contents                                                                               |
-| --------- | -------------------- | -------------------------------------------------------------------------------------- |
-| `.`       | `src/index.ts`       | createTicker, createSight, createLoop, createScrollProgress, easing, errors            |
-| `./ease`  | `src/ease/index.ts`  | Easing + math utilities (clamp, lerp, remap, easeOutCubic)                             |
-| `./react` | `src/react/index.ts` | useLoop, useTween, useCanvas, useSight, useScrollProgress, usePresence, Presence, Swap |
-
-## Performance contracts
-
-Every module must satisfy these performance contracts without exception.
-
-### Hot-path rules (per-frame code)
-
-- **Zero allocations per frame.** No object/array/string creation, no closures, no `.map()`, `.filter()`, spread operators, or template literals in the onTick path.
-- **FrameState mutated in place.** Sealed shape, V8 stays on monomorphic IC path.
-- **No try/catch wrapping onTick.** Defeats TurboFan optimization.
-- **Stable function references.** Frame callback created once, never recreated.
-- **No debug logging in hot path.** Zero string ops unless devtools active.
-
-### Lifecycle rules
-
-- **Strong pause.** `cancelAnimationFrame()` stops scheduling entirely. Zero callbacks fire, and the loop fully halts (no rAF + early return).
-- **Frame-locked shared clock.** All tickers receive the same browser rAF timestamp. No per-frame `performance.now()` read and no visual desync.
-- **Delta clamped at 40ms.** Prevents teleport on resume after long pause.
-- **Pause-aware elapsed.** `frame.elapsed` freezes during pause, resumes from where it left off.
-
-### Browser API rules
-
-- **Zero forced reflows.** Never call `getBoundingClientRect()`, `offsetWidth`, `scrollWidth`, `getComputedStyle()`, or any property that triggers synchronous layout.
-- **All dimensions from ResizeObserver** (async, compositor-aligned)
-- **All visibility from IntersectionObserver** (async, post-paint)
-
-### React rules
-
-- **Zero re-renders from frame loop.** All per-frame state lives in refs. `onTick`/`onDraw` write to refs or DOM directly.
-- **Only phase changes trigger setState.** Infrequent lifecycle transitions, not per-frame.
-- **Per-frame callbacks live in a synced ref.** `onTick`/`onDraw` are stored via `useSyncedRef` so their identity never triggers a loop restart. Use `useStableCallback` for consumer callbacks that need a stable identity elsewhere (e.g. props to memoized children).
-
-## Performance testing
-
-`src/__tests__/perf.spec.ts` contains structural and budget assertions that gate regressions:
-
-1. **Zero-allocation.** `FrameState` is the exact same object reference across 10,000 frames.
-2. **Frame budget.** Per-frame math overhead stays under 0.1ms.
-
-## Bundle size
-
-Minimal footprint is a core promise of phase. Every public export is individually measured with [Size Limit](https://github.com/ai/size-limit) and budgeted in `.size-limit.json`. CI enforces limits on every PR.
-
-- **Check individual exports, not barrels.** Size-limit tests each named export from `dist/`. Ease is the exception (single entry, < 300 B).
-- **Run `pnpm size` before and after changes.** Any new export, refactor, or dependency change can shift sizes. Run size locally to catch regressions before CI does.
-- **Avoid transitive dependency linking.** Each export should only pull in what it directly needs. Don't import from a module only for a constant if inlining it avoids dragging in unrelated code.
-- **When adding a new export**, add a corresponding entry to `.size-limit.json` with `name`, `path`, `import`, and `limit`. Set the limit to ~20% above measured size for exports under 500 B, ~10% for everything else.
-- **Keep error strings concise.** Error `reason` and `fix` fields ship in the bundle. Say what's needed, nothing more.
-
-## Code style
-
-| Convention            | Rule                                                                                                                                            |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| File and folder names | `kebab-case`                                                                                                                                    |
-| Type names            | `PascalCase`                                                                                                                                    |
-| Function names        | `camelCase`                                                                                                                                     |
-| `any`                 | Banned. Use `unknown` and narrow.                                                                                                               |
-| Import extensions     | No `.js` extensions                                                                                                                             |
-| Index imports         | No `/index` (directory index is inferred)                                                                                                       |
-| Type imports          | Use `import type` / `export type` for type-only                                                                                                 |
-| Barrel files          | Separate API exports from type exports (API first, types second)                                                                                |
-| JSDoc                 | On public APIs: explain _what_ and _why_, not _how_                                                                                             |
-| Inline comments       | Only where code cannot speak for itself                                                                                                         |
-| Boolean props         | Banned. Use string unions (e.g. `enter: 'animate' \| 'instant'`). Exception: `enabled` is boolean across all hooks (binary on/off, not a mode). |
-| Exported type names   | Must not shadow global `lib.dom` types (e.g. avoid exporting `MutationCallback` when the DOM defines one)                                       |
-
-## Testing conventions
-
-- **Framework**: Vitest with `globals: true`, `environment: 'jsdom'`
-- **Location**: co-located `index.spec.ts` (or `.spec.tsx`) next to `index.ts`
-- **Shared mocks**: `src/__mocks__/` (IO, RO, MQL mocks)
-
-## Dependency rules
-
-- **Zero runtime dependencies** shipped to consumers
-- Never add runtime dependencies without explicit approval
-- All dependencies pinned to exact versions
-
-Architecture decisions: follow [`docs/adr/README.md`](./docs/adr/README.md).
-
-## Key design rules
-
-1. **No barrel files** except the three designated entry points (`src/index.ts`, `src/ease/index.ts`, `src/react/index.ts`). Barrels must be **pure re-exports only** (no declarations, logic, or top-level side effects).
-2. **`_internal/` is never exported** publicly.
-3. **Zero per-frame allocations.** FrameState is reused, no closures in the hot path.
-4. **React is optional.** Peer dep marked optional; core works without React.
-5. **No circular imports.** `ease/` has no deps, `core/` depends on `ease/` and `_internal/`, `react/` depends on `core/`. Never import upward.
-6. **Co-located tests.** Every module has a sibling `.spec.ts(x)` file.
-7. **Observer pooling.** IO keyed by serialized options, RO is a singleton, MQL keyed by query string. Never create raw observers outside the pool.
-8. **Phases + reasons.** Every state machine exposes both. Phase describes _what_ state; reason describes _why_. Core primitives with phases must expose an `onPhaseChange` callback so React hooks can subscribe without polling. React hooks must use `useState` for phase/reason (reactive by default) and provide a transient (zero-re-render) escape hatch via a callback option, matching the `useSight` dual-mode pattern.
-
-## Admission criteria
-
-Every proposed export must pass all four criteria. If any fails, the solution belongs in the **skill** as a pattern or recipe, not in the library as shipped code.
-
-1. **Wraps a browser API that is easy to misuse.** The raw API causes measurable perf regressions without careful handling (forced reflows, leaked observers, unbatched callbacks, always-on scheduling).
-2. **Manages a lifecycle.** The primitive must manage at least one of: browser lifecycle (visibility-pausing, reduced-motion, observer pooling, rAF-batching), render lifecycle (preventing unnecessary re-renders, stable callback identities), or CSS containment lifecycle (`content-visibility` state). A pure utility that works identically regardless of any lifecycle does not belong here.
-3. **Makes the safe path shorter than the raw path.** Using the primitive is less code and less error-prone than using the browser API directly. The wrong thing is impossible or harder than the right thing.
-4. **Stays individually lean.** Every export is measured and budgeted in `.size-limit.json`. CI rejects regressions. An export must pull in only what it directly needs, never drag in unrelated code through transitive imports. There is no universal ceiling, but every byte must justify itself.
-
-Infrastructure exports (errors, easing math) support the primitives above and do not individually need to pass criteria 1-2. They exist because the lifecycle-aware primitives depend on them.
-
-### What does NOT belong in phase
-
-- CSS linting or build-time stylesheet analysis
-- Bundler or code-splitting configuration
-- Design system components or modal layers
-- General DOM scheduling beyond rAF batching
-
-When a gap exists but fails the criteria, close it in the skill: add an audit rule, a recipe, or a scanner signal.
-
-### Export taxonomy
-
-Every export falls into one category. New exports must fit an existing category or justify a new one.
-
-| Category    | Exports                                                                                                                                                                                                                                                                                          | What they wrap                                                                |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| Timing      | createTicker, createLoop, createThrottle, createDebounce, useTween, useLoop, useCanvas, useThrottledCallback, useDebouncedCallback                                                                                                                                                               | rAF, frame clock, rate limiting                                               |
-| Observation | createSight, createScrollProgress, createRenderState, createDevicePixelRatio, createMutation, createPointer, useSight, useScrollProgress, useSize, useContainerQuery, useMediaQuery, useRenderState, useDevicePixelRatio, usePrefersReducedMotion, useMutation, usePointer, prefersReducedMotion | IO, RO, MQL, MO, pointer events, contentvisibilityautostatechange, matchMedia |
-| Lifecycle   | createLifecycle, useLifecycle, whenIdle, useIdle, useWhenIdle                                                                                                                                                                                                                                    | IO + MQL + rIC composed into activation signals                               |
-| Composition | Presence, usePresence, Swap, WhenVisible, WhenIdle, Defer                                                                                                                                                                                                                                        | Mount/unmount orchestration with transition coordination                      |
-| Math        | clamp, clamp01, lerp, inverseLerp, remap, easeOutCubic, easeOutQuart, easeOutBack, easeInOutCubic, linear                                                                                                                                                                                        | Pure functions, no browser API                                                |
-| Utility     | useSyncedRef, useStableCallback                                                                                                                                                                                                                                                                  | React ref/callback patterns needed by phase internals and consumers           |
-
-## How to add new features
-
-### New core primitive
-
-1. Create `src/core/<name>/index.ts` with implementation
-2. Create `src/core/<name>/index.spec.ts` with tests
-3. Add exports to `src/index.ts` (API section, then types section)
-4. Add a size-limit entry to `.size-limit.json`. Run `pnpm size` and set the limit to ~20% above measured size for exports under 500 B, ~10% for larger exports.
-5. Add a skill reference at `skills/phase/references/<name>.md` following `skills/phase/references/_template.md`
-6. If the primitive has phases: expose `onPhaseChange` callback in options (see rule 8)
-7. Verify exported type names do not collide with `lib.dom` globals
-8. Run `pnpm format:fix && pnpm size:readme && pnpm validate && pnpm skill:check`
-
-### New React hook
-
-1. Create `src/react/<use-name>/index.ts` (or `.tsx`) with implementation
-2. Create `src/react/<use-name>/index.spec.ts` (or `.spec.tsx`) with tests
-3. Add exports to `src/react/index.ts` (API section, then types section)
-4. Add a size-limit entry to `.size-limit.json` with `"ignore": ["react"]`. Run `pnpm size` and set the limit to ~20% above measured size for exports under 500 B, ~10% for larger exports.
-5. Add a skill reference at `skills/phase/references/<use-name>.md` following `skills/phase/references/_template.md`
-6. If the hook exposes phase state: use `useState` (reactive by default), expose `phaseRef`/`phaseReasonRef` (always-current via ref), and provide a transient callback option that suppresses `setState` (see rule 8, match the `useSight` dual-mode pattern)
-7. No boolean props except `enabled`. Use string unions for modes and behaviors.
-8. Verify exported type names do not collide with `lib.dom` globals
-9. Run `pnpm format:fix && pnpm size:readme && pnpm validate && pnpm skill:check`
-
-### New easing function
-
-1. Add the function to `src/ease/index.ts`. Must be pure (`number → number`), no side effects.
-2. Add test cases to `src/ease/index.spec.ts`
-3. Add export to `src/index.ts` (it re-exports from ease)
-4. Run `pnpm size`. Ease is checked as a single module; bump the limit in `.size-limit.json` if needed.
-5. Update `skills/phase/references/ease.md` with the new function
-6. Run `pnpm format:fix && pnpm validate && pnpm skill:check`
-
-### New scanner signal (audit skill)
-
-The audit scanner lives in typed region modules under `scanner/` and ships as a generated bundle at `skills/phase/scripts/scan.mjs` (built by `pnpm skill:build`, never hand-edited). It detects anti-pattern candidates; every signal ships with executable examples and calibrated triage metadata. Check the signal against the skill's scope first (animation lifecycle, rendering gating, observer/listener hygiene, CSS animation cost — see audit.md "Scope and handoffs"); adjacent React/Next.js perf concerns belong to other skills, not new signals.
-
-1. Add the catalog entry to `SIGNALS` in `scanner/signals.ts`: kebab-case `id`, `label`, `severity` (`critical`/`high`/`medium`/`dedup`, per audit.md's weighting), `noise` (`precise`/`normal`/`noisy`), a one-line `detects` summary for the generated signal table, a one-line `why`, a one-line `replacement` naming what to use instead (both are printed in every report block), and a `fix` pointer to a real `references/<file>#anchor`. Detection is a `pattern` plus optional `contextPattern` (±5 lines by default; set `contextLines` only with a regression example), or a custom `matcher` (`(lines, i) => boolean`, pure). When a pattern needs static-analysis evidence beyond its own line, declare an `evidence` name from `EVIDENCE_REGISTRY` in `scanner/analysis.ts`; do not add catalog policy flags or signal-specific branches in the detection engine. Optional: `fileTypes` (`css`/`jsx`/array), `supersedes`, `perFile`, `codeOnly`, `evidence`.
-   - **`negativePattern` is whole-file.** It suppresses the signal for every line in a file that matches it anywhere, so it only suits `perFile` signals. For a condition that belongs to one declaration or one enclosing rule, write a `matcher` — a file-wide negative silenced `permanent-will-change` on every stylesheet containing a `:hover` rule, which is to say all of them.
-   - **Watch the regex for ambiguity.** A group that can match empty inside a quantifier (`(?:\s*,?\s*…)*`) makes a failing match exponential. Signals run over unknown third-party code; a pattern that can hang is a pattern that will.
-2. Add examples to `scanner/examples.ts` under the same id: at least one `match` and one `noMatch`, including a regression example for every false positive the signal must avoid. The suite fails structurally without them.
-3. Write the examples to encode intended behavior before tuning the detection (red first): `pnpm vitest run scanner/__tests__/examples.spec.ts`.
-   - **Severity is what it costs when real; execution is what it costs now.** The scanner classifies each JS finding as per-frame or incidental from the surrounding code and ranks accordingly, so a signal does not need a severity bump to be noticed in a hot path. Set severity for the worst case and let the ranking sort the rest.
-4. Probe, don't just read: run the scanner against a real repo (`pnpm skill:build && node skills/phase/scripts/scan.mjs <path>`), hand-classify a sample of findings, and set the noise tier from what you observe. Record the provenance in the PR description.
-5. Run `pnpm skill:build` to regenerate audit.md's signal table from the catalog. `pnpm skill:check` fails CI when the table or fix pointers drift; `pnpm test` executes the examples and eval ground truth.
-6. If the signal fires on the planted-defect fixture (`evals/scenarios/audit-planted-defects/workspace`), run `pnpm goldens` to regenerate both goldens and audit.md's sample block in the required order.
-7. Run `pnpm format:fix && pnpm validate`.
-
-When a real-world audit failure surfaces (wrong recommendation, missed context), encode it as an eval scenario under `evals/scenarios/` (see `ssr-semantics-guard` for the pattern) so it can never regress silently. Every scenario requires a neutral, non-empty `prompt.md` and a validated `expected-findings.json`; see `evals/README.md` for the full contract. Put everything machine-checkable in direct `scan.assertions` or named `scan.runs` (`required`, `requiredAbsent`, `outputExcludes`, `context`): `scanner/__tests__/scenarios.spec.ts` executes those gates against the fixture workspace on every run, while `expectedBehavior` remains a non-gating agent rubric. Encode adversarial control characters with the tokens documented in `evals/README.md`; the scenario harness materializes them only in a temporary copy. If a fixture workspace needs a `package.json`, keep it free of `scripts` and `dependencies`: pnpm's recursive runs discover nested projects, so a fixture script named `test` or `lint` would execute during `pnpm validate`.
-
-### Recalibrating the scanner
-
-Noise tiers are evidence-backed: they come from hand-classifying findings on real code. The durable outcomes are encoded where they are enforceable — every confirmed false-positive class becomes a `noMatch` example in `scanner/examples.ts` (with the test suite executing it forever) and, where a cheap tightening kills the whole class, a detection fix. Recalibrate when a signal's detection changes (mandatory, at least for the changed signals), when a field report claims a false positive or negative, or before a release that touches the scanner.
-
-1. Shallow-clone 2-3 real, actively maintained open-source repos into `/tmp`, never into this repo. Pick by profile so the mix approximates consumers: a Tailwind-heavy component library, a canvas/whiteboard-style app (rAF and pointer heavy), and a production Next.js App Router app (ideally with PPR enabled, to exercise context detection). Add a repo likely to exercise the signal under calibration; repos resembling the actual consumer's codebase beat popular OSS. Pick apps, not animation/rendering engines (engines legitimately own raw rAF and observers internally, so their findings teach nothing about consumer code), and beware SDK-weighted monorepos: library internals skew the sample, and third-party state-machine APIs with their own `onTick` name-collide with `setstate-in-ontick`.
-2. Run `node skills/phase/scripts/scan.mjs --json /tmp/<repo>` per repo. Compare per-signal counts before and after your change; a count that moved without a corresponding scanner change is itself a finding.
-3. Sample up to ~10 findings per changed or `noisy` signal. Open each `file:line` and classify true/false positive against the signal's `why`.
-4. Act on evidence only: a confirmed FP class becomes a `noMatch` example plus a regex tightening when a cheap fix kills the whole class, or a noise-tier bump when it does not. Never loosen a tier or a pattern without sampled evidence.
-5. **Log actions, not scorecards, and never name the repos.** Raw per-repo counts and verdicts stay local; do not commit or publish repository names or tables attributing findings to them, in docs, commit messages, or PR descriptions (this is a Vercel-branded repo, and other people's finding counts are not ours to publish). What lands in the PR description: which signals were calibrated, the profiles scanned, the FP classes found, and the fixes/tier changes they drove — each backed by its committed `noMatch` example.
-
-This is bounded judgment work, not an autonomous loop: fixed repo set, fixed sample size, done when the fixes and examples are committed. When asking for a recalibration, the highest-value inputs are field reports with `file:line` and why the finding was wrong, plus repos representative of the code being audited.
+- `skill:build` and `skill:package` run on pre-commit whenever `skills/phase/` or `packages/skill/` changes. Lefthook re-stages `metadata.json`, `scripts/scan.mjs`, the generated audit regions, and the zip.
+- CI and the release workflow rebuild committed artifacts and fail on a diff.
+- Tree-writing tasks (`goldens`, `skill:build`, and `skill:package`) stay uncached. A cache hit would skip regeneration and make a freshness check inspect the wrong tree.
 
 ## Before committing
 
-Run this sequence before every commit. Lefthook covers some of it on pre-commit, but `--amend` and non-skill changes can skip hooks. Do it yourself every time.
+Run this sequence before every commit. Lefthook covers part of it, but generated files must already be current before the hook runs.
 
 ```bash
-pnpm lint:fix            # oxlint auto-fix
-pnpm format:fix          # oxfmt (including .md files)
-pnpm size:readme         # regenerate README bundle-size table
-pnpm skill:build         # bundle scanner/cli.ts + regenerate metadata.json
-pnpm skill:package       # regenerate phase-skill.zip
+pnpm lint:fix
+pnpm format:fix
+pnpm size:readme
+pnpm skill:build
+pnpm skill:package
 ```
 
-`size:readme` and `skill:build`/`skill:package` produce generated files that CI diffchecks. A stale artifact fails the build.
-
-Run `pnpm validate` before opening or updating a PR, not on every commit.
+Run `pnpm validate` before opening or updating a PR.
 
 ## Versioning and changelog
 
 Package and skill versions are independent release signals:
 
-- Bump the package version for changes to shipped source, build output, or consumer-facing package metadata.
-- Do not bump the package for skill-only, test-only, workflow-only, or README-only changes. The npm README updates with the next package release; use an intentional patch release only when an npm-facing documentation correction must ship immediately.
-- Bump the skill version when the skill itself changes.
-- The release workflow validates every merge to `main`, but publishes only package versions that are not already on npm. An existing version is a successful no-op.
+- Bump `packages/phase/package.json` for changes to shipped library source, build output, or consumer-facing package metadata.
+- Do not bump the package for skill-only, test-only, workflow-only, or README-only changes. Use an intentional patch release only when an npm-facing documentation correction must ship immediately.
+- Bump the version in `skills/phase/SKILL.md` whenever installable skill content changes.
+- The release workflow validates every merge to `main`, but publishes only package versions not already on npm. An existing version is a successful no-op.
 
-When asked to bump the version (patch, minor, or major):
+When asked to bump the package version:
 
 1. Bump `version` in `packages/phase/package.json`.
-2. Bump `version` in `skills/phase/SKILL.md` frontmatter (skill version is independent, but bump it alongside package changes that alter the public API or skill references).
-3. **Prepend** a new section to `CHANGELOG.md` under the new version number. Keep all previous entries intact (newest first, oldest last). Follow the existing format: `## X.Y.Z`, then `### Patch Changes` / `### Minor Changes` / `### Major Changes`, then bullet points.
-4. **Keep entries short.** State what changed, not why. One line per change. Only elaborate if it directly affects how consumers use the API. Internal refactors, test infrastructure, and agent file updates get one line at most.
-5. Never overwrite or truncate older changelog entries.
+2. Bump `version` in `skills/phase/SKILL.md` when the package change alters the public API or skill references.
+3. Prepend a section to `CHANGELOG.md` under the new version number. Keep all older entries.
+4. Use the existing `## X.Y.Z` and `### Patch Changes` / `### Minor Changes` / `### Major Changes` format.
+5. Keep each entry to what changed and never overwrite older changelog entries.
 
-## Skill sync
-
-The `skills/phase/` directory contains an agent skill that documents the public API. It must stay in sync with the source.
-
-### Source of truth and generated files
-
-- **Hand-edit:** `SKILL.md` and `references/*.md`. Start new references from `skills/phase/references/_template.md`. `SKILL.md` frontmatter is the single source of truth for the skill's `name`, `description`, `license`, `version`, `author`, and `abstract`.
-- **Never hand-edit (generated by `skill:build` / `skill:package`):** `metadata.json`, `dist/phase-skill.zip`, `scripts/scan.mjs` (bundled from `scanner/cli.ts` by tsdown; edit the source modules, not the artifact), and the signal-table and scan-golden regions inside `references/audit.md` (spliced from `scanner/signals.ts` and `evals/scenarios/audit-planted-defects/expected-scan.txt` by `scripts/skill/sync-scan-docs.mjs`). To change the version, edit `SKILL.md` frontmatter and rebuild.
-- The skill `version` is intentionally independent of the package `version`. They evolve on different cadences. Don't sync them.
-
-### When to update skill references
-
-After any change to:
-
-- **Option names, types, or defaults.** Update the corresponding `skills/phase/references/<export>.md`.
-- **Phase or reason enum values.** Update the phases/reasons tables in the reference.
-- **The canonical CSS pattern** (`data-[enter=animate]:starting:...`, `data-[phase=exiting]:...`): grep `skills/phase/references/` and update all occurrences.
-- **The "choosing a primitive" table** in `README.md`: also update the matching table in `skills/phase/SKILL.md`.
-- **Adding or removing exports.** `pnpm skill:check` will catch this (exits non-zero on uncovered export or orphan reference).
-
-### After updating skill references
-
-```bash
-pnpm format:fix               # format everything including markdown
-pnpm skill:check              # verify no drift between barrels and references
-pnpm skill:build              # bundle scanner + regenerate skills/phase/metadata.json
-pnpm skill:package            # regenerate skills/phase/dist/phase-skill.zip
-```
-
-(Pre-commit runs `skill:build` + `skill:package` automatically when skill files are staged, so these are usually already done for you.)
-
-### What to exclude from skill references
-
-- **Bundle sizes.** These are auto-maintained in the README via `pnpm size:readme`. Do not duplicate in skill references.
-- **Implementation details.** The skill teaches correct usage patterns, not internal architecture.
-- **Version-specific workarounds.** If it's a bug, fix it; don't document the workaround in the skill.
+Package and skill naming follows [`ADR 0007`](./docs/adr/0007-reserve-unscoped-names-for-published-packages.md): unscoped names are publishable, while `@usephase/*` workspace packages are internal and must set `"private": true`.

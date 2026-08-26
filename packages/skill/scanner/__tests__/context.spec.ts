@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import {
   detectAppRouterRoot,
@@ -9,6 +9,8 @@ import {
 } from '../context.ts';
 import type { ScanContext } from '../context.ts';
 import { scanTargets } from '../index.ts';
+
+const packageRoot = resolve(import.meta.dirname, '..', '..');
 
 function emptyContext(): ScanContext {
   return {
@@ -90,7 +92,7 @@ describe('context', () => {
 describe('environment context', () => {
   it('detects Next.js App Router and PPR from the ssr-semantics workspace', () => {
     const result = scanTargets([
-      'evals/scenarios/ssr-semantics-guard/workspace',
+      join(packageRoot, 'evals/scenarios/ssr-semantics-guard/workspace'),
     ]);
     expect(result.context.framework).toBe('next');
     expect(result.context.appRouter).toBe(true);
@@ -99,7 +101,7 @@ describe('environment context', () => {
 
   it('finds the Next config by walking up from a subdirectory target', () => {
     const result = scanTargets([
-      'evals/scenarios/ssr-semantics-guard/workspace/app',
+      join(packageRoot, 'evals/scenarios/ssr-semantics-guard/workspace/app'),
     ]);
     expect(result.context.framework).toBe('next');
     expect(result.context.appRouter).toBe(true);
@@ -296,7 +298,7 @@ describe('environment context', () => {
 
   it('reports no framework for the plain fixture workspace', () => {
     const result = scanTargets([
-      'evals/scenarios/false-positive-discipline/workspace',
+      join(packageRoot, 'evals/scenarios/false-positive-discipline/workspace'),
     ]);
     expect(result.context.framework).toBe(null);
   });

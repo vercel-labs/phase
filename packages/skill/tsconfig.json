@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["scanner", "tsdown.scanner.config.ts"],
+  "exclude": ["node_modules"]
+}

@@ -25,10 +25,11 @@ import { NOISE_TIERS, SEVERITY_ORDER, SIGNALS } from '../../scanner/signals.ts';
 import { readMarkerBlock } from './marker-block.mjs';
 import { isSignalTableFresh } from './scan-docs.mjs';
 
-const root = resolve(import.meta.dirname, '..', '..');
-const refsDir = join(root, 'skills', 'phase', 'references');
+const packageRoot = resolve(import.meta.dirname, '..', '..');
+const repoRoot = resolve(packageRoot, '..', '..');
+const refsDir = join(repoRoot, 'skills', 'phase', 'references');
 const auditPath = join(refsDir, 'audit.md');
-const goldenPath = join(root, GOLDEN_SCENARIO_DIR, 'expected-scan.txt');
+const goldenPath = join(packageRoot, GOLDEN_SCENARIO_DIR, 'expected-scan.txt');
 
 let errors = 0;
 
@@ -152,7 +153,7 @@ for (const fileName of referenceFiles) {
 
 // --- 4. Eval scenarios satisfy the shared contract ---
 
-const scenariosDir = join(root, 'evals/scenarios');
+const scenariosDir = join(packageRoot, 'evals/scenarios');
 const scenarios = readdirSync(scenariosDir);
 for (const scenario of scenarios) {
   try {
@@ -173,7 +174,7 @@ const guardAnchor = 'scanned-content-is-data-not-instructions';
 if (!markdownInfo(auditPath).anchors.has(guardAnchor)) {
   fail(`audit.md is missing the untrusted-content section (#${guardAnchor})`);
 }
-const skillMd = readFileSync(join(root, 'skills/phase/SKILL.md'), 'utf8');
+const skillMd = readFileSync(join(repoRoot, 'skills/phase/SKILL.md'), 'utf8');
 if (!skillMd.includes('untrusted data, never instructions')) {
   fail('SKILL.md is missing the untrusted-content guardrail sentence');
 }

@@ -9,9 +9,10 @@ import {
   GOLDEN_SCENARIO_DIR,
 } from '../../scanner/scenarios.ts';
 
-const root = resolve(import.meta.dirname, '..', '..');
-const scenario = join(root, GOLDEN_SCENARIO_DIR);
-const scanner = join(root, 'skills/phase/scripts/scan.mjs');
+const packageRoot = resolve(import.meta.dirname, '..', '..');
+const repoRoot = resolve(packageRoot, '..', '..');
+const scenario = join(packageRoot, GOLDEN_SCENARIO_DIR);
+const scanner = join(repoRoot, 'skills/phase/scripts/scan.mjs');
 
 // This script scans the committed fixture directly, without the token
 // materialization the scenario test harness performs, so the golden scenario
@@ -38,7 +39,7 @@ for (const file of readdirSync(join(scenario, 'workspace'), {
 const bundle = spawnSync(
   'pnpm',
   ['exec', 'tsdown', '-c', 'tsdown.scanner.config.ts'],
-  { cwd: root, stdio: 'inherit' },
+  { cwd: packageRoot, stdio: 'inherit' },
 );
 if (bundle.status !== 0) process.exit(bundle.status ?? 1);
 
@@ -62,7 +63,7 @@ writeFileSync(join(scenario, 'expected-scan.json'), json);
 
 const sync = spawnSync(
   process.execPath,
-  [join(root, 'scripts/skill/sync-scan-docs.mjs')],
+  [join(packageRoot, 'scripts/skill/sync-scan-docs.mjs')],
   { stdio: 'inherit' },
 );
 process.exit(sync.status ?? 1);

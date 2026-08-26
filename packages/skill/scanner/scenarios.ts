@@ -22,7 +22,7 @@ export const CONTROL_CHARACTER_TOKENS = {
 
 /**
  * The scenario whose full-scan output is committed as the golden sample and
- * spliced into audit.md. Relative to the repository root.
+ * spliced into audit.md. Relative to the @usephase/skill package root.
  */
 export const GOLDEN_SCENARIO_DIR = 'evals/scenarios/audit-planted-defects';
 
