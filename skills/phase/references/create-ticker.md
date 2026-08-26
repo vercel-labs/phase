@@ -35,16 +35,21 @@ const ticker = createTicker(options: TickerOptions): Ticker;
 - `fps` must be a finite number greater than 0, both at construction and in `setFps`. Anything else throws `invalid_fps`; a failed `setFps` keeps the previous cap.
 - `setFps` works while idle, running, or paused, and never restarts the timeline: `FrameState` identity, frame count, `elapsed`, and pause accounting all continue. On a stopped ticker it throws `ticker_stopped`, even when the fps is also invalid.
 - A new cap applies from the next frame, and never sooner than the new interval allows.
+- A cap change updates cadence and the stall bound together. It does not reset frame count, elapsed time, or the reused `FrameState` object.
 - The cap holds its target rate on real browser timestamps: a 60fps cap on a 60Hz display delivers ~60fps even though timestamps are rounded. A cap at or above the display rate delivers every frame; delivery never exceeds the display rate.
 
 ### FrameState
 
-| Field     | Type     | Description                              |
-| --------- | -------- | ---------------------------------------- |
-| `time`    | `number` | Current browser rAF timestamp            |
-| `delta`   | `number` | ms since last tick (clamped to 40ms max) |
-| `elapsed` | `number` | ms since start, excluding paused time    |
-| `frame`   | `number` | Frame count since start                  |
+| Field     | Type     | Description                                             |
+| --------- | -------- | ------------------------------------------------------- |
+| `time`    | `number` | Raw browser rAF timestamp                               |
+| `delta`   | `number` | ms since the last delivered frame, with stall smoothing |
+| `elapsed` | `number` | Running sum of delivered deltas                         |
+| `frame`   | `number` | Frame count since start                                 |
+
+`elapsed` and `delta` form one coherent timeline: each delivered frame sets `elapsed` to its previous value plus that frame's `delta`. The first delivered frame, and the first frame after `resume()`, use 16.67ms when uncapped or one active FPS interval when capped.
+
+Stalls never make animations teleport. The maximum delivered `delta` is 40ms when uncapped or one active FPS interval plus 40ms when capped. Under repeated jank, this timeline can briefly run slower than wall clock. `time` is exempt and always exposes the raw browser timestamp for synchronization with non-phase rAF code.
 
 ## When to use
 
@@ -65,7 +70,7 @@ const ticker = createTicker(options: TickerOptions): Ticker;
 - Use `setFps()` to change the FPS cap on a live ticker instead of destroying and rebuilding it.
 - Use `pause()` / `resume()` for intentional suspension (e.g. user pauses a game).
 - Rely on the shared clock: all tickers receive the same browser rAF timestamp, even when the same JavaScript global loads duplicate phase copies that use the same clock protocol.
-- Trust delta clamping: after a long pause, `frame.delta` is clamped to 40ms. No teleporting.
+- Use `frame.delta` and `frame.elapsed` for animation progress. Both follow the same stall-smoothed timeline and freeze during strong pause.
 
 ## Don't
 

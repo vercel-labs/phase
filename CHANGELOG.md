@@ -1,5 +1,12 @@
 # phase
 
+## 0.5.0
+
+### Minor Changes
+
+- `frame.elapsed` is now the running sum of delivered `frame.delta` values, keeping elapsed- and delta-driven consumers synchronized through stalls.
+- `frame.delta` now uses an FPS-aware stall bound and the active FPS interval on first and resumed frames, so low-FPS tickers report their delivered cadence instead of 40ms.
+
 ## 0.4.2
 
 ### Patch Changes

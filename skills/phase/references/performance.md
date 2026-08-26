@@ -6,7 +6,7 @@ Impact-ranked do's and don'ts for writing performant animation code with phase. 
 
 - **Critical.** Zero per-frame allocations | Never setState in onTick | No forced reflows | No layout-inducing writes
 - **High.** Strong pause | Reduced motion by default | Stable function references
-- **Medium.** Frame-locked shared clock | Delta clamping | Observer pooling | Never drive layout from a MutationObserver | will-change lifecycle | No getBoundingClientRect for visibility
+- **Medium.** Frame-locked shared clock | Coherent frame timeline | Observer pooling | Never drive layout from a MutationObserver | will-change lifecycle | No getBoundingClientRect for visibility
 - **Low.** Don't store FrameState refs | No try/catch in onTick | No debug logging in hot path
 
 ## Critical (per-frame violations cause visible jank)
@@ -186,9 +186,11 @@ requestAnimationFrame(function loop2() {
 
 **Do:** Use multiple `createTicker` / `useLoop` instances — they automatically share the clock.
 
-### Delta clamping
+### Coherent frame timeline
 
-`frame.delta` is clamped to 40ms. When resuming from a long pause (tab switch, debugger), animations pick up smoothly instead of teleporting.
+`frame.elapsed` is the exact running sum of delivered `frame.delta` values. An uncapped frame advances by at most 40ms; a capped frame advances by at most one active FPS interval plus 40ms. The first delivered frame, including the first after resume, uses 16.67ms when uncapped or one active FPS interval when capped.
+
+This smoothing means a visible stall or repeated jank can make an animation run briefly slower than wall clock instead of teleporting. Strong pauses freeze the timeline. `frame.time` remains the raw browser rAF timestamp for synchronization with non-phase frame code.
 
 **Don't:**
 
@@ -200,7 +202,7 @@ onTick: (frame) => {
 };
 ```
 
-**Do:** Use `frame.delta` and `frame.elapsed` — both account for pause time and clamping.
+**Do:** Use `frame.delta` and `frame.elapsed` for animation progress. Both account for strong pauses and stall smoothing, and they always describe the same timeline.
 
 ### Observer pooling
 
