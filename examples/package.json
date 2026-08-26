@@ -1,0 +1,30 @@
+{
+  "name": "@usephase/examples",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "manifest": "node scripts/generate-manifest.mjs",
+    "test": "node --test scripts/generate-manifest.spec.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "phase": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.10",
+    "react": "19.2.7",
+    "typescript": "6.0.2"
+  },
+  "exports": {
+    "./manifest": "./manifest.ts",
+    "./types": "./types.ts",
+    "./*/meta": "./*/meta.ts",
+    "./*": "./*.tsx"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

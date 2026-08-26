@@ -45,6 +45,12 @@ jobs:
       - name: Build, typecheck, test, and size
         run: pnpm exec turbo run build typecheck test size
 
+      - name: Examples manifest freshness
+        run: |
+          pnpm --filter @usephase/examples manifest
+          git diff --exit-code examples/manifest.ts \
+            || (echo "Examples manifest is stale. Run 'pnpm --filter @usephase/examples manifest' and commit the result." && exit 1)
+
       - name: README bundle-size freshness
         run: |
           pnpm size:readme

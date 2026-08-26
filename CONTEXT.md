@@ -74,9 +74,36 @@ Repeating calibration after a detection change, a field report, or before a rele
 The generated single scanner file users receive with phase's installable agent skill at `skills/phase/scripts/scan.mjs`, distinct from its typed source modules. Owner: `packages/skill/tsdown.scanner.config.ts`.
 _Avoid_: Built scanner, bundled scanner
 
+## Examples corpus
+
+**Examples corpus**:
+The canonical collection of renderable phase examples shared by documentation, browser tests, generated snippets, and agent evaluations. It contains examples and their metadata, never adapter-specific assertions. Owner: `examples/`.
+_Avoid_: Demo suite, fixture suite, sample app
+
+**Example**:
+One renderable demonstration of a phase export: a default-exported, prop-free, self-styled React component. Owner: `examples/<export-kebab>/<variant>.tsx`.
+_Avoid_: Demo, sample, fixture
+
+**Variant**:
+One named presentation of an example within an export directory. Its kebab-case filename forms the second half of the example slug. Owner: `examples/<export-kebab>/<variant>.tsx`.
+
+**Example slug**:
+The canonical `<export-kebab>/<variant>` identity used by every examples-corpus adapter. Owner: `examples/manifest.ts`.
+_Avoid_: Example ID, example key
+
+**Manifest**:
+The generated map from each example slug to its lazy component import. Owner: `examples/manifest.ts`.
+
+**Example meta**:
+The title, description, and demonstrated phase exports shared by every variant in one export directory. Owner: `examples/<export-kebab>/meta.ts`.
+
+**Structural determinism**:
+The guarantee that an example's DOM structure, attributes, class names, and text are determined by mount state, elapsed frames, and explicit user interaction. Continuous animated values may vary, but randomness, wall-clock time, locale, and timezone do not shape the output. Owner: `examples/CONVENTIONS.md`.
+
 ## Overloaded terms
 
 - **Tier** always needs a qualifier: severity tier describes impact when real, while noise tier describes detection trust. `dedup` marks optional cleanup, and execution is a class rather than another tier.
 - **Finding** means a source-code location reported by the scanner, not a confirmed problem or an evaluation expectation.
 - **Evidence** means a named yes/no scanner check. Use **ground truth** for the findings an evaluation expects.
 - **Scenario**, **fixture**, and **golden** are distinct: a scenario is the complete evaluation, a fixture is sample input, and a golden is saved scanner output.
+- **Example** is renderable reference code from the examples corpus. **Fixture** remains evaluation input owned by a scenario.
