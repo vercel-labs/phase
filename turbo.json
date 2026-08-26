@@ -33,6 +33,9 @@
       "dependsOn": ["build", "typecheck", "test", "size", "skill:check"]
     },
     "//#test:root": {},
+    "@usephase/examples#typecheck": {
+      "dependsOn": ["phase#build", "^typecheck"]
+    },
     "@usephase/skill#test": {
       "cache": false
     }
