@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const PACKAGE_ROOT = resolve(ROOT, 'packages', 'phase');
-const README = resolve(PACKAGE_ROOT, 'README.md');
+const README = resolve(ROOT, 'README.md');
 
 const SIZE_LIMIT_CONFIG = resolve(PACKAGE_ROOT, '.size-limit.json');
 
@@ -70,4 +70,4 @@ ${readme.slice(endIdx)}`;
 
 writeFileSync(README, updated);
 execSync(`pnpm exec oxfmt ${README}`, { cwd: ROOT, stdio: 'inherit' });
-console.log('packages/phase/README.md size table updated.');
+console.log('README.md size table updated.');

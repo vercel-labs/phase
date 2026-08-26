@@ -12,6 +12,8 @@ Run commands from the repository root. The repository has three ownership bounda
 - [`packages/skill/`](./packages/skill/AGENTS.md) owns scanner source, evals, and skill-maintainer tooling.
 - `skills/phase/` contains only installable skill content and committed generated artifacts.
 
+The root `README.md` tells the package and repository story; `packages/phase/README.md` is the npm package summary.
+
 Scanner, audit, or eval changes must use the canonical vocabulary in [`CONTEXT.md`](./CONTEXT.md). Durable architecture decisions live in [`docs/adr/`](./docs/adr/README.md).
 
 ## Commands
@@ -59,7 +61,7 @@ Run `pnpm validate` before opening or updating a PR.
 Package and skill versions are independent release signals:
 
 - Bump `packages/phase/package.json` for changes to shipped library source, build output, or consumer-facing package metadata.
-- Do not bump the package for skill-only, test-only, workflow-only, or README-only changes. Use an intentional patch release only when an npm-facing documentation correction must ship immediately.
+- Do not bump the package for skill-only, test-only, workflow-only, or README-only changes. Root `README.md` changes are repository-only; changes to `packages/phase/README.md` reach npm with the next package release. Use an intentional patch release only when an npm-facing documentation correction must ship immediately.
 - Bump the version in `skills/phase/SKILL.md` whenever installable skill content changes.
 - The release workflow validates every merge to `main`, but publishes only package versions not already on npm. An existing version is a successful no-op.
 
