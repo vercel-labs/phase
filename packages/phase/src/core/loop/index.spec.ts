@@ -1,5 +1,6 @@
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 import { createMockMatchMedia } from '../../__mocks__/match-media';
+import type { FrameState } from '../tick';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
 let mockMM: ReturnType<typeof createMockMatchMedia>;
@@ -504,6 +505,383 @@ describe('quality signal - frame budget', () => {
 
     // Timer firing after stop must not throw or resurrect the loop.
     await vi.advanceTimersByTimeAsync(RECOVERY_RETRY_MS);
+    expect(loop.phase).toBe('stopped');
+    clock.restore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Timeline continuity across FPS policy changes
+// ---------------------------------------------------------------------------
+
+describe('timeline continuity across FPS policy changes', () => {
+  it('blur -> refocus preserves FrameState identity, frame count, and elapsed', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+
+    const identities = new Set<FrameState>();
+    const frameCounts: number[] = [];
+    const elapsedValues: number[] = [];
+    const loop = createLoop({
+      target: el,
+      onTick: (frame) => {
+        identities.add(frame);
+        frameCounts.push(frame.frame);
+        elapsedValues.push(frame.elapsed);
+      },
+    });
+    makeSightVisible(el);
+
+    clock.advance(16);
+    clock.advance(16);
+    clock.advance(16);
+
+    const hasFocusSpy = vi.spyOn(document, 'hasFocus');
+    hasFocusSpy.mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+    expect(loop.quality).toBe('degraded');
+    await Promise.resolve(); // flush any queued policy work
+
+    clock.advance(34);
+    clock.advance(34);
+
+    hasFocusSpy.mockReturnValue(true);
+    window.dispatchEvent(new Event('focus'));
+    expect(loop.quality).toBe('full');
+    await Promise.resolve();
+
+    clock.advance(16);
+    clock.advance(16);
+
+    // One FrameState object across the entire run: the ticker was never replaced.
+    expect(identities.size).toBe(1);
+    // Frame count never resets: strictly +1 per delivery.
+    let prevCount: number | undefined;
+    for (const count of frameCounts) {
+      if (prevCount !== undefined) expect(count).toBe(prevCount + 1);
+      prevCount = count;
+    }
+    // Elapsed never restarts from zero.
+    let prevElapsed = Number.NEGATIVE_INFINITY;
+    for (const elapsed of elapsedValues) {
+      expect(elapsed).toBeGreaterThanOrEqual(prevElapsed);
+      prevElapsed = elapsed;
+    }
+    loop.stop();
+    clock.restore();
+  });
+});
+
+describe('FPS policy cadence', () => {
+  it('uncapped degrades to 30 FPS and returns to uncapped', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const onTick = vi.fn();
+    const loop = createLoop({ target: el, onTick });
+    makeSightVisible(el);
+
+    // Uncapped: every 16ms source frame delivers.
+    onTick.mockClear();
+    for (let i = 0; i < 10; i++) clock.advance(16);
+    expect(onTick).toHaveBeenCalledTimes(10);
+
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+
+    // Degraded to 30 FPS: at most one delivery per 33.3ms, applied from the
+    // very next source frame (no uncapped transition frame).
+    onTick.mockClear();
+    for (let i = 0; i < 10; i++) clock.advance(16);
+    expect(onTick.mock.calls.length).toBeLessThanOrEqual(5);
+    expect(onTick.mock.calls.length).toBeGreaterThanOrEqual(4);
+
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    window.dispatchEvent(new Event('focus'));
+
+    // Back to uncapped: every source frame delivers again.
+    onTick.mockClear();
+    for (let i = 0; i < 10; i++) clock.advance(16);
+    expect(onTick).toHaveBeenCalledTimes(10);
+
+    loop.stop();
+    clock.restore();
+  });
+
+  it('a base fps below the degraded cap is unchanged by degradation', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const onTick = vi.fn();
+    const loop = createLoop({ target: el, onTick, fps: 20 });
+    makeSightVisible(el);
+
+    // 20 FPS = 50ms interval: 8 source frames at 25ms = 200ms -> 4 deliveries.
+    onTick.mockClear();
+    for (let i = 0; i < 8; i++) clock.advance(25);
+    const baselineDeliveries = onTick.mock.calls.length;
+
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+
+    // min(20, 30) = 20: cadence unchanged while degraded.
+    onTick.mockClear();
+    for (let i = 0; i < 8; i++) clock.advance(25);
+    expect(onTick.mock.calls.length).toBe(baselineDeliveries);
+
+    loop.stop();
+    clock.restore();
+  });
+
+  it('re-derives the frame budget when quality recovers', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const loop = createLoop({ target: el, onTick: vi.fn() });
+    makeSightVisible(el);
+    clock.advance(16);
+
+    // Degrade (budget 33.3ms) and recover (budget back to 16.7ms).
+    const hasFocusSpy = vi.spyOn(document, 'hasFocus');
+    hasFocusSpy.mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+    hasFocusSpy.mockReturnValue(true);
+    window.dispatchEvent(new Event('focus'));
+    expect(loop.quality).toBe('full');
+
+    // 30ms frames are over budget against the recovered uncapped budget
+    // (16.7 * 1.5 = 25ms) but would pass a stale degraded budget (50ms).
+    clock.advance(30);
+    clock.advance(30);
+    clock.advance(30);
+    expect(loop.quality).toBe('degraded');
+    expect(loop.qualityReason).toBe('frame-budget');
+
+    loop.stop();
+    clock.restore();
+  });
+
+  it('respects a configured degradedFps', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const onTick = vi.fn();
+    const loop = createLoop({ target: el, onTick, degradedFps: 10 });
+    makeSightVisible(el);
+
+    clock.advance(16);
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+
+    // 10 FPS = 100ms interval: 8 source frames at 25ms = 200ms -> 2 deliveries.
+    onTick.mockClear();
+    for (let i = 0; i < 8; i++) clock.advance(25);
+    expect(onTick.mock.calls.length).toBe(2);
+
+    loop.stop();
+    clock.restore();
+  });
+});
+
+describe('FPS policy while paused', () => {
+  it('a quality change during pause applies its cap on resume', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const onTick = vi.fn();
+    const loop = createLoop({ target: el, onTick });
+    makeSightVisible(el);
+    for (let i = 0; i < 4; i++) clock.advance(16);
+
+    makeSightHidden(el);
+    expect(loop.phase).toBe('paused');
+
+    // Blur while paused: quality degrades, the 30 FPS cap must not be lost.
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+    expect(loop.quality).toBe('degraded');
+
+    makeSightVisible(el);
+    expect(loop.phase).toBe('running');
+
+    // 8 source frames at 16ms = 128ms. Uncapped would deliver all 8; the
+    // degraded 30 FPS cap must throttle them.
+    onTick.mockClear();
+    for (let i = 0; i < 8; i++) clock.advance(16);
+    expect(onTick.mock.calls.length).toBeLessThan(8);
+
+    loop.stop();
+    clock.restore();
+  });
+
+  it('lifecycle pause freezes elapsed and resumes with a clean delta', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    let lastElapsed = 0;
+    let lastDelta = 0;
+    const loop = createLoop({
+      target: el,
+      onTick: (frame) => {
+        lastElapsed = frame.elapsed;
+        lastDelta = frame.delta;
+      },
+    });
+    makeSightVisible(el);
+    for (let i = 0; i < 4; i++) clock.advance(16);
+    const elapsedBeforePause = lastElapsed;
+
+    makeSightHidden(el);
+    clock.advance(500); // time passes while strong-paused; no deliveries
+
+    makeSightVisible(el);
+    clock.advance(16);
+
+    // Elapsed excludes the paused 500ms and the resume delta is clean (no
+    // pause gap). Continuity only; exact delta bounds belong to the ticker.
+    expect(lastElapsed - elapsedBeforePause).toBeLessThan(500);
+    expect(lastDelta).toBeLessThan(500);
+
+    loop.stop();
+    clock.restore();
+  });
+});
+
+describe('fps validation', () => {
+  const invalidValues = [0, -1, Number.NaN, Infinity, -Infinity];
+
+  it.each(invalidValues)('rejects fps: %s at construction', async (value) => {
+    const { createLoop } = await getModule();
+    const el = document.createElement('div');
+    expect(() =>
+      createLoop({ target: el, onTick: vi.fn(), fps: value, start: 'manual' }),
+    ).toThrow(/invalid fps/);
+  });
+
+  it.each(invalidValues)(
+    'rejects degradedFps: %s at construction, even in manual start',
+    async (value) => {
+      const { createLoop } = await getModule();
+      const el = document.createElement('div');
+      expect(() =>
+        createLoop({
+          target: el,
+          onTick: vi.fn(),
+          degradedFps: value,
+          start: 'manual',
+        }),
+      ).toThrow(/invalid fps/);
+    },
+  );
+
+  it('rejects an invalid degradedFps even when the degraded path is inactive', async () => {
+    const { createLoop } = await getModule();
+    const el = document.createElement('div');
+    // Runtime JS can pass degradedFps alongside degraded: 'pause' despite the
+    // type union forbidding it; the value is validated regardless.
+    const options = {
+      target: el,
+      onTick: vi.fn(),
+      degraded: 'pause',
+      degradedFps: -5,
+      start: 'manual',
+    };
+    expect(() =>
+      createLoop(options as unknown as Parameters<typeof createLoop>[0]),
+    ).toThrow(/invalid fps/);
+  });
+});
+
+describe('stop is terminal for the ticker', () => {
+  it('no frames deliver after stop()', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const onTick = vi.fn();
+    const loop = createLoop({ target: el, onTick });
+    makeSightVisible(el);
+    clock.advance(16);
+    expect(onTick).toHaveBeenCalled();
+
+    loop.stop();
+
+    onTick.mockClear();
+    for (let i = 0; i < 5; i++) clock.advance(16);
+    expect(onTick).not.toHaveBeenCalled();
+    clock.restore();
+  });
+
+  it('a throwing onPhaseChange(stopped) does not abort teardown', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const onTick = vi.fn();
+    const loop = createLoop({
+      target: el,
+      onTick,
+      onPhaseChange: (phase) => {
+        if (phase === 'stopped') throw new Error('consumer bug');
+      },
+    });
+    makeSightVisible(el);
+    clock.advance(16);
+
+    expect(() => loop.stop()).toThrow('consumer bug');
+
+    // Teardown finished before the callback threw: no more deliveries.
+    onTick.mockClear();
+    for (let i = 0; i < 5; i++) clock.advance(16);
+    expect(onTick).not.toHaveBeenCalled();
+    expect(loop.phase).toBe('stopped');
+    clock.restore();
+  });
+
+  it('stop from a pause-mode degrade callback arms no recovery timer', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    let loop: ReturnType<typeof createLoop>;
+    loop = createLoop({
+      target: el,
+      onTick: vi.fn(),
+      degraded: 'pause',
+      onPhaseChange: (phase, reason) => {
+        if (phase === 'paused' && reason === 'degraded') loop.stop();
+      },
+    });
+    makeSightVisible(el);
+
+    // Three over-budget frames degrade; the callback stops the loop mid-degrade.
+    clock.advance(16);
+    clock.advance(35);
+    clock.advance(35);
+    clock.advance(35);
+    expect(loop.phase).toBe('stopped');
+
+    // No timer may fire after stop and mutate quality back to full.
+    await vi.advanceTimersByTimeAsync(RECOVERY_RETRY_MS);
+    expect(loop.quality).toBe('degraded');
+    expect(loop.phase).toBe('stopped');
+    clock.restore();
+  });
+
+  it('stop from paused leaves no ticker to resurrect', async () => {
+    const { createLoop } = await getModule();
+    const clock = setupManualClock();
+    const el = document.createElement('div');
+    const onTick = vi.fn();
+    const loop = createLoop({ target: el, onTick });
+    makeSightVisible(el);
+    clock.advance(16);
+    makeSightHidden(el);
+    expect(loop.phase).toBe('paused');
+
+    loop.stop();
+
+    onTick.mockClear();
+    for (let i = 0; i < 5; i++) clock.advance(16);
+    expect(onTick).not.toHaveBeenCalled();
     expect(loop.phase).toBe('stopped');
     clock.restore();
   });

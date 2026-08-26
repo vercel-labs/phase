@@ -16,10 +16,10 @@ const loop = createLoop(options: LoopOptions): Loop;
 | --------------------- | ----------------------------------- | ------------ | ------------------------------------------------------ |
 | `target`              | `Element \| Document`               | required     | Element to observe, or `document` for the page         |
 | `onTick`              | `(frame: FrameState) => void`       | required     | Called each frame while running                        |
-| `fps`                 | `number`                            | —            | Cap frames per second                                  |
+| `fps`                 | `number`                            | —            | Cap frames per second (finite, > 0)                    |
 | `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion              |
 | `degraded`            | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades                         |
-| `degradedFps`         | `number`                            | `30`         | FPS cap in degraded throttle mode                      |
+| `degradedFps`         | `number`                            | `30`         | FPS cap in degraded throttle mode (finite, > 0)        |
 | `intersectionOptions` | `IntersectionObserverInit`          | —            | Forwarded to the underlying IO. Ignored for `document` |
 | `start`               | `'auto' \| 'manual'`                | `'auto'`     | Whether to start immediately                           |
 | `onPhaseChange`       | `(phase, reason) => void`           | —            | Called on every phase transition                       |
@@ -65,6 +65,7 @@ const loop = createLoop(options: LoopOptions): Loop;
   ```
 - Call `stop()` when the animation is permanently done (e.g. component unmounts, page navigates away).
 - Read `phase` and `phaseReason` to debug unexpected pauses.
+- Keep accumulating across quality changes: FPS throttling and recovery (e.g. the tab losing and regaining focus) never reset `frame.frame`, `frame.elapsed`, or swap out the `frame` object, so position and progress variables need no re-sync.
 - Use `degraded: 'pause'` for heavy canvas/WebGL that can't gracefully degrade.
 
 ## Don't
@@ -74,6 +75,7 @@ const loop = createLoop(options: LoopOptions): Loop;
 - **Never store a reference to `frame`.** It's the same object every tick, mutated in place. Read values immediately.
 - **Don't call `start()` after `stop()`.** `stop()` is terminal. Create a new loop instance.
 - **Don't use `createLoop` without an element.** Throws `PhaseError` with code `no_target`.
+- **Don't pass a non-positive or non-finite `fps` or `degradedFps`.** Throws `PhaseError` with code `invalid_fps` at construction.
 
 ## Reduced motion
 
