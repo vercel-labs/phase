@@ -42,11 +42,8 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
+      - name: Build, typecheck, test, and size
+        run: pnpm exec turbo run build typecheck test size
 
       - name: README bundle-size freshness
         run: |
@@ -54,15 +51,11 @@ jobs:
           git diff --exit-code packages/phase/README.md \
             || (echo "README bundle-size table is stale. Run 'pnpm size:readme' and commit the result." && exit 1)
 
-      - name: Unit tests
-        run: pnpm test
-
       - name: Skill coverage
         run: pnpm skill:check
 
       - name: Skill artifact freshness
         run: |
-          pnpm skill:build
           pnpm skill:package
           git diff --exit-code skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip \
-            || (echo "Skill artifacts are stale. Run 'pnpm skill:build && pnpm skill:package' and commit the result." && exit 1)
+            || (echo "Skill artifacts are stale. Run 'pnpm skill:package' and commit the result." && exit 1)
