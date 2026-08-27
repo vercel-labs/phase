@@ -12,9 +12,9 @@ import {
 export interface FrameState {
   /** Current browser requestAnimationFrame timestamp. */
   time: number;
-  /** Milliseconds since last tick, clamped to 40ms. */
+  /** Milliseconds to advance this frame. At most 40ms, or one FPS interval plus 40ms. */
   delta: number;
-  /** Milliseconds since start, excluding paused time. */
+  /** Sum of delivered deltas since start. */
   elapsed: number;
   /** Frame count since start. */
   frame: number;
@@ -60,7 +60,7 @@ export interface Ticker {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Prevents teleportation on resume. Matches motion's maxElapsed. */
+/** Maximum amount delta may exceed the active FPS interval. */
 const MAX_DELTA_MS = 40;
 
 /** Default first-frame delta when no previous tick exists. */
@@ -175,7 +175,7 @@ function advanceDeadline(
 // ---------------------------------------------------------------------------
 
 /**
- * Core rAF loop primitive with FPS cap, delta clamping, and strong pause.
+ * Low-level requestAnimationFrame loop with an optional FPS limit and pause controls.
  *
  * @remarks
  * `FrameState` is reused across frames. Do not store a reference to it.
@@ -189,14 +189,14 @@ export function createTicker(options: TickerOptions): Ticker {
 
   const { onTick, signal } = options;
   let minFrameTime: number = resolveMinFrameTime('createTicker', options.fps);
+  let maxDeltaTime: number = minFrameTime + MAX_DELTA_MS;
 
   let _phase: TickerPhase = 'idle';
   let _reason: TickerReason = 'initial';
 
-  let lastTickTime = 0;
-  let pauseStartTime = 0;
-  let totalPausedTime = 0;
-  let startTime = 0;
+  let lastTickTime = -1;
+  let elapsedTime = 0;
+  let frameCount = 0;
 
   // When the next capped delivery becomes eligible (see advanceDeadline).
   // 0 while uncapped.
@@ -209,9 +209,9 @@ export function createTicker(options: TickerOptions): Ticker {
     // FPS throttle: skip this frame if the cap's deadline hasn't arrived.
     if (now < nextDueTime) return;
 
-    const isFirstDelivery: boolean = lastTickTime === 0;
+    const isFirstDelivery: boolean = lastTickTime < 0;
     const rawDelta: number = isFirstDelivery
-      ? DEFAULT_FIRST_DELTA_MS
+      ? minFrameTime || DEFAULT_FIRST_DELTA_MS
       : now - lastTickTime;
     lastTickTime = now;
 
@@ -222,9 +222,11 @@ export function createTicker(options: TickerOptions): Ticker {
     }
 
     frame.time = now;
-    frame.delta = rawDelta > MAX_DELTA_MS ? MAX_DELTA_MS : rawDelta;
-    frame.elapsed = now - startTime - totalPausedTime;
-    frame.frame++;
+    frame.delta = rawDelta > maxDeltaTime ? maxDeltaTime : rawDelta;
+    elapsedTime += frame.delta;
+    frame.elapsed = elapsedTime;
+    frameCount++;
+    frame.frame = frameCount;
 
     onTick(frame);
   }
@@ -241,10 +243,10 @@ export function createTicker(options: TickerOptions): Ticker {
 
     _phase = 'running';
     _reason = 'started';
-    startTime = performance.now();
-    lastTickTime = 0;
+    lastTickTime = -1;
     nextDueTime = 0;
-    totalPausedTime = 0;
+    elapsedTime = 0;
+    frameCount = 0;
     resetFrameState(frame);
 
     joinSharedClock(subscription);
@@ -255,7 +257,6 @@ export function createTicker(options: TickerOptions): Ticker {
 
     _phase = 'paused';
     _reason = 'manual';
-    pauseStartTime = performance.now();
 
     // Strong pause: cancel rAF subscription entirely — zero CPU while paused.
     leaveSharedClock(subscription);
@@ -265,10 +266,9 @@ export function createTicker(options: TickerOptions): Ticker {
     if (_phase === 'stopped') tickerStoppedError();
     if (_phase !== 'paused') return;
 
-    totalPausedTime += performance.now() - pauseStartTime;
     // Reset so the first resumed tick gets a clean delta (not the pause gap)
     // and delivers immediately, re-anchoring the cadence grid.
-    lastTickTime = 0;
+    lastTickTime = -1;
     nextDueTime = 0;
 
     _phase = 'running';
@@ -278,10 +278,12 @@ export function createTicker(options: TickerOptions): Ticker {
 
   function setFps(fps?: number): void {
     if (_phase === 'stopped') tickerStoppedError();
-    minFrameTime = resolveMinFrameTime('setFps', fps);
+    const nextMinFrameTime: number = resolveMinFrameTime('setFps', fps);
+    minFrameTime = nextMinFrameTime;
+    maxDeltaTime = nextMinFrameTime + MAX_DELTA_MS;
     // Base the next deadline on the last delivery: the new cap applies from
     // the next frame, and never sooner than the new interval allows.
-    nextDueTime = lastTickTime === 0 ? 0 : lastTickTime + minFrameTime;
+    nextDueTime = lastTickTime < 0 ? 0 : lastTickTime + minFrameTime;
   }
 
   function stop(): void {

@@ -56,6 +56,27 @@ async function startDuplicateModuleTickers(
   return { raf, first, second };
 }
 
+function stubRaf() {
+  const raf = createRafDriver();
+  vi.stubGlobal('requestAnimationFrame', raf.request);
+  vi.stubGlobal('cancelAnimationFrame', raf.cancel);
+  return raf;
+}
+
+interface TimingSnapshot {
+  time: number;
+  delta: number;
+  elapsed: number;
+}
+
+function snapshotTiming(frame: TimingSnapshot): TimingSnapshot {
+  return {
+    time: frame.time,
+    delta: frame.delta,
+    elapsed: frame.elapsed,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Phase transitions
 // ---------------------------------------------------------------------------
@@ -262,63 +283,261 @@ describe('frame state', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Delta clamping
+// Frame timeline
 // ---------------------------------------------------------------------------
 
-describe('delta clamping', () => {
-  it('delta is clamped to 40ms when raw delta exceeds it', async () => {
+describe('frame timeline', () => {
+  it('treats timestamp 0 as a delivered frame before a later stall', async () => {
+    const raf = stubRaf();
     const { createTicker } = await getModule();
-    let lastDelta = 0;
+    const frames: Array<{ time: number; delta: number; elapsed: number }> = [];
     const ticker = createTicker({
-      onTick: (f) => {
-        lastDelta = f.delta;
+      onTick: (frame) => {
+        frames.push({
+          time: frame.time,
+          delta: frame.delta,
+          elapsed: frame.elapsed,
+        });
       },
     });
     ticker.start();
-    advanceFrame(16);
-    advanceFrame(200);
-    expect(lastDelta).toBeLessThanOrEqual(40);
-    ticker.stop();
-  });
-});
 
-// ---------------------------------------------------------------------------
-// Elapsed time
-// ---------------------------------------------------------------------------
+    raf.frame(0);
+    raf.frame(5000);
 
-describe('elapsed time', () => {
-  it('elapsed increases across frames', async () => {
-    const { createTicker } = await getModule();
-    const vals: number[] = [];
-    const ticker = createTicker({ onTick: (f) => vals.push(f.elapsed) });
-    ticker.start();
-    advanceFrame(16);
-    advanceFrame(16);
-    advanceFrame(16);
-    expect(vals.length).toBeGreaterThanOrEqual(3);
-    expect(vals[1] as number).toBeGreaterThan(vals[0] as number);
-    expect(vals[2] as number).toBeGreaterThan(vals[1] as number);
+    expect(frames).toEqual([
+      { time: 0, delta: 16.67, elapsed: 16.67 },
+      { time: 5000, delta: 40, elapsed: 56.67 },
+    ]);
     ticker.stop();
   });
 
-  it('elapsed EXCLUDES paused time', async () => {
+  it('restores internal values after a callback changes the reused frame object', async () => {
+    const raf = stubRaf();
     const { createTicker } = await getModule();
-    let lastElapsed = 0;
+    const frames: Array<{ delta: number; elapsed: number; frame: number }> = [];
     const ticker = createTicker({
-      onTick: (f) => {
-        lastElapsed = f.elapsed;
+      onTick: (frame) => {
+        frames.push({
+          delta: frame.delta,
+          elapsed: frame.elapsed,
+          frame: frame.frame,
+        });
+        if (frames.length === 1) {
+          frame.delta = 1000;
+          frame.elapsed = 1000;
+          frame.frame = 1000;
+        }
       },
     });
     ticker.start();
-    advanceFrame(16);
-    const before = lastElapsed;
-    ticker.pause();
-    advanceFrame(1000);
-    ticker.resume();
-    advanceFrame(16);
-    const after = lastElapsed;
-    expect(after - before).toBeLessThan(100);
+
+    raf.frame(10);
+    raf.frame(26);
+
+    expect(frames).toEqual([
+      { delta: 16.67, elapsed: 16.67, frame: 1 },
+      { delta: 16, elapsed: 32.67, frame: 2 },
+    ]);
     ticker.stop();
+  });
+
+  it('keeps elapsed equal to summed deltas after an uncapped 5s delay', async () => {
+    const raf = stubRaf();
+    const { createTicker } = await getModule();
+    const frames: TimingSnapshot[] = [];
+    const ticker = createTicker({
+      onTick: (frame) => {
+        frames.push(snapshotTiming(frame));
+      },
+    });
+    ticker.start();
+
+    raf.frame(10);
+    raf.frame(5010);
+
+    expect(frames).toEqual([
+      { time: 10, delta: 16.67, elapsed: 16.67 },
+      { time: 5010, delta: 40, elapsed: 56.67 },
+    ]);
+    ticker.stop();
+  });
+
+  it('advances an fps: 2 sequence by about 500ms per callback', async () => {
+    const raf = stubRaf();
+    const { createTicker } = await getModule();
+    const frames: TimingSnapshot[] = [];
+    const firedSteps: number[] = [];
+    let nextStep = 500;
+    const ticker = createTicker({
+      fps: 2,
+      onTick: (frame) => {
+        frames.push(snapshotTiming(frame));
+        if (frame.elapsed >= nextStep) {
+          firedSteps.push(frame.frame);
+          nextStep += 500;
+        }
+      },
+    });
+    ticker.start();
+
+    raf.frame(10);
+    raf.frame(510);
+    raf.frame(1010);
+
+    expect(frames).toEqual([
+      { time: 10, delta: 500, elapsed: 500 },
+      { time: 510, delta: 500, elapsed: 1000 },
+      { time: 1010, delta: 500, elapsed: 1500 },
+    ]);
+    expect(firedSteps).toEqual([1, 2, 3]);
+    ticker.stop();
+  });
+
+  it('limits an fps: 2 callback after a 5s delay to 540ms', async () => {
+    const raf = stubRaf();
+    const { createTicker } = await getModule();
+    const frames: TimingSnapshot[] = [];
+    const ticker = createTicker({
+      fps: 2,
+      onTick: (frame) => {
+        frames.push(snapshotTiming(frame));
+      },
+    });
+    ticker.start();
+
+    raf.frame(10);
+    raf.frame(510);
+    raf.frame(5510);
+
+    expect(frames.at(-1)).toEqual({
+      time: 5510,
+      delta: 540,
+      elapsed: 1540,
+    });
+    ticker.stop();
+  });
+
+  it.each([20, 30, 60])(
+    'limits an fps: %d callback after a 5s delay to one interval plus 40ms',
+    async (fps) => {
+      const raf = stubRaf();
+      const { createTicker } = await getModule();
+      const frames: TimingSnapshot[] = [];
+      const ticker = createTicker({
+        fps,
+        onTick: (frame) => frames.push(snapshotTiming(frame)),
+      });
+      ticker.start();
+
+      raf.frame(10);
+      raf.frame(5010);
+
+      const interval = 1000 / fps;
+      const maximumDelta = interval + 40;
+      expect(frames).toEqual([
+        { time: 10, delta: interval, elapsed: interval },
+        {
+          time: 5010,
+          delta: maximumDelta,
+          elapsed: interval + maximumDelta,
+        },
+      ]);
+      ticker.stop();
+    },
+  );
+
+  it.each([
+    { fps: undefined, expectedDelta: 16.67 },
+    { fps: 2, expectedDelta: 500 },
+  ])(
+    'uses $expectedDelta ms for the first callback after start and resume at fps: $fps',
+    async ({ fps, expectedDelta }) => {
+      const raf = stubRaf();
+      const { createTicker } = await getModule();
+      const refs: unknown[] = [];
+      const frames: TimingSnapshot[] = [];
+      const ticker = createTicker({
+        fps,
+        onTick: (frame) => {
+          refs.push(frame);
+          frames.push(snapshotTiming(frame));
+        },
+      });
+      ticker.start();
+
+      raf.frame(10);
+      ticker.pause();
+      const elapsedBeforePause = (frames.at(-1) as { elapsed: number }).elapsed;
+      raf.frame(5010);
+      vi.advanceTimersByTime(5000);
+      expect(frames).toHaveLength(1);
+
+      ticker.resume();
+      raf.frame(5026);
+
+      expect(frames).toEqual([
+        { time: 10, delta: expectedDelta, elapsed: expectedDelta },
+        {
+          time: 5026,
+          delta: expectedDelta,
+          elapsed: elapsedBeforePause + expectedDelta,
+        },
+      ]);
+      expect(new Set(refs).size).toBe(1);
+      ticker.stop();
+    },
+  );
+
+  it('keeps elapsed equal to summed deltas in a long mixed stream', async () => {
+    const raf = stubRaf();
+    const { createTicker } = await getModule();
+    const frames: TimingSnapshot[] = [];
+    const sourceTimes: number[] = [];
+    const refs: unknown[] = [];
+    let sourceTime = 0;
+    const ticker = createTicker({
+      fps: 2,
+      onTick: (frame) => {
+        refs.push(frame);
+        sourceTimes.push(sourceTime);
+        frames.push(snapshotTiming(frame));
+      },
+    });
+    ticker.start();
+
+    for (let i = 1; i <= 1000; i++) {
+      if (i === 120) ticker.setFps(20);
+      if (i === 250) {
+        ticker.pause();
+        const deliveryCount = frames.length;
+        for (let pausedFrame = 0; pausedFrame < 25; pausedFrame++) {
+          sourceTime += 1000 / 120;
+          raf.frame(sourceTime);
+        }
+        expect(frames).toHaveLength(deliveryCount);
+        ticker.setFps(30);
+        ticker.resume();
+      }
+      if (i === 400) ticker.setFps(60);
+      if (i === 550) ticker.setFps();
+      if (i === 700) ticker.setFps(2);
+      if (i === 850) ticker.setFps(20);
+
+      sourceTime += i % 137 === 0 ? 5000 : i % 29 === 0 ? 75 : 1000 / 120;
+      raf.frame(sourceTime);
+    }
+    ticker.stop();
+
+    let expectedElapsed = 0;
+    for (let i = 0; i < frames.length; i++) {
+      const frame = frames[i] as TimingSnapshot;
+      expectedElapsed += frame.delta;
+      expect(frame.elapsed).toBe(expectedElapsed);
+      expect(frame.time).toBe(sourceTimes[i]);
+    }
+    expect(frames.length).toBeGreaterThan(100);
+    expect(new Set(refs).size).toBe(1);
   });
 });
 
@@ -555,13 +774,6 @@ describe('FPS cap cadence', () => {
 // ---------------------------------------------------------------------------
 
 describe('setFps', () => {
-  function stubRaf() {
-    const raf = createRafDriver();
-    vi.stubGlobal('requestAnimationFrame', raf.request);
-    vi.stubGlobal('cancelAnimationFrame', raf.cancel);
-    return raf;
-  }
-
   it('changes the delivered cadence while running', async () => {
     const raf = stubRaf();
     const { createTicker } = await getModule();
@@ -617,6 +829,41 @@ describe('setFps', () => {
     ticker.stop();
   });
 
+  it('updates the maximum delta when fps changes', async () => {
+    const raf = stubRaf();
+    const { createTicker } = await getModule();
+    const frames: TimingSnapshot[] = [];
+    const ticker = createTicker({
+      fps: 2,
+      onTick: (frame) => {
+        frames.push(snapshotTiming(frame));
+      },
+    });
+    ticker.start();
+    raf.frame(10);
+
+    const interval = 1000 / 60;
+    ticker.setFps(60);
+    raf.frame(10 + interval);
+    raf.frame(5010 + interval);
+
+    const expectedBound = interval + 40;
+    expect(frames).toEqual([
+      { time: 10, delta: 500, elapsed: 500 },
+      {
+        time: 10 + interval,
+        delta: interval,
+        elapsed: 500 + interval,
+      },
+      {
+        time: 5010 + interval,
+        delta: expectedBound,
+        elapsed: 500 + interval + expectedBound,
+      },
+    ]);
+    ticker.stop();
+  });
+
   it('raising the cap takes effect next eligible frame without an uncapped transition frame', async () => {
     const raf = stubRaf();
     const { createTicker } = await getModule();
@@ -667,11 +914,13 @@ describe('setFps', () => {
     const raf = stubRaf();
     const { createTicker } = await getModule();
     const frames: number[] = [];
+    const deltas: number[] = [];
     const elapsed: number[] = [];
     const ticker = createTicker({
       fps: 60,
       onTick: (f) => {
         frames.push(f.frame);
+        deltas.push(f.delta);
         elapsed.push(f.elapsed);
       },
     });
@@ -694,13 +943,12 @@ describe('setFps', () => {
 
     // Frame count continues from where it left off.
     expect(frames[countBefore]).toBe(framesBefore + 1);
-    // Pause accounting and start time survive the mutation: elapsed still
-    // excludes the paused second instead of jumping by it.
+    // The first callback after resume uses the new 30fps interval and excludes
+    // the paused second from elapsed.
     const elapsedAfter = elapsed[countBefore] as number;
-    expect(elapsedAfter - elapsedBefore).toBeGreaterThan(0);
-    expect(elapsedAfter - elapsedBefore).toBeLessThan(100);
-    // Post-resume cadence follows the new 30fps cap (first resumed frame
-    // delivers immediately and re-anchors, then ~30/s).
+    expect(deltas[countBefore]).toBe(1000 / 30);
+    expect(elapsedAfter).toBe(elapsedBefore + (deltas[countBefore] as number));
+    // Later callbacks continue at about 30 per second.
     const after = frames.length - countBefore;
     expect(after).toBeGreaterThanOrEqual(29);
     expect(after).toBeLessThanOrEqual(31);

@@ -93,7 +93,7 @@ WAAPI is not a blanket compositor guarantee. Prefer `transform`/`opacity`, avoid
 
 ## JS-owned sequence: `useLoop` with `frame.elapsed`
 
-When JavaScript genuinely must own each frame, derive the step from `frame.elapsed` thresholds. The loop auto-pauses off-screen, `elapsed` freezes during pause, and the sequence resumes exactly where it left off.
+When JavaScript genuinely must own each frame, derive the step from `frame.elapsed` thresholds. The loop auto-pauses off-screen, `elapsed` freezes during pause, and the sequence resumes exactly where it left off. At `fps: 2`, each normal delivery advances `delta` and `elapsed` by about 500ms, so half-second thresholds stay aligned with delivered frames.
 
 The loop doesn't fire until the element enters the viewport, so there's a gap between the browser's first paint and the first `onTick` call. If an element's CSS renders it at full width but the animation starts from zero, the user sees a flash: full width → snap to zero → animate back. Set each element's CSS to its animation start state (e.g., `scaleX(0)`, `opacity: 0`) so the browser paints the pre-animation state from the start:
 
@@ -131,6 +131,7 @@ return (
 - **No flash on first entry.** Elements start at `scaleX(0)` in CSS, matching the animation's start state, so there's no visible snap when the loop fires its first tick.
 - **`frame.elapsed` freezes during pause.** Scroll away, come back — the sequence picks up exactly where it stopped. No restart on re-entry.
 - **`fps: 2` (or `fps: 1`) keeps CPU near zero.** Step transitions happen on second or half-second boundaries. You don't need 60fps to check which step you're in.
+- **A delayed callback advances by at most 540ms at `fps: 2`.** The sequence does not advance by the full delay at once.
 - **Zero re-renders.** `onTick` writes to the DOM directly via refs. React never reconciles.
 - **Visibility-aware by default.** The loop pauses off-screen and under reduced motion. No manual `IntersectionObserver` needed.
 

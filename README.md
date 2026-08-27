@@ -123,7 +123,7 @@ One string replaces `if (running && visible && !paused && !prefersReducedMotion 
 
 Each of those signals is also a CPU and battery decision. Animating while off-screen, ignoring reduced motion, or running after unmount is what burns cycles and causes jank. `phase` composes them once, correctly, instead of leaving each call site to get the conjunction right.
 
-Safe behavior is automatic. Visibility awareness, reduced motion, observer cleanup, and delta clamping are defaults, not opt-ins. Bypassing reduced motion requires an explicit `reducedMotion: 'ignore'` in the diff.
+Safe behavior is automatic. Visibility awareness, reduced motion, observer cleanup, and limits on animation-time jumps after delayed frames are defaults, not opt-ins. Bypassing reduced motion requires an explicit `reducedMotion: 'ignore'` in the diff.
 
 ## Scope
 
@@ -179,10 +179,10 @@ import { createLoop } from 'phase';
 const loop = createLoop({
   target: el,
   onTick: (frame) => {
-    // frame.time    — browser rAF timestamp
-    // frame.delta   — ms since last tick (clamped to 40ms)
-    // frame.elapsed — ms since start (paused time excluded)
-    // frame.frame   — frame count
+    // frame.time    — browser requestAnimationFrame timestamp
+    // frame.delta   — milliseconds to advance this frame
+    // frame.elapsed — sum of all delivered deltas
+    // frame.frame   — delivered frame count
   },
 });
 
@@ -251,7 +251,7 @@ createLoop({
 
 ### createTicker
 
-The low-level rAF clock underneath `createLoop`. Use it when you need a frame loop without visibility management (background processing, audio sync, non-visual timing).
+The low-level `requestAnimationFrame` clock underneath `createLoop`. Use it when you need a frame loop without visibility management (background processing, audio sync, non-visual timing).
 
 ```ts
 import { createTicker } from 'phase';
@@ -265,7 +265,11 @@ const ticker = createTicker({
 ticker.start();
 ```
 
-All tickers share a single `requestAnimationFrame` loop. Every subscriber receives the same browser-supplied timestamp each frame, so independent animations stay in visual sync.
+Ticker instances within one JavaScript global, such as a page or worker, share one browser `requestAnimationFrame` loop and timestamp. This includes instances created by separately bundled copies of phase.
+
+`frame.delta` is how many milliseconds an animation should advance on each callback. After a delayed callback, it is at most 40ms without an FPS limit, or one configured FPS interval plus 40ms with a limit. `frame.elapsed` increases by exactly the same `delta`.
+
+The first callback after `start()` or `resume()` uses 16.67ms without an FPS limit, or one configured interval with a limit. `frame.time` always reports the browser's unmodified `requestAnimationFrame` timestamp so non-phase animation code can use the same source time.
 
 #### Ticker phases
 
@@ -321,7 +325,7 @@ lifecycle.resume();
 lifecycle.stop();
 ```
 
-`createLoop` is built on `createLifecycle` (it adds a ticker and quality signals on top). Loop-level optimizations (shared clock, zero-allocation `FrameState`, delta clamping, FPS cap, strong pause) only apply when `phase` drives the loop. Lifecycle-level optimizations (pooled observers, composed document-visibility + bfcache + viewport, reduced motion) carry over to consumer-owned loops.
+`createLoop` adds timing and quality controls to `createLifecycle`. Frame scheduling, `FrameState` reuse, FPS limits, and bounded time advances apply only when phase runs the loop. Observer pooling, visibility handling, and reduced-motion handling also apply to consumer-owned loops.
 
 #### Lifecycle phases
 
@@ -1198,11 +1202,11 @@ The rAF loop never triggers a React re-render. All per-frame state lives in refs
 
 ### Frame-locked shared clock
 
-All tickers share one `requestAnimationFrame` loop and receive the same browser-supplied timestamp each frame, keeping multiple animations on the same page in visual sync.
+Ticker instances within one JavaScript global share one browser `requestAnimationFrame` loop and timestamp. See [`createTicker`](#createticker) for the duplicate-copy behavior.
 
-### Delta clamping
+### Frame timing
 
-When a loop resumes after a pause, `frame.delta` is clamped to 40 ms. Animations resume from where they left off with no teleporting.
+See [`createTicker`](#createticker) for how `delta`, `elapsed`, and `time` behave after delayed frames and pauses.
 
 ## Errors
 
@@ -1236,7 +1240,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |            1.1 kB |
+| `createTicker`            |           1.11 kB |
 | `createSight`             |           1.05 kB |
 | `createLifecycle`         |           1.55 kB |
 | `createLoop`              |           2.98 kB |
@@ -1253,10 +1257,10 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           3.28 kB |
+| `useLoop`                 |           3.29 kB |
 | `useLifecycle`            |           1.83 kB |
 | `useSight`                |           1.36 kB |
-| `useCanvas`               |           3.84 kB |
+| `useCanvas`               |           3.85 kB |
 | `useMutation`             |           1.38 kB |
 | `usePointer`              |           1.51 kB |
 | `useScroll`               |           1.97 kB |

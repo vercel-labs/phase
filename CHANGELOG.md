@@ -1,5 +1,12 @@
 # phase
 
+## 0.5.0
+
+### Minor Changes
+
+- `frame.elapsed` now advances by exactly the `frame.delta` delivered to each callback, including after delayed frames.
+- A delayed callback now advances `frame.delta` by at most 40ms without an FPS limit, or one configured FPS interval plus 40ms with a limit. The first callback after `start()` or `resume()` uses 16.67ms without a limit, or one configured interval with a limit.
+
 ## 0.4.2
 
 ### Patch Changes
