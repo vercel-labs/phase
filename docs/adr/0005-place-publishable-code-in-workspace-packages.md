@@ -1,16 +1,12 @@
 # Place publishable code in workspace packages
 
-## Status
-
-Partially superseded by [ADR 0010](./0010-keep-workspace-packages-under-packages.md). The examples package now lives at `packages/examples` instead of the repository root.
-
 ## Context
 
 The repository root combined the published library, repository orchestration, and the installable agent skill's source and artifacts. Adding examples and applications there would blur package ownership and let nested evaluation fixtures be discovered as workspaces.
 
 ## Decision
 
-Use a pnpm workspace with explicit `packages/*`, `examples`, and `apps/*` entries. The only publishable package, `phase`, lives at `packages/phase`; the private root owns orchestration and repository-wide checks. `skills/phase/` remains root-level content with committed artifacts so direct directory installs and the `skills/phase/dist/phase-skill.zip` download path remain stable. The scanner, skill scripts, and evaluations will move together into one private workspace package because the skill archive is the scanner's only consumer.
+Use a pnpm workspace with `packages/*` and `apps/*` entries. The published `phase` package lives at `packages/phase`; the private skill tooling and examples packages live beside it at `packages/skill` and `packages/examples`. The private root owns orchestration and repository-wide checks. `skills/phase/` remains root-level content with committed artifacts so direct directory installs and the `skills/phase/dist/phase-skill.zip` download path remain stable.
 
 ## Reason
 
