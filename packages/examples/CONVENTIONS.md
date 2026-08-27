@@ -11,7 +11,7 @@
 - Every variant starts with `'use client'` and exports one React component as its default.
 - Every component includes everything it needs, takes no props, and follows the predictable output rules.
 - Every directory has a `meta.ts` file that exports one `ExampleMeta` object by default. It lists the title, description, and phase exports shown. Variant names come from filenames and the generated manifest, so do not repeat them in metadata.
-- Run `pnpm --filter @usephase/examples generate-manifest` after adding, renaming, or removing a variant. The command checks these rules and writes `manifest.ts` in example-slug order.
+- Run `pnpm --filter @usephase/examples generate-manifest` after adding, renaming, or removing a variant. The command checks directory and file names, required metadata, `'use client'`, and default exports. It then writes `manifest.ts` in example-slug order. Review the other rules manually.
 
 ## Rendering rules
 

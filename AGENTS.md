@@ -6,10 +6,11 @@
 
 Animation infrastructure for the web. Lifecycle-aware primitives compose visibility, timing, reduced motion, and quality signals into coherent state machines with debuggable transitions.
 
-Run commands from the repository root. The repository has three ownership boundaries:
+Run commands from the repository root. The repository has four ownership boundaries:
 
 - [`packages/phase/`](./packages/phase/AGENTS.md) owns the published library, performance contracts, and library implementation rules.
 - [`packages/skill/`](./packages/skill/AGENTS.md) owns scanner source, evals, and skill-maintainer tooling.
+- [`packages/examples/`](./packages/examples/CONVENTIONS.md) owns the shared React examples and their rules.
 - `skills/phase/` contains only installable skill content and committed generated artifacts.
 
 The root `README.md` tells the package and repository story; `packages/phase/README.md` is the npm package summary.
@@ -39,6 +40,7 @@ pnpm skill:package     # Rebuild the deterministic skill zip
 
 - `skill:check` runs as part of `pnpm validate` and in CI on every PR.
 - `skill:build` and `skill:package` run on pre-commit whenever `skills/phase/` or `packages/skill/` changes. Lefthook re-stages `metadata.json`, `scripts/scan.mjs`, the generated audit regions, and the zip.
+- The examples manifest is regenerated and staged on pre-commit whenever `packages/examples/` changes.
 - CI and the release workflow rebuild committed artifacts and fail on a diff.
 - Tree-writing tasks (`goldens`, `skill:build`, and `skill:package`) stay uncached. A cache hit would skip regeneration and make a freshness check inspect the wrong tree.
 

@@ -15,6 +15,8 @@ pre-commit:
       run: pnpm oxfmt --check {staged_files}
     lint:
       glob: '**/*.{ts,tsx}'
+      exclude:
+        - 'packages/examples/manifest.ts'
       run: pnpm oxlint {staged_files}
     # Regenerate metadata.json + the downloadable zip whenever skill sources
     # change, then stage the regenerated outputs into the same commit.

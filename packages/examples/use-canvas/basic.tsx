@@ -23,7 +23,10 @@ const styles = `
   border-radius: 12px;
   background: #172554;
 }
-.phx-use-canvas-basic canvas { display: block; }
+.phx-use-canvas-basic canvas {
+  display: block;
+  background: radial-gradient(circle at center, #60a5fa 0 13px, transparent 14px);
+}
 .phx-use-canvas-basic output { font-family: ui-monospace, SFMono-Regular, monospace; }
 `;
 
@@ -54,7 +57,7 @@ export default function UseCanvasBasic(): JSX.Element {
         Status: <output>{phase}</output>
       </div>
       <div ref={containerRef} className="phx-use-canvas-basic-canvas">
-        <canvas ref={canvasRef} aria-label="Animated blue marker" />
+        <canvas ref={canvasRef} aria-label="Blue marker with a moving dot" />
       </div>
     </section>
   );

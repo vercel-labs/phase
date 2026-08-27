@@ -35,7 +35,7 @@ export default function CreateLoopBasic(): JSX.Element {
 
     let value = 50;
     let direction = 0.04;
-    // phase-scan-ignore core-primitive-in-component -- This example uses createLoop in React and stops it when the component unmounts.
+    // This example intentionally teaches the core API. Prefer useLoop in application components.
     const loop = createLoop({
       target,
       onTick(frame) {
@@ -64,7 +64,12 @@ export default function CreateLoopBasic(): JSX.Element {
       <div>
         Status: <output ref={phaseRef}>idle</output>
       </div>
-      <progress ref={targetRef} max={100} aria-label="Animated progress" />
+      <progress
+        ref={targetRef}
+        max={100}
+        value={50}
+        aria-label="Animated progress"
+      />
     </section>
   );
 }

@@ -1,16 +1,23 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const scriptPath = fileURLToPath(
   new URL('./generate-manifest.mjs', import.meta.url),
 );
+const temporaryRoots = [];
 
-test('writes manifest entries in alphabetical order and loads each example with import()', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
+after(async () => {
+  await Promise.all(
+    temporaryRoots.map((root) => rm(root, { recursive: true, force: true })),
+  );
+});
+
+test('writes manifest entries in alphabetical order', async () => {
+  const root = await createTemporaryRoot();
 
   await writeExample(root, 'use-loop', 'basic');
   await writeExample(root, 'create-loop', 'advanced');
@@ -35,7 +42,7 @@ export type ExampleSlug = keyof typeof manifest;
 });
 
 test('reports a missing meta.ts file', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
+  const root = await createTemporaryRoot();
   const directory = join(root, 'use-loop');
   await mkdir(directory, { recursive: true });
   await writeFile(
@@ -48,7 +55,7 @@ test('reports a missing meta.ts file', async () => {
 
 test('reports invalid example files and folders', async (context) => {
   await context.test('non-kebab-case example directory', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
+    const root = await createTemporaryRoot();
     await writeExample(root, 'useLoop', 'basic');
 
     await assert.rejects(
@@ -58,7 +65,7 @@ test('reports invalid example files and folders', async (context) => {
   });
 
   await context.test('non-kebab-case variant', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
+    const root = await createTemporaryRoot();
     await writeExample(root, 'use-loop', 'BasicExample');
 
     await assert.rejects(
@@ -68,7 +75,7 @@ test('reports invalid example files and folders', async (context) => {
   });
 
   await context.test('folder with no .tsx example files', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
+    const root = await createTemporaryRoot();
     const directory = join(root, 'use-loop');
     await mkdir(directory, { recursive: true });
     await writeFile(
@@ -83,7 +90,7 @@ test('reports invalid example files and folders', async (context) => {
   });
 
   await context.test('example file without a default export', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
+    const root = await createTemporaryRoot();
     const directory = join(root, 'use-loop');
     await mkdir(directory, { recursive: true });
     await writeFile(
@@ -104,7 +111,7 @@ test('reports invalid example files and folders', async (context) => {
   await context.test(
     "example file without 'use client' at the start",
     async () => {
-      const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
+      const root = await createTemporaryRoot();
       const directory = join(root, 'use-loop');
       await mkdir(directory, { recursive: true });
       await writeFile(
@@ -126,7 +133,7 @@ test('reports invalid example files and folders', async (context) => {
   await context.test(
     'meta.ts with an empty title and exports list',
     async () => {
-      const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
+      const root = await createTemporaryRoot();
       const directory = join(root, 'use-loop');
       await mkdir(directory, { recursive: true });
       await writeFile(
@@ -145,6 +152,12 @@ test('reports invalid example files and folders', async (context) => {
     },
   );
 });
+
+async function createTemporaryRoot() {
+  const root = await mkdtemp(join(tmpdir(), 'phase-examples-'));
+  temporaryRoots.push(root);
+  return root;
+}
 
 async function writeExample(root, exportName, variant) {
   const directory = join(root, exportName);

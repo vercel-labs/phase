@@ -55,6 +55,7 @@ export default function PresenceBasic(): JSX.Element {
       </button>
       <Presence
         show={visible}
+        enter="instant"
         exitDuration={250}
         className="phx-presence-basic-card"
       >

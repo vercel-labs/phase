@@ -52,7 +52,7 @@ export default function UseLoopBasic(): JSX.Element {
       <div>
         Status: <output>{phase}</output>
       </div>
-      <progress ref={ref} max={100} aria-label="Animated progress" />
+      <progress ref={ref} max={100} value={50} aria-label="Animated progress" />
     </section>
   );
 }

@@ -8,7 +8,6 @@ const styles = `
   box-sizing: border-box;
   width: 100%;
   max-width: 560px;
-  height: 360px;
   padding: 24px;
   border: 1px solid #bae6fd;
   border-radius: 16px;
