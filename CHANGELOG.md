@@ -1,5 +1,12 @@
 # phase
 
+## 0.5.1
+
+### Patch Changes
+
+- Pointer, scroll, mutation, and throttle state now flushes before frame-loop callbacks in the same animation frame.
+- Raised the affected core and React wrapper size budgets for the shared input stage.
+
 ## 0.5.0
 
 ### Minor Changes

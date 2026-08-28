@@ -1,4 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
+import { cancelInput, scheduleInput } from '../_internal/clock';
 import { isDocument } from '../_internal/dom';
 import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
@@ -120,7 +121,6 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     visibleY: 1,
   };
 
-  let rafId = 0;
   let dirty = false;
   let geometryDirty = false;
   let listenersAttached = false;
@@ -173,7 +173,6 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   }
 
   function flush(): void {
-    rafId = 0;
     if (stopped || (!dirty && !geometryDirty)) return;
     if (geometryDirty) {
       geometryDirty = false;
@@ -184,16 +183,8 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     onScroll(_state);
   }
 
-  function scheduleFlush(): void {
-    if (rafId !== 0) return;
-    rafId = requestAnimationFrame(flush);
-  }
-
   function cancelFlush(): void {
-    if (rafId !== 0) {
-      cancelAnimationFrame(rafId);
-      rafId = 0;
-    }
+    cancelInput(flush);
     dirty = false;
     geometryDirty = false;
   }
@@ -201,7 +192,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   function onScrollEvent(): void {
     if (stopped) return;
     dirty = true;
-    scheduleFlush();
+    scheduleInput(flush);
   }
 
   // Page mode hears one layout change from two sources (the observer and the
@@ -210,7 +201,7 @@ export function createScroll(options: CreateScrollOptions): Scroll {
   function onROResize(): void {
     if (stopped || !listenersAttached) return;
     geometryDirty = true;
-    scheduleFlush();
+    scheduleInput(flush);
   }
 
   function attachListeners(): void {

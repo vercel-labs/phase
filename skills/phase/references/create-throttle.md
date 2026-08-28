@@ -2,6 +2,8 @@
 
 Frame-aligned, visibility-aware throttle for event-driven work below frame rate. Leading calls fire synchronously; a pending trailing call fires with the latest value on the first animation frame at or past `interval`. Schedules nothing while idle or while the document is hidden. The framework-agnostic core behind `useThrottledCallback`.
 
+Event-derived state from pointer, scroll, mutation, and throttle is flushed before any frame-loop callback in the same frame.
+
 ## Signature
 
 ```ts

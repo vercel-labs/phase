@@ -1240,31 +1240,31 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |           1.11 kB |
+| `createTicker`            |           1.14 kB |
 | `createSight`             |           1.05 kB |
 | `createLifecycle`         |           1.55 kB |
-| `createLoop`              |           2.98 kB |
+| `createLoop`              |            3.0 kB |
 | `createScrollProgress`    |             895 B |
 | `createRenderState`       |             490 B |
 | `createDevicePixelRatio`  |             544 B |
-| `createMutation`          |            1.2 kB |
-| `createPointer`           |            1.3 kB |
-| `createScroll`            |           1.61 kB |
-| `createThrottle`          |             660 B |
+| `createMutation`          |           1.39 kB |
+| `createPointer`           |           1.49 kB |
+| `createScroll`            |           1.82 kB |
+| `createThrottle`          |             863 B |
 | `createDebounce`          |             559 B |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           3.29 kB |
+| `useLoop`                 |           3.32 kB |
 | `useLifecycle`            |           1.83 kB |
 | `useSight`                |           1.36 kB |
-| `useCanvas`               |           3.85 kB |
-| `useMutation`             |           1.38 kB |
-| `usePointer`              |           1.51 kB |
-| `useScroll`               |           1.97 kB |
-| `useThrottledCallback`    |             804 B |
+| `useCanvas`               |           3.88 kB |
+| `useMutation`             |           1.59 kB |
+| `usePointer`              |           1.71 kB |
+| `useScroll`               |           2.16 kB |
+| `useThrottledCallback`    |             998 B |
 | `useDebouncedCallback`    |             685 B |
 | `useTween`                |             684 B |
 | `usePresence`             |             591 B |

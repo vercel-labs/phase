@@ -1,4 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
+import { joinTick, leaveTick } from '../_internal/clock';
 import {
   invalidFpsError,
   serverContextError,
@@ -67,74 +68,6 @@ const MAX_DELTA_MS = 40;
 const DEFAULT_FIRST_DELTA_MS = 16.67;
 
 // ---------------------------------------------------------------------------
-// Shared frame-locked clock
-//
-// All ticker instances subscribe to a single rAF loop so they read the same
-// timestamp each frame. Separately bundled copies in the same JavaScript
-// global share this clock. It starts when the first subscriber joins and stops
-// when the last one leaves.
-// ---------------------------------------------------------------------------
-
-interface SharedSubscription {
-  callback: (time: number) => void;
-  joinedFrame: number;
-}
-
-interface SharedClock {
-  rafId: number | null;
-  frame: number;
-  time: number;
-  subscribers: Set<SharedSubscription>;
-}
-
-let sharedClock: SharedClock;
-
-function getSharedClock(): SharedClock {
-  const registry = globalThis as unknown as Record<
-    symbol,
-    SharedClock | undefined
-  >;
-  return (registry[Symbol.for('phase.clock@1')] ??= {
-    rafId: null,
-    frame: 0,
-    time: 0,
-    subscribers: new Set<SharedSubscription>(),
-  });
-}
-
-function dispatchSharedSubscription(subscription: SharedSubscription): void {
-  if (subscription.joinedFrame < sharedClock.frame) {
-    subscription.callback(sharedClock.time);
-  }
-}
-
-function sharedTick(time: number): void {
-  sharedClock.time = time;
-  sharedClock.frame++;
-  sharedClock.rafId = requestAnimationFrame(sharedTick);
-  // eslint-disable-next-line unicorn/no-array-for-each -- Set#forEach avoids a per-frame iterator.
-  sharedClock.subscribers.forEach(dispatchSharedSubscription);
-}
-
-function joinSharedClock(subscription: SharedSubscription): void {
-  const wasEmpty: boolean = sharedClock.subscribers.size === 0;
-  subscription.joinedFrame = sharedClock.frame;
-  sharedClock.subscribers.add(subscription);
-
-  if (wasEmpty) {
-    sharedClock.rafId = requestAnimationFrame(sharedTick);
-  }
-}
-
-function leaveSharedClock(subscription: SharedSubscription): void {
-  sharedClock.subscribers.delete(subscription);
-  if (sharedClock.subscribers.size === 0 && sharedClock.rafId !== null) {
-    cancelAnimationFrame(sharedClock.rafId);
-    sharedClock.rafId = null;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -185,8 +118,6 @@ export function createTicker(options: TickerOptions): Ticker {
   if (typeof requestAnimationFrame === 'undefined') {
     serverContextError('createTicker');
   }
-  sharedClock ??= getSharedClock();
-
   const { onTick, signal } = options;
   let minFrameTime: number = resolveMinFrameTime('createTicker', options.fps);
   let maxDeltaTime: number = minFrameTime + MAX_DELTA_MS;
@@ -231,8 +162,6 @@ export function createTicker(options: TickerOptions): Ticker {
     onTick(frame);
   }
 
-  const subscription: SharedSubscription = { callback: tick, joinedFrame: 0 };
-
   function start(): void {
     if (_phase === 'running') return;
     if (_phase === 'stopped') tickerStoppedError();
@@ -249,7 +178,7 @@ export function createTicker(options: TickerOptions): Ticker {
     frameCount = 0;
     resetFrameState(frame);
 
-    joinSharedClock(subscription);
+    joinTick(tick);
   }
 
   function pause(): void {
@@ -259,7 +188,7 @@ export function createTicker(options: TickerOptions): Ticker {
     _reason = 'manual';
 
     // Strong pause: cancel rAF subscription entirely — zero CPU while paused.
-    leaveSharedClock(subscription);
+    leaveTick(tick);
   }
 
   function resume(): void {
@@ -273,7 +202,7 @@ export function createTicker(options: TickerOptions): Ticker {
 
     _phase = 'running';
     _reason = 'resumed';
-    joinSharedClock(subscription);
+    joinTick(tick);
   }
 
   function setFps(fps?: number): void {
@@ -292,7 +221,7 @@ export function createTicker(options: TickerOptions): Ticker {
     _phase = 'stopped';
     _reason = _reason === 'initial' ? 'disposed' : 'manual';
     unlinkAbort?.();
-    leaveSharedClock(subscription);
+    leaveTick(tick);
   }
 
   // Declared before assignment because an already-aborted signal makes

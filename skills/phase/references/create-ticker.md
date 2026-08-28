@@ -2,6 +2,8 @@
 
 The low-level rAF clock underneath `createLoop`. Use when you need a frame loop without visibility management (background processing, audio sync, non-visual timing).
 
+Event-derived state from pointer, scroll, mutation, and throttle is flushed before any frame-loop callback in the same frame.
+
 ## Signature
 
 ```ts

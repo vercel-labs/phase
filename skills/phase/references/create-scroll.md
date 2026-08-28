@@ -2,6 +2,8 @@
 
 Lifecycle-aware scroll tracker. Reads `scrollLeft`/`scrollTop` once per rAF frame and reads the reflow-heavy geometry (`scrollWidth`/`clientWidth`) only on a coalesced resize or an explicit `measure()`, never on the scroll path. Auto-pauses off-screen. The framework-agnostic core behind `useScroll`.
 
+Event-derived state from pointer, scroll, mutation, and throttle is flushed before any frame-loop callback in the same frame.
+
 ## Signature
 
 ```ts

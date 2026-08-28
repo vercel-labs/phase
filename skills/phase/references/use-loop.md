@@ -2,6 +2,8 @@
 
 The primary React hook. Wraps `createLoop` with React lifecycle management. Visibility-aware animation loop that never triggers re-renders from the frame loop.
 
+Event-derived state from pointer, scroll, mutation, and throttle is flushed before any frame-loop callback in the same frame.
+
 ## Signature
 
 ```ts

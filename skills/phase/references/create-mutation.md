@@ -2,6 +2,8 @@
 
 Lifecycle-aware MutationObserver that coalesces records into one rAF-batched callback. Never fires per-record synchronously. Auto-pauses when the observed element is off-screen via pooled IntersectionObserver.
 
+Event-derived state from pointer, scroll, mutation, and throttle is flushed before any frame-loop callback in the same frame.
+
 ## Signature
 
 ```ts
