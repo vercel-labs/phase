@@ -18,6 +18,10 @@ it('reacts to native container breakpoint crossings', async () => {
     target.style.width = '200px';
   });
   await waitFor(() => expect(result.current.matches).toBe(true));
+  act(() => {
+    target.style.width = '100px';
+  });
+  await waitFor(() => expect(result.current.matches).toBe(false));
 
   unmount();
   target.remove();

@@ -32,6 +32,11 @@ it('updates React lifecycle state from native intersections', async () => {
     fixture.root.scrollTop = 150;
   });
   await waitFor(() => expect(result.current.phase).toBe('active'));
+  act(() => {
+    fixture.root.scrollTop = 0;
+  });
+  await waitFor(() => expect(result.current.phase).toBe('paused'));
+  expect(result.current.phaseReason).toBe('sight');
 
   unmount();
   fixture.cleanup();

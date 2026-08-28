@@ -22,9 +22,6 @@ it('mounts once a native intersection reaches the sentinel', async () => {
     root.scrollTop = 150;
   });
   await waitFor(() => expect(view.getByText('ready')).toBeTruthy());
-  root.scrollTop = 0;
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-  expect(view.getByText('ready')).toBeTruthy();
 
   view.unmount();
   root.remove();

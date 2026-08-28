@@ -54,11 +54,11 @@ describe('useMediaQuery', () => {
   it('cleans up subscription on unmount', async () => {
     const useMediaQuery = await getHook();
     const { unmount } = renderHook(() => useMediaQuery('(max-width: 600px)'));
+    expect(mockMM.listenerCount('(max-width: 600px)')).toBe(1);
 
     unmount();
 
-    // After unmount, setting matches should not throw or affect anything
-    expect(() => mockMM.setMatches('(max-width: 600px)', true)).not.toThrow();
+    expect(mockMM.listenerCount('(max-width: 600px)')).toBe(0);
   });
 
   it('two instances with same query update independently', async () => {

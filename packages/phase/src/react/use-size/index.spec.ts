@@ -68,9 +68,14 @@ describe('useSize', () => {
     const useSize = await getHook();
     const { ref, el } = createRefWithElement();
     const { unmount } = renderHook(() => useSize({ ref }));
+    expect(mockRO.instances.some((instance) => instance.observed.has(el))).toBe(
+      true,
+    );
 
     unmount();
-    expect(() => mockRO.trigger(el, 100, 50)).not.toThrow();
+    expect(mockRO.instances.some((instance) => instance.observed.has(el))).toBe(
+      false,
+    );
   });
 
   it('rapid resize reflects the last value', async () => {

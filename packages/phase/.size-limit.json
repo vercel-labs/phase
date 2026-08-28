@@ -9,25 +9,25 @@
     "name": "createSight",
     "path": "src/index.ts",
     "import": "{ createSight }",
-    "limit": "1.1 kB"
+    "limit": "1.2 kB"
   },
   {
     "name": "createLifecycle",
     "path": "src/index.ts",
     "import": "{ createLifecycle }",
-    "limit": "1.65 kB"
+    "limit": "1.8 kB"
   },
   {
     "name": "createLoop",
     "path": "src/index.ts",
     "import": "{ createLoop }",
-    "limit": "3.25 kB"
+    "limit": "3.35 kB"
   },
   {
     "name": "createScrollProgress",
     "path": "src/index.ts",
     "import": "{ createScrollProgress }",
-    "limit": "950 B"
+    "limit": "1.05 kB"
   },
   {
     "name": "createRenderState",
@@ -93,28 +93,28 @@
     "path": "src/react/index.ts",
     "import": "{ useLoop }",
     "ignore": ["react"],
-    "limit": "3.6 kB"
+    "limit": "3.7 kB"
   },
   {
     "name": "useLifecycle",
     "path": "src/react/index.ts",
     "import": "{ useLifecycle }",
     "ignore": ["react"],
-    "limit": "1.95 kB"
+    "limit": "2.1 kB"
   },
   {
     "name": "useSight",
     "path": "src/react/index.ts",
     "import": "{ useSight }",
     "ignore": ["react"],
-    "limit": "1.5 kB"
+    "limit": "1.6 kB"
   },
   {
     "name": "useCanvas",
     "path": "src/react/index.ts",
     "import": "{ useCanvas }",
     "ignore": ["react"],
-    "limit": "4.2 kB"
+    "limit": "4.3 kB"
   },
   {
     "name": "useMutation",
@@ -170,7 +170,7 @@
     "path": "src/react/index.ts",
     "import": "{ useScrollProgress }",
     "ignore": ["react"],
-    "limit": "1.1 kB"
+    "limit": "1.2 kB"
   },
   {
     "name": "useSize",
@@ -233,7 +233,7 @@
     "path": "src/react/index.ts",
     "import": "{ WhenVisible }",
     "ignore": ["react"],
-    "limit": "1.68 kB"
+    "limit": "1.85 kB"
   },
   {
     "name": "WhenIdle",

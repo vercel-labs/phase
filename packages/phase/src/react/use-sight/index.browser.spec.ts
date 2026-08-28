@@ -17,6 +17,10 @@ it('updates React state from native intersections', async () => {
     fixture.root.scrollTop = 150;
   });
   await waitFor(() => expect(result.current.phase).toBe('visible'));
+  act(() => {
+    fixture.root.scrollTop = 0;
+  });
+  await waitFor(() => expect(result.current.phase).toBe('hidden'));
 
   unmount();
   fixture.cleanup();

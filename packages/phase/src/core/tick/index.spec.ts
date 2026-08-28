@@ -990,6 +990,22 @@ describe('setFps', () => {
 // ---------------------------------------------------------------------------
 
 describe('shared clock', () => {
+  it('cancels the pending browser frame while its sole ticker is paused', async () => {
+    const raf = stubRaf();
+    const { createTicker } = await getModule();
+    const ticker = createTicker({ onTick: vi.fn() });
+    ticker.start();
+    expect(raf.pending.size).toBe(1);
+
+    ticker.pause();
+    expect(raf.cancel).toHaveBeenCalledTimes(1);
+    expect(raf.pending.size).toBe(0);
+
+    ticker.resume();
+    expect(raf.pending.size).toBe(1);
+    ticker.stop();
+  });
+
   it('shares one browser frame across duplicate module instances', async () => {
     const firstTick = vi.fn();
     const secondTick = vi.fn();

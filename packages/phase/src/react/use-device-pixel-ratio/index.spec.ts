@@ -40,13 +40,10 @@ describe('useDevicePixelRatio', () => {
   it('cleans up subscription on unmount', async () => {
     const useDevicePixelRatio = await getHook();
     const { unmount } = renderHook(() => useDevicePixelRatio());
+    expect(mockMM.listenerCount('(resolution: 2dppx)')).toBe(1);
 
     unmount();
 
-    // After unmount, triggering a DPR change should not throw
-    expect(() => {
-      vi.stubGlobal('devicePixelRatio', 1);
-      mockMM.setMatches('(resolution: 2dppx)', false);
-    }).not.toThrow();
+    expect(mockMM.listenerCount('(resolution: 2dppx)')).toBe(0);
   });
 });

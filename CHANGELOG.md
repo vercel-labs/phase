@@ -1,5 +1,13 @@
 # phase
 
+## 0.5.2
+
+### Patch Changes
+
+- IntersectionObserver pooling now isolates observers with distinct custom roots.
+- `usePointer().stateRef.current.active` now updates on pointer entry and visibility suspension, before another pointer callback runs.
+- Raised IO-dependent export size budgets to restore regression headroom.
+
 ## 0.5.1
 
 ### Patch Changes

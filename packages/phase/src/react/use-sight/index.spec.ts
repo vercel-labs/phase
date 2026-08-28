@@ -71,10 +71,14 @@ describe('useSight', () => {
     const useSight = await getHook();
     const { ref, el } = createRefWithElement();
     const { unmount } = renderHook(() => useSight({ ref }));
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      true,
+    );
 
     unmount();
-    // IO trigger after unmount should not throw
-    expect(() => mockIO.trigger(el, true)).not.toThrow();
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      false,
+    );
   });
 
   it('changing observe mode disposes old sight and creates new', async () => {

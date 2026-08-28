@@ -12,7 +12,7 @@ it('updates the hook from browser-driven pointer input', async () => {
   const ref = createRef<HTMLDivElement>();
   ref.current = target;
   const states: Array<{ x: number; y: number; active: boolean }> = [];
-  const { unmount } = renderHook(() =>
+  const { result, unmount } = renderHook(() =>
     usePointer({
       ref,
       visibility: 'ignore',
@@ -31,6 +31,11 @@ it('updates the hook from browser-driven pointer input', async () => {
   const activeState = states.find((state) => state.active);
   expect(activeState?.x).toBeCloseTo(25, 0);
   expect(activeState?.y).toBeCloseTo(35, 0);
+  expect(result.current.phaseRef.current).toBe('tracking');
+  expect(result.current.phaseReasonRef.current).toBe('enter');
+  expect(result.current.stateRef.current.x).toBeCloseTo(25, 0);
+  expect(result.current.stateRef.current.y).toBeCloseTo(35, 0);
+  expect(result.current.stateRef.current.active).toBe(true);
 
   unmount();
   target.remove();

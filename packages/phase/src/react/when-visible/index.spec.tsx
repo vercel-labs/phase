@@ -159,6 +159,30 @@ describe('after intersection', () => {
 });
 
 // ---------------------------------------------------------------------------
+// One-shot policy
+// ---------------------------------------------------------------------------
+
+describe('one-shot policy', () => {
+  it('stays mounted after visibility changes back to hidden', async () => {
+    const WhenVisible = await getWhenVisible();
+    render(
+      <WhenVisible data-testid="when-visible">
+        <span data-testid="child">content</span>
+      </WhenVisible>,
+    );
+
+    const sentinel = getSentinel();
+    act(() => mockIO.trigger(sentinel, true));
+    expect(
+      mockIO.instances.some((instance) => instance.observed.has(sentinel)),
+    ).toBe(false);
+    act(() => mockIO.trigger(screen.getByTestId('when-visible'), false));
+
+    expect(screen.getByTestId('child')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Options
 // ---------------------------------------------------------------------------
 

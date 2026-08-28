@@ -29,6 +29,9 @@ export default defineConfig({
           name: 'browser',
           globals: true,
           include: ['src/**/*.browser.spec.{ts,tsx}'],
+          // Playwright pointer actions are page-global; parallel pointer specs
+          // can move the pointer out of another spec's iframe.
+          fileParallelism: false,
           retry: 0,
           browser: {
             enabled: true,

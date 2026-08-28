@@ -77,9 +77,16 @@ describe('useLifecycle', () => {
     const useLifecycle = await getHook();
     const { ref, el } = createRefWithElement();
     const { unmount } = renderHook(() => useLifecycle({ ref }));
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      true,
+    );
+    expect(mockMM.listenerCount('(prefers-reduced-motion: reduce)')).toBe(1);
 
     unmount();
-    expect(() => mockIO.trigger(el, true)).not.toThrow();
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      false,
+    );
+    expect(mockMM.listenerCount('(prefers-reduced-motion: reduce)')).toBe(0);
   });
 
   it('onPhaseChange fires synchronously on phase transitions', async () => {

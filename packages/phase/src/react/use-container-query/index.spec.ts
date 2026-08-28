@@ -82,9 +82,14 @@ describe('useContainerQuery', () => {
     const { unmount } = renderHook(() =>
       useContainerQuery({ minWidth: 600 }, { ref }),
     );
+    expect(mockRO.instances.some((instance) => instance.observed.has(el))).toBe(
+      true,
+    );
 
     unmount();
-    expect(() => mockRO.trigger(el, 800, 400)).not.toThrow();
+    expect(mockRO.instances.some((instance) => instance.observed.has(el))).toBe(
+      false,
+    );
   });
 
   it('breakpoint prop change re-evaluates immediately', async () => {

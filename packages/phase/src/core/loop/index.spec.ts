@@ -1008,6 +1008,32 @@ describe('SSR', () => {
 // ---------------------------------------------------------------------------
 
 describe('page anchor', () => {
+  it('cancels the pending browser frame while visibility-paused', async () => {
+    let nextId = 1;
+    const pending = new Map<number, FrameRequestCallback>();
+    const request = vi.fn((callback: FrameRequestCallback): number => {
+      const id = nextId++;
+      pending.set(id, callback);
+      return id;
+    });
+    const cancel = vi.fn((id: number): void => {
+      pending.delete(id);
+    });
+    vi.stubGlobal('requestAnimationFrame', request);
+    vi.stubGlobal('cancelAnimationFrame', cancel);
+    const { createLoop } = await getModule();
+    const loop = createLoop({ target: document, onTick: vi.fn() });
+    expect(pending.size).toBe(1);
+
+    setDocumentHidden(true);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(pending.size).toBe(0);
+
+    setDocumentHidden(false);
+    expect(pending.size).toBe(1);
+    loop.stop();
+  });
+
   it('runs a page-anchored loop with no observer', async () => {
     const { createLoop } = await getModule();
     const onTick = vi.fn();

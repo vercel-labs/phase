@@ -1243,15 +1243,15 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
 | `createTicker`            |           1.23 kB |
-| `createSight`             |           1.05 kB |
-| `createLifecycle`         |           1.55 kB |
-| `createLoop`              |           3.09 kB |
-| `createScrollProgress`    |             895 B |
+| `createSight`             |           1.08 kB |
+| `createLifecycle`         |            1.6 kB |
+| `createLoop`              |           3.12 kB |
+| `createScrollProgress`    |             934 B |
 | `createRenderState`       |             490 B |
 | `createDevicePixelRatio`  |             544 B |
-| `createMutation`          |            1.5 kB |
-| `createPointer`           |            1.6 kB |
-| `createScroll`            |           1.92 kB |
+| `createMutation`          |           1.54 kB |
+| `createPointer`           |           1.64 kB |
+| `createScroll`            |           1.95 kB |
 | `createThrottle`          |             983 B |
 | `createDebounce`          |             559 B |
 | `whenIdle`                |             409 B |
@@ -1259,18 +1259,18 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |            3.4 kB |
-| `useLifecycle`            |           1.83 kB |
-| `useSight`                |           1.36 kB |
-| `useCanvas`               |           3.96 kB |
-| `useMutation`             |           1.69 kB |
-| `usePointer`              |           1.81 kB |
-| `useScroll`               |           2.26 kB |
+| `useLoop`                 |           3.44 kB |
+| `useLifecycle`            |           1.87 kB |
+| `useSight`                |           1.41 kB |
+| `useCanvas`               |            4.0 kB |
+| `useMutation`             |           1.72 kB |
+| `usePointer`              |           1.85 kB |
+| `useScroll`               |           2.29 kB |
 | `useThrottledCallback`    |            1.1 kB |
 | `useDebouncedCallback`    |             685 B |
 | `useTween`                |             684 B |
 | `usePresence`             |             591 B |
-| `useScrollProgress`       |           1.03 kB |
+| `useScrollProgress`       |           1.06 kB |
 | `useSize`                 |             430 B |
 | `useContainerQuery`       |             389 B |
 | `useMediaQuery`           |             246 B |
@@ -1279,7 +1279,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
 | `Presence`                |             741 B |
-| `WhenVisible`             |           1.61 kB |
+| `WhenVisible`             |           1.65 kB |
 | `WhenIdle`                |             596 B |
 | `Defer`                   |              85 B |
 | `useIdle`                 |             414 B |

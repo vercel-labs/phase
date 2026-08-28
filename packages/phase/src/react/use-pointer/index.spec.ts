@@ -159,6 +159,35 @@ describe('stateRef', () => {
       active: false,
     });
   });
+
+  it('marks active on pointer entry before the first move', async () => {
+    const usePointer = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() =>
+      usePointer({ ref, onPointer: vi.fn(), visibility: 'ignore' }),
+    );
+
+    act(() => el.dispatchEvent(new Event('pointerenter')));
+
+    expect(result.current.stateRef.current.active).toBe(true);
+  });
+
+  it('clears active when visibility suspends tracking', async () => {
+    const usePointer = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() =>
+      usePointer({ ref, onPointer: vi.fn() }),
+    );
+
+    act(() => {
+      mockIO.trigger(el, true);
+      el.dispatchEvent(new Event('pointerenter'));
+    });
+    expect(result.current.stateRef.current.active).toBe(true);
+
+    act(() => mockIO.trigger(el, false));
+    expect(result.current.stateRef.current.active).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

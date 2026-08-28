@@ -63,6 +63,41 @@ describe('pooling', () => {
 
     expect(mockIO.instances).toHaveLength(2);
   });
+
+  it('same custom root shares one IO instance', async () => {
+    const { observeIntersection } = await getModule();
+    const root = document.createElement('div');
+
+    observeIntersection({
+      element: document.createElement('div'),
+      root,
+      onIntersect: vi.fn(),
+    });
+    observeIntersection({
+      element: document.createElement('div'),
+      root,
+      onIntersect: vi.fn(),
+    });
+
+    expect(mockIO.instances).toHaveLength(1);
+  });
+
+  it('distinct custom roots create separate IO instances', async () => {
+    const { observeIntersection } = await getModule();
+
+    observeIntersection({
+      element: document.createElement('div'),
+      root: document.createElement('div'),
+      onIntersect: vi.fn(),
+    });
+    observeIntersection({
+      element: document.createElement('div'),
+      root: document.createElement('div'),
+      onIntersect: vi.fn(),
+    });
+
+    expect(mockIO.instances).toHaveLength(2);
+  });
 });
 
 // ---------------------------------------------------------------------------

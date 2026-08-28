@@ -46,9 +46,14 @@ describe('useScrollProgress', () => {
     const useScrollProgress = await getHook();
     const { ref, el } = createRefWithElement();
     const { unmount } = renderHook(() => useScrollProgress({ ref }));
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      true,
+    );
 
     unmount();
-    expect(() => mockIO.triggerWithRatio(el, 0.5)).not.toThrow();
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      false,
+    );
   });
 
   it('re-subscribes when steps changes', async () => {

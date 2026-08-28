@@ -63,6 +63,17 @@ describe('before idle', () => {
 // ---------------------------------------------------------------------------
 
 describe('after idle', () => {
+  it('stamps entered and animate when motion is allowed', async () => {
+    const WhenIdle = await getWhenIdle();
+    render(<WhenIdle data-testid="when-idle">content</WhenIdle>);
+
+    act(() => mockIdle.flush());
+
+    const element = screen.getByTestId('when-idle');
+    expect(element.dataset.phase).toBe('entered');
+    expect(element.dataset.enter).toBe('animate');
+  });
+
   it('does not stamp data-enter under reduced motion', async () => {
     mockMM.setMatches(REDUCED_MOTION_QUERY, true);
     const WhenIdle = await getWhenIdle();

@@ -12,7 +12,8 @@ it('updates when the real viewport crosses a media query', async () => {
   await waitFor(() => expect(result.current).toBe(false));
   await act(() => page.viewport(500, 600));
   await waitFor(() => expect(result.current).toBe(true));
+  await act(() => page.viewport(800, 600));
+  await waitFor(() => expect(result.current).toBe(false));
 
   unmount();
-  await page.viewport(800, 600);
 });
