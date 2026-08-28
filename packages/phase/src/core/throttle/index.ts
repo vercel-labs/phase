@@ -82,13 +82,13 @@ export function createThrottle<T = void>(
     callback(latest);
   }
 
-  function flushWhenDue(): void {
+  function flushWhenDue(): true | undefined {
     if (stopped || !pending) return;
     const now: number = performance.now();
     if (now - lastFire >= interval) {
       fire(now);
     } else {
-      scheduleInput(flushWhenDue);
+      return true;
     }
   }
 

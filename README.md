@@ -14,7 +14,7 @@ You can't accidentally tank the main thread, leak an observer, jank on scroll, o
 
 - **Pauses when unseen.** Off-screen or in a background tab, work stops and CPU drops to zero.
 - **Respects reduced motion by default.** Accessibility is built in, not an opt-in.
-- **Never forces a reflow.** No `getBoundingClientRect`, no layout thrash, anywhere in the package.
+- **Batches layout reads.** Element-relative pointer tracking performs at most one `getBoundingClientRect()` read in the input stage of each dirty frame; other dimensions and visibility come from observers.
 - **Zero re-renders from the frame loop.** Per-frame work writes to refs and the DOM, never React state.
 - **Frame-locked shared clock.** Every animation on the page reads one clock, so nothing drifts out of sync.
 - **Renders only what matters.** Skip painting off-screen content, mount non-critical UI when idle.
@@ -266,6 +266,8 @@ ticker.start();
 ```
 
 Ticker instances within one JavaScript global, such as a page or worker, share one browser `requestAnimationFrame` loop and timestamp. This includes instances created by separately bundled copies of phase.
+
+Pointer, scroll, mutation, and throttle work queued before frame dispatch begins flushes before every ticker callback in that frame. Work queued during input or tick dispatch runs in the next frame. An input callback error does not prevent other input or ticker callbacks from running; the first error is rethrown after both stages complete. A ticker callback error retains precedence and aborts the remaining ticker callbacks.
 
 `frame.delta` is how many milliseconds an animation should advance on each callback. After a delayed callback, it is at most 40ms without an FPS limit, or one configured FPS interval plus 40ms with a limit. `frame.elapsed` increases by exactly the same `delta`.
 
@@ -1192,9 +1194,9 @@ These are the performance invariants behind [Why phase](#why-phase). They are te
 
 When paused, the ticker calls `cancelAnimationFrame` and stops scheduling entirely. Zero callbacks fire, zero CPU consumed. This is not the "weak pause" pattern of scheduling rAF and returning early.
 
-### Zero forced reflows
+### Controlled layout reads
 
-No `getBoundingClientRect()`, `offsetWidth`, `scrollWidth`, or `getComputedStyle()` anywhere in the package. All dimensions come from ResizeObserver (async, compositor-aligned) and all visibility from IntersectionObserver.
+Dimensions come from ResizeObserver and visibility comes from IntersectionObserver. Element-relative pointer tracking is the exception: `createPointer` batches at most one `getBoundingClientRect()` read into the input stage of each dirty frame instead of reading once per pointer event. Frame-loop callbacks perform no synchronous layout reads.
 
 ### Zero React re-renders from the frame loop
 
@@ -1240,31 +1242,31 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |           1.14 kB |
+| `createTicker`            |           1.22 kB |
 | `createSight`             |           1.05 kB |
 | `createLifecycle`         |           1.55 kB |
-| `createLoop`              |            3.0 kB |
+| `createLoop`              |           3.08 kB |
 | `createScrollProgress`    |             895 B |
 | `createRenderState`       |             490 B |
 | `createDevicePixelRatio`  |             544 B |
-| `createMutation`          |           1.39 kB |
-| `createPointer`           |           1.49 kB |
-| `createScroll`            |           1.82 kB |
-| `createThrottle`          |             863 B |
+| `createMutation`          |           1.49 kB |
+| `createPointer`           |           1.59 kB |
+| `createScroll`            |           1.91 kB |
+| `createThrottle`          |             969 B |
 | `createDebounce`          |             559 B |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           3.32 kB |
+| `useLoop`                 |           3.39 kB |
 | `useLifecycle`            |           1.83 kB |
 | `useSight`                |           1.36 kB |
-| `useCanvas`               |           3.88 kB |
-| `useMutation`             |           1.59 kB |
-| `usePointer`              |           1.71 kB |
-| `useScroll`               |           2.16 kB |
-| `useThrottledCallback`    |             998 B |
+| `useCanvas`               |           3.96 kB |
+| `useMutation`             |           1.69 kB |
+| `usePointer`              |           1.79 kB |
+| `useScroll`               |           2.24 kB |
+| `useThrottledCallback`    |           1.09 kB |
 | `useDebouncedCallback`    |             685 B |
 | `useTween`                |             684 B |
 | `usePresence`             |             591 B |

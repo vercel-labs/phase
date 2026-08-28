@@ -2,7 +2,7 @@
 
 The primary React hook. Wraps `createLoop` with React lifecycle management. Visibility-aware animation loop that never triggers re-renders from the frame loop.
 
-Event-derived state from pointer, scroll, mutation, and throttle is flushed before any frame-loop callback in the same frame.
+Event-derived work queued before frame dispatch begins is flushed before any frame-loop callback in that frame. Work queued during input or tick dispatch runs in the next frame.
 
 ## Signature
 

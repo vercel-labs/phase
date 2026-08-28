@@ -6,9 +6,9 @@ The same browser window can load phase more than once. Each copy used to start i
 
 ## Decision
 
-Copies in the same browser window share one clock through `globalThis[Symbol.for('phase.clock@1')]`. Phase reads this record only after checking that a browser API that uses the clock is available. The record holds input and ticker callbacks, the scheduled frame ID, the frame count, and the last timestamp.
+Copies in the same browser window share one clock through a versioned global record, currently `globalThis[Symbol.for('phase.clock@2')]`. Phase reads this record only after checking that a browser API that uses the clock is available. The record holds input and ticker callbacks, the scheduled frame ID, the frame count, and the last timestamp.
 
-The `@1` suffix names the clock protocol. During alpha, the record and its subscription behavior may evolve in place under `@1`. Use a new suffix when separately published copies must preserve compatibility across protocol changes; different suffixes run separate clocks.
+The suffix names the clock protocol. Incompatible record or subscription changes use a new suffix. Different protocol versions run separate clocks instead of interpreting incompatible shared state.
 
 ## Reason
 

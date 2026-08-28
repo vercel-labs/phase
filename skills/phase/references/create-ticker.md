@@ -2,7 +2,7 @@
 
 The low-level rAF clock underneath `createLoop`. Use when you need a frame loop without visibility management (background processing, audio sync, non-visual timing).
 
-Event-derived state from pointer, scroll, mutation, and throttle is flushed before any frame-loop callback in the same frame.
+Event-derived work queued before frame dispatch begins is flushed before any frame-loop callback in that frame. Work queued during input or tick dispatch runs in the next frame.
 
 ## Signature
 

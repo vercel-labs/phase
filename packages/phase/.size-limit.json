@@ -3,7 +3,7 @@
     "name": "createTicker",
     "path": "src/index.ts",
     "import": "{ createTicker }",
-    "limit": "1.2 kB"
+    "limit": "1.3 kB"
   },
   {
     "name": "createSight",
@@ -45,25 +45,25 @@
     "name": "createMutation",
     "path": "src/index.ts",
     "import": "{ createMutation }",
-    "limit": "1.55 kB"
+    "limit": "1.65 kB"
   },
   {
     "name": "createPointer",
     "path": "src/index.ts",
     "import": "{ createPointer }",
-    "limit": "1.65 kB"
+    "limit": "1.75 kB"
   },
   {
     "name": "createScroll",
     "path": "src/index.ts",
     "import": "{ createScroll }",
-    "limit": "2 kB"
+    "limit": "2.1 kB"
   },
   {
     "name": "createThrottle",
     "path": "src/index.ts",
     "import": "{ createThrottle }",
-    "limit": "960 B"
+    "limit": "1.07 kB"
   },
   {
     "name": "createDebounce",
@@ -121,28 +121,28 @@
     "path": "src/react/index.ts",
     "import": "{ useMutation }",
     "ignore": ["react"],
-    "limit": "1.75 kB"
+    "limit": "1.85 kB"
   },
   {
     "name": "usePointer",
     "path": "src/react/index.ts",
     "import": "{ usePointer }",
     "ignore": ["react"],
-    "limit": "1.9 kB"
+    "limit": "2 kB"
   },
   {
     "name": "useScroll",
     "path": "src/react/index.ts",
     "import": "{ useScroll }",
     "ignore": ["react"],
-    "limit": "2.4 kB"
+    "limit": "2.5 kB"
   },
   {
     "name": "useThrottledCallback",
     "path": "src/react/index.ts",
     "import": "{ useThrottledCallback }",
     "ignore": ["react"],
-    "limit": "1.1 kB"
+    "limit": "1.2 kB"
   },
   {
     "name": "useDebouncedCallback",

@@ -7,7 +7,7 @@ This glossary defines the canonical domain language for phase. Terms are grouped
 ## Timing
 
 **Input stage**:
-The first shared-clock stage. It flushes event-derived pointer, scroll, mutation, and throttle work before frame loops run. Owner: `packages/phase/src/core/_internal/clock/`.
+The first shared-clock stage. It flushes event-derived pointer, scroll, mutation, and throttle work that was queued before frame dispatch began. Work queued during either stage is eligible for the next frame. Owner: `packages/phase/src/core/_internal/clock/`.
 _Avoid_: Event stage, read stage
 
 **Tick stage**:

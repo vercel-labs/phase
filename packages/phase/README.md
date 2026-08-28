@@ -36,9 +36,10 @@ function Orbit({ radius }) {
 
 - **Pauses when unseen.** Off-screen or in a background tab, work stops and CPU drops to zero.
 - **Respects reduced motion by default.** Accessibility is built in, not an opt-in.
-- **Never forces a reflow.** No `getBoundingClientRect`, no layout thrash, anywhere in the package.
+- **Batches layout reads.** Element-relative pointer tracking performs at most one `getBoundingClientRect()` read in the input stage of each dirty frame; other dimensions and visibility come from observers.
 - **Zero re-renders from the frame loop.** Per-frame work writes to refs and the DOM, never React state.
 - **Frame-locked shared clock.** Every animation on the page reads one clock, so nothing drifts out of sync.
+- **Input before frame loops.** Pointer, scroll, mutation, and throttle work queued before a frame flushes before its animation callbacks.
 - **Renders only what matters.** Skip painting off-screen content, mount non-critical UI when idle.
 
 Read the [full documentation](https://github.com/vercel-labs/phase#readme), install the [phase agent skill](https://github.com/vercel-labs/phase/tree/main/skills/phase), review the [changelog](https://github.com/vercel-labs/phase/blob/main/CHANGELOG.md), or see the [MIT license](https://github.com/vercel-labs/phase/blob/main/packages/phase/LICENSE).

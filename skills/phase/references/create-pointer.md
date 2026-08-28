@@ -2,7 +2,7 @@
 
 Lifecycle-aware pointer tracker that reads `getBoundingClientRect` once per rAF frame instead of per `pointermove` event. Auto-pauses when the element is off-screen.
 
-Event-derived state from pointer, scroll, mutation, and throttle is flushed before any frame-loop callback in the same frame.
+Event-derived work queued before frame dispatch begins is flushed before any frame-loop callback in that frame. Work queued during input or tick dispatch runs in the next frame.
 
 ## Signature
 

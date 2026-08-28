@@ -6,7 +6,9 @@ Event-derived work and frame loops used to request separate animation frames. Tw
 
 ## Decision
 
-The shared clock has two stages: input, then tick. Pointer, scroll, mutation, and throttle flushes run in the input stage. Frame-loop callbacks run in the tick stage. Every eligible input callback runs before any eligible tick callback in the same frame; order within either stage is not part of the contract.
+The shared clock has two stages: input, then tick. Pointer, scroll, mutation, and throttle flushes run in the input stage. Frame-loop callbacks run in the tick stage. Input queued before frame dispatch begins is eligible for that frame and runs before every eligible tick callback. Input queued during either stage runs in the next frame. Order within either stage is not part of the contract.
+
+An input callback error does not prevent other input or tick callbacks from running. The clock rethrows the first input error after both stages complete. A tick callback error retains existing ticker behavior: it aborts the remaining tick callbacks and takes precedence over a deferred input error.
 
 ## Reason
 
