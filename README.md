@@ -1304,10 +1304,11 @@ The audit scanner ships with the skill (no separate install needed). Ask your ag
 
 ## Repository layout
 
-| Path             | Purpose                                           |
-| ---------------- | ------------------------------------------------- |
-| `packages/phase` | Published `phase` npm package                     |
-| `skills/phase`   | Installable agent skill and public API references |
-| `scanner/`       | Audit scanner source bundled with the agent skill |
-| `evals/`         | Agent skill and scanner evaluation scenarios      |
-| `docs/adr/`      | Architecture decision records                     |
+| Path                | Purpose                                           |
+| ------------------- | ------------------------------------------------- |
+| `packages/phase`    | Published `phase` npm package                     |
+| `packages/examples` | Shared React examples                             |
+| `skills/phase`      | Installable agent skill and public API references |
+| `scanner/`          | Audit scanner source bundled with the agent skill |
+| `evals/`            | Agent skill and scanner evaluation scenarios      |
+| `docs/adr/`         | Architecture decision records                     |

@@ -10,10 +10,13 @@ pre-commit:
       # staging only evals files hands oxfmt zero targets and it exits 2.
       exclude:
         - 'skills/phase/metadata.json'
+        - 'packages/examples/manifest.ts'
         - 'packages/skill/evals/**'
       run: pnpm oxfmt --check {staged_files}
     lint:
       glob: '**/*.{ts,tsx}'
+      exclude:
+        - 'packages/examples/manifest.ts'
       run: pnpm oxlint {staged_files}
     # Regenerate metadata.json + the downloadable zip whenever skill sources
     # change, then stage the regenerated outputs into the same commit.
@@ -24,3 +27,6 @@ pre-commit:
     skill-sync:
       glob: '{skills/phase/**/*,packages/skill/**/*}'
       run: pnpm skill:package && git add skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip
+    generate-examples-manifest:
+      glob: 'packages/examples/**/*'
+      run: pnpm --filter @usephase/examples generate-manifest && git add packages/examples/manifest.ts

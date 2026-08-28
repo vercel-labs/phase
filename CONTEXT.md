@@ -74,9 +74,36 @@ Repeating calibration after a detection change, a field report, or before a rele
 The generated single scanner file users receive with phase's installable agent skill at `skills/phase/scripts/scan.mjs`, distinct from its typed source modules. Owner: `packages/skill/tsdown.scanner.config.ts`.
 _Avoid_: Built scanner, bundled scanner
 
+## Examples
+
+**Examples package**:
+The main set of phase examples used in documentation, browser tests, generated snippets, and tests of agent behavior. It contains example components and their descriptions, but not checks that belong to a specific tool. Owner: `packages/examples/`.
+_Avoid_: Demo suite, fixture suite, sample app
+
+**Example**:
+A React component that shows how to use one phase export. It is the default export, takes no props, and includes its own styles. Owner: `packages/examples/<export-kebab>/<variant>.tsx`.
+_Avoid_: Demo, sample, fixture
+
+**Variant**:
+A named version of an example in an export directory. Its kebab-case filename becomes the second part of the example slug. Owner: `packages/examples/<export-kebab>/<variant>.tsx`.
+
+**Example slug**:
+The `<export-kebab>/<variant>` path that every tool uses to identify an example. Owner: `packages/examples/manifest.ts`.
+_Avoid_: Example ID, example key
+
+**Manifest**:
+A generated file that maps each example slug to an import that loads the component only when needed. Owner: `packages/examples/manifest.ts`.
+
+**Example metadata**:
+The title, description, and phase exports shown by all variants in one export directory. Owner: `packages/examples/<export-kebab>/meta.ts`.
+
+**Predictable output**:
+An example's rendered HTML, attributes, class names, and text may depend only on when React adds it to the page, how many frames have passed, and explicit user actions. Animated numbers may vary, but random values, the current time, locale, and time zone must not affect the output. Owner: `packages/examples/CONVENTIONS.md`.
+
 ## Overloaded terms
 
 - **Tier** always needs a qualifier: severity tier describes impact when real, while noise tier describes detection trust. `dedup` marks optional cleanup, and execution is a class rather than another tier.
 - **Finding** means a source-code location reported by the scanner, not a confirmed problem or an evaluation expectation.
 - **Evidence** means a named yes/no scanner check. Use **ground truth** for the findings an evaluation expects.
 - **Scenario**, **fixture**, and **golden** are distinct: a scenario is the complete evaluation, a fixture is sample input, and a golden is saved scanner output.
+- **Example** means React reference code from the examples package. **Fixture** means sample input used by a scenario.
