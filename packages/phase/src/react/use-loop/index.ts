@@ -74,7 +74,7 @@ const INITIAL_STATE: LoopState = {
 
 /**
  * Ref-based animation loop that never triggers re-renders from the frame loop.
- * Event-derived work queued before frame dispatch runs before `onTick`.
+ * Event-derived callbacks queued before frame dispatch run before `onTick`.
  *
  * @example
  * const { ref, phase } = useLoop({

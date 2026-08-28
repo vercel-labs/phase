@@ -2,7 +2,7 @@
 
 Lifecycle-aware MutationObserver that coalesces records into one rAF-batched callback. Never fires per-record synchronously. Auto-pauses when the observed element is off-screen via pooled IntersectionObserver.
 
-Event-derived work queued before frame dispatch begins is flushed before any frame-loop callback in that frame. Work queued during input or tick dispatch runs in the next frame.
+Event-derived callbacks queued before frame dispatch begins are flushed before any frame-loop callback in that frame. A callback first queued during either stage runs next frame; additional work can coalesce into an eligible callback that has not run yet.
 
 ## Signature
 

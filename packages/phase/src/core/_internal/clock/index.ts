@@ -76,10 +76,14 @@ function tick(time: number): void {
     sharedClock.ticks.size === 0 ? null : requestAnimationFrame(tick);
   // eslint-disable-next-line unicorn/no-array-for-each -- Map#forEach avoids a per-frame iterator.
   sharedClock.input.forEach(dispatchInput);
+  const failed = inputFailed;
+  const error = inputError;
+  inputFailed = false;
+  inputError = undefined;
   // eslint-disable-next-line unicorn/no-array-for-each -- Map#forEach avoids a per-frame iterator.
   sharedClock.ticks.forEach(dispatchTick);
   stopIfEmpty();
-  if (inputFailed) throw inputError;
+  if (failed) throw error;
 }
 
 function scheduleFrame(): void {

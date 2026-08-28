@@ -231,6 +231,48 @@ it('defers new input scheduled during the input stage', async () => {
   clock.leaveTick(tick);
 });
 
+it.each([
+  [
+    'unvisited',
+    ['first', 'second', 'tick'],
+    ['first', 'second', 'tick', 'tick'],
+  ],
+  [
+    'already visited',
+    ['second', 'first', 'tick'],
+    ['second', 'first', 'tick', 'second', 'tick'],
+  ],
+] as const)(
+  'coalesces work for a pending callback that is %s',
+  async (position, firstFrame, secondFrame) => {
+    const { raf, clock } = await setup();
+    const calls: string[] = [];
+    const second = vi.fn(() => {
+      calls.push('second');
+    });
+    const first = vi.fn(() => {
+      calls.push('first');
+      clock.scheduleInput(second);
+    });
+    const tick = vi.fn(() => calls.push('tick'));
+    if (position === 'unvisited') {
+      clock.scheduleInput(first);
+      clock.scheduleInput(second);
+    } else {
+      clock.scheduleInput(second);
+      clock.scheduleInput(first);
+    }
+    clock.joinTick(tick);
+
+    raf.frame(16);
+    expect(calls).toEqual(firstFrame);
+
+    raf.frame(32);
+    expect(calls).toEqual(secondFrame);
+    clock.leaveTick(tick);
+  },
+);
+
 it('defers input scheduled during the tick stage', async () => {
   const { raf, clock } = await setup();
   const calls: string[] = [];

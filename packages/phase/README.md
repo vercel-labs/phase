@@ -36,7 +36,7 @@ function Orbit({ radius }) {
 
 - **Pauses when unseen.** Off-screen or in a background tab, work stops and CPU drops to zero.
 - **Respects reduced motion by default.** Accessibility is built in, not an opt-in.
-- **Batches layout reads.** Element-relative pointer tracking performs at most one `getBoundingClientRect()` read in the input stage of each dirty frame; other dimensions and visibility come from observers.
+- **Batches layout reads.** Element-relative pointer tracking reads one rect per dirty frame; scroll geometry is read on attachment or explicit measurement and coalesced after resize signals; other dimensions and visibility come from observers.
 - **Zero re-renders from the frame loop.** Per-frame work writes to refs and the DOM, never React state.
 - **Frame-locked shared clock.** Every animation on the page reads one clock, so nothing drifts out of sync.
 - **Input before frame loops.** Pointer, scroll, mutation, and throttle work queued before a frame flushes before its animation callbacks.

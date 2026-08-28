@@ -51,8 +51,8 @@ Every module must satisfy these contracts.
 
 ### Browser APIs
 
-- Never force layout from frame-loop callbacks. `createPointer` owns one input-stage `getBoundingClientRect()` read per dirty frame to provide element-relative coordinates; do not add other synchronous layout reads.
-- Read dimensions through ResizeObserver.
+- Never force layout from frame-loop callbacks. Controlled synchronous exceptions are `createPointer` reading one input-stage rect per dirty frame and `createScroll` reading scroll geometry on attachment, explicit `measure()`, or an input-stage resize flush. Do not add other synchronous layout reads.
+- Read element dimensions through ResizeObserver. `createScroll` uses observer and page-resize signals to refresh its scroll-geometry cache.
 - Read visibility through IntersectionObserver.
 
 ### React
