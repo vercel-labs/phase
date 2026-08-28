@@ -1,3 +1,5 @@
+// Native DPR coverage lives in index.browser.spec.ts. Keep only deterministic
+// DPR transition and teardown scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockMatchMedia } from '../../__mocks__/match-media';
@@ -21,12 +23,6 @@ async function getHook() {
 }
 
 describe('useDevicePixelRatio', () => {
-  it('reads the live DPR after mount', async () => {
-    const useDevicePixelRatio = await getHook();
-    const { result } = renderHook(() => useDevicePixelRatio());
-    expect(result.current).toBe(2);
-  });
-
   it('updates when DPR changes (monitor switch)', async () => {
     const useDevicePixelRatio = await getHook();
     const { result } = renderHook(() => useDevicePixelRatio());

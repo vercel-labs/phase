@@ -24,5 +24,26 @@
     "no-async-await": "off",
     "no-plusplus": "off",
     "prefer-template": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "packages/phase/src/**/*.browser.spec.ts",
+        "packages/phase/src/**/*.browser.spec.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(^|/)__mocks__/",
+                "message": "Browser specs must exercise real browser APIs."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

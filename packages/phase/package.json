@@ -14,7 +14,8 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsdown",
-    "test": "vitest run",
+    "test": "vitest run --project=unit",
+    "test:browser": "vitest run --project=browser",
     "typecheck": "tsc --noEmit",
     "size": "size-limit",
     "prepublishOnly": "pnpm build"
@@ -34,10 +35,12 @@
     "@types/node": "25.6.0",
     "@types/react": "19.2.10",
     "@types/react-dom": "19.2.3",
+    "@vitest/browser-playwright": "4.1.4",
     "jsdom": "23.2.0",
     "lefthook": "2.1.5",
     "oxfmt": "0.44.0",
     "oxlint": "1.59.0",
+    "playwright": "1.59.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "size-limit": "12.1.0",

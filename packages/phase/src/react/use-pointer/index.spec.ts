@@ -1,3 +1,5 @@
+// Native event and scheduling coverage lives in index.browser.spec.ts. Keep
+// only deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
@@ -78,20 +80,6 @@ describe('reactive mode', () => {
     expect(result.current.phaseReason).toBe('initial');
   });
 
-  it('re-renders to tracking on pointer enter', async () => {
-    const usePointer = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() =>
-      usePointer({ ref, onPointer: vi.fn(), visibility: 'ignore' }),
-    );
-
-    act(() => {
-      el.dispatchEvent(new Event('pointerenter'));
-    });
-    expect(result.current.phase).toBe('tracking');
-    expect(result.current.phaseReason).toBe('enter');
-  });
-
   it('re-renders back to idle on pointer leave', async () => {
     const usePointer = await getHook();
     const { ref, el } = createRefWithElement();
@@ -109,20 +97,6 @@ describe('reactive mode', () => {
     });
     expect(result.current.phase).toBe('idle');
     expect(result.current.phaseReason).toBe('leave');
-  });
-
-  it('phaseRef is always current alongside state', async () => {
-    const usePointer = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() =>
-      usePointer({ ref, onPointer: vi.fn(), visibility: 'ignore' }),
-    );
-
-    act(() => {
-      el.dispatchEvent(new Event('pointerenter'));
-    });
-    expect(result.current.phaseRef.current).toBe('tracking');
-    expect(result.current.phaseReasonRef.current).toBe('enter');
   });
 
   it('does not track until the element is visible (visibility pause)', async () => {
@@ -184,27 +158,6 @@ describe('stateRef', () => {
       y: 0,
       active: false,
     });
-  });
-
-  it('mirrors the latest pointer position without a re-render', async () => {
-    const usePointer = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() =>
-      usePointer({ ref, onPointer: vi.fn(), visibility: 'ignore' }),
-    );
-
-    await act(async () => {
-      el.dispatchEvent(new Event('pointerenter'));
-      el.dispatchEvent(
-        new PointerEvent('pointermove', { clientX: 50, clientY: 60 }),
-      );
-      // rAF is stubbed to a macrotask; let the batched flush run.
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    expect(result.current.stateRef.current.x).toBe(50);
-    expect(result.current.stateRef.current.y).toBe(60);
-    expect(result.current.stateRef.current.active).toBe(true);
   });
 });
 

@@ -1,3 +1,5 @@
+// Native DPR coverage lives in index.browser.spec.ts. Keep only deterministic
+// policy and headless-unreachable DPR transitions here.
 import { createMockMatchMedia } from '../../__mocks__/match-media';
 
 let mockMM: ReturnType<typeof createMockMatchMedia>;
@@ -24,13 +26,6 @@ describe('createDevicePixelRatio()', () => {
     vi.resetModules();
     const createDevicePixelRatio = await getFactory();
     expect(() => createDevicePixelRatio({ onChange: vi.fn() })).toThrow();
-  });
-
-  it('exposes the current dpr synchronously', async () => {
-    const createDevicePixelRatio = await getFactory();
-    const watcher = createDevicePixelRatio({ onChange: vi.fn() });
-    expect(watcher.dpr).toBe(2);
-    watcher.stop();
   });
 
   it('calls onChange and updates dpr when DPR changes', async () => {

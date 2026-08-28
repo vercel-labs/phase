@@ -1,3 +1,5 @@
+// Native observer and scheduling coverage lives in index.browser.spec.ts. Keep
+// only deterministic policy and headless-unreachable scenarios here.
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 import { createMockMutationObserver } from '../../__mocks__/mutation-observer';
 
@@ -88,46 +90,6 @@ describe('initial state', () => {
 // ---------------------------------------------------------------------------
 
 describe('rAF batching', () => {
-  it('coalesces multiple MO callbacks into one rAF flush', async () => {
-    const { createMutation } = await getModule();
-    const el = document.createElement('div');
-    const cb = vi.fn();
-    const mutation = createMutation({
-      target: el,
-      mutation: { childList: true },
-      onMutations: cb,
-      visibility: 'ignore',
-    });
-
-    mockMO.trigger(el, [{ type: 'childList' }]);
-    mockMO.trigger(el, [{ type: 'childList' }]);
-
-    expect(cb).not.toHaveBeenCalled();
-    flushRAF();
-
-    expect(cb).toHaveBeenCalledTimes(1);
-    expect(cb.mock.calls[0]?.[0]).toHaveLength(2);
-    mutation.stop();
-  });
-
-  it('does not flush if stopped before rAF fires', async () => {
-    const { createMutation } = await getModule();
-    const el = document.createElement('div');
-    const cb = vi.fn();
-    const mutation = createMutation({
-      target: el,
-      mutation: { childList: true },
-      onMutations: cb,
-      visibility: 'ignore',
-    });
-
-    mockMO.trigger(el, [{ type: 'childList' }]);
-    mutation.stop();
-    flushRAF();
-
-    expect(cb).not.toHaveBeenCalled();
-  });
-
   it('does not flush when paused', async () => {
     const { createMutation } = await getModule();
     const el = document.createElement('div');

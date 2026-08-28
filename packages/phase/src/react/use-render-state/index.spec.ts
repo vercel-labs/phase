@@ -1,3 +1,5 @@
+// Browser event coverage lives in index.browser.spec.ts. Keep only deterministic
+// React wiring and teardown scenarios here.
 import { renderHook, act } from '@testing-library/react';
 import type { RefObject } from 'react';
 
@@ -15,21 +17,6 @@ describe('useRenderState', () => {
     const ref = { current: el } as RefObject<HTMLDivElement>;
     const { result } = renderHook(() => useRenderState(ref));
     expect(result.current).toBe('rendered');
-  });
-
-  it('reports skipped then rendered as the browser toggles', () => {
-    const el = document.createElement('div');
-    document.body.appendChild(el);
-    const ref = { current: el } as RefObject<HTMLDivElement>;
-    const { result } = renderHook(() => useRenderState(ref));
-
-    act(() => dispatchStateChange(el, true));
-    expect(result.current).toBe('skipped');
-
-    act(() => dispatchStateChange(el, false));
-    expect(result.current).toBe('rendered');
-
-    el.remove();
   });
 
   it('stops listening on unmount', () => {

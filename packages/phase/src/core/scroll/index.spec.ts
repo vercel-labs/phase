@@ -1,3 +1,5 @@
+// Native observer and scheduling coverage lives in index.browser.spec.ts. Keep
+// only deterministic policy and headless-unreachable scenarios here.
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 import { createMockResizeObserver } from '../../__mocks__/resize-observer';
 
@@ -93,26 +95,6 @@ async function getModule() {
 // ---------------------------------------------------------------------------
 
 describe('initial state', () => {
-  it('measures and reports geometry on attach (visibility ignore)', async () => {
-    const { createScroll } = await getModule();
-    const el = document.createElement('div');
-    makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
-    const cb = vi.fn();
-
-    const scroll = createScroll({
-      target: el,
-      onScroll: cb,
-      visibility: 'ignore',
-    });
-
-    expect(scroll.phase).toBe('tracking');
-    expect(scroll.phaseReason).toBe('started');
-    expect(scroll.state.maxX).toBe(300);
-    expect(scroll.state.visibleX).toBe(0.25); // 100 / 400
-    expect(cb).toHaveBeenCalledTimes(1);
-    scroll.stop();
-  });
-
   it('reports maxX 0 and progress 0 when not scrollable', async () => {
     const { createScroll } = await getModule();
     const el = document.createElement('div');
@@ -136,28 +118,24 @@ describe('initial state', () => {
 // ---------------------------------------------------------------------------
 
 describe('scroll events', () => {
-  it('batches scroll events into one rAF flush', async () => {
+  it('coalesces synthetic scroll events into one frame', async () => {
     const { createScroll } = await getModule();
     const el = document.createElement('div');
     const geo = makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
     const cb = vi.fn();
-
     const scroll = createScroll({
       target: el,
       onScroll: cb,
       visibility: 'ignore',
     });
-    cb.mockClear(); // ignore the initial measure emit
+    cb.mockClear();
 
     geo.setLeft(150);
     el.dispatchEvent(new Event('scroll'));
     el.dispatchEvent(new Event('scroll'));
-    expect(cb).toHaveBeenCalledTimes(0);
-
     flushRAF();
+
     expect(cb).toHaveBeenCalledTimes(1);
-    expect(scroll.state.x).toBe(150);
-    expect(scroll.state.progressX).toBeCloseTo(0.5); // 150 / 300
     scroll.stop();
   });
 
@@ -269,55 +247,6 @@ describe('geometry', () => {
 // ---------------------------------------------------------------------------
 // Visibility gating
 // ---------------------------------------------------------------------------
-
-describe('visibility gating', () => {
-  it('does not track until visible', async () => {
-    const { createScroll } = await getModule();
-    const el = document.createElement('div');
-    makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
-    const cb = vi.fn();
-
-    const scroll = createScroll({ target: el, onScroll: cb });
-    expect(scroll.phase).toBe('paused');
-    expect(cb).toHaveBeenCalledTimes(0);
-
-    mockIO.trigger(el, true);
-    expect(scroll.phase).toBe('tracking');
-    expect(scroll.phaseReason).toBe('started');
-    expect(cb).toHaveBeenCalledTimes(1); // initial measure on attach
-    scroll.stop();
-  });
-
-  it('pauses when the element leaves the viewport', async () => {
-    const { createScroll } = await getModule();
-    const el = document.createElement('div');
-    makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
-
-    const scroll = createScroll({ target: el, onScroll: vi.fn() });
-    mockIO.trigger(el, true);
-    expect(scroll.phase).toBe('tracking');
-
-    mockIO.trigger(el, false);
-    expect(scroll.phase).toBe('paused');
-    expect(scroll.phaseReason).toBe('sight');
-    scroll.stop();
-  });
-
-  it('does not flush scroll events while paused', async () => {
-    const { createScroll } = await getModule();
-    const el = document.createElement('div');
-    const geo = makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
-    const cb = vi.fn();
-
-    const scroll = createScroll({ target: el, onScroll: cb });
-    // Never became visible: scroll listener is not attached.
-    geo.setLeft(150);
-    el.dispatchEvent(new Event('scroll'));
-    flushRAF();
-    expect(cb).toHaveBeenCalledTimes(0);
-    scroll.stop();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Stop / teardown
@@ -494,34 +423,6 @@ describe('strong pause', () => {
 // ---------------------------------------------------------------------------
 // Vertical axis
 // ---------------------------------------------------------------------------
-
-describe('vertical axis', () => {
-  it('tracks scrollTop, maxY, progressY and visibleY', async () => {
-    const { createScroll } = await getModule();
-    const el = document.createElement('div');
-    makeScrollable(el, {
-      scrollWidth: 0,
-      clientWidth: 0,
-      scrollHeight: 500,
-      clientHeight: 100,
-    });
-
-    const scroll = createScroll({
-      target: el,
-      onScroll: vi.fn(),
-      visibility: 'ignore',
-    });
-    expect(scroll.state.maxY).toBe(400);
-    expect(scroll.state.visibleY).toBe(0.2); // 100 / 500
-
-    el.scrollTop = 200;
-    el.dispatchEvent(new Event('scroll'));
-    flushRAF();
-    expect(scroll.state.y).toBe(200);
-    expect(scroll.state.progressY).toBe(0.5);
-    scroll.stop();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // measure() guards

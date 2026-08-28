@@ -1,3 +1,5 @@
+// Native media-query coverage lives in index.browser.spec.ts. Keep only
+// deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockMatchMedia } from '../../__mocks__/match-media';
@@ -34,18 +36,6 @@ describe('useMediaQuery', () => {
 
     // After effect runs with readMediaQuery, should be true
     expect(result.current).toBe(true);
-  });
-
-  it('updates when MQL change event fires', async () => {
-    const useMediaQuery = await getHook();
-    const { result } = renderHook(() => useMediaQuery('(max-width: 600px)'));
-    expect(result.current).toBe(false);
-
-    act(() => mockMM.setMatches('(max-width: 600px)', true));
-    expect(result.current).toBe(true);
-
-    act(() => mockMM.setMatches('(max-width: 600px)', false));
-    expect(result.current).toBe(false);
   });
 
   it('re-subscribes when query string changes', async () => {

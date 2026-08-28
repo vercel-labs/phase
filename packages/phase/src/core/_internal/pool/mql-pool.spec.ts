@@ -1,3 +1,5 @@
+// Native media-query coverage lives in mql-pool.browser.spec.ts. Keep only
+// deterministic pooling policy and teardown scenarios here.
 import { createMockMatchMedia } from '../../../__mocks__/match-media';
 import { describePoolContract } from './pool-contract';
 

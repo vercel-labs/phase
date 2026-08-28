@@ -1,3 +1,5 @@
+// Native observer delivery coverage lives in io-pool.browser.spec.ts. Keep only
+// deterministic pooling policy and teardown scenarios here.
 import { createMockIntersectionObserver } from '../../../__mocks__/intersection-observer';
 import { describePoolContract } from './pool-contract';
 

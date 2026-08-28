@@ -1,3 +1,5 @@
+// Native observer and scheduling coverage lives in index.browser.spec.ts. Keep
+// only deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';

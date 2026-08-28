@@ -1,3 +1,5 @@
+// Native observer coverage lives in index.browser.spec.ts. Keep only
+// deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockResizeObserver } from '../../__mocks__/resize-observer';
@@ -41,17 +43,6 @@ describe('useContainerQuery', () => {
     expect(result.current.ref.current).toBeNull();
   });
 
-  it('returns true when element crosses minWidth threshold', async () => {
-    const useContainerQuery = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() =>
-      useContainerQuery({ minWidth: 600 }, { ref }),
-    );
-
-    act(() => mockRO.trigger(el, 800, 400));
-    expect(result.current.matches).toBe(true);
-  });
-
   it('does NOT re-render when match result is unchanged', async () => {
     const useContainerQuery = await getHook();
     const { ref, el } = createRefWithElement();
@@ -67,20 +58,6 @@ describe('useContainerQuery', () => {
     // Size changes but still above 600 — match unchanged
     act(() => mockRO.trigger(el, 900, 400));
     expect(renderCount).toBe(countAfterMatch);
-  });
-
-  it('returns false when element shrinks below threshold', async () => {
-    const useContainerQuery = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() =>
-      useContainerQuery({ minWidth: 600 }, { ref }),
-    );
-
-    act(() => mockRO.trigger(el, 800, 400));
-    expect(result.current.matches).toBe(true);
-
-    act(() => mockRO.trigger(el, 400, 400));
-    expect(result.current.matches).toBe(false);
   });
 
   it('supports multiple breakpoint constraints', async () => {

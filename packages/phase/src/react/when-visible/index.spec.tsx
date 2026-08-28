@@ -1,3 +1,5 @@
+// Native observer coverage lives in index.browser.spec.tsx. Keep only
+// deterministic composition and headless-unreachable scenarios here.
 import { render, screen, act } from '@testing-library/react';
 import { createRef } from 'react';
 
@@ -93,20 +95,6 @@ describe('before intersection', () => {
 // ---------------------------------------------------------------------------
 
 describe('after intersection', () => {
-  it('renders children when IO triggers isIntersecting=true', async () => {
-    const WhenVisible = await getWhenVisible();
-    render(
-      <WhenVisible data-testid="when-visible">
-        <span data-testid="child">content</span>
-      </WhenVisible>,
-    );
-
-    const el = getSentinel();
-    act(() => mockIO.trigger(el, true));
-
-    expect(screen.getByTestId('child')).toBeTruthy();
-  });
-
   it('stamps data-phase="entered" on content div', async () => {
     const WhenVisible = await getWhenVisible();
     render(<WhenVisible data-testid="when-visible">content</WhenVisible>);
@@ -167,28 +155,6 @@ describe('after intersection', () => {
 
     const el = screen.getByTestId('when-visible');
     expect(el.className).toBe('content-class');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// One-shot behavior
-// ---------------------------------------------------------------------------
-
-describe('one-shot behavior', () => {
-  it('stays mounted after IO triggers false (observe: once freezes)', async () => {
-    const WhenVisible = await getWhenVisible();
-    render(
-      <WhenVisible data-testid="when-visible">
-        <span data-testid="child">content</span>
-      </WhenVisible>,
-    );
-
-    const el = getSentinel();
-    act(() => mockIO.trigger(el, true));
-    expect(screen.getByTestId('child')).toBeTruthy();
-
-    act(() => mockIO.trigger(screen.getByTestId('when-visible'), false));
-    expect(screen.getByTestId('child')).toBeTruthy();
   });
 });
 
