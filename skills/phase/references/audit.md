@@ -203,7 +203,7 @@ Next: start with the hotspots above, then classify each candidate against the de
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
 
 Beyond the scan: no pattern here matches an infinite CSS animation nobody gated, a transitionend
-listener driving unmount, eagerly mounted below-fold UI, a timer chain sequencing states, a canvas
+listener driving unmount, eagerly mounted below-fold UI, a finite timer chain sequencing states, a canvas
 sized from devicePixelRatio once, or JS still running inside a skipped content-visibility subtree.
 Run the manual and opportunity passes (references/audit.md Step 1.5) before concluding an audit.
 ```
@@ -226,19 +226,19 @@ A triage pass on a large report is usually `--noise precise --noise normal` (dro
 
 ### Suppressions
 
-A comment `phase-scan-ignore <signal-id> -- <reason>` (colon after `ignore` also accepted) suppresses that signal on the same line and the next line. The reason is mandatory; the scanner warns about and ignores reason-less directives and directives naming unknown signal ids. For per-file signals (`missing-reduced-motion`), a directive anywhere in the file suppresses its single finding. Suppressing a superseding signal (`setstate-in-raf`) re-exposes the general one (`manual-raf`) on that line; name both to silence both. Also note: the scanner cannot tell a dangling directive (nothing left to suppress) from an active one, so remove directives when the code they covered is gone.
+A comment `phase-scan-ignore <signal-id> -- <reason>` (colon after `ignore` also accepted) suppresses that signal on the same line and the next line. The reason is mandatory; the scanner warns about and ignores reason-less directives and directives naming unknown signal ids. For per-file signals (`missing-reduced-motion` and `timer-missing-reduced-motion`), a directive anywhere in the file suppresses its single finding. Suppressing a superseding signal (`setstate-in-raf`) re-exposes the general one (`manual-raf`) on that line; name both to silence both. Also note: the scanner cannot tell a dangling directive (nothing left to suppress) from an active one, so remove directives when the code they covered is gone.
 
 **Policy: suppressions record human decisions.** Never add a suppression yourself unless the user has explicitly accepted the finding. If the scanner warns about a reason-less directive, report it; do not silently add a reason or delete the directive.
 
 The directive is the only sanctioned way to silence a finding, but it is not the only way a finding can disappear. These are detection limits, not approved exits — reaching for one to clear a report is falsifying the audit:
 
-- `missing-reduced-motion` goes quiet for a whole file that uses `prefers-reduced-motion` or `reducedMotion`; confirm the handling applies to every animation in that file.
+- Both reduced-motion signals go quiet for a whole file that uses `prefers-reduced-motion` or `reducedMotion`; confirm the handling applies to every animation in that file.
 - Renaming a file into an excluded path (`__tests__`, `__mocks__`, `.stories.`, `.spec.`, `.test.`) removes it from the scan.
 - Lines longer than 1,000 characters are treated as generated and are not scanned.
 
 ### Signals
 
-Severity and noise mirror the scanner's catalog; a repo check fails CI when this table drifts from `scan.mjs`. Signals marked **(CSS)** run only on stylesheet files (`.css`/`.scss`/`.sass`/`.less`); **(JSX)** only on `.tsx`/`.jsx`; the rest on all JS/TS files. `missing-reduced-motion` reports once per file.
+Severity and noise mirror the scanner's catalog; a repo check fails CI when this table drifts from `scan.mjs`. Signals marked **(CSS)** run only on stylesheet files (`.css`/`.scss`/`.sass`/`.less`); **(JSX)** only on `.tsx`/`.jsx`; the rest on all JS/TS files. Both reduced-motion signals report once per file.
 
 <!-- signal-table:begin -->
 
@@ -250,6 +250,7 @@ Severity and noise mirror the scanner's catalog; a repo check fails CI when this
 | `forced-reflow`                  | critical | noisy   | Layout-reading member access or call (`getBoundingClientRect`, `.offset*`, `.scroll*`, `.client*`)                      | [performance.md](./performance.md#no-forced-reflows-in-animation-paths)                                                    |
 | `mutationobserver-layout`        | critical | normal  | MutationObserver watching inline styles or reading layout in its callback                                               | [performance.md](./performance.md#never-drive-layout-from-a-mutationobserver)                                              |
 | `missing-reduced-motion`         | critical | noisy   | Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling                                   | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
+| `timer-missing-reduced-motion`   | critical | noisy   | `setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity with no reduced-motion handling     | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
 | `bare-window-listener`           | critical | normal  | resize/scroll listener with a layout read in the handler                                                                | [performance-recipes.md](./performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer) |
 | `pointer-listener-layout-read`   | critical | normal  | pointermove/mousemove/touchmove listener, or intrinsic JSX move prop, with a layout read per event                      | [use-pointer.md](./use-pointer.md)                                                                                         |
 | `manual-raf`                     | high     | noisy   | Proven raw rAF callback cycle: no visibility pause, shared clock, or cleanup                                            | [audit.md](#common-replacements)                                                                                           |
@@ -275,7 +276,7 @@ Severity and noise mirror the scanner's catalog; a repo check fails CI when this
 
 <!-- signal-table:end -->
 
-> Manual heuristics the scanner cannot see: CSS-in-JS (styled-components, emotion, vanilla-extract) hides the CSS signals entirely (JS signals still fire); Vue/Svelte/Astro single-file components are not scanned at all; in React Native code, `missing-reduced-motion` findings need judgment (the fix is the platform's reduced-motion API, not a CSS media query); `getBoundingClientRect()` used only for an initial in-view check; and hand-wired "IO + visibilitychange + reduced motion → boolean" gates. See [Common replacements](#common-replacements).
+> Manual heuristics the scanner cannot see: CSS-in-JS (styled-components, emotion, vanilla-extract) hides the CSS signals entirely (JS signals still fire); Vue/Svelte/Astro single-file components are not scanned at all; in React Native code, findings from either reduced-motion signal need judgment (the fix is the platform's reduced-motion API, not a CSS media query); `getBoundingClientRect()` used only for an initial in-view check; and hand-wired "IO + visibilitychange + reduced motion → boolean" gates. See [Common replacements](#common-replacements).
 
 > Known blind spots in the CSS signals: a vendor-prefixed declaration with no unprefixed sibling (`-webkit-transition: all` alone) is skipped, because prefix-aware matching is what stops one logical declaration being counted five times. Lines over 1,000 characters are treated as generated and skipped, so a stylesheet compacted onto one line reports nothing.
 
@@ -309,7 +310,7 @@ A clean scan means no anti-pattern candidates, not no opportunities: the scanner
 - **Long-running or infinite CSS animations** (spinners, marquees, animated gradients) with no visibility gating. Even with reduced-motion handled, they burn CPU/GPU off-screen and in background tabs. → `useLifecycle` toggling `animation-play-state` (see [decision-guide.md](./decision-guide.md)).
 - **`transitionend`/`animationend` listeners driving unmount or state.** → `Presence` / `Swap`.
 - **Eagerly mounted non-critical UI** (below-fold sections, chat widgets, pickers, heavy modals). → `Defer` (SSR-safe default) or `WhenVisible`/`WhenIdle`, subject to the [Step 2.5](#step-25-verify-the-blast-radius) semantics rules.
-- **`setTimeout`/`setInterval` chains sequencing UI states.** The scanner flags a timer only when it recurs near animation keywords, so a chain of one-shot timeouts stays invisible even when it drives visible motion. → CSS/WAAPI when the sequence is predetermined and keyframe-friendly; `useLoop` with `frame.elapsed` only when JavaScript must own the steps ([timed-sequences.md](./timed-sequences.md)).
+- **Finite `setTimeout` chains sequencing UI states.** The scanner flags recurring timers near animation vocabulary, but a chain of one-shot timeouts stays invisible even when it drives visible motion. → CSS/WAAPI when the sequence is predetermined and keyframe-friendly; `useLoop` with `frame.elapsed` only when JavaScript must own the steps ([timed-sequences.md](./timed-sequences.md)).
 - **Phase loops replaying a predetermined timeline** (scanner: `phase-loop-browser-keyframes`). Verify that output depends only on elapsed time, can be expressed as browser-animatable keyframes, and requires no per-frame JS side effects. → CSS/WAAPI for playback, with `useLifecycle` as the visibility gate. Also verify that first-paint CSS matches keyframe zero and reduced motion renders a meaningful static state instead of pausing there.
 - **Scroll listeners doing position math without layout reads.** The scanner only flags handlers that read layout. → `useScroll`.
 - **One-shot `matchMedia(...).matches` reads.** The scanner only flags a MediaQueryList something subscribes to, so a snapshot is silent. Check whether the value has to react: a snapshot read once at mount is stale after a theme change, a rotation, or a move to another monitor. → `useMediaQuery` when it must react, `prefersReducedMotion()` for a deliberate one-time read.

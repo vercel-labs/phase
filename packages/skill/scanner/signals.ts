@@ -256,6 +256,27 @@ const SIGNAL_CATALOG = [
     perFile: true,
   },
   {
+    id: 'timer-missing-reduced-motion',
+    replacement:
+      'a prefers-reduced-motion media query, or a phase hook (handles it automatically)',
+    label: 'Timer animation without reduced-motion check',
+    severity: 'critical',
+    noise: 'noisy',
+    detects:
+      '`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity with no reduced-motion handling',
+    why: 'Accessibility gap: motion plays for users who asked for none.',
+    fix: 'references/performance.md#reduced-motion-by-default',
+    pattern: TIMER_REFERENCE,
+    negativePattern:
+      /prefers-reduced-motion|\b(?:usePrefersReducedMotion|prefersReducedMotion|reducedMotion)\b/,
+    negativeCodeOnly: true,
+    contextPattern:
+      /\.style\.(?:transform|opacity)\s*=|\btranslate\b|\banimate\b/,
+    codeOnly: true,
+    evidence: 'recurring-timer',
+    perFile: true,
+  },
+  {
     id: 'background-animation',
     replacement:
       'CSS/WAAPI when predetermined and keyframe-friendly; otherwise useLoop with elapsed steps',

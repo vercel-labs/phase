@@ -1361,6 +1361,23 @@ const SIGNAL_CATALOG = [
 		perFile: true
 	},
 	{
+		id: "timer-missing-reduced-motion",
+		replacement: "a prefers-reduced-motion media query, or a phase hook (handles it automatically)",
+		label: "Timer animation without reduced-motion check",
+		severity: "critical",
+		noise: "noisy",
+		detects: "`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity with no reduced-motion handling",
+		why: "Accessibility gap: motion plays for users who asked for none.",
+		fix: "references/performance.md#reduced-motion-by-default",
+		pattern: TIMER_REFERENCE,
+		negativePattern: /prefers-reduced-motion|\b(?:usePrefersReducedMotion|prefersReducedMotion|reducedMotion)\b/,
+		negativeCodeOnly: true,
+		contextPattern: /\.style\.(?:transform|opacity)\s*=|\btranslate\b|\banimate\b/,
+		codeOnly: true,
+		evidence: "recurring-timer",
+		perFile: true
+	},
+	{
 		id: "background-animation",
 		replacement: "CSS/WAAPI when predetermined and keyframe-friendly; otherwise useLoop with elapsed steps",
 		label: "setInterval/setTimeout for animation (no visibility check)",
@@ -2088,7 +2105,7 @@ const MIN_FINDINGS_FOR_ROLLUP = 5;
 const BEYOND_THE_SCAN = [
 	"",
 	"Beyond the scan: no pattern here matches an infinite CSS animation nobody gated, a transitionend",
-	"listener driving unmount, eagerly mounted below-fold UI, a timer chain sequencing states, a canvas",
+	"listener driving unmount, eagerly mounted below-fold UI, a finite timer chain sequencing states, a canvas",
 	"sized from devicePixelRatio once, or JS still running inside a skipped content-visibility subtree.",
 	"Run the manual and opportunity passes (references/audit.md Step 1.5) before concluding an audit."
 ];

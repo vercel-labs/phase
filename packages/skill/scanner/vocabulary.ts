@@ -69,9 +69,10 @@ export const MUTATION_OBSERVER_CONSTRUCTOR = observerPattern(
 );
 
 // Consumers: recurring timer evidence identifies interval calls;
-// background-animation detects interval and timeout scheduling; FRAME_DRIVER
-// ranks only interval-driven work. Timeouts stay out of ranking because one-shot
-// and recurring ownership require the scheduling analysis to distinguish them.
+// background-animation and timer-missing-reduced-motion detect interval and
+// timeout scheduling; FRAME_DRIVER ranks only interval-driven work. Timeouts
+// stay out of ranking because one-shot and recurring ownership require the
+// scheduling analysis to distinguish them.
 export const INTERVAL_CALL = new RegExp(
   String.raw`\b${INTERVAL_TIMER_NAME}\s*(?:\?\.)?\s*\(`,
 );

@@ -110,6 +110,6 @@ Next: start with the hotspots above, then classify each candidate against the de
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
 
 Beyond the scan: no pattern here matches an infinite CSS animation nobody gated, a transitionend
-listener driving unmount, eagerly mounted below-fold UI, a timer chain sequencing states, a canvas
+listener driving unmount, eagerly mounted below-fold UI, a finite timer chain sequencing states, a canvas
 sized from devicePixelRatio once, or JS still running inside a skipped content-visibility subtree.
 Run the manual and opportunity passes (references/audit.md Step 1.5) before concluding an audit.
