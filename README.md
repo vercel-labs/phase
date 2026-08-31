@@ -1271,7 +1271,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useTween`                |             684 B |
 | `usePresence`             |             591 B |
 | `useScrollProgress`       |           1.06 kB |
-| `useSize`                 |             506 B |
+| `useSize`                 |             505 B |
 | `useContainerQuery`       |             389 B |
 | `useMediaQuery`           |             246 B |
 | `usePrefersReducedMotion` |             274 B |

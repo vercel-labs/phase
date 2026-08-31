@@ -87,10 +87,11 @@ export function useSize<T extends Element = HTMLDivElement>(
       prevWidth.current = null;
       prevHeight.current = null;
 
-      return observeResize(
+      const unobserve = observeResize(
         element,
         (entry) => {
-          if (ref.current !== element) return;
+          // A detached element may notify before the passive reconciliation.
+          if (entry.target !== ref.current) return;
 
           const resolved: ResizeObserverSize | undefined =
             boxOption === 'border-box'
@@ -117,6 +118,8 @@ export function useSize<T extends Element = HTMLDivElement>(
         },
         boxOption,
       );
+
+      return unobserve;
     },
     [boxOption],
   );

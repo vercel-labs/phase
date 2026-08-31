@@ -64,7 +64,7 @@ describe('useElementEffect', () => {
       return show ? <div ref={ref} /> : null;
     }
 
-    const view = render(<Probe show={false} />);
+    const view = render(<Probe show={false} />, { reactStrictMode: false });
     expect(effect).not.toHaveBeenCalled();
 
     view.rerender(<Probe show />);
@@ -104,7 +104,7 @@ describe('useElementEffect', () => {
     expect(subscriptions).toBe(cleanups);
   });
 
-  it('uses the latest effect when dependencies change without reconciling', () => {
+  it('restarts on dependency changes without an extra render', () => {
     const events: string[] = [];
     let renders = 0;
 

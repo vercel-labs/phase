@@ -289,6 +289,8 @@ describe('useSize', () => {
     const { result } = renderHook(() => useSize({ ref, onResize }));
 
     act(() => mockRO.trigger(first, 200, 100));
+    // React updates object refs during commit before passive effects reconcile
+    // the subscription.
     ref.current = second;
     act(() => mockRO.trigger(first, 0, 0));
 
