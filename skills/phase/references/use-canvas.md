@@ -79,7 +79,7 @@ const { restart, phase, phaseReason, quality, qualityReason } =
 
 ## Don't
 
-- **Never call `setState` inside `draw`.** Same rule as `onTick`.
+- **Never write state that changes on every frame inside `draw`.** React may re-render on every tick. A one-time update is allowed only if the callback sets a guard before the update and also sets `enabled` to `false`.
 - **Never allocate inside `draw`.** Zero-allocation contract applies.
 - **Don't call `canvas.getContext('2d')` yourself.** `useCanvas` manages the context.
 - **Don't manually set `canvas.width`/`canvas.height`.** Handled by the resize system.

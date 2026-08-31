@@ -1,0 +1,20 @@
+{
+  "description": "One IntersectionObserver and one ResizeObserver are shared across a changing set of elements. They use observer data directly, stop watching removed elements, and disconnect during cleanup.",
+  "scan": {
+    "assertions": {
+      "required": [
+        { "signal": "raw-io", "file": "src/section-observer.ts", "count": 1 },
+        { "signal": "raw-ro", "file": "src/section-observer.ts", "count": 1 }
+      ],
+      "requiredAbsent": [
+        { "signal": "forced-reflow", "reason": "Geometry comes from observer entries rather than synchronous layout reads" }
+      ]
+    }
+  },
+  "expectedBehavior": [
+    "Runs the bundled scanner before manually reviewing the observers",
+    "Before suggesting a replacement, checks how many elements are watched, what observer data is used, how removed elements are unobserved, and who disconnects the observers",
+    "Classifies both observers as no change when they are cleaned up and remain the simplest way to watch many elements and use observer data",
+    "Recommends a change for missing cleanup, one observer per item, duplicate subscriptions, or simple single-element visibility and size checks"
+  ]
+}

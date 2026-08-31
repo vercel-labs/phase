@@ -4,7 +4,7 @@ Impact-ranked do's and don'ts for writing performant animation code with phase. 
 
 ## Contents
 
-- **Critical.** Zero per-frame allocations | Never setState in onTick | No forced reflows | No layout-inducing writes
+- **Critical.** Zero per-frame allocations | Never write repeated state in onTick | No forced reflows | No layout-inducing writes
 - **High.** Strong pause | Reduced motion by default | Stable function references
 - **Medium.** Frame-locked shared clock | Frame time after delays | Observer pooling | Never drive layout from a MutationObserver | will-change lifecycle | No getBoundingClientRect for visibility
 - **Low.** Don't store FrameState refs | No try/catch in onTick | No debug logging in hot path
@@ -45,9 +45,9 @@ onTick: (frame) => {
 
 **Pragmatic exception:** writing a template literal to `el.style.transform` (as in the Do example above) is acceptable. You must produce a string to set a CSS property, and the browser immediately consumes it. The rule targets unnecessary intermediate allocations (objects, arrays, closures), not the unavoidable final string write to the DOM.
 
-### Never `setState` inside `onTick` / `draw`
+### Never write repeated state inside `onTick` / `draw`
 
-React's reconciler is designed for infrequent, batched updates, not 60Hz. Each `setState` schedules a full fiber tree walk, diffing, and DOM commit. At 60fps that's 60 reconciliations per second competing with your animation for the 16.6ms frame budget. The animation itself stalls while React diffs. Write to refs or DOM directly.
+A state update in a recurring callback can make React re-render on every tick and compete with the animation. Check whether it repeats or records one final state change. Write repeated values to refs or the DOM.
 
 **Do:**
 
@@ -61,11 +61,11 @@ onTick: (frame) => {
 
 ```ts
 onTick: (frame) => {
-  setOpacity(clamp01(frame.elapsed / 1000)); // 60 re-renders/sec
+  setOpacity(clamp01(frame.elapsed / 1000)); // may re-render on every tick
 };
 ```
 
-The only exception is `useTween`, which deliberately uses `setState` for single cheap renders.
+A one-time state update is allowed if the callback first sets a guard and then disables the phase loop or stops scheduling raw rAF. The guard prevents another update before React commits and tears down the hook. Use this only to record completion or recovery, not values that change every frame. See [Finite sequence](./timed-sequences.md#finite-sequence-stop-after-the-last-step). Use `useTween` when one value intentionally drives React rendering.
 
 ### No forced reflows in animation paths
 
@@ -151,7 +151,7 @@ All phase primitives respect `prefers-reduced-motion: reduce` automatically. Byp
 createLoop({ target: el, onTick: draw, reducedMotion: 'ignore' });
 ```
 
-**Do:** Only use `'ignore'` for non-decorative motion (data visualization that communicates via movement, a game, an accessibility feature that uses motion).
+**Do:** Use `'ignore'` when motion is essential, such as in a data visualization, game, or motion-based accessibility feature. It is also valid when a parent responds to preference changes, does not render the animated child while reduced motion is on, and shows the same information without motion. A one-time check or incomplete fallback does not qualify.
 
 ### Stable function references
 
@@ -208,7 +208,9 @@ onTick: (frame) => {
 
 phase pools IntersectionObserver (keyed by serialized options), ResizeObserver (singleton), and MediaQueryList (keyed by query string).
 
-**Don't:**
+A raw IO/RO finding means only that the code skips the shared pool; it does not prove a leak. Before replacing it, check how many elements it watches, how it uses each observer entry, how elements are removed, and who disconnects it. Replace it only if a phase API supports the same behavior.
+
+**Example to review:**
 
 ```ts
 // Creating raw observers outside the pool
@@ -216,7 +218,9 @@ const io = new IntersectionObserver(callback, options);
 io.observe(element);
 ```
 
-**Do:** Use `createSight`, `createScrollProgress`, `useSize`, `useMediaQuery` — all use the shared pools automatically. 20 elements with the same IO options share one observer instance.
+Use `createSight`, `createScrollProgress`, `useSize`, or `useMediaQuery` when they provide the same elements and observer data; all use shared pools. Twenty elements with the same IO options share one observer. A raw observer may be simpler for changing element sets or data from each entry. Keep it only if removed elements are unobserved and cleanup disconnects it.
+
+Fix or replace observers with missing cleanup, one observer per item, duplicate subscriptions, or simple single-element wiring that a phase API already covers.
 
 ### Never drive layout from a `MutationObserver`
 

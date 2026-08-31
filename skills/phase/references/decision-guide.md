@@ -77,7 +77,7 @@ All phase primitives share:
 
 - Zero per-frame allocations
 - Automatic reduced-motion handling
-- Pooled observers (IO/RO/MQL, no raw `new IntersectionObserver`)
+- Phase shares IO/RO/MQL instances when it can provide the same elements and observer data. Otherwise, keep the raw observer only after checking how removed elements are unobserved and who disconnects it.
 - Clean teardown on unmount
 
 #### Which scroll primitive?
@@ -232,9 +232,9 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 ## When to replace existing code with phase
 
 - Manual `requestAnimationFrame` loops without visibility pausing → CSS/WAAPI when the browser can own animatable keyframes; `useLoop` / `useCanvas` when frames require live JS
-- Raw `IntersectionObserver` for visibility gating → `useSight` / `useLifecycle`
-- Raw `ResizeObserver` for dimensions → `useSize`
-- `setState` inside rAF → `useLoop` with ref-based DOM writes
+- Raw `IntersectionObserver` for visibility gating → `useSight` / `useLifecycle` when they support the same elements and data; otherwise keep it only after checking how removed elements are unobserved and who disconnects it
+- Raw `ResizeObserver` for dimensions → `useSize` when it watches the same element and provides the needed data; otherwise keep it only after checking how removed elements are unobserved and who disconnects it
+- Repeated `setState` inside rAF → `useLoop` with ref-based DOM writes; keep one state update only if its callback sets a guard before the update and stops scheduling frames
 - `getBoundingClientRect()` in animation paths → `useSize` (async, no reflow)
 - Animations that keep running in background tabs → `useLoop` (auto-pauses)
 - Missing `prefers-reduced-motion` handling → phase pauses automatically; browser-driven playback still needs a meaningful static CSS fallback

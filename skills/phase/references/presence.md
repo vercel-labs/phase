@@ -46,6 +46,7 @@ import { Presence } from 'phase/react';
 | Exit→enter between N states   | `<Swap>` (coordinated transitions)            |
 | Viewport-gated lazy mount     | `<WhenVisible>`                               |
 | Per-frame animation           | `useLoop`                                     |
+| Persistent recovery layers    | Keep both mounted; record completion          |
 
 ## Do
 

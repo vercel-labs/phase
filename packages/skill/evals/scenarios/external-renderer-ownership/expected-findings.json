@@ -1,0 +1,22 @@
+{
+  "description": "A parent handles reduced motion. Its child creates an external renderer and uses the renderer's own playback, pointer, resize, and cleanup APIs.",
+  "scan": {
+    "assertions": {
+      "required": [
+        { "signal": "reduced-motion-ignored", "file": "src/renderer-canvas.tsx", "count": 1 },
+        { "signal": "forced-reflow", "file": "src/renderer-canvas.tsx", "count": 1 }
+      ],
+      "requiredAbsent": [
+        { "signal": "pointer-listener-layout-read", "reason": "The named move handler calls a same-file helper that reads layout, but the detector stops at the handler" }
+      ]
+    }
+  },
+  "expectedBehavior": [
+    "Runs the bundled scanner and checks how the parent handles reduced motion for the renderer child",
+    "Keeps `reducedMotion: 'ignore'` only when the parent responds to preference changes by not rendering the animated child and showing the same information without motion",
+    "Keeps the renderer's own start, pause, resume, gesture, and cleanup APIs instead of proposing a generic renderer export",
+    "Checks that the renderer can resize and change pixel ratio without being rebuilt",
+    "Uses the existing `useLifecycle` gate, `useSize({ onResize })`, `usePointer({ onPointer, visibility: 'ignore', enabled: isActive })`, and `useDevicePixelRatio`",
+    "Manually follows same-file helpers called by named move handlers because the pointer detector stops at the handler"
+  ]
+}

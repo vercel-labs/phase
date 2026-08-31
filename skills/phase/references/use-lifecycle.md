@@ -109,7 +109,7 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 
 ## Reduced motion
 
-Default `'pause'`: `isActive` becomes `false`, `phaseReason` is `'reduced-motion'`. Your renderer should stop entirely. When gating CSS/WAAPI, also render a meaningful static state under the media query; pausing at keyframe zero is not necessarily a valid reduced-motion fallback. With `'ignore'`: lifecycle stays active regardless.
+Default `'pause'`: `isActive` becomes `false`, `phaseReason` is `'reduced-motion'`, and the renderer should stop. For CSS/WAAPI, show a static fallback instead of pausing at keyframe zero. With `'ignore'`, the lifecycle stays active. Use it only when motion is essential or a parent does not render this component while reduced motion is on and shows the same information without motion. Check every consumer before relying on the parent.
 
 ## See also
 

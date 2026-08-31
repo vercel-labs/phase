@@ -94,7 +94,7 @@ const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
 
 Default: `'pause'`. The lifecycle reports `phase: 'paused'`, `phaseReason: 'reduced-motion'` when reduced motion is enabled. Your renderer should stop.
 
-With `reducedMotion: 'ignore'`: lifecycle stays `active` regardless. Use only for non-decorative motion.
+With `reducedMotion: 'ignore'`, the lifecycle stays `active`. Use it when motion is essential. It is also valid when surrounding code does not create the lifecycle while reduced motion is on and shows the same information without motion.
 
 ## See also
 
