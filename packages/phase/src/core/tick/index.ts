@@ -111,9 +111,10 @@ function advanceDeadline(
  * Low-level requestAnimationFrame loop with an optional FPS limit and pause controls.
  *
  * @remarks
- * Event-derived callbacks queued before frame dispatch run before `onTick`. A
- * callback first queued during dispatch runs in the next frame; additional
- * work can coalesce into an eligible callback that has not run yet.
+ * Event-derived callbacks sharing this clock protocol run before `onTick` when
+ * queued before frame dispatch. A callback first queued during dispatch runs
+ * in the next frame; additional work can coalesce into an eligible callback
+ * that has not run yet.
  *
  * `FrameState` is reused across frames. Do not store a reference to it.
  * Read values immediately in your `onTick` callback.

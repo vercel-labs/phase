@@ -16,7 +16,7 @@ You can't accidentally tank the main thread, leak an observer, jank on scroll, o
 - **Respects reduced motion by default.** Accessibility is built in, not an opt-in.
 - **Batches layout reads.** Element-relative pointer tracking reads one rect per dirty frame; scroll geometry is read on attachment or explicit measurement and coalesced after resize signals; other dimensions and visibility come from observers.
 - **Zero re-renders from the frame loop.** Per-frame work writes to refs and the DOM, never React state.
-- **Frame-locked shared clock.** Every animation on the page reads one clock, so nothing drifts out of sync.
+- **Frame-locked shared clock.** Tickers using the same clock protocol read one timestamp, so they do not drift out of sync.
 - **Renders only what matters.** Skip painting off-screen content, mount non-critical UI when idle.
 
 Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every export stays [sub-kilobyte to a few kilobytes](#bundle-size).
@@ -265,9 +265,9 @@ const ticker = createTicker({
 ticker.start();
 ```
 
-Ticker instances within one JavaScript global, such as a page or worker, share one browser `requestAnimationFrame` loop and timestamp. This includes instances created by separately bundled copies of phase.
+Ticker instances within one JavaScript global, such as a page or worker, share one browser `requestAnimationFrame` loop and timestamp when they use the same clock protocol. This includes separately bundled copies of the same compatible phase release.
 
-Pointer, scroll, mutation, and throttle callbacks queued before frame dispatch begins flush before every ticker callback in that frame. A callback first queued during input or tick dispatch runs in the next frame. Additional work coalesces into an eligible callback that has not run yet; once it has run, new work waits for the next frame. An input callback error does not prevent other input or ticker callbacks from running; the first error is rethrown after both stages complete. A ticker callback error retains precedence and aborts the remaining ticker callbacks.
+Within one clock protocol, pointer, scroll, mutation, and throttle callbacks queued before frame dispatch begins flush before every ticker callback in that frame. A callback first queued during input or tick dispatch runs in the next frame. Additional work coalesces into an eligible callback that has not run yet; once it has run, new work waits for the next frame. An input callback error does not prevent other input or ticker callbacks from running; the first error is rethrown after both stages complete. A ticker callback error retains precedence and aborts the remaining ticker callbacks.
 
 `frame.delta` is how many milliseconds an animation should advance on each callback. After a delayed callback, it is at most 40ms without an FPS limit, or one configured FPS interval plus 40ms with a limit. `frame.elapsed` increases by exactly the same `delta`.
 
@@ -1204,7 +1204,7 @@ The rAF loop never triggers a React re-render. All per-frame state lives in refs
 
 ### Frame-locked shared clock
 
-Ticker instances within one JavaScript global share one browser `requestAnimationFrame` loop and timestamp. See [`createTicker`](#createticker) for the duplicate-copy behavior.
+Ticker instances within one JavaScript global and clock protocol share one browser `requestAnimationFrame` loop and timestamp. See [`createTicker`](#createticker) for the duplicate-copy behavior.
 
 ### Frame timing
 
