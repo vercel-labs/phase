@@ -215,7 +215,7 @@ return (
 );
 ```
 
-The ref guard is set synchronously before `setDone(true)`, so the terminal update fires once even if React has not disabled the loop before another callback. This is one phase transition, not repeated frame-derived state.
+Because the ref guard is set before `setDone(true)`, the update runs once even if the callback fires again before React disables the loop. This records completion once instead of writing state every frame.
 
 ### Static CSS sequences that need lifecycle gating
 
@@ -257,4 +257,4 @@ This is the right choice when CSS handles the timing and interpolation and you o
 - [use-lifecycle](./use-lifecycle.md). For browser-driven sequences that need visibility gating
 - [ease](./ease.md). Easing functions for smooth step transitions
 - [decision-guide](./decision-guide.md). Choosing between CSS, phase, and external libraries
-- [performance](./performance.md). Rules for `onTick` (zero allocations, no repeated frame-derived state)
+- [performance](./performance.md). Rules for `onTick` (zero allocations, no state updates on every frame)

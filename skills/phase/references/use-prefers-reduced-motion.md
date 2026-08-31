@@ -51,7 +51,7 @@ No parameters. Returns `false` during SSR and initial hydration, then the live v
 
 - Use for non-phase animations that need a reactive reduced-motion signal.
 - Combine with `useCallback` so event handlers pick up preference changes without re-binding.
-- A parent can own reduced-motion handling for an animated child: reactively avoid constructing or unmount the child, render meaningful static output, and document that ownership before the child's phase primitive uses `reducedMotion: 'ignore'`.
+- A parent may handle reduced motion for an animated child by not rendering the child while reduced motion is on and showing the same information without motion. See [Reduced motion by default](./performance.md#reduced-motion-by-default) before the child's phase API uses `reducedMotion: 'ignore'`.
 
 ## Don't
 

@@ -47,7 +47,7 @@ onTick: (frame) => {
 
 ### Never write repeated state inside `onTick` / `draw`
 
-React's reconciler is designed for infrequent, batched updates, not frame-derived values. A state update inside a recurring callback can make React reconcile at the callback's tick rate, competing with the animation for the frame budget. Inspect whether the update repeats or records one terminal transition. Write repeated values to refs or the DOM directly.
+A state update in a recurring callback can make React re-render on every tick and compete with the animation. Check whether it repeats or records one final state change. Write repeated values to refs or the DOM.
 
 **Do:**
 
@@ -61,11 +61,11 @@ onTick: (frame) => {
 
 ```ts
 onTick: (frame) => {
-  setOpacity(clamp01(frame.elapsed / 1000)); // can reconcile on every tick
+  setOpacity(clamp01(frame.elapsed / 1000)); // may re-render on every tick
 };
 ```
 
-A guarded terminal update is valid when it is idempotent, runs once, and requests phase-loop shutdown or stops raw rAF rescheduling in the same callback. Set the guard synchronously before the state update; React may tear down a phase hook on the next commit, so the guard prevents another update meanwhile. This permits a completion or recovery milestone; it does not permit repeated frame-derived state. See [Finite sequence](./timed-sequences.md#finite-sequence-stop-after-the-last-step). `useTween` is the separate primitive for intentionally driving one value into React render.
+A one-time state update is allowed if the callback first sets a guard and then disables the phase loop or stops scheduling raw rAF. The guard prevents another update before React commits and tears down the hook. Use this only to record completion or recovery, not values that change every frame. See [Finite sequence](./timed-sequences.md#finite-sequence-stop-after-the-last-step). Use `useTween` when one value intentionally drives React rendering.
 
 ### No forced reflows in animation paths
 
@@ -151,7 +151,7 @@ All phase primitives respect `prefers-reduced-motion: reduce` automatically. Byp
 createLoop({ target: el, onTick: draw, reducedMotion: 'ignore' });
 ```
 
-**Do:** Use `'ignore'` for non-decorative motion (data visualization that communicates via movement, a game, an accessibility feature that uses motion), or when a verified reactive parent owns the preference. That parent must avoid constructing or unmount the animated child and render meaningful static output while reduced motion is active. A snapshot check or a parent with no equivalent static output does not justify `'ignore'`.
+**Do:** Use `'ignore'` when motion is essential, such as in a data visualization, game, or motion-based accessibility feature. It is also valid when a parent responds to preference changes, does not render the animated child while reduced motion is on, and shows the same information without motion. A one-time check or incomplete fallback does not qualify.
 
 ### Stable function references
 
@@ -208,9 +208,9 @@ onTick: (frame) => {
 
 phase pools IntersectionObserver (keyed by serialized options), ResizeObserver (singleton), and MediaQueryList (keyed by query string).
 
-A raw IO/RO finding means the code bypasses those pools; it does not prove the observer leaks. Before migrating, verify target cardinality, callback output (including entry-derived selection or geometry), the owner, per-target unregister, and owner-level disconnect. Use a phase primitive only when it preserves those contracts.
+A raw IO/RO finding means only that the code skips the shared pool; it does not prove a leak. Before replacing it, check how many elements it watches, how it uses each observer entry, how elements are removed, and who disconnects it. Replace it only if a phase API supports the same behavior.
 
-**Don't:**
+**Example to review:**
 
 ```ts
 // Creating raw observers outside the pool
@@ -218,9 +218,9 @@ const io = new IntersectionObserver(callback, options);
 io.observe(element);
 ```
 
-**Do:** Use `createSight`, `createScrollProgress`, `useSize`, or `useMediaQuery` when their target and output contracts fit; all use the shared pools automatically. 20 elements with the same IO options share one observer instance. One owner-created observer with dynamic multi-target registration, specialized entry output, per-target `unobserve()`, and owner-level `disconnect()` may remain the shortest correct implementation.
+Use `createSight`, `createScrollProgress`, `useSize`, or `useMediaQuery` when they provide the same elements and observer data; all use shared pools. Twenty elements with the same IO options share one observer. A raw observer may be simpler for changing element sets or data from each entry. Keep it only if removed elements are unobserved and cleanup disconnects it.
 
-This conditional exception does not excuse missing teardown, one observer per item, duplicate subscriptions, or raw observers used only for simple single-element visibility or size.
+Fix or replace observers with missing cleanup, one observer per item, duplicate subscriptions, or simple single-element wiring that a phase API already covers.
 
 ### Never drive layout from a `MutationObserver`
 

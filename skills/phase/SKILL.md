@@ -90,10 +90,10 @@ Reach for core primitives in React when the hook doesn't fit, such as building a
 Tests enforce these guarantees for animation hot paths. Violating them in consumer code is always a bug. For `WhenVisible` / `WhenIdle`, verify whether mounting changes the wrapper's in-flow footprint and reserve that space when it does (see [references/rendering-recipes.md](references/rendering-recipes.md)).
 
 1. **Zero per-frame allocations.** No objects, arrays, closures, template literals, or spreads in `onTick`/`draw`.
-2. **Never write repeated frame-derived state inside `onTick`.** Write repeated values to refs or the DOM. A terminal state update may run once when it sets its guard synchronously and requests loop shutdown in the same callback.
+2. **Never write state that changes on every frame inside `onTick`.** Write repeated values to refs or the DOM. A one-time state update is allowed only if the callback first blocks repeats and then disables the loop.
 3. **No layout thrash.** Never read layout synchronously or repeatedly write SVG geometry, SVG transform lists, or CSS layout properties in animation paths. Use `useSize` for reads and animate `transform`/`opacity` on a wrapper when possible.
 4. **Strong pause.** `cancelAnimationFrame()` stops scheduling entirely. Zero callbacks, zero CPU when paused.
-5. **Reduced motion by default.** All primitives respect `prefers-reduced-motion: reduce` automatically. Bypassing requires explicit `reducedMotion: 'ignore'` and either non-decorative motion or a verified reactive parent owner with meaningful static output.
+5. **Reduced motion by default.** All primitives respect `prefers-reduced-motion: reduce` automatically. Use `reducedMotion: 'ignore'` only when motion is essential or a parent does not render the animated child while reduced motion is on and shows the same information without motion.
 6. **Frame-locked shared clock.** Every animation receives the same browser rAF timestamp. No per-frame `performance.now()` read.
 
 For the full performance ruleset, read [references/performance.md](references/performance.md).

@@ -1,1 +1,1 @@
-Audit this workspace for animation and rendering performance issues. Run the phase scanner, inspect ownership across the components, and recommend the smallest contract-preserving change.
+Audit this workspace for animation and rendering performance issues. Run the phase scanner, trace which component controls each behavior, and recommend the smallest change that keeps the current behavior.

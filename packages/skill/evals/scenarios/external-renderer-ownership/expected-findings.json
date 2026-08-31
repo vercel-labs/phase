@@ -1,5 +1,5 @@
 {
-  "description": "An external renderer whose reactive parent owns reduced-motion output while the child delegates playback, interaction, sizing, and disposal to renderer-specific contracts.",
+  "description": "A parent handles reduced motion. Its child creates an external renderer and uses the renderer's own playback, pointer, resize, and cleanup APIs.",
   "scan": {
     "assertions": {
       "required": [
@@ -7,15 +7,16 @@
         { "signal": "forced-reflow", "file": "src/renderer-canvas.tsx", "count": 1 }
       ],
       "requiredAbsent": [
-        { "signal": "pointer-listener-layout-read", "reason": "The named handler delegates the layout read through a same-file synchronous helper beyond the detector's one-hop association" }
+        { "signal": "pointer-listener-layout-read", "reason": "The named move handler calls a same-file helper that reads layout, but the detector stops at the handler" }
       ]
     }
   },
   "expectedBehavior": [
-    "Runs the bundled scanner and follows the reduced-motion owner from the renderer child to its parent",
-    "Verifies that the parent reacts to preference changes, avoids constructing or reactively unmounts the renderer under reduced motion, and supplies meaningful static output before leaving reducedMotion ignore unchanged",
-    "Keeps the external renderer and its start, pause, resume, gesture, and disposal contracts rather than proposing a generic renderer export",
-    "Verifies the renderer's in-place update contracts, then recommends useLifecycle plus transient size and pointer signals and reactive device-pixel-ratio handling without moving renderer ownership into phase",
-    "Follows named move callbacks through same-file synchronous helper chains manually even though the pointer detector does not perform call-graph analysis"
+    "Runs the bundled scanner and checks how the parent handles reduced motion for the renderer child",
+    "Keeps `reducedMotion: 'ignore'` only when the parent responds to preference changes by not rendering the animated child and showing the same information without motion",
+    "Keeps the renderer's own start, pause, resume, gesture, and cleanup APIs instead of proposing a generic renderer export",
+    "Checks that the renderer can resize and change pixel ratio without being rebuilt",
+    "Uses the existing `useLifecycle` gate, `useSize({ onResize })`, `usePointer({ onPointer, visibility: 'ignore', enabled: isActive })`, and `useDevicePixelRatio`",
+    "Manually follows same-file helpers called by named move handlers because the pointer detector stops at the handler"
   ]
 }

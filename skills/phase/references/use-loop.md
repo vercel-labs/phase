@@ -98,13 +98,13 @@ Prefer an element `ref` when the animation belongs to one element. Off-screen pa
 
 ## Don't
 
-- **Never write repeated frame-derived state inside `onTick`.** It can make React reconcile at tick rate; write repeated values to refs or the DOM. A terminal update may run once when it sets its guard synchronously and sets `enabled` to `false` in the same callback; see [Finite sequence](./timed-sequences.md#finite-sequence-stop-after-the-last-step).
+- **Never write state that changes on every frame inside `onTick`.** React may re-render on every tick. Write repeated values to refs or the DOM. A one-time update is allowed only if the callback sets a guard before the update and also sets `enabled` to `false`; see [Finite sequence](./timed-sequences.md#finite-sequence-stop-after-the-last-step).
 - **Never allocate inside `onTick`.** No objects, arrays, closures, or spreads. Template literals for the final `style.*` write are acceptable (see [performance.md](./performance.md)).
 - **Never store a reference to `frame`.** Same object mutated in place each tick.
 
 ## Reduced motion
 
-Default `'pause'`: loop pauses, `phaseReason` is `'reduced-motion'`. Use `'complete'` for tweens that should jump to target. Use `'ignore'` for non-decorative motion or when a verified reactive parent avoids constructing or unmounts this component and supplies meaningful static output.
+Default `'pause'`: the loop pauses and `phaseReason` is `'reduced-motion'`. Use `'complete'` for tweens that should jump to their target. Use `'ignore'` only when motion is essential or a parent does not render this component while reduced motion is on and shows the same information without motion.
 
 ## See also
 

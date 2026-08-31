@@ -1,5 +1,5 @@
 {
-  "description": "Specialized shared observers whose target cardinality, entry-derived output, ownership, and teardown can make one cleaned raw observer the shortest contract-preserving implementation.",
+  "description": "One IntersectionObserver and one ResizeObserver are shared across a changing set of elements. They use observer data directly, stop watching removed elements, and disconnect during cleanup.",
   "scan": {
     "assertions": {
       "required": [
@@ -12,9 +12,9 @@
     }
   },
   "expectedBehavior": [
-    "Runs the bundled scanner and retains both raw-io and raw-ro findings",
-    "Verifies target cardinality, callback output, ownership, per-target unregister, and owner-level disconnect before recommending a migration",
-    "Classifies the observers as no change when one cleaned observer remains the shortest implementation that preserves multi-target registration and entry-derived output",
-    "Does not generalize this exception to leaks, observer storms, duplicate subscriptions, or simple single-element visibility and size cases"
+    "Runs the bundled scanner before manually reviewing the observers",
+    "Before suggesting a replacement, checks how many elements are watched, what observer data is used, how removed elements are unobserved, and who disconnects the observers",
+    "Classifies both observers as no change when they are cleaned up and remain the simplest way to watch many elements and use observer data",
+    "Recommends a change for missing cleanup, one observer per item, duplicate subscriptions, or simple single-element visibility and size checks"
   ]
 }

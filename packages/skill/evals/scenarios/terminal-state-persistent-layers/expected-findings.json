@@ -1,5 +1,5 @@
 {
-  "description": "Persistent fallback and live layers coordinate recovery with a transition milestone, one-shot reliability timeout, and one guarded terminal frame-state update.",
+  "description": "The fallback and live layers stay mounted for recovery. A transition event or one-time timeout marks the live layer ready, and one guarded state update disables the loop.",
   "scan": {
     "assertions": {
       "required": [
@@ -8,10 +8,10 @@
     }
   },
   "expectedBehavior": [
-    "Runs the bundled scanner and retains the setstate-in-ontick finding for manual classification",
-    "Does not replace the persistent fallback and live layers with Presence or Swap because both layers must remain mounted for recovery",
-    "Keeps transition milestone state and the one-shot reliability timeout where they preserve recovery semantics",
-    "Classifies the idempotent terminal update as no change because it sets the guard synchronously and sets enabled false in the same callback",
-    "Retains the general prohibition on frame-derived repeated state updates"
+    "Runs the bundled scanner before manually reviewing the frame callback",
+    "Keeps both layers mounted so retry can show the fallback without rebuilding either layer",
+    "Keeps the transition event and one backup timeout because either can mark the live layer ready",
+    "Classifies the one-time state update as no change because the callback sets its guard before setting enabled to false",
+    "Moves values that change every frame to refs or DOM writes"
   ]
 }

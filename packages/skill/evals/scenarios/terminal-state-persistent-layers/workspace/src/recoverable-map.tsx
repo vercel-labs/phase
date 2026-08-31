@@ -5,31 +5,31 @@ import { useLoop } from 'phase/react';
 
 export function RecoverableMap() {
   const liveLayerRef = useRef<HTMLDivElement>(null);
-  const terminalUpdateCommitted = useRef(false);
+  const finalUpdateSent = useRef(false);
   const [loopEnabled, setLoopEnabled] = useState(true);
-  const [milestone, setMilestone] = useState<'loading' | 'ready'>('loading');
+  const [status, setStatus] = useState<'loading' | 'ready'>('loading');
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const liveLayer = liveLayerRef.current;
     if (!liveLayer) return;
 
-    let reliabilityTimeout = window.setTimeout(recordMilestone, 1500);
-    function recordMilestone() {
-      window.clearTimeout(reliabilityTimeout);
-      setMilestone('ready');
+    let backupTimeout = window.setTimeout(markReady, 1500);
+    function markReady() {
+      window.clearTimeout(backupTimeout);
+      setStatus('ready');
     }
 
-    liveLayer.addEventListener('transitionend', recordMilestone, { once: true });
+    liveLayer.addEventListener('transitionend', markReady, { once: true });
     return () => {
-      window.clearTimeout(reliabilityTimeout);
-      liveLayer.removeEventListener('transitionend', recordMilestone);
+      window.clearTimeout(backupTimeout);
+      liveLayer.removeEventListener('transitionend', markReady);
     };
   }, [attempt]);
 
   function retryLiveLayer(): void {
-    terminalUpdateCommitted.current = false;
-    setMilestone('loading');
+    finalUpdateSent.current = false;
+    setStatus('loading');
     setLoopEnabled(true);
     setAttempt((current) => current + 1);
   }
@@ -39,18 +39,18 @@ export function RecoverableMap() {
     enabled: loopEnabled,
     reducedMotion: 'complete',
     onTick: (frame) => {
-      if (frame.elapsed < 1200 || terminalUpdateCommitted.current) return;
-      terminalUpdateCommitted.current = true;
+      if (frame.elapsed < 1200 || finalUpdateSent.current) return;
+      finalUpdateSent.current = true;
       setLoopEnabled(false);
     },
   });
 
   return (
     <section aria-label="Regional availability">
-      <div data-layer="fallback" aria-hidden={milestone === 'ready'}>
+      <div data-layer="fallback" aria-hidden={status === 'ready'}>
         North America and Europe are active
       </div>
-      <div ref={liveLayerRef} data-layer="live" data-milestone={milestone} />
+      <div ref={liveLayerRef} data-layer="live" data-status={status} />
       <button type="button" onClick={retryLiveLayer}>
         Retry live layer
       </button>
