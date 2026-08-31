@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, type RefObject } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 
 import { observeResize } from '../../core/_internal/pool/ro-pool';
+import { useElementEffect } from '../_internal/use-element-effect';
 import { useSyncedRef } from '../use-synced-ref';
 
 export type SizeCallback = (size: Size) => void;
@@ -80,42 +81,45 @@ export function useSize<T extends Element = HTMLDivElement>(
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
   const boxOption: 'content-box' | 'border-box' | undefined = options?.box;
 
-  useEffect(() => {
-    const element: Element | null = ref.current;
-    if (!element) return;
+  useElementEffect(
+    ref,
+    (element) => {
+      prevWidth.current = null;
+      prevHeight.current = null;
 
-    const unobserve: () => void = observeResize(
-      element,
-      (entry) => {
-        const resolved: ResizeObserverSize | undefined =
-          boxOption === 'border-box'
-            ? entry.borderBoxSize[0]
-            : entry.contentBoxSize[0];
-        if (!resolved) return;
+      return observeResize(
+        element,
+        (entry) => {
+          if (ref.current !== element) return;
 
-        const width: number = resolved.inlineSize;
-        const height: number = resolved.blockSize;
+          const resolved: ResizeObserverSize | undefined =
+            boxOption === 'border-box'
+              ? entry.borderBoxSize[0]
+              : entry.contentBoxSize[0];
+          if (!resolved) return;
 
-        if (width === prevWidth.current && height === prevHeight.current)
-          return;
-        prevWidth.current = width;
-        prevHeight.current = height;
+          const width: number = resolved.inlineSize;
+          const height: number = resolved.blockSize;
 
-        const next: Size = { width, height };
-        sizeRef.current = next;
+          if (width === prevWidth.current && height === prevHeight.current)
+            return;
+          prevWidth.current = width;
+          prevHeight.current = height;
 
-        if (onResizeRef.current) {
-          onResizeRef.current(next);
-        } else {
-          setSize(next);
-        }
-      },
-      boxOption,
-    );
+          const next: Size = { width, height };
+          sizeRef.current = next;
 
-    return unobserve;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boxOption]);
+          if (onResizeRef.current) {
+            onResizeRef.current(next);
+          } else {
+            setSize(next);
+          }
+        },
+        boxOption,
+      );
+    },
+    [boxOption],
+  );
 
   return { ref, size, sizeRef };
 }

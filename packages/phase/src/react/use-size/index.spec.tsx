@@ -280,6 +280,22 @@ describe('useSize', () => {
     expect(onResize).toHaveBeenLastCalledWith({ width: 200, height: 100 });
   });
 
+  it('ignores a notification from an element no longer held by the ref', async () => {
+    const useSize = await getHook();
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const ref = { current: first as HTMLDivElement | null };
+    const onResize = vi.fn();
+    const { result } = renderHook(() => useSize({ ref, onResize }));
+
+    act(() => mockRO.trigger(first, 200, 100));
+    ref.current = second;
+    act(() => mockRO.trigger(first, 0, 0));
+
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(result.current.sizeRef.current).toEqual({ width: 200, height: 100 });
+  });
+
   it('adds no mount render and one reconciliation render for a swap', async () => {
     const useSize = await getHook();
 

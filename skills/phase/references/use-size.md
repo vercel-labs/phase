@@ -41,6 +41,16 @@ const { ref, sizeRef } = useSize<T>({ onResize: (s) => applySize(s) });
 
 `size` is not available in transient mode. Accessing it is a TypeScript error.
 
+## Element lifecycle
+
+`useSize` tracks the element behind its ref across commits. Conditional mounts,
+keyed replacements, and remounts release the old observation and observe the
+new element.
+
+On initial mount, `size` remains `null` for one frame by design. ResizeObserver
+subscription is asynchronous, and phase never forces a reflow to measure
+synchronously.
+
 ## When to use
 
 - Reading element dimensions without forced reflows.

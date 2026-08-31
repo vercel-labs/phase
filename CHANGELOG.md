@@ -1,5 +1,12 @@
 # phase
 
+## 0.5.3
+
+### Patch Changes
+
+- `useSize` now follows its ref across conditional mounts, keyed replacements, and remounts, releasing detached elements and delivering the replacement's first size even when its dimensions match.
+- Raised the `useSize` size budget to restore headroom for element reconciliation.
+
 ## 0.5.2
 
 ### Patch Changes
