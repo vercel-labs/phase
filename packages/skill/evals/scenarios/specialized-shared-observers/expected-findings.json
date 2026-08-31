@@ -1,0 +1,20 @@
+{
+  "description": "Specialized shared observers whose target cardinality, entry-derived output, ownership, and teardown can make one cleaned raw observer the shortest contract-preserving implementation.",
+  "scan": {
+    "assertions": {
+      "required": [
+        { "signal": "raw-io", "file": "src/section-observer.ts", "count": 1 },
+        { "signal": "raw-ro", "file": "src/section-observer.ts", "count": 1 }
+      ],
+      "requiredAbsent": [
+        { "signal": "forced-reflow", "reason": "Geometry comes from observer entries rather than synchronous layout reads" }
+      ]
+    }
+  },
+  "expectedBehavior": [
+    "Runs the bundled scanner and retains both raw-io and raw-ro findings",
+    "Verifies target cardinality, callback output, ownership, per-target unregister, and owner-level disconnect before recommending a migration",
+    "Classifies the observers as no change when one cleaned observer remains the shortest implementation that preserves multi-target registration and entry-derived output",
+    "Does not generalize this exception to leaks, observer storms, duplicate subscriptions, or simple single-element visibility and size cases"
+  ]
+}

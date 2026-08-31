@@ -1,0 +1,21 @@
+{
+  "description": "An external renderer whose reactive parent owns reduced-motion output while the child delegates playback, interaction, sizing, and disposal to renderer-specific contracts.",
+  "scan": {
+    "assertions": {
+      "required": [
+        { "signal": "reduced-motion-ignored", "file": "src/renderer-canvas.tsx", "count": 1 },
+        { "signal": "forced-reflow", "file": "src/renderer-canvas.tsx", "count": 1 }
+      ],
+      "requiredAbsent": [
+        { "signal": "pointer-listener-layout-read", "reason": "The named handler delegates the layout read through a same-file synchronous helper beyond the detector's one-hop association" }
+      ]
+    }
+  },
+  "expectedBehavior": [
+    "Runs the bundled scanner and follows the reduced-motion owner from the renderer child to its parent",
+    "Verifies that the parent reacts to preference changes, avoids constructing or reactively unmounts the renderer under reduced motion, and supplies meaningful static output before leaving reducedMotion ignore unchanged",
+    "Keeps the external renderer and its start, pause, resume, gesture, and disposal contracts rather than proposing a generic renderer export",
+    "Verifies the renderer's in-place update contracts, then recommends useLifecycle plus transient size and pointer signals and reactive device-pixel-ratio handling without moving renderer ownership into phase",
+    "Follows named move callbacks through same-file synchronous helper chains manually even though the pointer detector does not perform call-graph analysis"
+  ]
+}

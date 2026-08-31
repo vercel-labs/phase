@@ -185,6 +185,7 @@ Use `enabled` to stop the loop once the sequence is done:
 
 ```tsx
 const [done, setDone] = useState(false);
+const doneRef = useRef(false);
 
 const { ref } = useLoop({
   fps: 2,
@@ -199,7 +200,10 @@ const { ref } = useLoop({
     const progress = clamp01(frame.elapsed / 1000);
     bar.style.transform = `scaleX(${easeOutCubic(progress)})`;
 
-    if (progress >= 1) setDone(true);
+    if (progress >= 1 && !doneRef.current) {
+      doneRef.current = true;
+      setDone(true);
+    }
   },
 });
 
@@ -211,7 +215,7 @@ return (
 );
 ```
 
-`setDone(true)` fires once, not per frame. This is a phase transition (one re-render), not a hot-path allocation.
+The ref guard is set synchronously before `setDone(true)`, so the terminal update fires once even if React has not disabled the loop before another callback. This is one phase transition, not repeated frame-derived state.
 
 ### Static CSS sequences that need lifecycle gating
 
@@ -253,4 +257,4 @@ This is the right choice when CSS handles the timing and interpolation and you o
 - [use-lifecycle](./use-lifecycle.md). For browser-driven sequences that need visibility gating
 - [ease](./ease.md). Easing functions for smooth step transitions
 - [decision-guide](./decision-guide.md). Choosing between CSS, phase, and external libraries
-- [performance](./performance.md). Rules for `onTick` (zero allocations, no setState)
+- [performance](./performance.md). Rules for `onTick` (zero allocations, no repeated frame-derived state)

@@ -109,7 +109,7 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 
 ## Reduced motion
 
-Default `'pause'`: `isActive` becomes `false`, `phaseReason` is `'reduced-motion'`. Your renderer should stop entirely. When gating CSS/WAAPI, also render a meaningful static state under the media query; pausing at keyframe zero is not necessarily a valid reduced-motion fallback. With `'ignore'`: lifecycle stays active regardless.
+Default `'pause'`: `isActive` becomes `false`, `phaseReason` is `'reduced-motion'`. Your renderer should stop entirely. When gating CSS/WAAPI, also render a meaningful static state under the media query; pausing at keyframe zero is not necessarily a valid reduced-motion fallback. With `'ignore'`, lifecycle stays active regardless. This can be correct when a verified reactive parent already owns the preference, avoids constructing or unmounts this renderer, and supplies meaningful static output. Verify every consumer before accepting that delegation.
 
 ## See also
 

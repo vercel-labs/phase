@@ -670,7 +670,7 @@ Attach the returned `ref` to the element you want to animate. To bring your own,
 
 Your `onTick` callback always sees the latest props, state, and refs without restarting the loop (stored internally via `useSyncedRef`).
 
-**Never call `setState` inside `onTick`.** It runs 60 times per second. Write to refs or the DOM directly. The only re-render trigger is `phase` changing (an infrequent lifecycle event).
+**Never write repeated frame-derived state inside `onTick`.** It can make React reconcile at tick rate. Write repeated values to refs or the DOM directly. A terminal update may run once when it sets its guard synchronously and sets `enabled` to `false` in the same callback.
 
 ### useLifecycle
 

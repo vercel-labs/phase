@@ -1,0 +1,17 @@
+{
+  "description": "Persistent fallback and live layers coordinate recovery with a transition milestone, one-shot reliability timeout, and one guarded terminal frame-state update.",
+  "scan": {
+    "assertions": {
+      "required": [
+        { "signal": "setstate-in-ontick", "file": "src/recoverable-map.tsx", "count": 1 }
+      ]
+    }
+  },
+  "expectedBehavior": [
+    "Runs the bundled scanner and retains the setstate-in-ontick finding for manual classification",
+    "Does not replace the persistent fallback and live layers with Presence or Swap because both layers must remain mounted for recovery",
+    "Keeps transition milestone state and the one-shot reliability timeout where they preserve recovery semantics",
+    "Classifies the idempotent terminal update as no change because it sets the guard synchronously and sets enabled false in the same callback",
+    "Retains the general prohibition on frame-derived repeated state updates"
+  ]
+}

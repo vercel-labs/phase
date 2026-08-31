@@ -70,7 +70,7 @@ const loop = createLoop(options: LoopOptions): Loop;
 
 ## Don't
 
-- **Never call React `setState` inside `onTick`.** It fires 60 times/sec. Write to refs or DOM directly.
+- **Never write repeated frame-derived state inside `onTick`.** It can make React reconcile at tick rate; write repeated values to refs or the DOM. A guarded terminal update may run once when it synchronously stops this loop.
 - **Never allocate inside `onTick`.** No objects, arrays, closures, template literals, or spreads. `FrameState` is mutated in place; reuse external variables.
 - **Never store a reference to `frame`.** It's the same object every tick, mutated in place. Read values immediately.
 - **Don't call `start()` after `stop()`.** `stop()` is terminal. Create a new loop instance.
@@ -82,7 +82,7 @@ const loop = createLoop(options: LoopOptions): Loop;
 Default: `'pause'`. The loop pauses entirely when reduced motion is enabled. The `phaseReason` will be `'reduced-motion'`.
 
 - `'complete'`: Jump to the end state instantly (useful for tweens that have a target). The loop runs one final tick then stops.
-- `'ignore'`: Keep running regardless. Use only for non-decorative motion (e.g. a data visualization that conveys information via movement).
+- `'ignore'`: Keep running regardless. Use for non-decorative motion (e.g. a data visualization that conveys information via movement), or when a verified reactive owner avoids constructing this loop and supplies meaningful static output under reduced motion.
 
 ## See also
 

@@ -46,6 +46,7 @@ import { Presence } from 'phase/react';
 | Exit→enter between N states   | `<Swap>` (coordinated transitions)            |
 | Viewport-gated lazy mount     | `<WhenVisible>`                               |
 | Per-frame animation           | `useLoop`                                     |
+| Persistent recovery layers    | Keep both mounted; record the milestone       |
 
 ## Do
 
@@ -64,6 +65,7 @@ import { Presence } from 'phase/react';
 ## Don't
 
 - **Don't use for per-frame animation.** `Presence` is for mount/unmount transitions only.
+- **Don't replace a completion listener when every layer must remain mounted for recovery.** `Presence` coordinates visibility or unmount; milestone state can carry a different contract.
 - **Don't set `exitDuration` shorter than your CSS transition.** Causes mid-animation unmount.
 - **Don't nest `<Presence>` inside another `<Presence>` for exit→enter.** Use `<Swap>` instead.
 

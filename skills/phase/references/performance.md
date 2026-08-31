@@ -4,7 +4,7 @@ Impact-ranked do's and don'ts for writing performant animation code with phase. 
 
 ## Contents
 
-- **Critical.** Zero per-frame allocations | Never setState in onTick | No forced reflows | No layout-inducing writes
+- **Critical.** Zero per-frame allocations | Never write repeated state in onTick | No forced reflows | No layout-inducing writes
 - **High.** Strong pause | Reduced motion by default | Stable function references
 - **Medium.** Frame-locked shared clock | Frame time after delays | Observer pooling | Never drive layout from a MutationObserver | will-change lifecycle | No getBoundingClientRect for visibility
 - **Low.** Don't store FrameState refs | No try/catch in onTick | No debug logging in hot path
@@ -45,9 +45,9 @@ onTick: (frame) => {
 
 **Pragmatic exception:** writing a template literal to `el.style.transform` (as in the Do example above) is acceptable. You must produce a string to set a CSS property, and the browser immediately consumes it. The rule targets unnecessary intermediate allocations (objects, arrays, closures), not the unavoidable final string write to the DOM.
 
-### Never `setState` inside `onTick` / `draw`
+### Never write repeated state inside `onTick` / `draw`
 
-React's reconciler is designed for infrequent, batched updates, not 60Hz. Each `setState` schedules a full fiber tree walk, diffing, and DOM commit. At 60fps that's 60 reconciliations per second competing with your animation for the 16.6ms frame budget. The animation itself stalls while React diffs. Write to refs or DOM directly.
+React's reconciler is designed for infrequent, batched updates, not frame-derived values. A state update inside a recurring callback can make React reconcile at the callback's tick rate, competing with the animation for the frame budget. Inspect whether the update repeats or records one terminal transition. Write repeated values to refs or the DOM directly.
 
 **Do:**
 
@@ -61,11 +61,11 @@ onTick: (frame) => {
 
 ```ts
 onTick: (frame) => {
-  setOpacity(clamp01(frame.elapsed / 1000)); // 60 re-renders/sec
+  setOpacity(clamp01(frame.elapsed / 1000)); // can reconcile on every tick
 };
 ```
 
-The only exception is `useTween`, which deliberately uses `setState` for single cheap renders.
+A guarded terminal update is valid when it is idempotent, runs once, and requests phase-loop shutdown or stops raw rAF rescheduling in the same callback. Set the guard synchronously before the state update; React may tear down a phase hook on the next commit, so the guard prevents another update meanwhile. This permits a completion or recovery milestone; it does not permit repeated frame-derived state. See [Finite sequence](./timed-sequences.md#finite-sequence-stop-after-the-last-step). `useTween` is the separate primitive for intentionally driving one value into React render.
 
 ### No forced reflows in animation paths
 
@@ -151,7 +151,7 @@ All phase primitives respect `prefers-reduced-motion: reduce` automatically. Byp
 createLoop({ target: el, onTick: draw, reducedMotion: 'ignore' });
 ```
 
-**Do:** Only use `'ignore'` for non-decorative motion (data visualization that communicates via movement, a game, an accessibility feature that uses motion).
+**Do:** Use `'ignore'` for non-decorative motion (data visualization that communicates via movement, a game, an accessibility feature that uses motion), or when a verified reactive parent owns the preference. That parent must avoid constructing or unmount the animated child and render meaningful static output while reduced motion is active. A snapshot check or a parent with no equivalent static output does not justify `'ignore'`.
 
 ### Stable function references
 
@@ -208,6 +208,8 @@ onTick: (frame) => {
 
 phase pools IntersectionObserver (keyed by serialized options), ResizeObserver (singleton), and MediaQueryList (keyed by query string).
 
+A raw IO/RO finding means the code bypasses those pools; it does not prove the observer leaks. Before migrating, verify target cardinality, callback output (including entry-derived selection or geometry), the owner, per-target unregister, and owner-level disconnect. Use a phase primitive only when it preserves those contracts.
+
 **Don't:**
 
 ```ts
@@ -216,7 +218,9 @@ const io = new IntersectionObserver(callback, options);
 io.observe(element);
 ```
 
-**Do:** Use `createSight`, `createScrollProgress`, `useSize`, `useMediaQuery` — all use the shared pools automatically. 20 elements with the same IO options share one observer instance.
+**Do:** Use `createSight`, `createScrollProgress`, `useSize`, or `useMediaQuery` when their target and output contracts fit; all use the shared pools automatically. 20 elements with the same IO options share one observer instance. One owner-created observer with dynamic multi-target registration, specialized entry output, per-target `unobserve()`, and owner-level `disconnect()` may remain the shortest correct implementation.
+
+This conditional exception does not excuse missing teardown, one observer per item, duplicate subscriptions, or raw observers used only for simple single-element visibility or size.
 
 ### Never drive layout from a `MutationObserver`
 

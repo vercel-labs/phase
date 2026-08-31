@@ -77,7 +77,7 @@ All phase primitives share:
 
 - Zero per-frame allocations
 - Automatic reduced-motion handling
-- Pooled observers (IO/RO/MQL, no raw `new IntersectionObserver`)
+- Pooled observers (IO/RO/MQL) when they preserve target and callback-output contracts; specialized raw observers require explicit ownership and teardown review
 - Clean teardown on unmount
 
 #### Which scroll primitive?
@@ -232,9 +232,9 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 ## When to replace existing code with phase
 
 - Manual `requestAnimationFrame` loops without visibility pausing → CSS/WAAPI when the browser can own animatable keyframes; `useLoop` / `useCanvas` when frames require live JS
-- Raw `IntersectionObserver` for visibility gating → `useSight` / `useLifecycle`
-- Raw `ResizeObserver` for dimensions → `useSize`
-- `setState` inside rAF → `useLoop` with ref-based DOM writes
+- Raw `IntersectionObserver` for visibility gating → `useSight` / `useLifecycle` when target cardinality and callback output are preserved; otherwise no change with ownership and teardown evidence
+- Raw `ResizeObserver` for dimensions → `useSize` when its target and entry-output contract fits; otherwise no change with ownership and teardown evidence
+- Repeated `setState` inside rAF → `useLoop` with ref-based DOM writes; retain only guarded terminal updates that stop rescheduling
 - `getBoundingClientRect()` in animation paths → `useSize` (async, no reflow)
 - Animations that keep running in background tabs → `useLoop` (auto-pauses)
 - Missing `prefers-reduced-motion` handling → phase pauses automatically; browser-driven playback still needs a meaningful static CSS fallback
