@@ -119,6 +119,24 @@ describe('execution context', () => {
     expect(finding?.execution).toBe('per-frame');
   });
 
+  it('classifies work in a named phase callback outside the six-line frame-driver window as per-frame', () => {
+    const finding = scanFile(
+      'src/a.ts',
+      "import { useLoop } from 'phase/react';\nfunction tick() {\n  const points = source.map(project);\n  step1();\n  step2();\n  step3();\n  step4();\n  step5();\n  step6();\n  step7();\n  step8();\n}\nuseLoop({ onTick: tick });\n",
+    ).find((candidate) => candidate.signal === 'per-frame-allocation');
+
+    expect(finding?.execution).toBe('per-frame');
+  });
+
+  it('classifies a finding before a same-line phase callback as incidental', () => {
+    const finding = scanFile(
+      'src/a.ts',
+      "import { useLoop } from 'phase/react';\nconst width = element.offsetWidth; function tick() {\n  paint();\n  step1();\n  step2();\n  step3();\n  step4();\n  step5();\n  step6();\n  step7();\n}\nuseLoop({ onTick: tick });\n",
+    ).find((candidate) => candidate.signal === 'forced-reflow');
+
+    expect(finding?.execution).toBe('incidental');
+  });
+
   it('leaves stylesheet findings unclassified', () => {
     const [finding] = scanFile('src/a.css', '.x { transition: all 0.3s; }\n');
     expect(finding?.execution).toBe(null);
@@ -283,6 +301,46 @@ describe('cache performance', () => {
     const started = performance.now();
     scanFile('src/large.css', `@keyframes move {\n${body}\n}`);
     expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  it('scans 4k generated JavaScript lines containing complete phase callbacks', () => {
+    const content = `import { useLoop } from 'phase/react';\n${Array.from(
+      { length: 4000 },
+      (_, index) =>
+        index % 20 === 0
+          ? `useLoop({ onTick: () => { const point = [${index}, 0]; paint(point); } });`
+          : `const value${index} = ${index};`,
+    ).join('\n')}`;
+    const started = performance.now();
+    const findings = scanFile('src/large.ts', content).filter(
+      (finding) => finding.signal === 'per-frame-allocation',
+    );
+
+    expect(findings).toHaveLength(200);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  it('analyzes 4k incomplete useLoop calls within 250 ms', () => {
+    const content = `${"import { useLoop } from 'phase/react';\n"}${'useLoop(\n'.repeat(4000)}`;
+    const started = performance.now();
+    scanFile('src/malformed.ts', content);
+
+    expect(performance.now() - started).toBeLessThan(250);
+  });
+
+  it('analyzes 4k incomplete generic useLoop expressions within 500 ms', () => {
+    const content = `${"import { useLoop } from 'phase/react';\n"}${'useLoop<\n'.repeat(4000)}`;
+    const started = performance.now();
+    scanFile('src/malformed-generic.ts', content);
+
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  it('handles a callback wrapped in 5,000 pairs of parentheses without throwing', () => {
+    const wrapped = `${'('.repeat(5000)}() => { const points = []; }${')'.repeat(5000)}`;
+    const content = `import { useLoop } from 'phase/react';\nuseLoop({ onTick: ${wrapped} });`;
+
+    expect(() => scanFile('src/deep.ts', content)).not.toThrow();
   });
 });
 

@@ -169,6 +169,355 @@ const SIGNAL_EXAMPLE_CATALOG = {
       },
     ],
   },
+  'per-frame-allocation': {
+    match: [
+      {
+        file: 'src/manual-loop.ts',
+        content:
+          'function draw() {\n  const point = { x: 0, y: 0 };\n  const values = source.map(transform);\n  paint(point, values);\n  requestAnimationFrame(draw);\n}\nrequestAnimationFrame(draw);\n',
+      },
+      {
+        file: 'src/canvas.tsx',
+        content:
+          "import { useCanvas } from 'phase/react';\nuseCanvas({\n  draw: (context) => {\n    const points = [...source];\n    paint(context, points);\n  },\n});\n",
+      },
+      {
+        file: 'src/loop.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nconst tick = () => {\n  const visible = source.filter(isVisible);\n  const copy = { ...state };\n  paint(visible, copy);\n};\nuseLoop({ onTick: tick });\n",
+      },
+      {
+        file: 'src/ticker.ts',
+        content:
+          "import { createTicker } from 'phase';\ncreateTicker({\n  onTick(frame) {\n    const point = [frame.elapsed, 0];\n    paint(point);\n  },\n});\n",
+      },
+      {
+        file: 'src/core-loop.ts',
+        content:
+          "import { createLoop } from 'phase';\ncreateLoop({\n  target,\n  onTick: () => {\n    const point = { x: 0, y: 0 };\n    paint(point);\n  },\n});\n",
+      },
+      {
+        file: 'src/concise-loop.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => [frame.x, frame.y] });\n",
+      },
+      {
+        file: 'src/named-canvas.tsx',
+        content:
+          "import { useCanvas } from 'phase/react';\nconst draw = () => {\n  const points = source.map(project);\n  paint(points);\n};\nuseCanvas({ containerRef, canvasRef, draw });\n",
+      },
+      {
+        testId: 'mixed-same-line',
+        file: 'src/compact.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nconst setup = []; useLoop({ onTick: () => source.map(project) });\n",
+      },
+      {
+        file: 'src/object-argument.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => paint({ x: frame.x, y: frame.y }) });\n",
+      },
+      {
+        file: 'src/array-argument.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => paint([...source]) });\n",
+      },
+      {
+        file: 'src/conditional.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  const points = active ? [] : cached;\n  paint(points);\n} });\n",
+      },
+      {
+        file: 'src/parenthesized-return.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  return ({ x: frame.x, y: frame.y });\n} });\n",
+      },
+      {
+        file: 'src/multiline-literal.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  const points =\n    [frame.x, frame.y];\n  paint(points);\n} });\n",
+      },
+      {
+        file: 'src/guarded-assignment.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  if (active) points = [];\n  paint(points);\n} });\n",
+      },
+      {
+        file: 'src/aliased-loop.tsx',
+        content:
+          "import { useLoop as useFrameLoop } from 'phase/react';\nuseFrameLoop({ onTick: () => {\n  const points = [];\n  paint(points);\n} });\n",
+      },
+      {
+        file: 'src/namespaced-ticker.ts',
+        content:
+          "import * as Phase from 'phase';\nPhase.createTicker({ onTick: () => {\n  const point = { x: 0, y: 0 };\n  paint(point);\n} });\n",
+      },
+      {
+        file: 'src/nested-default.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({\n  onTick: ({ elapsed = readElapsed() }) => {\n    const points = [];\n    paint(points, elapsed);\n  },\n});\n",
+      },
+      {
+        file: 'src/quoted-property.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({\n  'onTick': () => {\n    const points = [];\n    paint(points);\n  },\n});\n",
+      },
+      {
+        file: 'src/generic-loop.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop<SVGSVGElement & { dataset: DOMStringMap }>({\n  onTick: () => {\n    const points = [];\n    paint(points);\n  },\n});\n",
+      },
+      {
+        file: 'src/regex-literal.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  const openingBrace = /\\{/;\n  const points = [];\n  paint(points, openingBrace);\n} });\n",
+      },
+      {
+        file: 'src/dollar-alias.tsx',
+        content:
+          "import { useLoop as $loop } from 'phase/react';\n$loop({ onTick: () => {\n  const points = [];\n  paint(points);\n} });\n",
+      },
+      {
+        file: 'src/parenthesized-callback.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: ((frame) => {\n  const points = [];\n  paint(points, frame);\n}) });\n",
+      },
+      {
+        file: 'src/typed-function.ts',
+        content:
+          "import { createTicker } from 'phase';\ncreateTicker({ onTick: function (frame): void {\n  const points = [];\n  paint(points, frame);\n} });\n",
+      },
+      {
+        file: 'src/async-method.ts',
+        content:
+          "import { createTicker } from 'phase';\ncreateTicker({ async onTick() {\n  const points = [];\n  paint(points);\n} });\n",
+      },
+      {
+        file: 'src/named-nested-default.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nconst tick = ({ elapsed = readElapsed() }) => {\n  const points = [];\n  paint(points, elapsed);\n};\nuseLoop({ onTick: tick });\n",
+      },
+      {
+        file: 'src/type-parameter-name.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\ntype Factory = (useLoop: Hook) => void;\nuseLoop({ onTick: () => {\n  const points = [];\n  paint(points);\n} });\n",
+      },
+      {
+        file: 'src/false-ternary-array.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  const points = active ? cached : [];\n  paint(points);\n} });\n",
+      },
+      {
+        file: 'src/false-ternary-object.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  const point = active ? cached : { x: 0, y: 0 };\n  paint(point);\n} });\n",
+      },
+      {
+        file: 'src/control-regex.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  if (ready) /\\{/.test(value);\n  const points = [];\n  paint(points);\n} });\n",
+      },
+      {
+        file: 'src/type-then-runtime.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  const factory: () => number = getFactory();\n  register({ x: factory() });\n} });\n",
+      },
+      {
+        file: 'src/typed-named-callback.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nconst tick: (frame: FrameState) => void = (frame) => {\n  const points = [];\n  paint(points, frame);\n};\nuseLoop({ onTick: tick });\n",
+      },
+      {
+        file: 'src/asserted-reference.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nconst tick = () => {\n  const points = [];\n  paint(points);\n};\nuseLoop({ onTick: tick as LoopTickFn });\n",
+      },
+    ],
+    noMatch: [
+      {
+        file: 'src/setup.ts',
+        content:
+          'const point = { x: 0, y: 0 };\nconst values = source.map(transform);\npaint(point, values);\n',
+      },
+      {
+        file: 'src/component.tsx',
+        content:
+          'function Chart() {\n  const points = source.filter(isVisible);\n  return <Plot points={points} />;\n}\n',
+      },
+      {
+        file: 'src/events.tsx',
+        content:
+          'return (\n  <canvas\n    onClick={() => paint([...source])}\n    onPointerMove={() => paint(source.map(project))}\n  />\n);\n',
+      },
+      {
+        file: 'src/initialize.ts',
+        content:
+          'function initialize() {\n  const point = { x: 0, y: 0 };\n  paint(point);\n}\nrequestAnimationFrame(initialize);\n',
+      },
+      {
+        file: 'src/third-party.ts',
+        content:
+          'renderer({\n  onTick: () => {\n    const point = [0, 0];\n    paint(point);\n  },\n  draw: () => source.map(project),\n});\n',
+      },
+      {
+        file: 'src/transform.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({\n  onTick: (frame) => {\n    element.style.transform = `translateX(${frame.elapsed}px)`;\n  },\n});\n",
+      },
+      {
+        file: 'src/helper.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({\n  onTick: () => {\n    const frame = buildFrame();\n    paint(frame);\n  },\n});\n",
+      },
+      {
+        testId: 'same-line-outside-callback',
+        file: 'src/options.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nconst samples = []; useLoop({ onTick: () => paint() });\n",
+      },
+      {
+        testId: 'same-line-raf-setup',
+        file: 'src/manual-options.ts',
+        content:
+          'const samples = []; function tick() { paint(); requestAnimationFrame(tick); } requestAnimationFrame(tick);\n',
+      },
+      {
+        file: 'src/wrong-phase-property.tsx',
+        content:
+          "import { useCanvas, useLoop } from 'phase/react';\nuseCanvas({ onTick: () => { const points = []; paint(points); } });\nuseLoop({ draw: () => source.map(project) });\n",
+      },
+      {
+        file: 'src/nested-helper.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  function buildFrame() {\n    return [];\n  }\n  paint();\n} });\n",
+      },
+      {
+        file: 'src/type-only-tuple.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  const factory: () => [number, number] = getFactory();\n  paint(factory);\n} });\n",
+      },
+      {
+        file: 'src/unrelated-loop.tsx',
+        content:
+          "import { useLoop } from 'other-library';\nuseLoop({ onTick: () => {\n  const points = [];\n  paint(points);\n} });\n",
+      },
+      {
+        file: 'src/local-loop.ts',
+        content:
+          'function useLoop(options) { return options; }\nuseLoop({ onTick: () => {\n  const points = [];\n  paint(points);\n} });\n',
+      },
+      {
+        file: 'src/shadowed-loop.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nfunction Component(useLoop) {\n  useLoop({ onTick: () => {\n    const points = [];\n    paint(points);\n  } });\n}\n",
+      },
+      {
+        file: 'src/duplicate-callback.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nfunction First() {\n  const tick = () => paint();\n  useLoop({ onTick: tick });\n}\nfunction Second() {\n  const tick = () => {\n    const points = [];\n    paint(points);\n  };\n}\n",
+      },
+      {
+        file: 'src/nested-anonymous.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  schedule(() => {\n    const points = [];\n    paint(points);\n  });\n} });\n",
+      },
+      {
+        file: 'src/nested-concise.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  schedule(() => []);\n  paint();\n} });\n",
+      },
+      {
+        file: 'src/import-string.ts',
+        content:
+          'const example = "import { useLoop } from \'phase/react\'";\nuseLoop({ onTick: () => {\n  const points = [];\n  paint(points);\n} });\n',
+      },
+      {
+        file: 'src/destructured-shadow.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nfunction Component() {\n  const { useLoop } = hooks;\n  useLoop({ onTick: () => {\n    const points = [];\n    paint(points);\n  } });\n}\n",
+      },
+      {
+        file: 'src/aliased-shadow.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nfunction Component() {\n  const { loop: useLoop } = hooks;\n  useLoop({ onTick: () => {\n    const points = [];\n    paint(points);\n  } });\n}\n",
+      },
+      {
+        file: 'src/namespace-shadow.ts',
+        content:
+          "import * as Phase from 'phase';\nfunction run() {\n  const [Phase] = hooks;\n  Phase.createLoop({ target, onTick: () => {\n    const points = [];\n    paint(points);\n  } });\n}\n",
+      },
+      {
+        file: 'src/computed-override.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nconst tick = () => {\n  const points = [];\n  paint(points);\n};\nuseLoop({ onTick: tick, [callbackName]: noop });\n",
+      },
+      {
+        file: 'src/async-override.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nconst tick = () => {\n  const points = [];\n  paint(points);\n};\nuseLoop({ onTick: tick, async onTick() { paint(); } });\n",
+      },
+      {
+        file: 'src/nested-function-expression.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  schedule(function () {\n    const points = [];\n    paint(points);\n  });\n} });\n",
+      },
+      {
+        file: 'src/nested-async-function.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  schedule(async function () {\n    const points = [];\n    paint(points);\n  });\n} });\n",
+      },
+      {
+        file: 'src/array-destructuring.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  [x, y] = point;\n  paint(x, y);\n} });\n",
+      },
+      {
+        file: 'src/object-destructuring.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  ({ x, y } = point);\n  paint(x, y);\n} });\n",
+      },
+      {
+        file: 'src/multiline-tuple.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  const point:\n    [number, number] = cached;\n  paint(point);\n} });\n",
+      },
+      {
+        file: 'src/multiline-type.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  type Point =\n    { x: number; y: number };\n  paint();\n} });\n",
+      },
+      {
+        file: 'src/regex-only.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  const braces = /[{}]/;\n  test(braces);\n} });\n",
+      },
+      {
+        file: 'src/regex-import.ts',
+        content:
+          "const example = /import { createLoop as frameLoop } from 'phase'/;\nframeLoop({ target, onTick: () => {\n  const points = [];\n  paint(points, example);\n} });\n",
+      },
+      {
+        file: 'src/multiline-shadow.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nfunction Component() {\n  const {\n    useLoop,\n  } = hooks;\n  useLoop({ onTick: () => {\n    const points = [];\n    paint(points);\n  } });\n}\n",
+      },
+      {
+        file: 'src/accessor-override.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nconst tick = () => {\n  const points = [];\n  paint(points);\n};\nuseLoop({ onTick: tick, get onTick() { return noop; } });\n",
+      },
+      {
+        file: 'src/optional-type-property.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\nuseLoop({ onTick: () => {\n  let options: { first: string; points?: [] };\n  paint(options);\n} });\n",
+      },
+      {
+        file: 'src/declared-callback.tsx',
+        content:
+          "import { useLoop } from 'phase/react';\ndeclare function tick(): void;\nfunction unrelated() {\n  const points = [];\n  paint(points);\n}\nuseLoop({ onTick: tick });\n",
+      },
+    ],
+  },
   'forced-reflow': {
     match: [
       {

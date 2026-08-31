@@ -74,6 +74,38 @@ describe('analysis evidence registry', () => {
     ).toBe(false);
   });
 
+  it('per-frame-allocation accepts matches only in the direct body of a proven recurring frame callback', () => {
+    const recurring =
+      'function tick() { const points = []; requestAnimationFrame(tick); } requestAnimationFrame(tick);';
+    expect(evidenceMatches('per-frame-allocation', recurring, 0, /\[/)).toBe(
+      true,
+    );
+
+    const phase =
+      "import { useLoop } from 'phase/react'; const setup = []; useLoop({ onTick: () => source.map(project) });";
+    expect(evidenceMatches('per-frame-allocation', phase, 0, /\[/)).toBe(false);
+    expect(evidenceMatches('per-frame-allocation', phase, 0, /\.map\(/)).toBe(
+      true,
+    );
+
+    expect(
+      evidenceMatches(
+        'per-frame-allocation',
+        'renderer({ onTick: () => source.map(project) });',
+        0,
+        /\.map\(/,
+      ),
+    ).toBe(false);
+    expect(
+      evidenceMatches(
+        'per-frame-allocation',
+        'function initialize() { return []; } requestAnimationFrame(initialize);',
+        0,
+        /\[/,
+      ),
+    ).toBe(false);
+  });
+
   it('subscribed-media-query requires a listener on the same receiver', () => {
     expect(
       evidenceMatches(
@@ -230,6 +262,15 @@ describe('analysis', () => {
   it('does not classify a named one-shot callback as recurring', () => {
     const analysis = analysisOf(
       'function initialize() { mount(); }\nrequestAnimationFrame(initialize);',
+    );
+
+    expect(analysis.raf.recurringScheduleLines).toEqual(new Set());
+    expect(analysis.raf.recurringCallbackLines).toEqual(new Set());
+  });
+
+  it('does not infer recurring ownership when callback names are ambiguous', () => {
+    const analysis = analysisOf(
+      'function tick() { requestAnimationFrame(tick); }\nfunction tick() { requestAnimationFrame(tick); }',
     );
 
     expect(analysis.raf.recurringScheduleLines).toEqual(new Set());
