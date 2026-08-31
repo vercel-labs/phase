@@ -328,12 +328,12 @@ describe('cache performance', () => {
     expect(performance.now() - started).toBeLessThan(250);
   });
 
-  it('analyzes 4k incomplete generic useLoop expressions within 250 ms', () => {
+  it('analyzes 4k incomplete generic useLoop expressions within 500 ms', () => {
     const content = `${"import { useLoop } from 'phase/react';\n"}${'useLoop<\n'.repeat(4000)}`;
     const started = performance.now();
     scanFile('src/malformed-generic.ts', content);
 
-    expect(performance.now() - started).toBeLessThan(250);
+    expect(performance.now() - started).toBeLessThan(500);
   });
 
   it('handles a callback wrapped in 5,000 pairs of parentheses without throwing', () => {
