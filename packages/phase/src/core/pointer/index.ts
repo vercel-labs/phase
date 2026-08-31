@@ -1,4 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
+import { cancelInput, scheduleInput } from '../_internal/clock';
 import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 
@@ -70,7 +71,6 @@ export function createPointer(options: PointerOptions): Pointer {
   let stopped = false;
   const _state: PointerState = { x: 0, y: 0, active: false };
 
-  let rafId = 0;
   let lastClientX = 0;
   let lastClientY = 0;
   let dirty = false;
@@ -83,7 +83,6 @@ export function createPointer(options: PointerOptions): Pointer {
   }
 
   function flush(): void {
-    rafId = 0;
     if (!dirty || stopped) return;
     dirty = false;
     const rect = element.getBoundingClientRect();
@@ -92,16 +91,8 @@ export function createPointer(options: PointerOptions): Pointer {
     onPointer(_state);
   }
 
-  function scheduleFlush(): void {
-    if (rafId !== 0) return;
-    rafId = requestAnimationFrame(flush);
-  }
-
   function cancelFlush(): void {
-    if (rafId !== 0) {
-      cancelAnimationFrame(rafId);
-      rafId = 0;
-    }
+    cancelInput(flush);
     dirty = false;
   }
 
@@ -111,7 +102,7 @@ export function createPointer(options: PointerOptions): Pointer {
     lastClientX = pe.clientX;
     lastClientY = pe.clientY;
     dirty = true;
-    scheduleFlush();
+    scheduleInput(flush);
   }
 
   function onPointerEnter(): void {

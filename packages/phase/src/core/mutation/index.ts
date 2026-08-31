@@ -1,4 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
+import { cancelInput, scheduleInput } from '../_internal/clock';
 import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
 
@@ -59,7 +60,6 @@ export function createMutation(options: MutationOptions): Mutation {
   let _reason: MutationReason = 'initial';
   let stopped = false;
   let pendingRecords: MutationRecord[] = [];
-  let rafId = 0;
 
   function setPhase(phase: MutationPhase, reason: MutationReason): void {
     const prev = _phase;
@@ -69,16 +69,10 @@ export function createMutation(options: MutationOptions): Mutation {
   }
 
   function flushRecords(): void {
-    rafId = 0;
     if (stopped || pendingRecords.length === 0) return;
     const batch = pendingRecords;
     pendingRecords = [];
     onMutations(batch);
-  }
-
-  function scheduleFlush(): void {
-    if (rafId !== 0) return;
-    rafId = requestAnimationFrame(flushRecords);
   }
 
   const mo = new MutationObserver((records) => {
@@ -86,7 +80,7 @@ export function createMutation(options: MutationOptions): Mutation {
     for (let i = 0, len = records.length; i < len; i++) {
       pendingRecords[pendingRecords.length] = records[i] as MutationRecord;
     }
-    scheduleFlush();
+    scheduleInput(flushRecords);
   });
 
   function startObserving(): void {
@@ -99,10 +93,7 @@ export function createMutation(options: MutationOptions): Mutation {
     if (stopped || _phase === 'paused') return;
     setPhase('paused', reason);
     mo.disconnect();
-    if (rafId !== 0) {
-      cancelAnimationFrame(rafId);
-      rafId = 0;
-    }
+    cancelInput(flushRecords);
     pendingRecords = [];
   }
 
@@ -158,10 +149,7 @@ export function createMutation(options: MutationOptions): Mutation {
     unlinkAbort?.();
     cleanupVisibility?.();
     mo.disconnect();
-    if (rafId !== 0) {
-      cancelAnimationFrame(rafId);
-      rafId = 0;
-    }
+    cancelInput(flushRecords);
     pendingRecords = [];
     setPhase('stopped', 'disposed');
   }

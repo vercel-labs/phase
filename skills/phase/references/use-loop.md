@@ -2,6 +2,8 @@
 
 The primary React hook. Wraps `createLoop` with React lifecycle management. Visibility-aware animation loop that never triggers re-renders from the frame loop.
 
+Within one clock protocol, event-derived callbacks queued before frame dispatch begins are flushed before any frame-loop callback in that frame. A callback first queued during either stage runs next frame; additional work can coalesce into an eligible callback that has not run yet.
+
 ## Signature
 
 ```ts

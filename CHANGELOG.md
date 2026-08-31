@@ -1,5 +1,13 @@
 # phase
 
+## 0.5.1
+
+### Patch Changes
+
+- Pointer, scroll, mutation, and throttle state now flushes before frame-loop callbacks in the same animation frame.
+- Input callback errors no longer suppress other input or frame-loop callbacks; the first input error is rethrown after the frame unless a ticker callback throws first.
+- Raised the affected core and React wrapper size budgets for the shared input stage.
+
 ## 0.5.0
 
 ### Minor Changes

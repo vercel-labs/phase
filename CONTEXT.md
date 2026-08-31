@@ -4,6 +4,16 @@ This glossary defines the canonical domain language for phase. Terms are grouped
 
 `CONTEXT.md` owns vocabulary. [`docs/adr/`](./docs/adr/README.md) records durable decisions. [`AGENTS.md`](./AGENTS.md) owns contributor procedures.
 
+## Timing
+
+**Input stage**:
+The first shared-clock stage. It flushes event-derived pointer, scroll, mutation, and throttle callbacks queued before frame dispatch began. A callback first queued during either stage is eligible for the next frame; additional work may still coalesce into an eligible callback that has not run. Owner: `packages/phase/src/core/_internal/clock/`.
+_Avoid_: Event stage, read stage
+
+**Tick stage**:
+The second shared-clock stage. It runs eligible ticker callbacks after the input stage completes. Owner: `packages/phase/src/core/_internal/clock/`.
+_Avoid_: Update stage, render stage
+
 ## Scanner and audit
 
 ### Scanner output

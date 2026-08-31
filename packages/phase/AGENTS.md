@@ -37,7 +37,7 @@ Every module must satisfy these contracts.
 
 - Allocate nothing per frame. Avoid object, array, string, closure, spread, `.map()`, and `.filter()` creation in `onTick` paths.
 - Mutate the sealed `FrameState` shape in place.
-- Do not wrap `onTick` in `try/catch`.
+- Do not wrap `onTick` in `try/catch`. Input-stage dispatch isolates consumer exceptions and rethrows after both stages complete; a tick exception retains precedence and aborts the remaining ticks.
 - Create frame callbacks once and keep their references stable.
 - Do not log or create debug strings unless devtools are active.
 
@@ -51,8 +51,8 @@ Every module must satisfy these contracts.
 
 ### Browser APIs
 
-- Never force layout with `getBoundingClientRect()`, `offsetWidth`, `scrollWidth`, `getComputedStyle()`, or equivalent synchronous reads.
-- Read dimensions through ResizeObserver.
+- Never force layout from frame-loop callbacks. Controlled synchronous exceptions are `createPointer` reading one input-stage rect per dirty frame and `createScroll` reading scroll geometry on attachment, explicit `measure()`, or an input-stage resize flush. Do not add other synchronous layout reads.
+- Read element dimensions through ResizeObserver. `createScroll` uses observer and page-resize signals to refresh its scroll-geometry cache.
 - Read visibility through IntersectionObserver.
 
 ### React

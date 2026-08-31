@@ -2,6 +2,8 @@
 
 The low-level rAF clock underneath `createLoop`. Use when you need a frame loop without visibility management (background processing, audio sync, non-visual timing).
 
+Within one clock protocol, event-derived callbacks queued before frame dispatch begins are flushed before any frame-loop callback in that frame. A callback first queued during either stage runs next frame; additional work can coalesce into an eligible callback that has not run yet.
+
 ## Signature
 
 ```ts
@@ -69,7 +71,7 @@ After a delayed callback, `delta` is at most 40ms without an FPS limit, or one c
 
 - Use `setFps()` to change the FPS cap on a live ticker instead of destroying and rebuilding it.
 - Use `pause()` / `resume()` for intentional suspension (e.g. user pauses a game).
-- Rely on the shared clock: ticker instances within one JavaScript global, such as a page or worker, receive the same browser `requestAnimationFrame` timestamp. This includes instances from separately bundled copies of phase.
+- Rely on the shared clock: ticker instances within one JavaScript global and clock protocol, such as a page or worker, receive the same browser `requestAnimationFrame` timestamp. This includes separately bundled copies of the same compatible phase release.
 - Use `frame.delta` and `frame.elapsed` for animation progress. Elapsed time advances by the delivered delta and does not advance while paused.
 
 ## Don't

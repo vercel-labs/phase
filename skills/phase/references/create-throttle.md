@@ -2,6 +2,8 @@
 
 Frame-aligned, visibility-aware throttle for event-driven work below frame rate. Leading calls fire synchronously; a pending trailing call fires with the latest value on the first animation frame at or past `interval`. Schedules nothing while idle or while the document is hidden. The framework-agnostic core behind `useThrottledCallback`.
 
+Within one clock protocol, event-derived callbacks queued before frame dispatch begins are flushed before any frame-loop callback in that frame. A callback first queued during either stage runs next frame; additional work can coalesce into an eligible callback that has not run yet.
+
 ## Signature
 
 ```ts

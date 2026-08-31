@@ -1,4 +1,5 @@
 import { linkAbortSignal } from '../_internal/abort';
+import { cancelInput, scheduleInput } from '../_internal/clock';
 import { serverContextError } from '../_internal/errors';
 
 // ---------------------------------------------------------------------------
@@ -72,7 +73,6 @@ export function createThrottle<T = void>(
   let stopped = false;
   let pending = false;
   let lastFire = 0;
-  let rafId = 0;
   let documentVisible: boolean = !document.hidden;
   let latest: T = undefined as T;
 
@@ -82,26 +82,14 @@ export function createThrottle<T = void>(
     callback(latest);
   }
 
-  function cancelRaf(): void {
-    if (rafId !== 0) {
-      cancelAnimationFrame(rafId);
-      rafId = 0;
-    }
-  }
-
-  function tick(): void {
-    rafId = 0;
+  function flushWhenDue(): true | undefined {
     if (stopped || !pending) return;
     const now: number = performance.now();
     if (now - lastFire >= interval) {
       fire(now);
     } else {
-      rafId = requestAnimationFrame(tick);
+      return true;
     }
-  }
-
-  function scheduleRaf(): void {
-    if (rafId === 0) rafId = requestAnimationFrame(tick);
   }
 
   function call(value: T): void {
@@ -127,19 +115,19 @@ export function createThrottle<T = void>(
 
     if (trailing) {
       pending = true;
-      scheduleRaf();
+      scheduleInput(flushWhenDue);
     }
   }
 
   function flush(): void {
     if (stopped || !pending) return;
-    cancelRaf();
+    cancelInput(flushWhenDue);
     fire(performance.now());
   }
 
   function cancel(): void {
     if (stopped) return;
-    cancelRaf();
+    cancelInput(flushWhenDue);
     pending = false;
     lastFire = 0;
   }
@@ -148,20 +136,20 @@ export function createThrottle<T = void>(
     documentVisible = !document.hidden;
     if (stopped) return;
     if (!documentVisible) {
-      cancelRaf();
+      cancelInput(flushWhenDue);
       if (pending) {
         if (hidden === 'flush') fire(performance.now());
         else pending = false;
       }
     } else if (pending) {
-      scheduleRaf();
+      scheduleInput(flushWhenDue);
     }
   }
 
   function onPageShow(event: PageTransitionEvent): void {
     if (!event.persisted) return;
     documentVisible = true;
-    if (!stopped && pending) scheduleRaf();
+    if (!stopped && pending) scheduleInput(flushWhenDue);
   }
 
   document.addEventListener('visibilitychange', onVisibilityChange);
@@ -175,7 +163,7 @@ export function createThrottle<T = void>(
     unlinkAbort?.();
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('pageshow', onPageShow);
-    cancelRaf();
+    cancelInput(flushWhenDue);
     pending = false;
   }
 
