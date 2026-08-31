@@ -1,6 +1,6 @@
 // Native observer coverage lives in index.browser.spec.ts. Keep only
 // deterministic React wiring and headless-unreachable scenarios here.
-import { renderHook, act } from '@testing-library/react';
+import { render, renderHook, act } from '@testing-library/react';
 
 import { createMockResizeObserver } from '../../__mocks__/resize-observer';
 
@@ -166,6 +166,159 @@ describe('useSize', () => {
     act(() => mockRO.trigger(el, 400, 300));
     expect(result.current.sizeRef.current).toEqual({ width: 400, height: 300 });
     expect(result.current.size).toEqual({ width: 400, height: 300 });
+  });
+
+  it('observes an element mounted after the initial commit', async () => {
+    const useSize = await getHook();
+
+    function Probe({ show }: { show: boolean }) {
+      const { ref, size } = useSize();
+      return (
+        <>
+          <output data-testid="size">
+            {size ? `${size.width}x${size.height}` : 'null'}
+          </output>
+          {show ? <div ref={ref} data-testid="target" /> : null}
+        </>
+      );
+    }
+
+    const view = render(<Probe show={false} />);
+    expect(view.getByTestId('size').textContent).toBe('null');
+
+    view.rerender(<Probe show />);
+    const element = view.getByTestId('target');
+    expect(mockRO.instances).toHaveLength(1);
+    expect(mockRO.instances[0]?.observed).toContain(element);
+
+    act(() => mockRO.trigger(element, 240, 120));
+    expect(view.getByTestId('size').textContent).toBe('240x120');
+  });
+
+  it('moves observation to a keyed replacement element', async () => {
+    const useSize = await getHook();
+
+    function Probe({ elementKey }: { elementKey: string }) {
+      const { ref, size } = useSize();
+      return (
+        <>
+          <output data-testid="size">
+            {size ? `${size.width}x${size.height}` : 'null'}
+          </output>
+          <div key={elementKey} ref={ref} data-testid="target" />
+        </>
+      );
+    }
+
+    const view = render(<Probe elementKey="first" />);
+    const first = view.getByTestId('target');
+    act(() => mockRO.trigger(first, 120, 60));
+
+    view.rerender(<Probe elementKey="second" />);
+    const second = view.getByTestId('target');
+    expect(second).not.toBe(first);
+    expect(mockRO.instances[0]?.observed).not.toContain(first);
+    expect(mockRO.instances[0]?.observed).toContain(second);
+
+    act(() => mockRO.trigger(second, 300, 150));
+    expect(view.getByTestId('size').textContent).toBe('300x150');
+  });
+
+  it('keeps the last size while detached and observes the replacement', async () => {
+    const useSize = await getHook();
+
+    function Probe({ show }: { show: boolean }) {
+      const { ref, size } = useSize();
+      return (
+        <>
+          <output data-testid="size">
+            {size ? `${size.width}x${size.height}` : 'null'}
+          </output>
+          {show ? <div ref={ref} data-testid="target" /> : null}
+        </>
+      );
+    }
+
+    const view = render(<Probe show />);
+    const first = view.getByTestId('target');
+    act(() => mockRO.trigger(first, 160, 80));
+
+    view.rerender(<Probe show={false} />);
+    expect(view.getByTestId('size').textContent).toBe('160x80');
+    expect(mockRO.instances[0]?.observed).not.toContain(first);
+
+    view.rerender(<Probe show />);
+    const second = view.getByTestId('target');
+    expect(second).not.toBe(first);
+    expect(mockRO.instances[0]?.observed).toContain(second);
+
+    act(() => mockRO.trigger(second, 320, 160));
+    expect(view.getByTestId('size').textContent).toBe('320x160');
+  });
+
+  it('delivers the first size from a replacement with matching dimensions', async () => {
+    const useSize = await getHook();
+    const onResize = vi.fn();
+
+    function Probe({ elementKey }: { elementKey: string }) {
+      const { ref } = useSize({ onResize });
+      return <div key={elementKey} ref={ref} data-testid="target" />;
+    }
+
+    const view = render(<Probe elementKey="first" />);
+    const first = view.getByTestId('target');
+    act(() => mockRO.trigger(first, 200, 100));
+
+    view.rerender(<Probe elementKey="second" />);
+    const second = view.getByTestId('target');
+    act(() => mockRO.trigger(second, 200, 100));
+
+    expect(onResize).toHaveBeenCalledTimes(2);
+    expect(onResize).toHaveBeenLastCalledWith({ width: 200, height: 100 });
+  });
+
+  it('adds no mount render and one reconciliation render for a swap', async () => {
+    const useSize = await getHook();
+
+    let reactiveRenders = 0;
+    function ReactiveProbe() {
+      reactiveRenders++;
+      const { ref } = useSize();
+      return <div ref={ref} data-testid="reactive-target" />;
+    }
+
+    const reactive = render(<ReactiveProbe />);
+    expect(reactiveRenders).toBe(1);
+    act(() => mockRO.trigger(reactive.getByTestId('reactive-target'), 100, 50));
+    expect(reactiveRenders).toBe(2);
+    reactive.unmount();
+
+    let transientRenders = 0;
+    function TransientProbe() {
+      transientRenders++;
+      const { ref } = useSize({ onResize: noop });
+      return <div ref={ref} data-testid="transient-target" />;
+    }
+
+    const transient = render(<TransientProbe />);
+    expect(transientRenders).toBe(1);
+    act(() =>
+      mockRO.trigger(transient.getByTestId('transient-target'), 100, 50),
+    );
+    expect(transientRenders).toBe(1);
+    transient.unmount();
+
+    let swapRenders = 0;
+    function SwapProbe({ elementKey }: { elementKey: string }) {
+      swapRenders++;
+      const { ref } = useSize({ onResize: noop });
+      return <div key={elementKey} ref={ref} />;
+    }
+
+    const swap = render(<SwapProbe elementKey="first" />);
+    const beforeSwap = swapRenders;
+    swap.rerender(<SwapProbe elementKey="second" />);
+    expect(swapRenders).toBe(beforeSwap + 2);
   });
 });
 
