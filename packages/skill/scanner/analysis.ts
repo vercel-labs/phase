@@ -56,19 +56,32 @@ export interface SourceIndex {
   source: string;
   lineStarts: number[];
   bracePairs: Map<number, number>;
+  parenPairs: Map<number, number>;
+  bracketPairs: Map<number, number>;
+  regexRanges: SourceRange[];
+}
+
+export interface SourceRange {
+  start: number;
+  end: number;
 }
 
 export interface SchedulingOwnership {
   recurringScheduleLines: Set<number>;
   stateScheduleLines: Set<number>;
   recurringCallbackLines: Set<number>;
+  recurringCallbackRanges: SourceRange[];
 }
 
 export interface FileAnalysis {
   raf: SchedulingOwnership;
   timeout: SchedulingOwnership;
+  phaseFrameCallbacks: SourceRange[];
+  callbackRanges: SourceRange[];
   subscribedMediaQueries: Set<number>;
   moveHandlers: MoveAnalysis;
+  sourceIndex: SourceIndex;
+  lineStarts: number[];
   uncommentedLines: string[];
 }
 
@@ -82,7 +95,7 @@ export interface MoveAnalysis {
   handlerLines: Set<number>;
 }
 
-type CallbackRange = LineRange;
+type CallbackRange = SourceRange;
 
 interface SchedulingCall {
   offset: number;
@@ -93,10 +106,22 @@ interface SchedulingCall {
 interface CallbackCollection {
   callbacks: CallbackRange[];
   callbacksByName: Map<string, CallbackRange>;
+  ambiguousCallbackNames: Set<string>;
+  callbackRanges: CallbackRange[];
 }
 
 const RAF_CALL = /\brequestAnimationFrame\s*(?:\?\.)?\s*\(/g;
 const TIMEOUT_CALL = /\bsetTimeout\s*(?:\?\.)?\s*\(/g;
+type PhaseFrameApi = 'createTicker' | 'createLoop' | 'useLoop' | 'useCanvas';
+
+interface PhaseFrameCall {
+  api: PhaseFrameApi;
+  offset: number;
+  open: number;
+}
+
+const PHASE_IMPORT =
+  /\bimport\s+(?!type\b)(?:\*\s+as\s+([A-Za-z_$][\w$]*)|\{([^}]*)\})\s+from\s*(['"])(phase(?:\/react)?)\3/g;
 
 /**
  * What a signal can require beyond its own line, analyzed once per scanned file:
@@ -113,14 +138,33 @@ export function analyzeFile(
   sourceIndex: SourceIndex,
   uncommentedLines: string[],
 ): FileAnalysis {
-  const { callbacks, callbacksByName } = collectCallbacks(sourceIndex);
+  const { callbacks, callbacksByName, ambiguousCallbackNames, callbackRanges } =
+    collectCallbacks(sourceIndex);
   const cycleOf = (pattern: RegExp) =>
-    analyzeSchedulingCycle(sourceIndex, callbacks, callbacksByName, pattern);
+    analyzeSchedulingCycle(
+      sourceIndex,
+      callbacks,
+      callbacksByName,
+      ambiguousCallbackNames,
+      pattern,
+    );
   return {
     raf: cycleOf(RAF_CALL),
     timeout: cycleOf(TIMEOUT_CALL),
+    phaseFrameCallbacks:
+      type === 'js'
+        ? collectPhaseFrameCallbacks(
+            sourceIndex,
+            uncommentedLines.join('\n'),
+            callbacksByName,
+            ambiguousCallbackNames,
+          )
+        : [],
+    callbackRanges,
     subscribedMediaQueries: subscribedMediaQueryLines(sourceIndex),
     moveHandlers: analyzeMoveHandlers(type, sourceIndex),
+    sourceIndex,
+    lineStarts: sourceIndex.lineStarts,
     uncommentedLines,
   };
 }
@@ -158,7 +202,7 @@ function subscribedMediaQueryLines(sourceIndex: SourceIndex): Set<number> {
 
   for (const match of source.matchAll(MATCH_MEDIA_CALLS)) {
     const open = match.index + match[0].lastIndexOf('(');
-    const close = matchingParen(source, open);
+    const close = matchingParen(sourceIndex, open);
     if (close === -1) continue;
     CHAINED_SUBSCRIBE.lastIndex = close + 1;
     if (
@@ -203,30 +247,573 @@ function subscribesViaBinding(source: string, callStart: number): boolean {
 }
 
 /** Offset of the `)` closing the `(` at `open`, or -1 when unbalanced. */
-function matchingParen(source: string, open: number): number {
-  let depth = 0;
-  for (let i = open; i < source.length; i++) {
-    if (source[i] === '(') depth++;
-    else if (source[i] === ')' && --depth === 0) return i;
-  }
-  return -1;
+function matchingParen(sourceIndex: SourceIndex, open: number): number {
+  return sourceIndex.parenPairs.get(open) ?? -1;
 }
 
 function analyzeSchedulingCycle(
   sourceIndex: SourceIndex,
   callbacks: CallbackRange[],
   callbacksByName: Map<string, CallbackRange>,
+  ambiguousCallbackNames: Set<string>,
   callPattern: RegExp,
 ): SchedulingOwnership {
   const calls = collectSchedulingCalls(
     sourceIndex.source,
     callbacks,
     callbacksByName,
+    ambiguousCallbackNames,
     callPattern,
   );
   const graph = buildCallbackGraph(callbacks, calls);
   const recurringCallbacks = cyclicCallbacks(graph);
   return summarizeSchedulingOwnership(sourceIndex, calls, recurringCallbacks);
+}
+
+/** Callback bodies passed directly to phase APIs that run them every frame. */
+function collectPhaseFrameCallbacks(
+  sourceIndex: SourceIndex,
+  uncommentedSource: string,
+  callbacksByName: Map<string, CallbackRange>,
+  ambiguousCallbackNames: Set<string>,
+): CallbackRange[] {
+  const { source, bracePairs } = sourceIndex;
+  const ranges: CallbackRange[] = [];
+
+  for (const call of collectPhaseFrameCalls(sourceIndex, uncommentedSource)) {
+    const callClose = matchingParen(sourceIndex, call.open);
+    if (callClose === -1) continue;
+
+    const optionsOpen = nextNonWhitespace(source, call.open + 1);
+    if (source[optionsOpen] !== '{') continue;
+    const optionsClose = bracePairs.get(optionsOpen);
+    if (optionsClose === undefined || optionsClose > callClose) continue;
+
+    const property = call.api === 'useCanvas' ? 'draw' : 'onTick';
+    const range = phaseCallbackPropertyRange(
+      sourceIndex,
+      uncommentedSource,
+      optionsOpen,
+      optionsClose,
+      property,
+      callbacksByName,
+      ambiguousCallbackNames,
+    );
+    if (range) ranges.push(range);
+  }
+
+  return ranges;
+}
+
+// oxlint-disable-next-line complexity -- import provenance has distinct direct, aliased, namespace, and shadowed states
+function collectPhaseFrameCalls(
+  sourceIndex: SourceIndex,
+  uncommentedSource: string,
+): PhaseFrameCall[] {
+  const { source } = sourceIndex;
+  const direct = new Map<string, PhaseFrameApi>();
+  const namespaces = new Map<string, 'core' | 'react'>();
+
+  for (const match of uncommentedSource.matchAll(PHASE_IMPORT)) {
+    if (source.slice(match.index, match.index + 'import'.length) !== 'import') {
+      continue;
+    }
+    if (innermostRange(sourceIndex.regexRanges, match.index)) continue;
+    const moduleKind = match[4] === 'phase' ? 'core' : 'react';
+    const namespace = match[1];
+    if (namespace) {
+      namespaces.set(namespace, moduleKind);
+      continue;
+    }
+
+    for (const specifier of (match[2] ?? '').split(',')) {
+      const imported =
+        /^(?!\s*type\b)\s*(createTicker|createLoop|useLoop|useCanvas)\b(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*$/.exec(
+          specifier,
+        );
+      if (!imported) continue;
+      const api = imported[1] as PhaseFrameApi;
+      if (!phaseModuleExports(moduleKind, api)) continue;
+      direct.set(imported[2] ?? api, api);
+    }
+  }
+
+  const calls: PhaseFrameCall[] = [];
+  for (const [local, api] of direct) {
+    if (hasShadowingBinding(sourceIndex, local)) continue;
+    const pattern = identifierPattern(local, 'g');
+    for (const match of source.matchAll(pattern)) {
+      const previous = previousNonWhitespace(source, match.index - 1, 0);
+      if (source[previous] === '.') continue;
+      const open = callOpenAfterBinding(
+        sourceIndex,
+        match.index + match[0].length,
+      );
+      if (open === -1) continue;
+      calls.push({
+        api,
+        offset: match.index,
+        open,
+      });
+    }
+  }
+
+  for (const [namespace, moduleKind] of namespaces) {
+    if (hasShadowingBinding(sourceIndex, namespace)) continue;
+    const pattern = new RegExp(
+      `${identifierSource(namespace)}\\s*\\.\\s*(createTicker|createLoop|useLoop|useCanvas)(?![A-Za-z0-9_$])`,
+      'g',
+    );
+    for (const match of source.matchAll(pattern)) {
+      const api = match[1] as PhaseFrameApi;
+      if (!phaseModuleExports(moduleKind, api)) continue;
+      const open = callOpenAfterBinding(
+        sourceIndex,
+        match.index + match[0].length,
+      );
+      if (open === -1) continue;
+      calls.push({
+        api,
+        offset: match.index,
+        open,
+      });
+    }
+  }
+
+  return calls.toSorted((a, b) => a.offset - b.offset);
+}
+
+function callOpenAfterBinding(
+  sourceIndex: SourceIndex,
+  afterBinding: number,
+): number {
+  const { source } = sourceIndex;
+  let cursor = nextNonWhitespace(source, afterBinding);
+  if (source[cursor] === '(') return cursor;
+  if (source[cursor] !== '<') return -1;
+
+  let depth = 0;
+  const limit = Math.min(source.length, cursor + 1000);
+  for (let i = cursor; i < limit; i++) {
+    const ch = source[i];
+    if (ch === '<') {
+      depth++;
+    } else if (ch === '>' && source[i - 1] !== '=') {
+      depth--;
+      if (depth === 0) {
+        cursor = nextNonWhitespace(source, i + 1);
+        return source[cursor] === '(' ? cursor : -1;
+      }
+    } else {
+      const close = closingDelimiter(sourceIndex, i);
+      if (close !== -1) i = close;
+    }
+  }
+  return -1;
+}
+
+function phaseModuleExports(
+  moduleKind: 'core' | 'react',
+  api: PhaseFrameApi,
+): boolean {
+  return moduleKind === 'core'
+    ? api === 'createTicker' || api === 'createLoop'
+    : api === 'useLoop' || api === 'useCanvas';
+}
+
+function hasShadowingBinding(sourceIndex: SourceIndex, name: string): boolean {
+  const { source, parenPairs } = sourceIndex;
+  const escaped = escapeRegExp(name);
+  const identifier = identifierSource(name);
+  if (
+    new RegExp(
+      `\\b(?:const|let|var|function|class)\\s+${escaped}(?![A-Za-z0-9_$])|${identifier}\\s*=>`,
+    ).test(source)
+  ) {
+    return true;
+  }
+
+  for (const match of source.matchAll(/\b(?:const|let|var)\s*/g)) {
+    const open = nextNonWhitespace(source, match.index + match[0].length);
+    if (source[open] !== '{' && source[open] !== '[') continue;
+    const close = closingDelimiter(sourceIndex, open);
+    if (
+      close !== -1 &&
+      identifierPattern(name).test(source.slice(open, close))
+    ) {
+      return true;
+    }
+  }
+
+  const parameter = identifierPattern(name);
+  for (const [open, close] of parenPairs) {
+    const before = previousNonWhitespace(source, open - 1, 0);
+    if (source[before] === ':') continue;
+    const statementStart =
+      Math.max(
+        source.lastIndexOf(';', open - 1),
+        source.lastIndexOf('{', open - 1),
+        source.lastIndexOf('}', open - 1),
+      ) + 1;
+    if (/^\s*(?:type|interface)\b/.test(source.slice(statementStart, open))) {
+      continue;
+    }
+    const after = nextNonWhitespace(source, close + 1);
+    if (source.slice(after, after + 2) !== '=>' && source[after] !== '{') {
+      continue;
+    }
+    if (parameter.test(source.slice(open + 1, close))) return true;
+  }
+  return false;
+}
+
+function identifierPattern(name: string, flags = ''): RegExp {
+  return new RegExp(identifierSource(name), flags);
+}
+
+function identifierSource(name: string): string {
+  return `(?<![A-Za-z0-9_$])${escapeRegExp(name)}(?![A-Za-z0-9_$])`;
+}
+
+/**
+ * Resolves one callback property on a direct options object. A later spread can
+ * replace an earlier property, so ownership is not proven until a later direct
+ * property wins again.
+ */
+// oxlint-disable-next-line complexity -- object properties have distinct direct, quoted, computed, spread, method, and accessor forms
+function phaseCallbackPropertyRange(
+  sourceIndex: SourceIndex,
+  uncommentedSource: string,
+  optionsOpen: number,
+  optionsClose: number,
+  property: string,
+  callbacksByName: Map<string, CallbackRange>,
+  ambiguousCallbackNames: Set<string>,
+): CallbackRange | null {
+  const { source } = sourceIndex;
+  let found: CallbackRange | null = null;
+
+  for (let i = optionsOpen + 1; i < optionsClose; i++) {
+    if (source[i] === '[' && isDirectPropertyStart(source, optionsOpen, i)) {
+      found = null;
+    }
+    if (source.startsWith('...', i)) {
+      found = null;
+      i += 2;
+      continue;
+    }
+    const asyncMethod =
+      source.startsWith('async', i) &&
+      !isIdentifierPart(source[i - 1]) &&
+      !isIdentifierPart(source[i + 'async'.length]) &&
+      isDirectPropertyStart(source, optionsOpen, i)
+        ? nextNonWhitespace(source, i + 'async'.length)
+        : -1;
+    const accessor =
+      /^(?:get|set)\b/.test(source.slice(i)) &&
+      isDirectPropertyStart(source, optionsOpen, i)
+        ? nextNonWhitespace(source, i + 3)
+        : -1;
+    const generator =
+      source[i] === '*' && isDirectPropertyStart(source, optionsOpen, i)
+        ? nextNonWhitespace(source, i + 1)
+        : -1;
+    if (
+      (accessor !== -1 && source.startsWith(property, accessor)) ||
+      (generator !== -1 && source.startsWith(property, generator))
+    ) {
+      found = null;
+    } else if (
+      asyncMethod !== -1 &&
+      source.startsWith(property, asyncMethod) &&
+      !isIdentifierPart(source[asyncMethod + property.length])
+    ) {
+      found = parsePhaseCallbackProperty(
+        sourceIndex,
+        asyncMethod + property.length,
+        optionsClose,
+        property,
+        callbacksByName,
+        ambiguousCallbackNames,
+      );
+    } else if (
+      source.startsWith(property, i) &&
+      !isIdentifierPart(source[i - 1]) &&
+      !isIdentifierPart(source[i + property.length]) &&
+      isDirectPropertyStart(source, optionsOpen, i)
+    ) {
+      found = parsePhaseCallbackProperty(
+        sourceIndex,
+        i + property.length,
+        optionsClose,
+        property,
+        callbacksByName,
+        ambiguousCallbackNames,
+      );
+    } else {
+      const quotedKey = quotedPropertyEnd(uncommentedSource, i, property);
+      if (quotedKey !== -1 && isDirectPropertyStart(source, optionsOpen, i)) {
+        found = parsePhaseCallbackProperty(
+          sourceIndex,
+          quotedKey,
+          optionsClose,
+          property,
+          callbacksByName,
+          ambiguousCallbackNames,
+        );
+      }
+    }
+
+    const close = closingDelimiter(sourceIndex, i);
+    if (close !== -1 && close < optionsClose) i = close;
+  }
+
+  return found;
+}
+
+function parsePhaseCallbackProperty(
+  sourceIndex: SourceIndex,
+  afterName: number,
+  optionsClose: number,
+  property: string,
+  callbacksByName: Map<string, CallbackRange>,
+  ambiguousCallbackNames: Set<string>,
+): CallbackRange | null {
+  const { source } = sourceIndex;
+  const next = nextNonWhitespace(source, afterName);
+
+  if (source[next] === ':') {
+    const valueStart = nextNonWhitespace(source, next + 1);
+    const inline = inlineCallbackRange(sourceIndex, valueStart, optionsClose);
+    if (inline) return inline;
+
+    const reference = /^([A-Za-z_$][\w$]*)\b/.exec(
+      source.slice(valueStart, optionsClose),
+    )?.[1];
+    if (!reference) return null;
+    if (ambiguousCallbackNames.has(reference)) return null;
+    const referenceEnd = nextNonWhitespace(
+      source,
+      valueStart + reference.length,
+    );
+    const valueEnd = propertyValueEnd(sourceIndex, referenceEnd, optionsClose);
+    const assertion = source.slice(referenceEnd, valueEnd).trim();
+    if (assertion && !/^(?:as|satisfies)\b[\s\S]+$/.test(assertion)) {
+      return null;
+    }
+    return callbacksByName.get(reference) ?? null;
+  }
+
+  if (source[next] === '(') {
+    return methodCallbackRange(sourceIndex, next, optionsClose);
+  }
+
+  if (source[next] === ',' || next === optionsClose) {
+    if (ambiguousCallbackNames.has(property)) return null;
+    return callbacksByName.get(property) ?? null;
+  }
+
+  return null;
+}
+
+function propertyValueEnd(
+  sourceIndex: SourceIndex,
+  start: number,
+  optionsClose: number,
+): number {
+  const { source } = sourceIndex;
+  for (let i = start; i < optionsClose; i++) {
+    const close = closingDelimiter(sourceIndex, i);
+    if (close !== -1 && close < optionsClose) {
+      i = close;
+      continue;
+    }
+    if (source[i] === ',') return i;
+  }
+  return optionsClose;
+}
+
+function quotedPropertyEnd(
+  source: string,
+  offset: number,
+  property: string,
+): number {
+  const quote = source[offset];
+  if (quote !== "'" && quote !== '"') return -1;
+  return source.slice(offset + 1, offset + property.length + 1) === property &&
+    source[offset + property.length + 1] === quote
+    ? offset + property.length + 2
+    : -1;
+}
+
+function inlineCallbackRange(
+  sourceIndex: SourceIndex,
+  valueStart: number,
+  limit: number,
+): CallbackRange | null {
+  const { source } = sourceIndex;
+  let cursor = valueStart;
+  let callbackLimit = limit;
+  if (/^async\b/.test(source.slice(cursor))) {
+    cursor = nextNonWhitespace(source, cursor + 'async'.length);
+  }
+
+  if (/^function\b/.test(source.slice(cursor))) {
+    return functionCallbackRange(sourceIndex, cursor, limit);
+  }
+
+  while (source[cursor] === '(') {
+    const wrapperClose = matchingParen(sourceIndex, cursor);
+    if (wrapperClose === -1 || wrapperClose > callbackLimit) return null;
+    const afterWrapper = nextNonWhitespace(source, wrapperClose + 1);
+    if (
+      source.slice(afterWrapper, afterWrapper + 2) === '=>' ||
+      source[afterWrapper] === ':'
+    ) {
+      break;
+    }
+    cursor = nextNonWhitespace(source, cursor + 1);
+    callbackLimit = wrapperClose;
+  }
+
+  let afterParams: number;
+  if (source[cursor] === '(') {
+    const paramsClose = matchingParen(sourceIndex, cursor);
+    if (paramsClose === -1 || paramsClose > callbackLimit) return null;
+    afterParams = nextNonWhitespace(source, paramsClose + 1);
+  } else {
+    const param = /^[A-Za-z_$][\w$]*/.exec(source.slice(cursor))?.[0];
+    if (!param) return null;
+    afterParams = nextNonWhitespace(source, cursor + param.length);
+  }
+
+  const arrowStart =
+    source[afterParams] === ':'
+      ? source.indexOf('=>', afterParams + 1)
+      : afterParams;
+  if (
+    arrowStart === -1 ||
+    arrowStart > callbackLimit ||
+    source.slice(arrowStart, arrowStart + 2) !== '=>'
+  ) {
+    return null;
+  }
+
+  const bodyStart = nextNonWhitespace(source, arrowStart + 2);
+  if (source[bodyStart] === '{') {
+    return callbackBodyRange(sourceIndex, bodyStart, callbackLimit);
+  }
+  return {
+    start: arrowStart,
+    end: callbackExpressionEnd(sourceIndex, bodyStart, callbackLimit),
+  };
+}
+
+function functionCallbackRange(
+  sourceIndex: SourceIndex,
+  functionStart: number,
+  limit: number,
+): CallbackRange | null {
+  const { source } = sourceIndex;
+  const paramsOpen = source.indexOf('(', functionStart + 'function'.length);
+  if (paramsOpen === -1 || paramsOpen > limit) return null;
+  const paramsClose = matchingParen(sourceIndex, paramsOpen);
+  if (paramsClose === -1 || paramsClose > limit) return null;
+
+  let bodyOpen = nextNonWhitespace(source, paramsClose + 1);
+  if (source[bodyOpen] === ':') {
+    bodyOpen = source.indexOf('{', bodyOpen + 1);
+    const semicolon = source.indexOf(';', paramsClose + 1);
+    if (semicolon !== -1 && (bodyOpen === -1 || semicolon < bodyOpen)) {
+      return null;
+    }
+  }
+  return bodyOpen !== -1 && bodyOpen < limit
+    ? callbackBodyRange(sourceIndex, bodyOpen, limit)
+    : null;
+}
+
+function methodCallbackRange(
+  sourceIndex: SourceIndex,
+  paramsOpen: number,
+  optionsClose: number,
+): CallbackRange | null {
+  const { source } = sourceIndex;
+  const paramsClose = matchingParen(sourceIndex, paramsOpen);
+  if (paramsClose === -1 || paramsClose > optionsClose) return null;
+
+  let bodyOpen = nextNonWhitespace(source, paramsClose + 1);
+  if (source[bodyOpen] === ':') {
+    bodyOpen = source.indexOf('{', bodyOpen + 1);
+    while (bodyOpen !== -1 && bodyOpen < optionsClose) {
+      const bodyClose = sourceIndex.bracePairs.get(bodyOpen);
+      if (bodyClose === undefined) return null;
+      const afterBody = nextNonWhitespace(source, bodyClose + 1);
+      if (afterBody === optionsClose || source[afterBody] === ',') break;
+      bodyOpen = source.indexOf('{', bodyClose + 1);
+    }
+  }
+  if (bodyOpen === -1 || source[bodyOpen] !== '{') return null;
+  return callbackBodyRange(sourceIndex, bodyOpen, optionsClose);
+}
+
+function callbackBodyRange(
+  sourceIndex: SourceIndex,
+  open: number,
+  limit: number,
+): CallbackRange | null {
+  const end = sourceIndex.bracePairs.get(open);
+  return end !== undefined && end <= limit ? { start: open + 1, end } : null;
+}
+
+function callbackExpressionEnd(
+  sourceIndex: SourceIndex,
+  start: number,
+  limit: number,
+): number {
+  const { source } = sourceIndex;
+  for (let i = start; i < limit; i++) {
+    const close = closingDelimiter(sourceIndex, i);
+    if (close !== -1 && close < limit) {
+      i = close;
+      continue;
+    }
+    if (/[,;\n)\]}]/.test(source[i] as string)) return i;
+  }
+  return limit;
+}
+
+function closingDelimiter(sourceIndex: SourceIndex, open: number): number {
+  return (
+    sourceIndex.bracePairs.get(open) ??
+    sourceIndex.parenPairs.get(open) ??
+    sourceIndex.bracketPairs.get(open) ??
+    -1
+  );
+}
+
+function isDirectPropertyStart(
+  source: string,
+  optionsOpen: number,
+  offset: number,
+): boolean {
+  let previous = offset - 1;
+  while (previous > optionsOpen && /\s/.test(source[previous] as string)) {
+    previous--;
+  }
+  return previous === optionsOpen || source[previous] === ',';
+}
+
+function isIdentifierPart(ch: string | undefined): boolean {
+  return ch !== undefined && /[\w$]/.test(ch);
+}
+
+function nextNonWhitespace(source: string, offset: number): number {
+  let cursor = offset;
+  while (cursor < source.length && /\s/.test(source[cursor] as string)) {
+    cursor++;
+  }
+  return cursor;
 }
 
 const EMPTY_MOVE_ANALYSIS: MoveAnalysis = {
@@ -368,11 +955,20 @@ export function buildSourceIndex(
   joined: string | null = null,
 ): SourceIndex {
   const source = joined ?? lines.join('\n');
+  const { bracePairs, parenPairs, bracketPairs, regexRanges } =
+    pairedDelimiters(source);
   const lineStarts = [0];
   for (let i = 0; i < source.length; i++) {
     if (source.charCodeAt(i) === 10) lineStarts.push(i + 1);
   }
-  return { source, lineStarts, bracePairs: pairedBraces(source) };
+  return {
+    source,
+    lineStarts,
+    bracePairs,
+    parenPairs,
+    bracketPairs,
+    regexRanges,
+  };
 }
 
 function collectCallbacks(sourceIndex: SourceIndex): CallbackCollection {
@@ -380,6 +976,16 @@ function collectCallbacks(sourceIndex: SourceIndex): CallbackCollection {
   const callbacks: CallbackRange[] = [];
   const callbacksByRange = new Map<string, CallbackRange>();
   const callbacksByName = new Map<string, CallbackRange>();
+  const ambiguousCallbackNames = new Set<string>();
+  const callbackRanges: CallbackRange[] = [];
+  const callbackRangeKeys = new Set<string>();
+
+  function registerLexicalCallback(start: number, end: number): void {
+    const key = `${start}:${end}`;
+    if (callbackRangeKeys.has(key)) return;
+    callbackRangeKeys.add(key);
+    callbackRanges.push({ start, end });
+  }
 
   function registerCallback(name: string, start: number, end: number) {
     const key = `${start}:${end}`;
@@ -389,50 +995,112 @@ function collectCallbacks(sourceIndex: SourceIndex): CallbackCollection {
       callbacksByRange.set(key, callback);
       callbacks.push(callback);
     }
+    registerLexicalCallback(start, end);
+    const previous = callbacksByName.get(name);
+    if (
+      previous &&
+      (previous.start !== callback.start || previous.end !== callback.end)
+    ) {
+      ambiguousCallbackNames.add(name);
+    }
     callbacksByName.set(name, callback);
   }
 
-  const declarations = [
-    /\bfunction\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::\s*[^={]+)?\s*\{/g,
-    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?(?:function(?:\s+[A-Za-z_$][\w$]*)?\s*\([^)]*\)|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*(?::\s*[^=]+)?=>)\s*\{/g,
-  ];
+  for (const match of source.matchAll(
+    /\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g,
+  )) {
+    const range = functionCallbackRange(
+      sourceIndex,
+      match.index,
+      source.length,
+    );
+    if (range) registerCallback(match[1] as string, range.start, range.end);
+  }
 
-  for (const pattern of declarations) {
-    for (const match of source.matchAll(pattern)) {
-      const open = match.index + match[0].lastIndexOf('{');
-      const end = bracePairs.get(open);
-      if (end === undefined) continue;
-      registerCallback(match[1] as string, open, end);
+  const binding = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\b/g;
+  for (const match of source.matchAll(binding)) {
+    const valueStart = initializerAfterBinding(
+      sourceIndex,
+      match.index + match[0].length,
+    );
+    if (valueStart === -1) continue;
+    const range = inlineCallbackRange(sourceIndex, valueStart, source.length);
+    if (range) registerCallback(match[1] as string, range.start, range.end);
+  }
+
+  for (const match of source.matchAll(/\bfunction\b/g)) {
+    const range = functionCallbackRange(
+      sourceIndex,
+      match.index,
+      source.length,
+    );
+    if (range) registerLexicalCallback(range.start, range.end);
+  }
+
+  for (const match of source.matchAll(/[=]>/g)) {
+    const bodyStart = nextNonWhitespace(source, match.index + 2);
+    if (source[bodyStart] === '{') {
+      const end = bracePairs.get(bodyStart);
+      if (end !== undefined) registerLexicalCallback(bodyStart + 1, end);
+    } else {
+      registerLexicalCallback(
+        match.index,
+        callbackExpressionEnd(sourceIndex, bodyStart, source.length),
+      );
     }
   }
 
-  const conciseArrow =
-    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>(?!\s*\{)\s*/g;
-  for (const match of source.matchAll(conciseArrow)) {
-    const start = match.index + match[0].length;
-    const semicolon = source.indexOf(';', start);
-    const newline = source.indexOf('\n', start);
-    const candidates = [semicolon, newline].filter((offset) => offset >= 0);
-    const end = candidates.length > 0 ? Math.min(...candidates) : source.length;
-    registerCallback(match[1] as string, start, end);
-  }
+  return {
+    callbacks,
+    callbacksByName,
+    ambiguousCallbackNames,
+    callbackRanges,
+  };
+}
 
-  return { callbacks, callbacksByName };
+function initializerAfterBinding(
+  sourceIndex: SourceIndex,
+  afterName: number,
+): number {
+  const { source } = sourceIndex;
+  const limit = Math.min(source.length, afterName + 2000);
+  for (let i = afterName; i < limit; i++) {
+    if (source[i] === ';') return -1;
+    const close = closingDelimiter(sourceIndex, i);
+    if (close !== -1 && close < limit) {
+      i = close;
+      continue;
+    }
+    if (
+      source[i] === '=' &&
+      source[i + 1] !== '>' &&
+      source[i + 1] !== '=' &&
+      source[i - 1] !== '=' &&
+      source[i - 1] !== '!' &&
+      source[i - 1] !== '<' &&
+      source[i - 1] !== '>'
+    ) {
+      return nextNonWhitespace(source, i + 1);
+    }
+  }
+  return -1;
 }
 
 function collectSchedulingCalls(
   source: string,
   callbacks: CallbackRange[],
   callbacksByName: Map<string, CallbackRange>,
+  ambiguousCallbackNames: Set<string>,
   callPattern: RegExp,
 ): SchedulingCall[] {
   const calls: SchedulingCall[] = [];
   for (const match of source.matchAll(callPattern)) {
     const open = match.index + match[0].lastIndexOf('(');
     const callbackName = firstArgumentIdentifier(source, open + 1);
-    const target = callbackName
-      ? (callbacksByName.get(callbackName) ?? null)
-      : null;
+    const target =
+      callbackName && !ambiguousCallbackNames.has(callbackName)
+        ? (callbacksByName.get(callbackName) ?? null)
+        : null;
     calls.push({ offset: match.index, owner: null, target });
   }
   assignCallbackOwners(callbacks, calls);
@@ -489,19 +1157,93 @@ function summarizeSchedulingOwnership(
     recurringScheduleLines,
     stateScheduleLines,
     recurringCallbackLines,
+    recurringCallbackRanges: [...recurringCallbacks],
   };
 }
 
-function pairedBraces(source: string): Map<number, number> {
-  const pairs = new Map<number, number>();
-  const stack: number[] = [];
+function pairedDelimiters(source: string): {
+  bracePairs: Map<number, number>;
+  parenPairs: Map<number, number>;
+  bracketPairs: Map<number, number>;
+  regexRanges: SourceRange[];
+} {
+  const bracePairs = new Map<number, number>();
+  const parenPairs = new Map<number, number>();
+  const bracketPairs = new Map<number, number>();
+  const braces: number[] = [];
+  const parens: number[] = [];
+  const brackets: number[] = [];
+  const regexRanges: SourceRange[] = [];
+  const controlParenCloses = new Set<number>();
+
   for (let i = 0; i < source.length; i++) {
-    if (source[i] === '{') stack.push(i);
-    if (source[i] === '}' && stack.length > 0) {
-      pairs.set(stack.pop() as number, i);
+    if (
+      source[i] === '/' &&
+      isRegexLiteralStart(source, i, controlParenCloses)
+    ) {
+      const end = regexLiteralEnd(source, i);
+      if (end > i) {
+        regexRanges.push({ start: i, end: end + 1 });
+        i = end;
+        continue;
+      }
+    }
+
+    if (source[i] === '{') braces.push(i);
+    else if (source[i] === '}' && braces.length > 0) {
+      bracePairs.set(braces.pop() as number, i);
+    } else if (source[i] === '(') parens.push(i);
+    else if (source[i] === ')' && parens.length > 0) {
+      const open = parens.pop() as number;
+      parenPairs.set(open, i);
+      const before = previousNonWhitespace(source, open - 1, 0);
+      if (
+        /^(?:if|while|for|with|switch|catch)$/.test(
+          identifierEndingAt(source, before),
+        )
+      ) {
+        controlParenCloses.add(i);
+      }
+    } else if (source[i] === '[') brackets.push(i);
+    else if (source[i] === ']' && brackets.length > 0) {
+      bracketPairs.set(brackets.pop() as number, i);
     }
   }
-  return pairs;
+
+  return { bracePairs, parenPairs, bracketPairs, regexRanges };
+}
+
+function isRegexLiteralStart(
+  source: string,
+  offset: number,
+  controlParenCloses: Set<number>,
+): boolean {
+  const previous = previousNonWhitespace(source, offset - 1, 0);
+  if (previous < 0) return true;
+  if (source[previous] === ')' && controlParenCloses.has(previous)) return true;
+  if (/[=(:,[!&|?;{>]/.test(source[previous] as string)) return true;
+  return /^(?:return|case|throw|yield)$/.test(
+    identifierEndingAt(source, previous),
+  );
+}
+
+function regexLiteralEnd(source: string, start: number): number {
+  let inClass = false;
+  for (let i = start + 1; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === '\n') return i - 1;
+    if (ch === '\\') {
+      i++;
+    } else if (ch === '[') {
+      inClass = true;
+    } else if (ch === ']') {
+      inClass = false;
+    } else if (ch === '/' && !inClass) {
+      while (/[a-z]/i.test(source[i + 1] ?? '')) i++;
+      return i;
+    }
+  }
+  return source.length - 1;
 }
 
 function firstArgumentIdentifier(
@@ -676,6 +1418,7 @@ export const EVIDENCE_REGISTRY = {
     analysis.raf.recurringScheduleLines.has(line),
   'recurring-raf-state': (analysis, line) =>
     analysis.raf.stateScheduleLines.has(line),
+  'per-frame-allocation': matchesPerFrameAllocation,
   'subscribed-media-query': (analysis, line) =>
     analysis.subscribedMediaQueries.has(line),
   'recurring-raf-branch': matchesRecurringRafBranch,
@@ -686,6 +1429,125 @@ export const EVIDENCE_REGISTRY = {
 } satisfies Record<string, EvidencePredicate>;
 
 export type EvidenceName = keyof typeof EVIDENCE_REGISTRY;
+
+function matchesPerFrameAllocation(
+  analysis: FileAnalysis,
+  line: number,
+  match: RegExpExecArray,
+): boolean {
+  const offset = (analysis.lineStarts[line] ?? 0) + match.index;
+  const rafOwned = innermostRange(analysis.raf.recurringCallbackRanges, offset);
+  const phaseOwned = innermostRange(analysis.phaseFrameCallbacks, offset);
+  const owned =
+    rafOwned && phaseOwned
+      ? rafOwned.end - rafOwned.start < phaseOwned.end - phaseOwned.start
+        ? rafOwned
+        : phaseOwned
+      : (rafOwned ?? phaseOwned);
+  if (!owned) return false;
+  if (innermostRange(analysis.sourceIndex.regexRanges, offset)) return false;
+
+  const lexical = innermostRange(analysis.callbackRanges, offset);
+  if (
+    lexical &&
+    lexical.start >= owned.start &&
+    lexical.end <= owned.end &&
+    (lexical.start !== owned.start || lexical.end !== owned.end)
+  ) {
+    return false;
+  }
+
+  return (
+    match[0][0] === '.' ||
+    isRuntimeLiteralStart(analysis.sourceIndex, offset, owned)
+  );
+}
+
+function innermostRange(
+  ranges: SourceRange[],
+  offset: number,
+): SourceRange | null {
+  let found: SourceRange | null = null;
+  for (const range of ranges) {
+    if (offset < range.start || offset >= range.end) continue;
+    if (!found || range.end - range.start < found.end - found.start) {
+      found = range;
+    }
+  }
+  return found;
+}
+
+function isRuntimeLiteralStart(
+  sourceIndex: SourceIndex,
+  offset: number,
+  owner: SourceRange,
+): boolean {
+  const { source } = sourceIndex;
+  const literal = source[offset];
+  const close =
+    literal === '{'
+      ? sourceIndex.bracePairs.get(offset)
+      : sourceIndex.bracketPairs.get(offset);
+  if (
+    close !== undefined &&
+    source[nextNonWhitespace(source, close + 1)] === '='
+  ) {
+    return false;
+  }
+
+  const previous = previousNonWhitespace(source, offset - 1, owner.start);
+  if (previous < owner.start) return literal === '[';
+
+  const previousChar = source[previous] as string;
+  if (previousChar === '>' && source[previous - 1] === '=') {
+    return literal === '[' && previous - 1 === owner.start;
+  }
+
+  const previousWord = identifierEndingAt(source, previous);
+  if (/^(?:const|let|var|type|interface)$/.test(previousWord)) return false;
+  if (/^(?:return|yield|throw)$/.test(previousWord)) return true;
+
+  const statementStart = Math.max(
+    owner.start,
+    source.lastIndexOf(';', offset - 1) + 1,
+  );
+  const prefix = source.slice(statementStart, offset);
+  if (/(?:^|[;\n])\s*(?:type|interface)\b[^;]*$/s.test(prefix)) {
+    return false;
+  }
+  if (/\b(?:as|satisfies)\s*$/.test(prefix)) return false;
+  if (previousChar === ':') {
+    const beforeColon = previousNonWhitespace(
+      source,
+      previous - 1,
+      statementStart,
+    );
+    if (source[beforeColon] === '?' || !prefix.includes('?')) return false;
+  }
+
+  if (/[A-Za-z0-9_$.)\]>]/.test(previousChar)) return false;
+  if (literal === '{' && /[;}>]/.test(previousChar)) return false;
+  return /[=(:,?[{@!&|]/.test(previousChar);
+}
+
+function previousNonWhitespace(
+  source: string,
+  offset: number,
+  limit: number,
+): number {
+  let cursor = offset;
+  while (cursor >= limit && /\s/.test(source[cursor] as string)) cursor--;
+  return cursor;
+}
+
+function identifierEndingAt(source: string, end: number): string {
+  if (!/[A-Za-z0-9_$]/.test(source[end] ?? '')) return '';
+  let start = end;
+  while (start > 0 && /[A-Za-z0-9_$]/.test(source[start - 1] as string)) {
+    start--;
+  }
+  return source.slice(start, end + 1);
+}
 
 function matchesRecurringRafBranch(
   analysis: FileAnalysis,

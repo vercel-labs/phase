@@ -4,11 +4,7 @@ import {
   enclosingBlock,
   EVIDENCE_REGISTRY,
 } from './analysis.ts';
-import type {
-  FileAnalysis,
-  MoveAnalysis,
-  SchedulingOwnership,
-} from './analysis.ts';
+import type { FileAnalysis } from './analysis.ts';
 import {
   commentText,
   maskComments,
@@ -212,26 +208,37 @@ function scanSignal(
 ): ScanFinding[] {
   const findings: ScanFinding[] = [];
   const matchLines = signal.codeOnly ? codeLines : uncommentedLines;
+  const candidatePattern = signal.pattern
+    ? new RegExp(
+        signal.pattern.source,
+        signal.pattern.flags.includes('g')
+          ? signal.pattern.flags
+          : `${signal.pattern.flags}g`,
+      )
+    : null;
   for (let i = 0; i < lines.length; i++) {
     if (overlong.has(i)) continue;
     const line = lines[i] ?? '';
     const matchLine = matchLines[i] ?? '';
     let matchIndex = 0;
+    let matchOffset: number | null = null;
 
     if (signal.matcher) {
       if (!signal.matcher(matchLines, i)) continue;
     } else {
-      const match = signal.pattern.exec(matchLine);
-      if (!match) continue;
-      matchIndex = match.index;
-
-      if (
-        signal.evidence &&
-        !EVIDENCE_REGISTRY[signal.evidence](analysis, i, match)
-      )
-        continue;
       if (!matchesSignalContext(signal, codeLines, uncommentedLines, i))
         continue;
+      if (!candidatePattern) continue;
+      const match = firstAcceptedMatch(
+        signal,
+        candidatePattern,
+        matchLine,
+        analysis,
+        i,
+      );
+      if (!match) continue;
+      matchIndex = match.index;
+      matchOffset = match.index;
     }
 
     // Per-file signals are suppressed at the file level (see scanFile), not
@@ -249,13 +256,33 @@ function scanSignal(
         i + 1,
         line,
         matchIndex,
-        executionOf(codeLines, i, type, analysis.raf, analysis.moveHandlers),
+        executionOf(codeLines, i, type, analysis, matchOffset),
       ),
     );
 
     if (signal.perFile) break;
   }
   return findings;
+}
+
+function firstAcceptedMatch(
+  signal: ScanSignal,
+  pattern: RegExp,
+  line: string,
+  analysis: FileAnalysis,
+  lineIndex: number,
+): RegExpExecArray | null {
+  pattern.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(line))) {
+    if (
+      !signal.evidence ||
+      EVIDENCE_REGISTRY[signal.evidence](analysis, lineIndex, match)
+    ) {
+      return match;
+    }
+  }
+  return null;
 }
 
 function matchesSignalContext(
@@ -303,20 +330,37 @@ function executionOf(
   lines: string[],
   i: number,
   type: ScanSourceType,
-  rafAnalysis: SchedulingOwnership,
-  moveAnalysis: MoveAnalysis,
+  analysis: FileAnalysis,
+  matchOffset: number | null,
 ): ScanExecution | null {
   if (type !== 'js') return null;
   if (
-    rafAnalysis.recurringCallbackLines.has(i) ||
-    rafAnalysis.recurringScheduleLines.has(i)
+    analysis.raf.recurringCallbackLines.has(i) ||
+    analysis.raf.recurringScheduleLines.has(i)
+  ) {
+    return 'per-frame';
+  }
+  const lineStart = analysis.lineStarts[i] ?? 0;
+  const lineEnd = analysis.lineStarts[i + 1] ?? Number.POSITIVE_INFINITY;
+  if (
+    matchOffset === null
+      ? analysis.phaseFrameCallbacks.some(
+          (range) => range.start < lineEnd && range.end >= lineStart,
+        )
+      : analysis.phaseFrameCallbacks.some((range) => {
+          const offset = lineStart + matchOffset;
+          return offset >= range.start && offset < range.end;
+        })
   ) {
     return 'per-frame';
   }
   // A move event runs code inside an intrinsic JSX move handler. Rank the
   // handler body and its prop line directly because the window below cannot
   // see a handler defined far from its JSX.
-  if (moveAnalysis.handlerLines.has(i) || moveAnalysis.propRanges.has(i)) {
+  if (
+    analysis.moveHandlers.handlerLines.has(i) ||
+    analysis.moveHandlers.propRanges.has(i)
+  ) {
     return 'per-frame';
   }
   const from = Math.max(0, i - FRAME_DRIVER_WINDOW);
