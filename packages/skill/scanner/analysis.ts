@@ -476,9 +476,9 @@ function identifierSource(name: string): string {
 }
 
 /**
- * Resolves one callback property on a direct options object. A later spread can
- * replace an earlier property, so ownership is not proven until a later direct
- * property wins again.
+ * Resolves one callback property on a direct options object. A later spread may
+ * override an earlier property, so only a direct property after that spread can
+ * establish ownership.
  */
 // oxlint-disable-next-line complexity -- object properties have distinct direct, quoted, computed, spread, method, and accessor forms
 function phaseCallbackPropertyRange(

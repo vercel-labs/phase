@@ -119,7 +119,7 @@ describe('execution context', () => {
     expect(finding?.execution).toBe('per-frame');
   });
 
-  it('marks a distant phase-owned callback as per-frame', () => {
+  it('classifies work in a named phase callback outside the six-line frame-driver window as per-frame', () => {
     const finding = scanFile(
       'src/a.ts',
       "import { useLoop } from 'phase/react';\nfunction tick() {\n  const points = source.map(project);\n  step1();\n  step2();\n  step3();\n  step4();\n  step5();\n  step6();\n  step7();\n  step8();\n}\nuseLoop({ onTick: tick });\n",
@@ -128,7 +128,7 @@ describe('execution context', () => {
     expect(finding?.execution).toBe('per-frame');
   });
 
-  it('does not promote an earlier same-line finding into a phase callback', () => {
+  it('classifies a finding before a same-line phase callback as incidental', () => {
     const finding = scanFile(
       'src/a.ts',
       "import { useLoop } from 'phase/react';\nconst width = element.offsetWidth; function tick() {\n  paint();\n  step1();\n  step2();\n  step3();\n  step4();\n  step5();\n  step6();\n  step7();\n}\nuseLoop({ onTick: tick });\n",
@@ -303,7 +303,7 @@ describe('cache performance', () => {
     expect(performance.now() - started).toBeLessThan(500);
   });
 
-  it('scans 4k JavaScript lines with balanced frame callbacks', () => {
+  it('scans 4k generated JavaScript lines containing complete phase callbacks', () => {
     const content = `import { useLoop } from 'phase/react';\n${Array.from(
       { length: 4000 },
       (_, index) =>
@@ -320,7 +320,7 @@ describe('cache performance', () => {
     expect(performance.now() - started).toBeLessThan(500);
   });
 
-  it('bounds analysis of 4k unmatched phase calls', () => {
+  it('analyzes 4k incomplete useLoop calls within 250 ms', () => {
     const content = `${"import { useLoop } from 'phase/react';\n"}${'useLoop(\n'.repeat(4000)}`;
     const started = performance.now();
     scanFile('src/malformed.ts', content);
@@ -328,7 +328,7 @@ describe('cache performance', () => {
     expect(performance.now() - started).toBeLessThan(250);
   });
 
-  it('bounds analysis of 4k unmatched phase generics', () => {
+  it('analyzes 4k incomplete generic useLoop expressions within 250 ms', () => {
     const content = `${"import { useLoop } from 'phase/react';\n"}${'useLoop<\n'.repeat(4000)}`;
     const started = performance.now();
     scanFile('src/malformed-generic.ts', content);
@@ -336,7 +336,7 @@ describe('cache performance', () => {
     expect(performance.now() - started).toBeLessThan(250);
   });
 
-  it('does not recurse through deeply wrapped callbacks', () => {
+  it('handles a callback wrapped in 5,000 pairs of parentheses without throwing', () => {
     const wrapped = `${'('.repeat(5000)}() => { const points = []; }${')'.repeat(5000)}`;
     const content = `import { useLoop } from 'phase/react';\nuseLoop({ onTick: ${wrapped} });`;
 

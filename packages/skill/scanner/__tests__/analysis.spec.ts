@@ -74,7 +74,7 @@ describe('analysis evidence registry', () => {
     ).toBe(false);
   });
 
-  it('per-frame-allocation requires the exact owned callback body', () => {
+  it('per-frame-allocation accepts matches only in the direct body of a proven recurring frame callback', () => {
     const recurring =
       'function tick() { const points = []; requestAnimationFrame(tick); } requestAnimationFrame(tick);';
     expect(evidenceMatches('per-frame-allocation', recurring, 0, /\[/)).toBe(
@@ -268,7 +268,7 @@ describe('analysis', () => {
     expect(analysis.raf.recurringCallbackLines).toEqual(new Set());
   });
 
-  it('fails closed when recurring callback names are ambiguous', () => {
+  it('does not infer recurring ownership when callback names are ambiguous', () => {
     const analysis = analysisOf(
       'function tick() { requestAnimationFrame(tick); }\nfunction tick() { requestAnimationFrame(tick); }',
     );

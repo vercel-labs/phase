@@ -558,9 +558,9 @@ function identifierSource(name) {
 	return `(?<![A-Za-z0-9_$])${escapeRegExp(name)}(?![A-Za-z0-9_$])`;
 }
 /**
-* Resolves one callback property on a direct options object. A later spread can
-* replace an earlier property, so ownership is not proven until a later direct
-* property wins again.
+* Resolves one callback property on a direct options object. A later spread may
+* override an earlier property, so only a direct property after that spread can
+* establish ownership.
 */
 function phaseCallbackPropertyRange(sourceIndex, uncommentedSource, optionsOpen, optionsClose, property, callbacksByName, ambiguousCallbackNames) {
 	const { source } = sourceIndex;
@@ -1252,11 +1252,11 @@ const SIGNAL_CATALOG = [
 	},
 	{
 		id: "per-frame-allocation",
-		replacement: "pre-allocate mutable objects/arrays outside the callback; replace map/filter with in-place iteration",
+		replacement: "allocate mutable objects and arrays outside the callback and reuse them; replace `.map()` and `.filter()` with in-place iteration",
 		label: "Allocation inside a recurring frame callback",
 		severity: "critical",
 		noise: "noisy",
-		detects: "Object/array literal or spread, `.map()`, or `.filter()` inside a proven recurring frame callback",
+		detects: "An object or array literal (including a spread copy), `.map()`, or `.filter()` inside a proven recurring frame callback",
 		why: "Repeated allocations add garbage-collection pressure to the render path.",
 		fix: "references/performance.md#zero-per-frame-allocations",
 		pattern: /\.(?:map|filter)\s*(?:\?\.)?\s*\(|[[{]/,

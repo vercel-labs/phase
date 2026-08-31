@@ -124,12 +124,12 @@ const SIGNAL_CATALOG = [
   {
     id: 'per-frame-allocation',
     replacement:
-      'pre-allocate mutable objects/arrays outside the callback; replace map/filter with in-place iteration',
+      'allocate mutable objects and arrays outside the callback and reuse them; replace `.map()` and `.filter()` with in-place iteration',
     label: 'Allocation inside a recurring frame callback',
     severity: 'critical',
     noise: 'noisy',
     detects:
-      'Object/array literal or spread, `.map()`, or `.filter()` inside a proven recurring frame callback',
+      'An object or array literal (including a spread copy), `.map()`, or `.filter()` inside a proven recurring frame callback',
     why: 'Repeated allocations add garbage-collection pressure to the render path.',
     fix: 'references/performance.md#zero-per-frame-allocations',
     pattern: PER_FRAME_ALLOCATION,
