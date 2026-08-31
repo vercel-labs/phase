@@ -1,6 +1,7 @@
 // Native observer coverage lives in index.browser.spec.ts. Keep only
 // deterministic React wiring and headless-unreachable scenarios here.
 import { render, renderHook, act } from '@testing-library/react';
+import { useRef } from 'react';
 
 import { createMockResizeObserver } from '../../__mocks__/resize-observer';
 
@@ -199,7 +200,8 @@ describe('useSize', () => {
     const useSize = await getHook();
 
     function Probe({ elementKey }: { elementKey: string }) {
-      const { ref, size } = useSize();
+      const ref = useRef<HTMLDivElement>(null);
+      const { size } = useSize({ ref });
       return (
         <>
           <output data-testid="size">
@@ -272,6 +274,7 @@ describe('useSize', () => {
     view.rerender(<Probe elementKey="second" />);
     const second = view.getByTestId('target');
     act(() => mockRO.trigger(second, 200, 100));
+    act(() => mockRO.trigger(second, 200, 100));
 
     expect(onResize).toHaveBeenCalledTimes(2);
     expect(onResize).toHaveBeenLastCalledWith({ width: 200, height: 100 });
@@ -287,7 +290,7 @@ describe('useSize', () => {
       return <div ref={ref} data-testid="reactive-target" />;
     }
 
-    const reactive = render(<ReactiveProbe />);
+    const reactive = render(<ReactiveProbe />, { reactStrictMode: false });
     expect(reactiveRenders).toBe(1);
     act(() => mockRO.trigger(reactive.getByTestId('reactive-target'), 100, 50));
     expect(reactiveRenders).toBe(2);
@@ -300,7 +303,7 @@ describe('useSize', () => {
       return <div ref={ref} data-testid="transient-target" />;
     }
 
-    const transient = render(<TransientProbe />);
+    const transient = render(<TransientProbe />, { reactStrictMode: false });
     expect(transientRenders).toBe(1);
     act(() =>
       mockRO.trigger(transient.getByTestId('transient-target'), 100, 50),
@@ -315,7 +318,9 @@ describe('useSize', () => {
       return <div key={elementKey} ref={ref} />;
     }
 
-    const swap = render(<SwapProbe elementKey="first" />);
+    const swap = render(<SwapProbe elementKey="first" />, {
+      reactStrictMode: false,
+    });
     const beforeSwap = swapRenders;
     swap.rerender(<SwapProbe elementKey="second" />);
     expect(swapRenders).toBe(beforeSwap + 2);
