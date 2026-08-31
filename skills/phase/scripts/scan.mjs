@@ -1350,7 +1350,7 @@ const SIGNAL_CATALOG = [
 		severity: "critical",
 		noise: "noisy",
 		detects: "Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling",
-		why: "Accessibility gap: motion plays for users who asked for none.",
+		why: "The animation ignores the reduced-motion preference.",
 		fix: "references/performance.md#reduced-motion-by-default",
 		pattern: /requestAnimationFrame|@keyframes|animation:(?!\s*none\b)/,
 		negativePattern: /prefers-reduced-motion|reducedMotion/,
@@ -1367,7 +1367,7 @@ const SIGNAL_CATALOG = [
 		severity: "critical",
 		noise: "noisy",
 		detects: "`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity with no reduced-motion handling",
-		why: "Accessibility gap: motion plays for users who asked for none.",
+		why: "The animation ignores the reduced-motion preference.",
 		fix: "references/performance.md#reduced-motion-by-default",
 		pattern: TIMER_REFERENCE,
 		negativePattern: /prefers-reduced-motion|\b(?:usePrefersReducedMotion|prefersReducedMotion|reducedMotion)\b/,
@@ -2105,7 +2105,7 @@ const MIN_FINDINGS_FOR_ROLLUP = 5;
 const BEYOND_THE_SCAN = [
 	"",
 	"Beyond the scan: no pattern here matches an infinite CSS animation nobody gated, a transitionend",
-	"listener driving unmount, eagerly mounted below-fold UI, a finite timer chain sequencing states, a canvas",
+	"listener driving unmount, eagerly mounted below-fold UI, a finite timer sequence that changes UI state, a canvas",
 	"sized from devicePixelRatio once, or JS still running inside a skipped content-visibility subtree.",
 	"Run the manual and opportunity passes (references/audit.md Step 1.5) before concluding an audit."
 ];

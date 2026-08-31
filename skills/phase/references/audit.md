@@ -122,7 +122,7 @@ forced-reflow — Forced reflow (getBoundingClientRect, offsetWidth, etc.) (2) �
   src/suppressed-banner.ts:5  const width = el.offsetWidth;
 
 missing-reduced-motion — Animation without reduced-motion check (4) · noise: noisy
-  why: Accessibility gap: motion plays for users who asked for none.
+  why: The animation ignores the reduced-motion preference.
   use: a prefers-reduced-motion media query, or a phase hook (handles it automatically)
   read: references/performance.md#reduced-motion-by-default
   ↑ in a per-frame path:
@@ -203,7 +203,7 @@ Next: start with the hotspots above, then classify each candidate against the de
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
 
 Beyond the scan: no pattern here matches an infinite CSS animation nobody gated, a transitionend
-listener driving unmount, eagerly mounted below-fold UI, a finite timer chain sequencing states, a canvas
+listener driving unmount, eagerly mounted below-fold UI, a finite timer sequence that changes UI state, a canvas
 sized from devicePixelRatio once, or JS still running inside a skipped content-visibility subtree.
 Run the manual and opportunity passes (references/audit.md Step 1.5) before concluding an audit.
 ```
@@ -232,7 +232,7 @@ A comment `phase-scan-ignore <signal-id> -- <reason>` (colon after `ignore` also
 
 The directive is the only sanctioned way to silence a finding, but it is not the only way a finding can disappear. These are detection limits, not approved exits — reaching for one to clear a report is falsifying the audit:
 
-- Both reduced-motion signals go quiet for a whole file that uses `prefers-reduced-motion` or `reducedMotion`; confirm the handling applies to every animation in that file.
+- Both reduced-motion signals are suppressed for a whole file that uses `prefers-reduced-motion` or `reducedMotion`; confirm the handling applies to every animation in that file.
 - Renaming a file into an excluded path (`__tests__`, `__mocks__`, `.stories.`, `.spec.`, `.test.`) removes it from the scan.
 - Lines longer than 1,000 characters are treated as generated and are not scanned.
 
@@ -310,7 +310,7 @@ A clean scan means no anti-pattern candidates, not no opportunities: the scanner
 - **Long-running or infinite CSS animations** (spinners, marquees, animated gradients) with no visibility gating. Even with reduced-motion handled, they burn CPU/GPU off-screen and in background tabs. → `useLifecycle` toggling `animation-play-state` (see [decision-guide.md](./decision-guide.md)).
 - **`transitionend`/`animationend` listeners driving unmount or state.** → `Presence` / `Swap`.
 - **Eagerly mounted non-critical UI** (below-fold sections, chat widgets, pickers, heavy modals). → `Defer` (SSR-safe default) or `WhenVisible`/`WhenIdle`, subject to the [Step 2.5](#step-25-verify-the-blast-radius) semantics rules.
-- **Finite `setTimeout` chains sequencing UI states.** The scanner flags recurring timers near animation vocabulary, but a chain of one-shot timeouts stays invisible even when it drives visible motion. → CSS/WAAPI when the sequence is predetermined and keyframe-friendly; `useLoop` with `frame.elapsed` only when JavaScript must own the steps ([timed-sequences.md](./timed-sequences.md)).
+- **Finite `setTimeout` chains sequencing UI states.** The scanner reports recurring timers near animation vocabulary, but it does not report a chain of one-shot timeouts even when the chain drives visible motion. → CSS/WAAPI when the sequence is predetermined and keyframe-friendly; `useLoop` with `frame.elapsed` only when JavaScript must own the steps ([timed-sequences.md](./timed-sequences.md)).
 - **Phase loops replaying a predetermined timeline** (scanner: `phase-loop-browser-keyframes`). Verify that output depends only on elapsed time, can be expressed as browser-animatable keyframes, and requires no per-frame JS side effects. → CSS/WAAPI for playback, with `useLifecycle` as the visibility gate. Also verify that first-paint CSS matches keyframe zero and reduced motion renders a meaningful static state instead of pausing there.
 - **Scroll listeners doing position math without layout reads.** The scanner only flags handlers that read layout. → `useScroll`.
 - **One-shot `matchMedia(...).matches` reads.** The scanner only flags a MediaQueryList something subscribes to, so a snapshot is silent. Check whether the value has to react: a snapshot read once at mount is stale after a theme change, a rotation, or a move to another monitor. → `useMediaQuery` when it must react, `prefersReducedMotion()` for a deliberate one-time read.

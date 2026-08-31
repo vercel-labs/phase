@@ -241,7 +241,7 @@ const SIGNAL_CATALOG = [
     noise: 'noisy',
     detects:
       'Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling',
-    why: 'Accessibility gap: motion plays for users who asked for none.',
+    why: 'The animation ignores the reduced-motion preference.',
     fix: 'references/performance.md#reduced-motion-by-default',
     // `animation:(?!\s*none)` keeps `animation: none` (motion disabled) out.
     pattern: /requestAnimationFrame|@keyframes|animation:(?!\s*none\b)/,
@@ -264,7 +264,7 @@ const SIGNAL_CATALOG = [
     noise: 'noisy',
     detects:
       '`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity with no reduced-motion handling',
-    why: 'Accessibility gap: motion plays for users who asked for none.',
+    why: 'The animation ignores the reduced-motion preference.',
     fix: 'references/performance.md#reduced-motion-by-default',
     pattern: TIMER_REFERENCE,
     negativePattern:

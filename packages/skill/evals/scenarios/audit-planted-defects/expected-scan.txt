@@ -29,7 +29,7 @@ forced-reflow — Forced reflow (getBoundingClientRect, offsetWidth, etc.) (2) �
   src/suppressed-banner.ts:5  const width = el.offsetWidth;
 
 missing-reduced-motion — Animation without reduced-motion check (4) · noise: noisy
-  why: Accessibility gap: motion plays for users who asked for none.
+  why: The animation ignores the reduced-motion preference.
   use: a prefers-reduced-motion media query, or a phase hook (handles it automatically)
   read: references/performance.md#reduced-motion-by-default
   ↑ in a per-frame path:
@@ -110,6 +110,6 @@ Next: start with the hotspots above, then classify each candidate against the de
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
 
 Beyond the scan: no pattern here matches an infinite CSS animation nobody gated, a transitionend
-listener driving unmount, eagerly mounted below-fold UI, a finite timer chain sequencing states, a canvas
+listener driving unmount, eagerly mounted below-fold UI, a finite timer sequence that changes UI state, a canvas
 sized from devicePixelRatio once, or JS still running inside a skipped content-visibility subtree.
 Run the manual and opportunity passes (references/audit.md Step 1.5) before concluding an audit.
