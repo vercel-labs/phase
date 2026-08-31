@@ -1,27 +1,27 @@
 # Performance traces for audits
 
-A phase scan ranks candidates by worst-case severity and visible execution context. A Chrome DevTools performance trace measures which work actually consumed time during a page load or interaction. Pair them to re-rank candidates using runtime evidence, and to measure whether an applied change helped.
+A phase scan labels findings with severity and noise tiers and, for JavaScript findings, an execution class. A Chrome DevTools performance trace records browser work during a page load or interaction. Use the trace to order findings from code paths exercised during the recording by measured runtime cost and to compare the same cost before and after a change.
 
 ## When to offer a trace
 
 - When the user reports jank, slow page load, high CPU, dropped frames, or excessive background work, offer a trace during audit intake so measured hotspots can direct the review.
-- End every audit that did not use a trace with the short offer below. A clean scan still benefits because traces can expose startup and interaction costs that source patterns cannot prove.
+- End every audit that did not use a trace with the short offer below. A clean scan does not measure runtime cost; a trace can measure it on the recorded path.
 - If the user already supplied a trace, analyze it instead of asking for another unless it misses the reported symptom.
-- If connected browser-automation tools can record performance traces, offer a separate dynamic capture. Before acting, get approval for the exact URL, environment, browser profile or account, interaction steps, and expected state-changing effects. Prefer staging and an isolated profile. Do not launch repository scripts or navigate the user's browser without approval.
+- If connected browser-automation tools can record a performance trace, offer to capture it separately. Before acting, get approval for the exact URL, environment, browser profile or account, interaction steps, and any expected state changes. Prefer staging and an isolated profile. Do not launch repository scripts or navigate the user's browser without approval.
 
 ## Ask the user
 
-Keep the request short enough to act on immediately:
+Use this request:
 
-> A Chrome performance trace can turn this audit's heuristic priorities into measured ones.
+> A Chrome DevTools performance trace can add measured runtime evidence to this audit.
 > **Load:** Open DevTools > Performance, click **Record and reload**, and wait for the trace to stop.
 > **Interaction:** In a separate trace, click **Record**, reproduce the janky interaction for 5-10 seconds, then click **Stop**.
 > Export each with **Download > Save trace** and attach the `.json.gz` files or share their local paths.
-> If the issue only reproduces with production optimizations, use a local production build with diagnostic browser source maps enabled when safe.
-> Send both when possible. One combined trace is also useful when the state is difficult to reproduce.
+> If the issue only reproduces with production optimizations, record a local production build. Include browser source maps only if the source can be shared with the analyzer.
+> Send both if you can. Use one combined trace if the state is difficult to reproduce.
 > Before sharing, review the trace for sensitive URLs, screenshots, annotations, and user data. Embedded resources or source maps can also expose source code.
 
-The load trace captures navigation and the first settling work after load. It can reveal eager below-fold rendering, hydration work, off-screen animations, and other startup costs. The interaction trace isolates the frames, event handlers, and rendering work associated with a specific symptom.
+The load trace captures navigation and browser work until DevTools automatically stops a few seconds after load. It can show startup rendering and hydration cost; use screenshots and source attribution to determine whether that work came from below-fold or off-screen code. The interaction trace records work during the interaction window; use markers and source attribution to associate it with the reported symptom.
 
 CPU throttling is optional. If the problem only appears on slower devices, re-record with the Performance panel's recommended or calibrated CPU preset. A fixed slowdown is relative to the recording computer, not an accurate emulation of a specific phone, so do not require 4x or 6x throttling for every audit. Record the unthrottled symptom first when it already reproduces.
 
@@ -37,11 +37,11 @@ Record where the symptom is real. Environment choice changes what the trace can 
 | Local production build | Production optimization with controlled access to diagnostic source maps | Confirm that the symptom still reproduces locally                      |
 | Development server     | Fast iteration and readable source attribution                           | Development checks and unoptimized code make timings unlike production |
 
-A production trace without source maps still shows long tasks, JavaScript samples against deployed bundle locations, dropped or long frames, and time spent in style recalculation, layout, and paint. Use it. State that source attribution is limited rather than treating the trace as unusable.
+A production trace without source maps can still show long tasks, dropped or long frames, and time spent in style recalculation, layout, and paint. When JavaScript sampling is enabled, it also attributes samples to deployed bundle locations. Use the trace, but state that original-source attribution is limited.
 
-Every trace can contain sensitive URLs, network activity, screenshots, annotations, or user-visible data. Review and handle it as sensitive before sharing or analysis. Source maps improve attribution but are not required for measuring browser work. If Chrome loaded the maps while recording, **Save trace** can make the export portable by including both **resource content** and **script source maps**. These options are off by default, and enabling them adds proprietary source and server-injected content to the exposure. Get approval before asking a customer to include either one.
+Every trace can contain sensitive URLs, network activity, screenshots, annotations, or user-visible data. Review and handle it as sensitive before sharing or analysis. Source maps improve attribution but are not required for measuring browser work. If Chrome loaded the maps while recording, **Save trace** can make the export portable by including both **resource content** and **script source maps**. These options are off by default. Enabling them includes page resource contents and source maps in the exported trace, including content the server injected into those resources. Get approval before asking a customer to include either one.
 
-Do not recommend publishing source maps on a production deployment solely for an audit. For Next.js, development source maps are on by default, while production browser source maps require [`productionBrowserSourceMaps: true`](https://nextjs.org/docs/app/api-reference/config/next-config-js/productionBrowserSourceMaps). That option outputs and serves the maps, which can expose authored source to anyone who can request them and increases build time and memory use. Prefer enabling it on a controlled local production build when production attribution is needed.
+Do not recommend publishing source maps on a production deployment solely for an audit. For Next.js, development source maps are on by default, while production browser source maps require [`productionBrowserSourceMaps: true`](https://nextjs.org/docs/app/api-reference/config/next-config-js/productionBrowserSourceMaps). That option outputs and serves the maps, can expose authored source to anyone who can request them, can increase build time, and increases memory use during the build. Prefer enabling it on a controlled local production build when production attribution is needed.
 
 ## Analyze a supplied trace
 
@@ -50,8 +50,8 @@ Treat a trace as measured evidence, not as an automatic verdict:
 1. Validate that the file is a supported Chrome Performance trace. Inventory available tracks, JavaScript samples, screenshots, interaction markers, and source maps; state what is missing or unsupported before drawing conclusions.
 2. Confirm which trace covers load versus interaction, which build and URL it recorded, and whether CPU or network throttling was enabled.
 3. Inspect long tasks and long or dropped frames, then inspect JavaScript stacks and style recalculation, layout, and paint events inside those ranges. Use screenshots or interaction markers when available to align the work with what the user experienced.
-4. Cross-reference attributed source locations with scanner findings and manual opportunities. A match can promote a candidate; absence can downgrade it only when the trace exercised that code path. Never infer original source attribution when samples, mappings, or analyzer support are absent.
-5. Re-rank recommendations by measured user impact. Preserve the scanner's severity and noise labels, but explain when runtime evidence changes the order.
+4. Cross-reference attributed source locations with scanner findings and manual opportunities. Move a recommendation earlier when the trace attributes runtime cost to its source. Move it later only when the trace exercised that code path, attribution was sufficient, and its measured runtime cost was lower than findings ordered ahead of it. Never infer original source attribution when samples, mappings, or analyzer support are absent.
+5. Order trace-exercised recommendations by measured runtime cost or frame impact. Preserve scanner severity and noise labels on findings, and explain why runtime evidence changes the order.
 6. Put React data flow, network waterfalls, hydration architecture, and other non-phase costs in the audit's **Out of scope** section and hand them to the appropriate skill.
 
 Large traces can exceed normal context limits or exhaust local resources when decompressed. Before parsing, check compressed and decompressed size and use an analyzer with bounded or streaming processing plus time and memory limits. If the available tool cannot enforce those limits, stop and request a shorter trace. Never paste or read the entire JSON into model context.
@@ -64,7 +64,7 @@ When a recommendation has trace evidence, add the optional `**Measured:**` field
 
 Capture the same load or interaction before and after a change. Keep the build mode, URL, browser, device, network setting, CPU setting, cache and data state, and interaction path consistent. To claim an improvement, capture at least three runs per condition and report the median and range. Compare the evidence relevant to the recommendation: frame duration and dropped frames, long-task duration, or style recalculation, layout, and paint cost.
 
-A single before-and-after pair is a directional observation, not proof of improvement. Even repeated improvement proves only that recorded path and environment. Report the measured result and the remaining device, production, or workload boundary.
+A single before-and-after pair is a directional observation, not proof of improvement. Even repeated improvement proves only that recorded path and environment. Report the measured result and note that it may not generalize to other devices, production environments, or workloads.
 
 ## See also
 
