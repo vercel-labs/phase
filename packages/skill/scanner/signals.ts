@@ -241,7 +241,7 @@ const SIGNAL_CATALOG = [
     noise: 'noisy',
     detects:
       'Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling',
-    why: 'Accessibility gap: motion plays for users who asked for none.',
+    why: 'The animation ignores the reduced-motion preference.',
     fix: 'references/performance.md#reduced-motion-by-default',
     // `animation:(?!\s*none)` keeps `animation: none` (motion disabled) out.
     pattern: /requestAnimationFrame|@keyframes|animation:(?!\s*none\b)/,
@@ -253,6 +253,27 @@ const SIGNAL_CATALOG = [
     codeOnly: true,
     evidence: 'recurring-raf-branch',
     // The gap is a property of the whole file, not of each animating line.
+    perFile: true,
+  },
+  {
+    id: 'timer-missing-reduced-motion',
+    replacement:
+      'a prefers-reduced-motion media query, or a phase hook (handles it automatically)',
+    label: 'Timer animation without reduced-motion check',
+    severity: 'critical',
+    noise: 'noisy',
+    detects:
+      '`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity with no reduced-motion handling',
+    why: 'The animation ignores the reduced-motion preference.',
+    fix: 'references/performance.md#reduced-motion-by-default',
+    pattern: TIMER_REFERENCE,
+    negativePattern:
+      /prefers-reduced-motion|\b(?:usePrefersReducedMotion|prefersReducedMotion|reducedMotion)\b/,
+    negativeCodeOnly: true,
+    contextPattern:
+      /\.style\.(?:transform|opacity)\s*=|\btranslate\b|\banimate\b/,
+    codeOnly: true,
+    evidence: 'recurring-timer',
     perFile: true,
   },
   {

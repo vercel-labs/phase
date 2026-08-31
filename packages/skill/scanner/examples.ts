@@ -799,6 +799,82 @@ const SIGNAL_EXAMPLE_CATALOG = {
       },
     ],
   },
+  'timer-missing-reduced-motion': {
+    match: [
+      {
+        file: 'src/carousel.ts',
+        content:
+          "setInterval(() => {\n  track.style.transform = 'translateX(' + offset + 'px)';\n}, 16);\n",
+      },
+      {
+        file: 'src/pulse.ts',
+        content:
+          'function step() {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(step, 16);\n}\nsetTimeout(step, 16);\n',
+      },
+      {
+        file: 'src/cross-fade.ts',
+        content:
+          'function fadeOut() {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(fadeIn, 16);\n}\nfunction fadeIn() {\n  node.style.opacity = nextOpacity();\n  timer = setTimeout(fadeOut, 16);\n}\nsetTimeout(fadeOut, 16);\n',
+      },
+    ],
+    noMatch: [
+      {
+        file: 'src/press.ts',
+        content:
+          "node.style.transform = 'scale(.98)';\nsetTimeout(() => {\n  node.style.transform = '';\n}, 100);\n",
+      },
+      {
+        file: 'src/reveal.ts',
+        content:
+          "node.style.transform = 'translateY(0)';\nnode.addEventListener('transitionend', onDone, { once: true });\nsetTimeout(onDone, 320);\n",
+      },
+      {
+        // Polling is recurring work, but it does not drive visible motion.
+        file: 'src/status.ts',
+        content: 'setInterval(fetchStatus, 30000);\n',
+      },
+      {
+        file: 'src/session.ts',
+        content:
+          'setInterval(() => {\n  refreshData();\n  keepSessionAlive();\n  updateClock();\n}, 30000);\n',
+      },
+      {
+        file: 'src/handled-pulse.ts',
+        content:
+          "const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;\nsetInterval(() => {\n  node.style.opacity = nextOpacity();\n}, 16);\n",
+      },
+      {
+        file: 'src/hook-handled-pulse.tsx',
+        content:
+          'const shouldReduce = usePrefersReducedMotion();\nif (!shouldReduce) {\n  setInterval(() => {\n    node.style.opacity = nextOpacity();\n  }, 16);\n}\n',
+      },
+      {
+        file: 'src/core-handled-pulse.ts',
+        content:
+          'if (!prefersReducedMotion()) {\n  setInterval(() => {\n    node.style.opacity = nextOpacity();\n  }, 16);\n}\n',
+      },
+      {
+        file: 'src/static.ts',
+        content:
+          "setInterval(() => {\n  element.style.animation = 'none';\n}, 16);\n",
+      },
+      {
+        file: 'src/timer-types.ts',
+        content:
+          'type Timer = ReturnType<typeof setInterval>;\nlet timer: Timer;\n',
+      },
+      {
+        file: 'src/timer-host.ts',
+        content:
+          'interface TimerHost {\n  setInterval(callback: () => void, wait: number): number;\n  transform: string;\n}\n',
+      },
+      {
+        file: 'src/docs.ts',
+        content:
+          "const example = 'setInterval(() => element.style.opacity = 0, 16)';\n// setInterval(() => element.style.transform = next(), 16);\n",
+      },
+    ],
+  },
   'background-animation': {
     match: [
       {

@@ -59,6 +59,7 @@ describe('scanner vocabulary', () => {
       MUTATION_OBSERVER_CONSTRUCTOR,
     );
     expect(signalPattern('background-animation')).toBe(TIMER_REFERENCE);
+    expect(signalPattern('timer-missing-reduced-motion')).toBe(TIMER_REFERENCE);
   });
 });
 
