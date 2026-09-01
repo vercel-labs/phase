@@ -1,7 +1,7 @@
 {
   "name": "phase",
-  "version": "0.0.44",
+  "version": "0.0.45",
   "author": "vercel",
   "license": "MIT",
-  "abstract": "Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library."
+  "abstract": "Browser runtime performance skill. Audit animation, rendering, and loading work, choose the cheapest safe fix, and use phase primitives when an application needs lifecycle-aware runtime control."
 }

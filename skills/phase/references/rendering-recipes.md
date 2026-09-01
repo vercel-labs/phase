@@ -6,15 +6,15 @@ For the single-helper decision (which one at all), see [decision-guide.md](./dec
 
 > **Reserve the final in-flow footprint (for `WhenVisible` / `WhenIdle`).** Their children are absent from the DOM until they mount, so mounting shifts later content when it adds unreserved in-flow size. Reserve that footprint through the wrapper, parent layout, `fallback`, or loading placeholder. The correct footprint can be zero when the child renders null, fixed or portaled UI, or otherwise out-of-flow output. Verify the actual before/after geometry rather than treating fallback presence as proof.
 >
-> **`Defer` is different: no hard layout shift.** Its children stay in the DOM and the browser measures and paints them at their true size when they scroll in, so a wrong `estimatedHeight` does **not** shift content. It only affects scrollbar proportion and scroll-anchoring math until first render. Give a realistic estimate to keep the scrollbar steady, but an imperfect one is cosmetic, not a CLS bug.
+> **`Defer` preserves DOM and server HTML, not exact initial geometry.** Before first render, `estimatedHeight` is the subtree's layout placeholder. When the browser measures the real content, a poor estimate can change document size and scroll position. Keep the estimate close to the final height; after the first render, the browser remembers the measured size.
 
 ## Choosing between `Defer`, `WhenVisible`, and `WhenIdle`
 
 When more than one could work, decide in this order:
 
 1. **Must the content be in the server HTML?** (SEO, deep links, no-JS) → `Defer`. It is the only one that keeps children server-rendered.
-2. **Is the mount itself expensive?** (large subtree, heavy component) → `WhenVisible` (scroll-gated) or `WhenIdle` (idle-gated). `Defer` still mounts and hydrates. It only skips paint.
-3. **Trigger: scroll or idle?** Near-viewport relevance → `WhenVisible`. Non-critical, "whenever there's spare time" → `WhenIdle`.
+2. **Is the mount itself expensive?** (large subtree, heavy component) → `WhenVisible` (scroll-gated) or `WhenIdle` (idle-scheduled with a next-task fallback). `Defer` still mounts and hydrates. It only skips paint.
+3. **Trigger: scroll or idle scheduling?** Near-viewport relevance → `WhenVisible`. Non-critical and safe to run on the fallback → `WhenIdle`.
 
 > `Defer` skips paint but still mounts and hydrates. `When*` skip the mount entirely but drop the content from SSR HTML. Pick by what you can afford to lose.
 
@@ -23,7 +23,7 @@ When more than one could work, decide in this order:
 They solve different halves of the problem and compose:
 
 - **`next/dynamic` (or React `lazy()`) splits the _bundle_.** The component's JS lands in a separate chunk and can skip SSR (`ssr: false`). But the chunk still downloads as soon as the component mounts.
-- **`WhenVisible` / `WhenIdle` gate the _mount_.** Nothing renders (and, with `lazy()`/`dynamic` inside, nothing downloads) until the element nears the viewport or the browser is idle.
+- **`WhenVisible` / `WhenIdle` gate the _mount_.** Nothing renders (and, with `lazy()`/`dynamic` inside, nothing downloads) until the element nears the viewport or idle scheduling runs. Without `requestIdleCallback`, `WhenIdle` uses a next-task fallback.
 
 Use `next/dynamic` alone when the component is below the fold but will almost certainly be needed (split the bytes, mount normally). Wrap it in `WhenVisible`/`WhenIdle` when you also want to defer the _download_ until it is likely needed. In Next.js apps, prefer `next/dynamic` over `lazy()`. It integrates with SSR and the loader.
 
@@ -61,9 +61,9 @@ const HeavyChart = dynamic(
 
 **Why/when:** `next/dynamic` splits the chunk; `WhenVisible` holds the mount (and therefore the chunk download) until the element nears the viewport. Both the `loading` placeholder and the `fallback` reserve the final `400px` height, so nothing shifts. Use `next/dynamic` alone if the widget will almost certainly be seen; add `WhenVisible` to also delay the download for content many users never reach.
 
-## Recipe: `WhenIdle` + `next/dynamic` (non-critical, idle-loaded)
+## Recipe: `WhenIdle` + `next/dynamic` (non-critical, idle-scheduled)
 
-**Scenario:** a non-critical, code-split widget that should load when the main thread is free, not gated on scroll.
+**Scenario:** a non-critical, code-split widget that may load on an idle callback or next-task fallback, without a scroll gate.
 
 ```tsx
 const Secondary = dynamic(
@@ -76,11 +76,11 @@ const Secondary = dynamic(
 </WhenIdle>;
 ```
 
-**Why/when:** `WhenIdle` defers the mount past first paint; `next/dynamic` keeps the code out of the initial bundle. Both placeholders reserve the same `320px` height to avoid layout shift. Use for supplementary UI (activity feeds, recommendations) that is not SEO-critical. For viewport relevance instead of idle, swap `WhenIdle` for `WhenVisible`. (Outside Next.js, use React `lazy()` + `Suspense` in place of `next/dynamic`.)
+**Why/when:** `WhenIdle` schedules the mount through `requestIdleCallback` or a next-task fallback; `next/dynamic` keeps the code out of the initial bundle. Both placeholders reserve the same `320px` height to avoid layout shift. Use for supplementary UI (activity feeds, recommendations) that is not SEO-critical and is safe to mount on the fallback. For viewport relevance, use `WhenVisible` instead. (Outside Next.js, use React `lazy()` + `Suspense` in place of `next/dynamic`.)
 
 ## Recipe: `useIdle` to sequence work
 
-**Scenario:** render critical UI immediately, then attach non-critical work once idle.
+**Scenario:** render critical UI immediately, then attach non-critical work through idle scheduling.
 
 ```tsx
 function Dashboard() {
@@ -98,14 +98,14 @@ function Dashboard() {
 
 ## Recipe: prefetch a heavy chunk on idle with `useWhenIdle`
 
-**Scenario:** a panel or route that will likely be opened soon. Warm its code-split chunk during idle so it opens instantly, without blocking first paint.
+**Scenario:** a panel or route that will likely be opened soon. Warm its code-split chunk through idle scheduling when the next-task fallback is also safe.
 
 ```tsx
 const openPanel = () => import('./chat-panel-with-chat');
 const ChatPanel = lazy(openPanel);
 
 function Chat() {
-  useWhenIdle(() => void openPanel()); // prefetch the chunk when idle
+  useWhenIdle(() => void openPanel()); // prefetch through idle scheduling
   return open ? (
     <Suspense fallback={<Skeleton className="h-[480px]" />}>
       <ChatPanel />
@@ -114,7 +114,7 @@ function Chat() {
 }
 ```
 
-**Why/when:** `useWhenIdle` is the effect-shaped idle primitive. It runs a callback once, cancels on unmount, and always calls the latest closure. Use it for prefetch, cache warming, or any non-urgent `import()`. It replaces the common (and frequently leaky) hand-rolled `useEffect(() => { const id = requestIdleCallback(...); return () => cancelIdleCallback(id); }, [])`. `useWhenIdle` handles the cancel and the SSR guard for you. Reach for `useIdle` instead when you need to _render_ from the idle signal rather than run a side effect.
+**Why/when:** `useWhenIdle` is the effect-shaped scheduling primitive. It runs a callback once, cancels on unmount, and always calls the latest closure. Use it for prefetch, cache warming, or a non-urgent `import()` that is also safe on the next-task fallback. It replaces the common (and frequently leaky) hand-rolled `useEffect(() => { const id = requestIdleCallback(...); return () => cancelIdleCallback(id); }, [])`. `useWhenIdle` handles cancellation, the fallback, and the SSR guard. Reach for `useIdle` instead when the scheduled result belongs in render.
 
 ## Recipe: render helper around a phase loop
 
@@ -150,7 +150,7 @@ function Raw() {
 }
 ```
 
-**Why/when:** `content-visibility: auto` skips paint, not JavaScript. Raw loops keep burning CPU inside a `Defer`. `useRenderState` reports the browser's actual render-skip decision so you can pause them. You only need this for non-phase work; phase loops already self-pause. `useRenderState` only listens and never mutates layout, so the no-layout-shift guarantee holds.
+**Why/when:** `content-visibility: auto` skips paint, not JavaScript. Raw loops keep burning CPU inside a `Defer`. `useRenderState` reports the browser's actual render-skip decision so you can pause them. You only need this for non-phase work; phase loops already self-pause. `useRenderState` only listens and never mutates layout. A poor `Defer` estimate can still change initial geometry when the browser measures the real content.
 
 ## What not to compose
 
@@ -164,6 +164,6 @@ function Raw() {
 
 - [decision-guide.md](./decision-guide.md). Choosing a tier and the single-helper decision
 - [defer.md](./defer.md). `content-visibility` wrapper
-- [when-idle.md](./when-idle.md). Idle-gated mount + `whenIdle`
+- [when-idle.md](./when-idle.md). Idle-scheduled mount with a next-task fallback
 - [when-visible.md](./when-visible.md). Viewport-gated mount
 - [use-render-state.md](./use-render-state.md). Render-skip signal for raw work

@@ -34,7 +34,8 @@ export interface DeferProps extends Omit<HTMLAttributes<HTMLElement>, 'style'> {
 /**
  * Skip browser rendering (style, layout, paint) for off-screen content via
  * `content-visibility: auto`. Pure CSS, no JS, no observer. Children stay
- * in the DOM and are server-rendered (SEO- and CLS-safe).
+ * in the DOM and are server-rendered. Keep `estimatedHeight` close to the
+ * final size to limit layout correction when content first renders.
  */
 export function Defer({
   as: Component = 'div',

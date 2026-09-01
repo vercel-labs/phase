@@ -2102,7 +2102,7 @@ function renderSummary(result) {
 	const actionable = counts.critical + counts.high + counts.medium;
 	const suppressed = result.suppressed ?? 0;
 	if (result.filesScanned === 0) return ["", "⚠ No scannable files found. Check the target path."];
-	if (result.findings.length === 0 && suppressed === 0) return ["", `✓ No animation anti-pattern candidates found (${result.filesScanned} files scanned).`];
+	if (result.findings.length === 0 && suppressed === 0) return ["", `✓ No browser runtime anti-pattern candidates found (${result.filesScanned} files scanned).`];
 	const suppressedNote = suppressed > 0 ? `, ${suppressed} suppressed` : "";
 	const sites = countSites(result.findings);
 	const perFrame = result.findings.filter((f) => f.execution === "per-frame").length;
@@ -2112,7 +2112,7 @@ function renderSummary(result) {
 		`Scanned ${result.filesScanned} files.`,
 		`Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup${suppressedNote}.`,
 		`${result.findings.length} findings on ${sites} distinct lines; ${perFrame} sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.`,
-		"Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.",
+		"Next: start with the hotspots above, then classify each candidate in context (references/audit.md Step 2). Findings are candidates, not verdicts.",
 		"Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending."
 	];
 }
@@ -2305,7 +2305,7 @@ function scanTargets(paths, options = {}) {
 //#region scanner/cli.ts
 const USAGE = `Usage: node scan.mjs [options] <target> [...targets]
 
-Scans directories or files for animation anti-pattern candidates.
+Scans directories or files for browser runtime anti-pattern candidates.
 Findings are candidates, not verdicts: classify each against
 references/audit.md before recommending a change.
 

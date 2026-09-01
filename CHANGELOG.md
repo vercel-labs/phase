@@ -1,5 +1,12 @@
 # phase
 
+## 0.5.4
+
+### Patch Changes
+
+- Package documentation and metadata now describe the animation, rendering, and loading primitives as one browser runtime layer.
+- Documentation now states that `Defer` estimates can change initial geometry and idle scheduling uses a next-task fallback when `requestIdleCallback` is unavailable.
+
 ## 0.5.3
 
 ### Patch Changes

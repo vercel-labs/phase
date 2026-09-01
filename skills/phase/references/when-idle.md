@@ -1,6 +1,6 @@
 # `WhenIdle`
 
-Mounts children once the browser is idle after first paint. One-shot (once mounted, stays mounted). Backed by the `whenIdle` core utility (`requestIdleCallback`). Use it to defer non-critical UI off the critical path.
+Mounts children after `requestIdleCallback` when available or in the next task when it is not. One-shot (once mounted, stays mounted). Use it for non-critical UI that can tolerate the fallback running before the browser is idle.
 
 ## Signature
 
@@ -25,7 +25,7 @@ cancel(); // optional: prevent the callback before it runs
 | Prop       | Type                    | Default | Description                           |
 | ---------- | ----------------------- | ------- | ------------------------------------- |
 | `timeout`  | `number`                | —       | Max ms to wait before mounting anyway |
-| `fallback` | `ReactNode`             | —       | Shown until the browser is idle       |
+| `fallback` | `ReactNode`             | —       | Shown until the scheduled mount runs  |
 | `ref`      | `Ref<HTMLDivElement>`   | —       | Forward a ref (after mount)           |
 | ...rest    | `ComponentProps<'div'>` | —       | All standard div props                |
 
@@ -36,7 +36,7 @@ cancel(); // optional: prevent the callback before it runs
 | `timeout` | `number`      | —       | Max ms to wait before running even if never idle |
 | `signal`  | `AbortSignal` | —       | Cancels the scheduled callback when aborted      |
 
-### Data attributes stamped (after idle)
+### Data attributes stamped (after the scheduled mount)
 
 | Attribute              | When                                                           |
 | ---------------------- | -------------------------------------------------------------- |
@@ -45,8 +45,8 @@ cancel(); // optional: prevent the callback before it runs
 
 ## When to use
 
-- Non-critical UI that should not compete with first paint (secondary panels, below-the-fold widgets, analytics).
-- Work that must run eventually but not on the critical path (`whenIdle` for cache warming, prefetch).
+- Non-critical UI that is safe to mount after an idle callback or next-task fallback (secondary panels, below-the-fold widgets, analytics).
+- Work that must run eventually and is safe on the same fallback (`whenIdle` for cache warming or prefetch).
 
 ## When not to use
 
@@ -81,5 +81,5 @@ Automatic: `data-enter="animate"` is not stamped when the user prefers reduced m
 - [when-visible](./when-visible.md). Gate mounting on viewport entry
 - [defer](./defer.md). Keep content in the DOM but skip painting
 - [use-idle](./use-idle.md). The boolean hook behind `WhenIdle`
-- [use-when-idle](./use-when-idle.md). Run a side effect (prefetch, `import()`) once idle
+- [use-when-idle](./use-when-idle.md). Schedule a non-critical side effect with the same fallback
 - [abort-signals](./abort-signals.md). Cancel the `whenIdle` callback via the `signal` option

@@ -44,6 +44,14 @@
     "should_trigger": false
   },
   {
+    "query": "The App Router dashboard has a server-side fetch waterfall. Rework the data dependencies and cache boundaries so the requests run in parallel.",
+    "should_trigger": false
+  },
+  {
+    "query": "Analyze our webpack chunks and package dependencies, then reduce the initial JavaScript bundle across every route.",
+    "should_trigger": false
+  },
+  {
     "query": "This production hero animation drops frames on mid-range Android devices. Profile the frame loop, find per-frame allocations or layout reads, and make it ready for the next release.",
     "should_trigger": true
   },
@@ -89,6 +97,14 @@
   },
   {
     "query": "Prepare this mount and unmount transition for release. Verify interruption behavior, reduced-motion handling, and whether phase Presence or a browser-native transition is the right implementation.",
+    "should_trigger": true
+  },
+  {
+    "query": "The production docs route imports its syntax highlighter and markdown editor before either is opened. Audit the browser loading path and defer those modules without changing the server-rendered article.",
+    "should_trigger": true
+  },
+  {
+    "query": "Our support widget downloads and mounts during startup even though most visitors never open it. Decide whether a dynamic import, viewport gating, or idle prefetch is the safest production fix.",
     "should_trigger": true
   },
   {

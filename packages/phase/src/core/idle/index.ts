@@ -24,8 +24,9 @@ const FALLBACK_DELAY = 1;
 // ---------------------------------------------------------------------------
 
 /**
- * Run a callback once the browser is idle. Wraps `requestIdleCallback`, falling
- * back to a near-immediate `setTimeout` where it is unavailable (Safari).
+ * Run a callback through `requestIdleCallback`, falling back to a near-immediate
+ * `setTimeout` where it is unavailable (Safari). The fallback does not wait for
+ * browser idle.
  *
  * Returns a cancel function. Calling it before the callback runs prevents it.
  *

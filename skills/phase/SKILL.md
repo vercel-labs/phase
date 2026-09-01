@@ -1,83 +1,83 @@
 ---
 name: phase
-description: 'Use when optimizing, auditing, or preparing to ship web animations or rendering performance work: frame loops, scroll/viewport reveals, mount/unmount transitions, canvas/WebGL lifecycles, reduced motion, lazy rendering, and deferred off-screen work. Use for jank, per-frame allocations, forced reflows, render loops, animations that do not pause off-screen, content-visibility, requestIdleCallback, analyzing Chrome DevTools performance traces for animation or rendering issues, or choosing between browser-driven CSS/WAAPI, minimal JS, phase, and Motion/GSAP. Use when the user explicitly asks about phase APIs or behavior. Do not use during exploratory animation ideation, prototyping, visual iteration, or trying variants, even when the code already imports phase; wait until the user asks for performance guidance, an audit, production implementation, ship-readiness review, or about phase itself.'
+description: 'Use when optimizing, auditing, or preparing to ship browser runtime performance work across animation, rendering, and loading: frame loops, scroll/viewport behavior, mount timing, canvas/WebGL lifecycles, reduced motion, lazy rendering, eager imports, and deferred off-screen work. Use for jank, per-frame allocations, forced reflows, render loops, animations that do not pause off-screen, content-visibility, requestIdleCallback, analyzing Chrome DevTools performance traces for browser animation, rendering, or loading issues, or choosing between browser APIs, framework features, phase, and Motion/GSAP. Always use when the user explicitly asks about phase APIs or behavior. Stay passive during exploratory animation ideation, prototyping, visual iteration, or trying variants until the user asks for performance guidance, an audit, production implementation, ship-readiness review, or about phase itself.'
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.44'
-  abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library.'
+  version: '0.0.45'
+  abstract: 'Browser runtime performance skill. Audit animation, rendering, and loading work, choose the cheapest safe fix, and use phase primitives when an application needs lifecycle-aware runtime control.'
 ---
-
-## Prerequisite: ensure phase is installed
-
-Before recommending phase imports, check the **consumer project's** `package.json` for `"phase"` in `dependencies`. If it is missing, install `phase` as a production dependency in that project. Do not install it in the phase repo itself (where phase is the package being developed). Skip this check when the task is auditing or advising without code changes.
 
 # phase
 
-This skill teaches you to implement phase primitives correctly, preserve performance guarantees, and audit animation code. Phase is the lifecycle-aware performance layer for the web: it composes visibility, reduced motion, and frame budget signals so animations pause when unseen, respect user preferences, and never force a reflow.
+Phase is a browser runtime performance toolkit for animation, rendering, and loading. This skill audits any web application and recommends the cheapest safe fix. The `phase` package is one possible fix, not a prerequisite for an audit.
+
+## Install the package only when using its APIs
+
+Before recommending phase imports, check the **consumer project's** `package.json` for `"phase"` in `dependencies`. If it is missing, install `phase` as a production dependency in that project. Do not install it in the phase repo itself, where phase is the package being developed. Skip this check when the task is auditing or advising without code changes.
 
 ## Stay passive during exploration
 
 Exploratory animation work optimizes for rapid visual learning, not production rigor: premature audits interrupt the iteration loop and spend effort on code that may be discarded. Signals include requests to ideate, prototype, play, try variants, or adjust how motion feels rather than its correctness, performance, or release readiness, especially in scratch files and sandboxes.
 
-If the skill is loaded during exploration, answer phase questions when asked and keep any requested code on the cheapest suitable animation-ladder tier, but do not volunteer audits, rewrite prototypes into phase primitives, or produce unsolicited recommendation lists. You may mention once that phase can audit or optimize the work when it is ready to ship.
+If the skill is loaded during exploration, answer phase questions when asked and keep any requested code on the cheapest suitable animation approach, but do not volunteer audits, rewrite prototypes into phase primitives, or produce unsolicited recommendation lists. You may mention once that phase can audit or optimize the work when it is ready to ship.
 
 Apply the full guidance when the user asks for optimization, an audit, production implementation, or ship-readiness review, including preparing or reviewing a PR. Jank, reduced motion, off-screen behavior, rendering cost, and explicit phase API questions are also production signals.
 
-## The animation ladder
+## Choose the cheapest sufficient fix
 
-Always prefer the cheapest tier that satisfies the requirement. Never recommend phase where CSS suffices; never recommend an external library where phase suffices.
+For animation, start with the browser and move to more JavaScript only when the requirement needs it:
 
-| Tier                 | When                                                                | Tools                                                                                          |
-| -------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **Browser-driven**   | Browser-animatable transitions/timelines the browser can own        | CSS `transition`/`animation`, View Transitions API, WAAPI                                      |
-| **Minimal JS**       | One value into React render, no per-frame DOM writes                | `useTween` (or CSS if render cost is trivial)                                                  |
-| **phase**            | Live per-frame JS, canvas, lifecycle-aware loops, render gating     | `useLoop`, `useCanvas`, `useLifecycle`, `Presence`, `Swap`, `WhenVisible`, `WhenIdle`, `Defer` |
-| **External library** | Spring physics, gesture systems, declarative keyframe orchestration | `motion`, GSAP, etc.                                                                           |
+| Tier                 | When                                                                | Tools                                                      |
+| -------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Browser-driven**   | Browser-animatable transitions/timelines the browser can own        | CSS `transition`/`animation`, View Transitions API, WAAPI  |
+| **Minimal JS**       | One value into React render, no per-frame DOM writes                | `useTween` (or CSS if render cost is trivial)              |
+| **phase**            | Live per-frame JS, canvas, lifecycle-aware loops                    | `useLoop`, `useCanvas`, `useLifecycle`, `Presence`, `Swap` |
+| **External library** | Spring physics, gesture systems, declarative keyframe orchestration | `motion`, GSAP, etc.                                       |
 
-For the full decision tree, read [references/decision-guide.md](references/decision-guide.md). This ladder ranks _animation_ cost; rendering work runs on a parallel track.
+For the full animation decision tree, read [references/decision-guide.md](references/decision-guide.md). Loading and containment choices depend on criticality, SSR, and mount semantics; classify them with [references/audit.md](references/audit.md#classification-by-work-type).
 
-## When to render, not only when to animate
+## Render and load only when needed
 
-phase is the _when_ layer (when to animate, render, and pause) from one set of signals. Three helpers skip increasing amounts of work for off-screen content:
+The `phase` package combines visibility, reduced motion, idle scheduling, and frame timing so applications can decide when work should run, pause, render, or wait. Three helpers skip increasing amounts of work for off-screen content:
 
-| Helper        | Defers                              | In DOM? | In SSR HTML? | Reach for it when                                  |
-| ------------- | ----------------------------------- | ------- | ------------ | -------------------------------------------------- |
-| `Defer`       | browser render (style/layout/paint) | yes     | yes          | content must stay crawlable but need not paint yet |
-| `WhenIdle`    | React mount until idle              | no      | no           | non-critical UI that shouldn't block first paint   |
-| `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading / reveals              |
+| Helper        | Defers                              | In DOM? | In SSR HTML? | Reach for it when                                   |
+| ------------- | ----------------------------------- | ------- | ------------ | --------------------------------------------------- |
+| `Defer`       | browser render (style/layout/paint) | yes     | yes          | content must stay crawlable but need not paint yet  |
+| `WhenIdle`    | React mount after idle scheduling   | no      | no           | non-critical UI safe to run on a next-task fallback |
+| `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading / reveals               |
 
-`Defer` is the cheapest and safest (keeps content, skips paint) and never causes a hard layout shift; its children stay in the DOM at true size. `When*` save the most (no DOM until triggered) but can shift layout when mounted content adds in-flow size. Reserve the child's final in-flow footprint through the wrapper, parent layout, or `fallback`. That footprint may be zero for null, fixed, portaled, or otherwise out-of-flow output, so verify the actual geometry rather than requiring a fallback categorically (see [references/rendering-recipes.md](references/rendering-recipes.md)).
+`Defer` keeps content in the DOM and server HTML while skipping off-screen rendering. Its `estimatedHeight` is a layout placeholder before first render; keep it close to the final height because the document can resize when the browser learns the actual size. `When*` omit the DOM until triggered and can shift layout when mounted content adds in-flow size. Reserve the child's final in-flow footprint through the wrapper, parent layout, or `fallback`. That footprint may be zero for null, fixed, portaled, or otherwise out-of-flow output, so verify the actual geometry rather than requiring a fallback categorically (see [references/rendering-recipes.md](references/rendering-recipes.md)).
 
 Route-specific render gating belongs to the route consumer. Keep reusable package components renderable by default when they serve both critical and below-the-fold positions; wrap only the non-critical usage in `Defer`, `WhenVisible`, or `WhenIdle`, and label the SSR and mount-timing consequences.
 
-Two idle hooks defer work off the critical path: `useIdle` gates rendering with a boolean once the browser is idle, and `useWhenIdle` runs a side effect (prefetch, `import()`) once idle. `useRenderState(ref)` reads a `Defer` subtree's render-skip state to pause **raw, non-phase** work (a hand-written rAF loop, `setInterval`); phase's own loops already self-pause off-screen.
+Two hooks schedule non-critical work with `requestIdleCallback` when available and a next-task fallback otherwise: `useIdle` gates rendering with a boolean, and `useWhenIdle` runs a side effect such as prefetch or `import()`. Use them only when the fallback can run safely before browser idle. `useRenderState(ref)` reads a `Defer` subtree's render-skip state to pause **raw, non-phase** work (a hand-written rAF loop, `setInterval`); phase's own loops already self-pause off-screen.
 
 ## Choosing a primitive
 
-The ladder picks a _tier_; this table picks the _primitive_ once phase is the right tier.
+The audit picks an approach; this table picks the primitive once phase is the right approach.
 
-| Need                                                 | Use                                                                                         |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Know if it's on screen?                              | `useSight` (element, or tab visibility with `target: 'page'`)                               |
-| Want phase to run your frame loop?                   | `useLoop` (DOM, or the page with `target: 'page'`) / `useCanvas` (canvas)                   |
-| You own the loop (WebGL, three.js, Web Worker)?      | `useLifecycle` (active/paused signal)                                                       |
-| Animating one value into render?                     | `useTween`                                                                                  |
-| Mount/unmount transitions?                           | `Presence` / `Swap` / `WhenVisible`                                                         |
-| Skip painting off-screen content (keep in DOM)?      | `Defer`                                                                                     |
-| Mount non-critical UI when idle?                     | `WhenIdle` / `useIdle`                                                                      |
-| Run a side effect (prefetch, `import()`) when idle?  | `useWhenIdle`                                                                               |
-| Pause raw work inside a `Defer` subtree?             | `useRenderState`                                                                            |
-| React to DOM mutations without reflow?               | `useMutation`                                                                               |
-| Track pointer position without layout thrash?        | `usePointer`                                                                                |
-| Track scroll offset/progress without reflow?         | `useScroll` (element, or the page with `target: 'page'`)                                    |
-| Reactive scroll/size/media values?                   | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
-| Scroll/size/visibility without re-renders?           | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
-| Reactive reduced-motion check for non-phase code?    | `usePrefersReducedMotion`                                                                   |
-| Need reactive `devicePixelRatio` for buffer sizing?  | `useDevicePixelRatio`                                                                       |
-| Visibility-aware timed sequences (do X, wait, do Y)? | CSS/WAAPI + `useLifecycle` when keyframe-friendly; `useLoop` when the steps need live JS    |
-| Rate-limit event-driven work (sockets, workers)?     | `useThrottledCallback`                                                                      |
-| Run once after a burst settles (resize, typing)?     | `useDebouncedCallback`                                                                      |
+| Need                                                         | Use                                                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Know if it's on screen?                                      | `useSight` (element, or tab visibility with `target: 'page'`)                               |
+| Want phase to run your frame loop?                           | `useLoop` (DOM, or the page with `target: 'page'`) / `useCanvas` (canvas)                   |
+| You own the loop (WebGL, three.js, Web Worker)?              | `useLifecycle` (active/paused signal)                                                       |
+| Animating one value into render?                             | `useTween`                                                                                  |
+| Mount/unmount transitions?                                   | `Presence` / `Swap` / `WhenVisible`                                                         |
+| Skip painting off-screen content (keep in DOM)?              | `Defer`                                                                                     |
+| Mount non-critical UI after idle scheduling or its fallback? | `WhenIdle` / `useIdle`                                                                      |
+| Schedule a non-critical side effect with the same fallback?  | `useWhenIdle`                                                                               |
+| Pause raw work inside a `Defer` subtree?                     | `useRenderState`                                                                            |
+| React to DOM mutations without reflow?                       | `useMutation`                                                                               |
+| Track pointer position without layout thrash?                | `usePointer`                                                                                |
+| Track scroll offset/progress without reflow?                 | `useScroll` (element, or the page with `target: 'page'`)                                    |
+| Reactive scroll/size/media values?                           | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
+| Scroll/size/visibility without re-renders?                   | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
+| Reactive reduced-motion check for non-phase code?            | `usePrefersReducedMotion`                                                                   |
+| Need reactive `devicePixelRatio` for buffer sizing?          | `useDevicePixelRatio`                                                                       |
+| Visibility-aware timed sequences (do X, wait, do Y)?         | CSS/WAAPI + `useLifecycle` when keyframe-friendly; `useLoop` when the steps need live JS    |
+| Rate-limit event-driven work (sockets, workers)?             | `useThrottledCallback`                                                                      |
+| Run once after a burst settles (resize, typing)?             | `useDebouncedCallback`                                                                      |
 
 ## React first
 
@@ -136,7 +136,7 @@ The audit procedure and invariants above catch JS anti-patterns. These rules cat
 
 ## Audit
 
-When you review, optimize, or audit animation code, follow [references/audit.md](references/audit.md). It provides a repeatable procedure backed by a deterministic scanner (`scripts/scan.mjs`) that surfaces anti-pattern candidates before judgment. The scan is the floor of an audit, not the whole of it: audit.md's manual and opportunity passes cover what regex cannot see (scanner-silent phase wins like ungated infinite CSS animations, `transitionend` unmount wiring, and eagerly mounted non-critical UI), so a clean scan alone never concludes an audit.
+When you review, optimize, or audit browser runtime performance, follow [references/audit.md](references/audit.md). It provides a repeatable procedure backed by a deterministic scanner (`scripts/scan.mjs`) that surfaces anti-pattern candidates before judgment. The scan is the floor of an audit, not the whole of it: audit.md's manual and opportunity passes cover what regex cannot see (scanner-silent phase wins like ungated infinite CSS animations, `transitionend` unmount wiring, and eagerly mounted non-critical UI), so a clean scan alone never concludes an audit.
 
 When the user supplies or accepts a Chrome DevTools performance trace, read [references/performance-trace.md](references/performance-trace.md).
 
@@ -159,7 +159,7 @@ Each export has its own reference file. Read the relevant file when implementing
 | `createScrollProgress`        | Tracking intersection ratio (0–1) for reveals        | [create-scroll-progress.md](references/create-scroll-progress.md)       |
 | `createRenderState`           | Observing `content-visibility` render-skip state     | [create-render-state.md](references/create-render-state.md)             |
 | `createDevicePixelRatio`      | Tracking DPR changes in framework-free code          | [create-device-pixel-ratio.md](references/create-device-pixel-ratio.md) |
-| `whenIdle`                    | Running a one-off callback when the browser is idle  | [when-idle.md](references/when-idle.md)                                 |
+| `whenIdle`                    | Scheduling a one-off callback for idle or next task  | [when-idle.md](references/when-idle.md)                                 |
 | `prefersReducedMotion`        | Gating expensive setup or conditional imports        | [prefers-reduced-motion.md](references/prefers-reduced-motion.md)       |
 | `createMutation`              | Lifecycle-aware MutationObserver with rAF batching   | [create-mutation.md](references/create-mutation.md)                     |
 | `createPointer`               | rAF-batched pointer tracking with visibility pause   | [create-pointer.md](references/create-pointer.md)                       |
@@ -185,8 +185,8 @@ Each export has its own reference file. Read the relevant file when implementing
 | `useThrottledCallback`    | Rate-limit event-driven work (sockets, workers)          | [use-throttled-callback.md](references/use-throttled-callback.md)         |
 | `useDebouncedCallback`    | Run once after a burst settles (resize, typing)          | [use-debounced-callback.md](references/use-debounced-callback.md)         |
 | `useRenderState`          | Pausing raw work when a `Defer` subtree is skipped       | [use-render-state.md](references/use-render-state.md)                     |
-| `useIdle`                 | Boolean that flips true once the browser is idle         | [use-idle.md](references/use-idle.md)                                     |
-| `useWhenIdle`             | Run a side effect (prefetch, `import()`) once idle       | [use-when-idle.md](references/use-when-idle.md)                           |
+| `useIdle`                 | Boolean for idle scheduling or its next-task fallback    | [use-idle.md](references/use-idle.md)                                     |
+| `useWhenIdle`             | Schedule a non-critical side effect with a fallback      | [use-when-idle.md](references/use-when-idle.md)                           |
 | `useSize`                 | Reading element dimensions without reflows               | [use-size.md](references/use-size.md)                                     |
 | `useContainerQuery`       | Breakpoint matching against element width/height         | [use-container-query.md](references/use-container-query.md)               |
 | `useMediaQuery`           | Reactive CSS media query subscription                    | [use-media-query.md](references/use-media-query.md)                       |
@@ -196,7 +196,7 @@ Each export has its own reference file. Read the relevant file when implementing
 | `useStableCallback`       | Stable-identity function for memo'd children             | [use-stable-callback.md](references/use-stable-callback.md)               |
 | `Presence`                | Show/hide with enter/exit transitions                    | [presence.md](references/presence.md)                                     |
 | `WhenVisible`             | Viewport-gated lazy mount (one-shot)                     | [when-visible.md](references/when-visible.md)                             |
-| `WhenIdle`                | Idle-gated lazy mount for non-critical UI                | [when-idle.md](references/when-idle.md)                                   |
+| `WhenIdle`                | Idle-scheduled mount with a next-task fallback           | [when-idle.md](references/when-idle.md)                                   |
 | `Defer`                   | Skip painting off-screen content (keep in DOM)           | [defer.md](references/defer.md)                                           |
 | `Swap`                    | Coordinated exit-then-enter between N states             | [swap.md](references/swap.md)                                             |
 
@@ -225,11 +225,11 @@ grep -ri "starting:opacity\|data-\[phase=exiting\]" references/  # the canonical
 
 | Reference                                                   | Use when                                                                        |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| [decision-guide.md](references/decision-guide.md)           | Choosing between CSS, phase, or an external library                             |
+| [decision-guide.md](references/decision-guide.md)           | Choosing the cheapest sufficient animation approach                             |
 | [rendering-recipes.md](references/rendering-recipes.md)     | Composing `Defer` / `WhenIdle` / `WhenVisible` / `useRenderState`               |
 | [performance-recipes.md](references/performance-recipes.md) | Fixing audit-surfaced anti-patterns (observer/listener storms, global `:has()`) |
 | [performance.md](references/performance.md)                 | Writing or reviewing hot-path animation code                                    |
-| [audit.md](references/audit.md)                             | Auditing existing animations for optimization opportunities                     |
+| [audit.md](references/audit.md)                             | Auditing browser runtime performance across animation, rendering, and loading   |
 | [abort-signals.md](references/abort-signals.md)             | Tearing down core primitives with an `AbortSignal` (`signal` option)            |
 | [timed-sequences.md](references/timed-sequences.md)         | Choosing browser keyframes or `useLoop` for multi-step timelines                |
 | [smil.md](references/smil.md)                               | Auditing or implementing static, lifecycle-aware SVG SMIL                       |

@@ -1,6 +1,6 @@
 # `useWhenIdle`
 
-Runs a callback once, when the browser is idle after mount. The effect-shaped counterpart to `useIdle`, for side effects (prefetching, cache warming, `import()`), not rendering. Cancels on unmount and always calls the latest callback.
+Runs a callback once after `requestIdleCallback` when available or in the next task when it is not. The effect-shaped counterpart to `useIdle`, for non-critical side effects such as prefetching, cache warming, or `import()`, not rendering. The fallback may run before the browser is idle. The hook cancels on unmount and always calls the latest callback.
 
 ## Signature
 
@@ -14,26 +14,26 @@ useWhenIdle(() => void import('./heavy-panel'), { timeout: 2000 });
 
 | Argument   | Type          | Description                                      |
 | ---------- | ------------- | ------------------------------------------------ |
-| `callback` | `() => void`  | Runs once when the browser is idle after mount   |
+| `callback` | `() => void`  | Runs once after idle scheduling or its fallback  |
 | `options`  | `IdleOptions` | `{ timeout?: number }` — max ms to wait for idle |
 
 ## When to use
 
 - Prefetch a code-split chunk so it is cached before the user needs it (`import()`).
-- Warm a cache, hydrate a store, or kick off non-urgent network work after first paint.
-- Any "do this when there's spare time" side effect that should not block the critical path.
+- Warm a cache, hydrate a store, or start non-urgent network work.
+- Side effects that can tolerate a next-task fallback when idle callbacks are unavailable.
 
 ## When not to use
 
 | Instead of this                       | Use                           |
 | ------------------------------------- | ----------------------------- |
-| Rendering something once idle         | `useIdle` (returns a boolean) |
+| Rendering from the scheduled callback | `useIdle` (returns a boolean) |
 | A one-off idle callback outside React | `whenIdle` (imperative core)  |
-| Mounting a subtree when idle          | `WhenIdle`                    |
+| Mounting from the scheduled callback  | `WhenIdle`                    |
 
 ## Do
 
-- **Prefetch a heavy panel during idle so it opens instantly later:**
+- **Prefetch a heavy panel through idle scheduling:**
   ```tsx
   useWhenIdle(() => void import('./chat-panel-with-chat'));
   ```
@@ -50,6 +50,6 @@ Not applicable. `useWhenIdle` is a scheduling primitive, not an animation. Gate 
 
 ## See also
 
-- [use-idle](./use-idle.md). The boolean form, for rendering once idle
-- [when-idle](./when-idle.md). Mount a subtree once idle
+- [use-idle](./use-idle.md). The boolean form of the same scheduling behavior
+- [when-idle](./when-idle.md). Mount a subtree after idle scheduling or its fallback
 - [rendering-recipes](./rendering-recipes.md). Prefetching and composing the rendering helpers

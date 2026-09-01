@@ -10,7 +10,7 @@ import { useIdle } from '../use-idle';
 export interface WhenIdleProps extends ComponentProps<'div'> {
   /** Max ms to wait before mounting even if no idle period occurs. */
   timeout?: number;
-  /** Content shown until the browser is idle. */
+  /** Content shown until the scheduled mount runs. */
   fallback?: ReactNode;
   ref?: Ref<HTMLDivElement>;
 }
@@ -20,8 +20,9 @@ export interface WhenIdleProps extends ComponentProps<'div'> {
 // ---------------------------------------------------------------------------
 
 /**
- * Mounts children once the browser is idle after first paint. One-shot (once
- * mounted, stays mounted). Use it to defer non-critical UI off the critical path.
+ * Mounts children after `requestIdleCallback` when available or in the next
+ * task when it is not. One-shot (once mounted, stays mounted). Use it for
+ * non-critical UI that can tolerate the fallback running before browser idle.
  *
  * Children are not server-rendered (idle never fires during SSR), so reserve
  * this for non-critical content. For viewport-gated mounting use `WhenVisible`;

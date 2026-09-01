@@ -225,7 +225,7 @@ function renderSummary(result: ScanResult): string[] {
   if (result.findings.length === 0 && suppressed === 0) {
     return [
       '',
-      `✓ No animation anti-pattern candidates found (${result.filesScanned} files scanned).`,
+      `✓ No browser runtime anti-pattern candidates found (${result.filesScanned} files scanned).`,
     ];
   }
 
@@ -242,7 +242,7 @@ function renderSummary(result: ScanResult): string[] {
     `Scanned ${result.filesScanned} files.`,
     `Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup${suppressedNote}.`,
     `${result.findings.length} findings on ${sites} distinct lines; ${perFrame} sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.`,
-    'Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.',
+    'Next: start with the hotspots above, then classify each candidate in context (references/audit.md Step 2). Findings are candidates, not verdicts.',
     'Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.',
   ];
 }

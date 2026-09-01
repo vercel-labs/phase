@@ -5,8 +5,9 @@ import { whenIdle, type IdleOptions } from '../../core/idle';
 export type { IdleOptions } from '../../core/idle';
 
 /**
- * Returns `false`, then `true` once the browser is idle after mount. Use it to
- * defer non-critical work or mounting until the main thread is free.
+ * Returns `false`, then `true` after `requestIdleCallback` when available or
+ * in the next task when it is not. Use only for non-critical work that can
+ * tolerate the fallback running before the browser is idle.
  *
  * SSR-safe: returns `false` on the server and during the first client render.
  *

@@ -250,7 +250,9 @@ describe('output', () => {
   it('hands a clean scan off to the manual passes instead of ending there', () => {
     // A green check with no next step is exactly where an audit stops early.
     const clean = render([]);
-    expect(clean).toContain('✓ No animation anti-pattern candidates found');
+    expect(clean).toContain(
+      '✓ No browser runtime anti-pattern candidates found',
+    );
     expect(clean).toContain('Beyond the scan:');
     expect(clean).toContain('Step 1.5');
   });

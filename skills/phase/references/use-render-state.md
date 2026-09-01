@@ -56,7 +56,7 @@ const phase = useRenderState(ref); // 'rendered' | 'skipped'
 
 ## Does this affect layout or CLS?
 
-No. The hook only observes and reports. Pausing CPU work in response has no layout effect. The `content-visibility` no-layout-shift guarantee stays intact.
+No. The hook only observes and reports; pausing CPU work in response does not mutate layout. A `Defer` estimate can still change initial geometry when the browser measures the real content.
 
 ## Reduced motion
 

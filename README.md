@@ -6,24 +6,46 @@
 
 > **Status: Alpha.** APIs are evolving rapidly. Expect breaking changes.
 
-Phase is a lightweight, lifecycle-aware UI performance layer for the web. It includes tools & guidance to optimize render performance, build performant animations, and manage layout and off-screen resources.
+Phase is a browser runtime performance toolkit for detecting and controlling avoidable browser work in animation, rendering, and loading.
+
+The toolkit combines an [agent skill](skills/phase), a deterministic source scanner, and an optional runtime library. The skill audits any web application, the scanner makes source checks repeatable and CI-enforceable, and the library provides lifecycle-aware primitives when work needs to run, pause, render, or wait. The package is one possible recommendation from the skill, not a prerequisite for an audit.
+
+Platforms and frameworks shape how code and data reach a page. Phase focuses on what remains once code runs in the browser: whether work needs to run now, whether an off-screen subtree needs to render, and whether non-critical code needs to load before interaction.
 
 ## Why phase
 
-You can't accidentally tank the main thread, leak an observer, jank on scroll, or ignore reduced motion. The hard parts are handled for you, so the slow path isn't even reachable:
+Phase addresses three browser decisions:
+
+- **Animate only when needed.** Prefer CSS or WAAPI when the browser can own playback. When live JavaScript is necessary, stop it off-screen and handle reduced motion.
+- **Render only when needed.** Skip style, layout, and paint for off-screen content, schedule non-critical React mounts after an idle callback or next-task fallback, or wait until content nears the viewport.
+- **Load only when needed.** Put modules that are not needed for first interaction in dynamic chunks, and schedule non-critical prefetches through idle callbacks or their fallback.
+
+When the runtime library is the right fix, it enforces these tested behaviors:
 
 - **Pauses when unseen.** Off-screen or in a background tab, work stops and CPU drops to zero.
 - **Respects reduced motion by default.** Accessibility is built in, not an opt-in.
 - **Batches layout reads.** Element-relative pointer tracking reads one rect per dirty frame; scroll geometry is read on attachment or explicit measurement and coalesced after resize signals; other dimensions and visibility come from observers.
 - **Zero re-renders from the frame loop.** Per-frame work writes to refs and the DOM, never React state.
 - **Frame-locked shared clock.** Tickers using the same clock protocol read one timestamp, so they do not drift out of sync.
-- **Renders only what matters.** Skip painting off-screen content, mount non-critical UI when idle.
 
 Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every export stays [sub-kilobyte to a few kilobytes](#bundle-size).
 
+## Verification
+
+The skill and scanner provide a repeatable source-code verification loop:
+
+```text
+scan source -> inspect each candidate in context -> apply the cheapest safe fix -> scan again
+```
+
+The scanner reports candidates, not confirmed defects. The skill checks rendering semantics, framework behavior, and blast radius before recommending a change. The scanner's `--fail-on` option can turn selected severity tiers into a CI gate.
+
+An optional Chrome DevTools performance trace can add measured evidence for a recorded load or interaction. Phase can analyze a trace the user supplies, or provide capture guidance after the user accepts it; phase does not capture traces automatically. Without a trace, the source audit is complete but makes no measured runtime claim.
+
 ## Table of contents
 
-- [Install](#install)
+- [Audit a project](#audit-a-project)
+- [Install the library](#install-the-library)
 - [Getting started](#getting-started)
 - [Philosophy](#philosophy)
 - [Scope](#scope)
@@ -76,13 +98,41 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every ex
 - [Agent skill](#agent-skill)
 - [Repository layout](#repository-layout)
 
-## Install
+## Audit a project
+
+Install the skill, then ask your agent to audit a route, component, or changed files. The target application does not need the `phase` package.
+
+```bash
+npx skills add vercel-labs/phase --skill phase
+```
+
+The skill runs its bundled scanner, inspects each candidate in context, and recommends CSS, a browser or framework feature, the `phase` package, an external library, or no change. See the [skill README](skills/phase/README.md) for the scanner CLI and audit contract.
+
+## Install the library
 
 ```bash
 pnpm add phase
 ```
 
 ## Getting started
+
+### Defer off-screen rendering
+
+```tsx
+import { Defer } from 'phase/react';
+
+function Article() {
+  return (
+    <Defer as="section" estimatedHeight="600px">
+      <RelatedStories />
+    </Defer>
+  );
+}
+```
+
+`Defer` keeps the content in the DOM and server-rendered HTML while the browser skips its off-screen style, layout, and paint work.
+
+### Run live animation without hidden work
 
 ```tsx
 import { useLoop } from 'phase/react';
@@ -100,7 +150,7 @@ function Orbit({ radius }) {
 }
 ```
 
-Four lines of animation code. Behind them, performance-critical plumbing:
+The loop includes the runtime controls a hand-written `requestAnimationFrame` loop usually omits:
 
 - **Pauses when invisible.** Scrolled off-screen or background tab? Zero CPU consumed.
 - **Respects reduced motion.** Accessibility is the default, not an opt-in.
@@ -109,7 +159,7 @@ Four lines of animation code. Behind them, performance-critical plumbing:
 
 ## Philosophy
 
-Every primitive in `phase` exposes its state as a **phase** (a single string: `idle`, `running`, `paused`, `active`, `exiting`...) paired with a **reason** explaining _why_ that transition happened.
+Each lifecycle primitive in `phase` exposes its state as a **phase** (a single string: `idle`, `running`, `paused`, `active`, `exiting`...) paired with a **reason** explaining _why_ that transition happened.
 
 ```ts
 const { phase, phaseReason } = useLoop({ onTick: draw });
@@ -121,17 +171,17 @@ const { phase, phaseReason } = useLoop({ onTick: draw });
 
 One string replaces `if (running && visible && !paused && !prefersReducedMotion && mounted)`.
 
-Each of those signals is also a CPU and battery decision. Animating while off-screen, ignoring reduced motion, or running after unmount is what burns cycles and causes jank. `phase` composes them once, correctly, instead of leaving each call site to get the conjunction right.
+Each signal controls whether browser work should run. Frame loops that continue off-screen, ignored motion preferences, work that survives unmount, and non-critical rendering on the initial path all add avoidable cost. `phase` composes the relevant signals instead of leaving each call site to coordinate them.
 
 Safe behavior is automatic. Visibility awareness, reduced motion, observer cleanup, and limits on animation-time jumps after delayed frames are defaults, not opt-ins. Bypassing reduced motion requires an explicit `reducedMotion: 'ignore'` in the diff.
 
 ## Scope
 
-`phase` composes signals (visibility, focus, reduced motion, frame budget) into a coherent lifecycle with a reason for every state transition.
+The `phase` library composes browser signals such as visibility, focus, reduced motion, idle scheduling, and frame timing into a coherent lifecycle with a reason for every state transition.
 
-**Handles:** lifecycle state, timing, visibility, scroll visibility-ratio, reduced motion, observer pooling, quality signals, frame loops.
+**Handles:** lifecycle state, timing, visibility, idle scheduling, scroll position and visibility ratio, reduced motion, observer pooling, quality signals, frame loops, and render containment.
 
-**Does not handle:** spring physics, gesture systems, declarative keyframe orchestration. Reach for a dedicated library (e.g. `motion`) when you need those.
+**Does not handle:** server rendering strategy, data fetching, caching, bundle analysis, spring physics, gesture systems, or declarative keyframe orchestration. Use the relevant platform, framework, or animation library for those concerns.
 
 This narrow scope is deliberate. Shipping only the performance-critical plumbing (and nothing else) is what keeps every export [sub-kilobyte to a few kilobytes](#bundle-size).
 
@@ -559,7 +609,7 @@ Use CSS `:hover` for hover state and a gesture library for drag physics. This pr
 
 ### whenIdle
 
-Runs one callback when the browser is idle, with a timeout fallback for browsers without `requestIdleCallback`. The returned function cancels pending work.
+Runs one callback with `requestIdleCallback`, or a near-immediate timer where that API is unavailable. The returned function cancels pending work.
 
 ```ts
 import { whenIdle } from 'phase';
@@ -635,8 +685,8 @@ Easing, interpolation, and your value range are three separate concerns. `phase`
 | Animate a single value in render output                                | `useTween`                                                                                  |
 | Animate mount/unmount transitions                                      | `Presence` / `Swap` / `WhenVisible`                                                         |
 | Skip painting off-screen content (keep in DOM)                         | `Defer`                                                                                     |
-| Defer non-critical UI until the browser is idle                        | `WhenIdle` / `useIdle`                                                                      |
-| Run a side effect or prefetch when idle                                | `useWhenIdle`                                                                               |
+| Mount non-critical UI after idle scheduling or its fallback            | `WhenIdle` / `useIdle`                                                                      |
+| Schedule a non-critical side effect with an idle or next-task fallback | `useWhenIdle`                                                                               |
 | Pause non-`phase` work inside a `Defer` subtree                        | `useRenderState`                                                                            |
 | React to DOM mutations without synchronous callback storms             | `useMutation`                                                                               |
 | Track element-relative pointer position without per-event layout reads | `usePointer`                                                                                |
@@ -1054,11 +1104,11 @@ Rapid changes (A → B → C during A's exit) skip intermediate states and advan
 
 `phase` is the _when_ layer (when to animate, when to render, when to pause), built from one set of signals. Alongside `WhenVisible`, two helpers skip rendering work for off-screen content. They differ in how aggressively they skip and whether the content survives server rendering:
 
-| Helper        | Defers                              | In DOM? | In SSR HTML? | Reach for it when                                  |
-| ------------- | ----------------------------------- | ------- | ------------ | -------------------------------------------------- |
-| `Defer`       | browser render (style/layout/paint) | yes     | yes          | content must stay crawlable but need not paint yet |
-| `WhenIdle`    | React mount until idle              | no      | no           | non-critical UI that shouldn't block first paint   |
-| `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading / reveals              |
+| Helper        | Defers                              | In DOM? | In SSR HTML? | Reach for it when                                   |
+| ------------- | ----------------------------------- | ------- | ------------ | --------------------------------------------------- |
+| `Defer`       | browser render (style/layout/paint) | yes     | yes          | content must stay crawlable but need not paint yet  |
+| `WhenIdle`    | React mount after idle scheduling   | no      | no           | non-critical UI safe to run on a next-task fallback |
+| `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading / reveals               |
 
 ### Defer
 
@@ -1087,7 +1137,7 @@ import { Defer } from 'phase/react';
 | `estimatedHeight` | `string`                                     | `'1000px'` | Reserved size before first paint (any CSS length)          |
 | ...rest           | `Omit<HTMLAttributes<HTMLElement>, 'style'>` | —          | Standard HTML attributes except `style` (use `className`)  |
 
-`contain-intrinsic-size: auto <estimatedHeight>` reserves space, so there is no layout shift. The browser remembers the real size after first paint. `Defer` defers rendering only, not hydration or mounting. There is no `style` prop: the render-skip styles are encapsulated so they can't be overridden. Style the wrapper with `className`.
+`contain-intrinsic-size: auto <estimatedHeight>` uses the estimate as a layout placeholder before first render, then the browser remembers the measured size. An inaccurate estimate can change document size when the content first renders, so keep it close to the final height. `Defer` defers rendering only, not hydration or mounting. There is no `style` prop: the render-skip styles are encapsulated so they can't be overridden. Style the wrapper with `className`.
 
 `content-visibility: auto` applies paint containment, which clips all overflow to the element's padding edge. Box shadows, negative margins, and positioned content that bleeds outside the boundary will be cut off. If your content needs to overflow, move it outside the `Defer` or skip `Defer` for that container.
 
@@ -1095,7 +1145,7 @@ import { Defer } from 'phase/react';
 
 ### WhenIdle
 
-Mounts children once the browser is idle after first paint. One-shot. Use it for non-critical UI that should not compete with the critical path. Backed by the `whenIdle` core utility (`requestIdleCallback`).
+Mounts children after `requestIdleCallback` when available, with a next-task fallback in browsers without it. One-shot. Use it for non-critical UI that can tolerate the fallback running before the browser is idle.
 
 ```tsx
 import { WhenIdle } from 'phase/react';
@@ -1111,13 +1161,13 @@ import { WhenIdle } from 'phase/react';
 | Prop       | Type        | Default | Description                           |
 | ---------- | ----------- | ------- | ------------------------------------- |
 | `timeout`  | `number`    | —       | Max ms to wait before mounting anyway |
-| `fallback` | `ReactNode` | —       | Shown until the browser is idle       |
+| `fallback` | `ReactNode` | —       | Shown until the scheduled mount runs  |
 
 Idle never fires during SSR, so `WhenIdle` children are absent from server HTML. Reserve it for non-critical content. For content that must be crawlable, use `Defer`. Reduced motion is automatic: `data-enter="animate"` is not stamped when reduced motion is preferred.
 
 ### useIdle
 
-Returns `false`, then flips to `true` once the browser is idle. Use it when the idle signal belongs in render; use `WhenIdle` for a wrapper or `useWhenIdle` for an effect.
+Returns `false`, then flips to `true` after `requestIdleCallback` when available or in the next task when it is not. Use it for non-critical rendering that can tolerate the fallback running before browser idle; use `WhenIdle` for a wrapper or `useWhenIdle` for an effect.
 
 ```tsx
 import { useIdle } from 'phase/react';
@@ -1126,11 +1176,11 @@ const idle = useIdle({ timeout: 2000 });
 return idle ? <SecondaryPanel /> : <Skeleton />;
 ```
 
-Like `WhenIdle`, idle-gated content is absent from server HTML and should be non-critical.
+Like `WhenIdle`, scheduled content is absent from server HTML and should be non-critical.
 
 ### useWhenIdle
 
-Runs a callback once when the browser is idle after mount (the effect-shaped counterpart to `useIdle`). Use it for side effects (prefetching a chunk, warming a cache) rather than rendering. Cancels on unmount and always calls the latest callback.
+Runs a callback once after `requestIdleCallback` when available, or in the next task when it is not (the effect-shaped counterpart to `useIdle`). Use it for non-critical side effects such as prefetching a chunk or warming a cache, and account for the fallback running before the browser is idle. Cancels on unmount and always calls the latest callback.
 
 ```tsx
 import { lazy, Suspense, useState } from 'react';
@@ -1141,7 +1191,7 @@ const ChatPanel = lazy(openPanel);
 
 function Chat() {
   const [open, setOpen] = useState(false);
-  useWhenIdle(() => void openPanel()); // prefetch the chunk during idle
+  useWhenIdle(() => void openPanel()); // prefetch through idle scheduling
 
   return open ? (
     <Suspense fallback={<Skeleton />}>
@@ -1180,7 +1230,7 @@ function Chart() {
 }
 ```
 
-`useRenderState` only listens and reports. It has no layout effect, so it never breaks `Defer`'s no-layout-shift guarantee. You rarely need it for `phase` loops, which already self-pause off-screen.
+`useRenderState` only listens and reports; it does not mutate layout. A poor `Defer` estimate can still change initial geometry when the browser measures the real content. You rarely need the hook for `phase` loops, which already self-pause off-screen.
 
 ## Guarantees
 
@@ -1291,7 +1341,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 
 ## Agent skill
 
-`phase` ships with an [agent skill](skills/phase) that teaches AI coding agents to implement the API correctly, follow performant-animation best practices, and audit existing code to recommend the cheapest sufficient approach (CSS-only, minimal JS, `phase`, or a heavier library).
+The [phase agent skill](skills/phase) audits browser runtime performance across animation, rendering, and loading. It teaches AI coding agents to inspect scanner candidates in context, recommend the cheapest safe fix, and implement the `phase` API correctly when the package fits. An audit does not require the package.
 
 Install it three ways:
 
@@ -1302,15 +1352,15 @@ npx skills add vercel-labs/phase --skill phase
 
 Or copy `skills/phase/` into your project's `.agents/skills/phase/` and reference its `SKILL.md` from your `AGENTS.md`, or download [`skills/phase/dist/phase-skill.zip`](skills/phase/dist/phase-skill.zip) and unzip it into your skills directory.
 
-The audit scanner ships with the skill (no separate install needed). Ask your agent to audit your animation code and it runs `scripts/scan.mjs` for you, or run it standalone with `node <skill-dir>/scripts/scan.mjs <target-dir>`. See the [skill README](skills/phase/README.md#running-an-audit) for details.
+The deterministic scanner ships with the skill. Ask your agent to audit a route or changed files and it runs `scripts/scan.mjs`, or run the scanner with `node <skill-dir>/scripts/scan.mjs <target-dir>`. See the [skill README](skills/phase/README.md#running-an-audit) for details.
 
 ## Repository layout
 
-| Path                | Purpose                                           |
-| ------------------- | ------------------------------------------------- |
-| `packages/phase`    | Published `phase` npm package                     |
-| `packages/examples` | Shared React examples                             |
-| `skills/phase`      | Installable agent skill and public API references |
-| `scanner/`          | Audit scanner source bundled with the agent skill |
-| `evals/`            | Agent skill and scanner evaluation scenarios      |
-| `docs/adr/`         | Architecture decision records                     |
+| Path                     | Purpose                                           |
+| ------------------------ | ------------------------------------------------- |
+| `packages/phase`         | Published `phase` npm package                     |
+| `packages/examples`      | Shared React examples                             |
+| `skills/phase`           | Installable agent skill and public API references |
+| `packages/skill/scanner` | Audit scanner source bundled with the agent skill |
+| `packages/skill/evals`   | Agent skill and scanner evaluation scenarios      |
+| `docs/adr/`              | Architecture decision records                     |

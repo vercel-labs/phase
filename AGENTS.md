@@ -4,7 +4,7 @@
 
 ## Repository overview
 
-Animation infrastructure for the web. Lifecycle-aware primitives compose visibility, timing, reduced motion, and quality signals into coherent state machines with debuggable transitions.
+A browser runtime performance toolkit for animation, rendering, and loading. The repository combines an agent skill, a deterministic scanner, and an optional lifecycle-aware runtime library.
 
 Run commands from the repository root. The repository has four ownership boundaries:
 
@@ -13,7 +13,7 @@ Run commands from the repository root. The repository has four ownership boundar
 - [`packages/examples/`](./packages/examples/CONVENTIONS.md) owns the shared React examples and their rules.
 - `skills/phase/` contains only installable skill content and committed generated artifacts.
 
-The root `README.md` tells the package and repository story; `packages/phase/README.md` is the npm package summary.
+The root `README.md` tells the package and repository story; `packages/phase/README.md` is the npm package summary. [`docs/positioning.md`](./docs/positioning.md) owns the public description and scope language.
 
 Scanner, audit, or eval changes must use the canonical vocabulary in [`CONTEXT.md`](./CONTEXT.md). Durable architecture decisions live in [`docs/adr/`](./docs/adr/README.md).
 

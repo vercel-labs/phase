@@ -63,7 +63,7 @@ render.stop();
 
 ## Does this affect layout or CLS?
 
-No. It only listens and reports. Reacting by pausing CPU work has zero layout effect. The no-layout-shift guarantee of `content-visibility` stays intact.
+No. It only listens and reports; reacting by pausing CPU work does not mutate layout. A `Defer` estimate can still change initial geometry when the browser measures the real content.
 
 ## Reduced motion
 

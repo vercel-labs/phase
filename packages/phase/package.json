@@ -1,7 +1,7 @@
 {
   "name": "phase",
-  "version": "0.5.3",
-  "description": "A lightweight, lifecycle-aware UI performance layer for the web. Includes tools to optimize render performance, build performant animations, and manage layout and off-screen resources",
+  "version": "0.5.4",
+  "description": "A lifecycle-aware browser runtime layer for animation, rendering, and loading work",
   "author": "Vercel",
   "license": "MIT",
   "repository": {

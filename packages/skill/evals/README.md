@@ -6,7 +6,7 @@ Control characters in adversarial fixtures are committed as placeholder tokens d
 
 ## Trigger dataset
 
-`trigger-evals.json` tests the `SKILL.md` description: queries that should load the skill (production animation and rendering work) and near-misses that should not (exploratory animation work). Re-run it through a trigger harness, such as the skill-creator description optimization loop, whenever the description changes.
+`trigger-evals.json` tests the `SKILL.md` description: queries that should load the skill (production animation, rendering, browser-loading work, and relevant Chrome performance traces) and near-misses that should not (exploratory animation, server data fetching, caching, bundle analysis, or non-browser profiles). Re-run it through a trigger harness, such as the skill-creator description optimization loop, whenever the description changes.
 
 The harness must:
 

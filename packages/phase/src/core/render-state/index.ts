@@ -33,8 +33,8 @@ export interface RenderState {
  * expensive effects) when a `Defer` subtree stops painting. phase's own loops
  * already self-pause off-screen, so they do not need this.
  *
- * Listening and reacting has zero layout effect. It never breaks the
- * no-layout-shift guarantee of `content-visibility`.
+ * Listening and reacting does not mutate layout. A `Defer` estimate can still
+ * change initial geometry when the browser measures the real content.
  *
  * @example
  * const render = createRenderState({

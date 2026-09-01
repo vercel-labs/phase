@@ -82,7 +82,7 @@ The right default: include `Defer` where the rendering cost is real (large lists
 - **Don't assume animations inside stop.** Paint is skipped but JS keeps running. phase loops self-pause off-screen on their own; gate raw rAF/interval work with `useRenderState`.
 - **Don't place overflowing content inside a `Defer`.** `content-visibility: auto` applies paint containment (per the CSS Containment spec), which clips all overflow to the element's padding edge. Box shadows, negative margins, tooltips, dropdowns, and any decorative bleed that extends outside the `Defer` boundary will be cut off. `overflow: visible` has no effect because paint containment overrides it. Move overflowing elements outside the `Defer`, or remove `Defer` from that container.
 - **Don't rely on `useSize` or `useContainerQuery` inside a skipped subtree.** Per the CSS Containment spec, `ResizeObserver` callbacks pause for elements inside skipped `content-visibility: auto` subtrees. Size observations resume automatically when the element scrolls back into view, but any size changes that occurred while skipped are only delivered at that point. If you need to react to the skip/unskip transition itself, use `useRenderState`.
-- **Don't mutate layout or unmount based on skip state.** That reintroduces the layout shift `contain-intrinsic-size` prevents.
+- **Don't mutate layout or unmount based on skip state.** Skip state reports browser rendering, not application presence. Unmounting from it changes layout and rendering semantics.
 
 ## Safari caveats
 
@@ -91,7 +91,7 @@ The right default: include `Defer` where the rendering cost is real (large lists
 
 ## Does this affect layout or CLS?
 
-No. `contain-intrinsic-size: auto <estimatedHeight>` reserves space before first paint, and the browser remembers the real size afterward. Content keeps its box whether painted or skipped, so nothing shifts on scroll. `Defer` defers rendering only, never layout reservation, DOM presence, or hydration.
+It can before the first render. `contain-intrinsic-size: auto <estimatedHeight>` uses the estimate as the subtree's layout placeholder while content is skipped. When the browser renders and measures the content, an inaccurate estimate can change document size and scroll position. Keep the estimate close to the final height. After the first render, the browser remembers the measured size. `Defer` preserves DOM presence and server HTML; it does not defer hydration or guarantee exact initial geometry.
 
 ## Reduced motion
 
@@ -101,5 +101,5 @@ Not applicable. `Defer` does not animate. It only toggles the browser's renderin
 
 - [rendering-recipes](./rendering-recipes.md). Composing `Defer` with the other rendering helpers
 - [when-visible](./when-visible.md). Gate mounting on viewport entry
-- [when-idle](./when-idle.md). Gate mounting on browser idle
+- [when-idle](./when-idle.md). Schedule mounting through an idle callback or next-task fallback
 - [use-render-state](./use-render-state.md). React to a `Defer` subtree's render-skip state

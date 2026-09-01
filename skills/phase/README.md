@@ -1,6 +1,6 @@
 # phase skill
 
-Agent skill for the [phase](https://github.com/vercel-labs/phase) animation library. Teaches you to implement phase primitives correctly, follow performant-animation best practices, and audit existing animation code.
+Agent skill for browser runtime performance across animation, rendering, and loading. It audits any web application, recommends the cheapest safe fix, and teaches agents to use the optional [phase](https://github.com/vercel-labs/phase) runtime library when its primitives fit.
 
 ## Install
 
@@ -30,19 +30,22 @@ The scanner ships with the skill; nothing else to install. Ask your agent, for e
 
 - "Audit the animations and rendering in `src/` for performance."
 - "This page is janky and the fans spin up while it's idle. Find out why."
+- "Find rendering and loading work this route can defer."
 - "Scan only the files I changed on this branch."
 
-The agent reads `SKILL.md` → `references/audit.md`, runs the scanner, then classifies every finding against the decision ladder (browser-driven CSS/WAAPI → `useTween` → phase → external library → no change).
+The agent reads `SKILL.md` → `references/audit.md`, runs the scanner, then classifies every finding against its runtime requirements and rendering semantics. The `phase` package is one possible recommendation, not a requirement for running the audit.
 
-### Why you can trust the recommendations
+The audit is a repeatable verification loop: scan source, inspect each candidate in context, apply the cheapest safe fix, and scan again. The scanner checks source and does not capture traces. When the user supplies or accepts a Chrome DevTools performance trace, the skill can add measured evidence for the recorded path; without one, it makes no measured runtime claim.
 
-Findings are candidates, not verdicts: each carries a severity (how bad if real) and a noise tier (how much to trust the detection), calibrated by hand-classifying findings across production open-source codebases spanning the consumer mix. False-positive classes cheap enough to detect are encoded as executable regression examples in the test suite; the ones that are not — a non-React `dispatch()` near a rAF, a third-party `onTick` API — are what the `noisy` tier is telling you about. Before recommending anything, the agent must verify the blast radius (framework, SSR, Next.js PPR; the scanner detects and stamps these) and label any recommendation that changes rendering semantics, which requires your explicit consent. Issues outside phase's domain (data fetching, bundling, server components) are reported and handed to the right skill, never improvised.
+### How recommendations are checked
 
-The scanner also refuses to overstate its coverage: `Scanned N files` counts files it actually analyzed, and anything it could not read is reported as an explicit `⚠ Incomplete coverage` line rather than folded into a clean result.
+Findings are candidates, not verdicts. Each carries a severity (impact if real) and a noise tier (how much verification the detection needs). The tiers were calibrated by hand-classifying findings across production open-source applications. The test suite encodes false-positive classes the scanner can distinguish cheaply; `noisy` marks cases it cannot, such as a non-React `dispatch()` near a rAF or a third-party `onTick` API. Before recommending a change, the agent checks its framework, SSR and Next.js PPR context, verifies the blast radius, and labels changes to rendering semantics for explicit consent. It reports data fetching, bundling, and server-component issues for the appropriate skill instead of improvising a fix.
 
-### The scan is half of it
+`Scanned N files` counts only files the scanner analyzed. Unreadable targets produce an explicit `⚠ Incomplete coverage` line instead of a clean result.
 
-A pattern scanner finds what is wrong. An audit also asks what phase would make better, and no regex sees that: a spinner animating off-screen, a `transitionend` listener wired to unmount, a chat widget mounted eagerly above the fold's worth of work, a canvas sized from `devicePixelRatio` once and blurry after a zoom, a subtree the browser has stopped painting whose timers keep running. The procedure runs those manual passes on every audit and reports them under **Opportunities**, separately from findings, so a clean scan never reads as "nothing to do" — the scanner says as much in its own output. Recommendations outside React map to the core primitives (`createLoop`, `createSight`, `createPointer`) rather than naming hooks you cannot import.
+### Manual audit pass
+
+The scanner finds source patterns that may waste browser work. It cannot detect every opportunity, including a spinner animating off-screen, a `transitionend` listener wired to unmount, a chat widget mounted eagerly, a canvas sized from `devicePixelRatio` once and blurry after a zoom, or timers running in a subtree the browser has stopped painting. The audit reports these manual checks under **Opportunities**, separately from scanner findings. Recommendations outside React map to core primitives such as `createLoop`, `createSight`, and `createPointer` rather than hooks the application cannot import.
 
 ### Scanner CLI
 

@@ -4,6 +4,27 @@ This glossary defines the canonical domain language for phase. Terms are grouped
 
 `CONTEXT.md` owns vocabulary. [`docs/adr/`](./docs/adr/README.md) records durable decisions. [`AGENTS.md`](./AGENTS.md) owns contributor procedures.
 
+## Project scope
+
+**Phase toolkit**:
+The complete browser runtime performance project: the agent skill, deterministic scanner, and optional runtime library. The toolkit covers animation, rendering, and loading work.
+_Avoid_: Animation library
+
+**Runtime library**:
+The published `phase` package. It provides lifecycle-aware browser primitives and is one possible recommendation from the skill, not a requirement for running an audit.
+_Avoid_: Toolkit, scanner
+
+**Browser runtime performance**:
+The cost and scheduling of work once application code runs in the browser, including frame callbacks, layout reads, paint, off-screen rendering, and non-critical loading. It names phase's scope, not ownership of an entire page metric.
+
+**Verification loop**:
+The required scan, inspect, fix, and rescan process used by a phase audit, with an optional performance trace to prioritize exercised findings or compare runtime behavior. Without a trace, the audit remains source-based and makes no measured runtime claim.
+_Avoid_: Automatic optimization loop
+
+**Animation ladder**:
+The ordered animation choices used by an audit: browser-driven playback, minimal JavaScript, phase primitives, then an external library. Each step adds runtime code or capability, so an audit starts with the first choice that meets the requirement.
+_Avoid_: Decision ladder, phase ladder, work ladder
+
 ## Timing
 
 **Input stage**:

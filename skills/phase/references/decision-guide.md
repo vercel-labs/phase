@@ -1,8 +1,8 @@
 # Decision guide
 
-How to choose between browser-driven animation, minimal JS, phase, or an external animation library.
+How to choose the cheapest sufficient animation approach. Rendering and loading candidates are classified by requirement in [audit.md](./audit.md#classification-by-work-type).
 
-## The ladder
+## Animation ladder
 
 Always prefer the cheapest tier. Moving up the ladder adds JS, runtime cost, and bundle weight, which is only justified when the lower tier genuinely cannot do the job.
 
@@ -54,24 +54,15 @@ Use when you need any of:
 - Mount/unmount transitions with exit animations
 - Scroll-driven reveals, element sizing, or media-query reactivity
 
-| Scenario                                        | Primitive                                                                  |
-| ----------------------------------------------- | -------------------------------------------------------------------------- |
-| DOM animation loop                              | `useLoop`                                                                  |
-| Canvas/WebGL loop                               | `useCanvas`                                                                |
-| Signal for your own renderer                    | `useLifecycle`                                                             |
-| Mount/unmount with exit                         | `Presence`, `usePresence`                                                  |
-| Swap between states with exit→enter             | `Swap`                                                                     |
-| Lazy mount on viewport entry                    | `WhenVisible`                                                              |
-| Lazy mount when the browser is idle             | `WhenIdle`, `useIdle`                                                      |
-| Prefetch / side effect when idle                | `useWhenIdle`                                                              |
-| Skip painting off-screen (keep DOM)             | `Defer`                                                                    |
-| Pause raw work inside a `Defer`                 | `useRenderState`                                                           |
-| Visibility ratio (reveal effects)               | `useScrollProgress`                                                        |
-| Scroll container offset (scrollbars, carousels) | `useScroll`                                                                |
-| Element dimensions                              | `useSize`, `useContainerQuery`                                             |
-| Media query subscription                        | `useMediaQuery`                                                            |
-| Visibility boolean                              | `useSight`                                                                 |
-| Timed multi-step animation sequence             | CSS/WAAPI + `useLifecycle` when keyframe-friendly; `useLoop` when JS-owned |
+| Scenario                            | Primitive                                                                  |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| DOM animation loop                  | `useLoop`                                                                  |
+| Canvas/WebGL loop                   | `useCanvas`                                                                |
+| Signal for your own renderer        | `useLifecycle`                                                             |
+| Mount/unmount with exit             | `Presence`, `usePresence`                                                  |
+| Swap between states with exit→enter | `Swap`                                                                     |
+| Visibility ratio (reveal effects)   | `useScrollProgress`                                                        |
+| Timed multi-step animation sequence | CSS/WAAPI + `useLifecycle` when keyframe-friendly; `useLoop` when JS-owned |
 
 All phase primitives share:
 
@@ -93,21 +84,6 @@ Four different questions, four different answers. The two phase primitives are n
 
 The trap: both phase hooks return a 0–1 number, but `useScrollProgress`'s is a _visibility_ fraction and `useScroll`'s `progressX/Y` is a _position_ fraction. Pick by the question, not by the number.
 
-### Rendering: when to render, not only when to animate
-
-phase's rendering helpers apply the same lifecycle signals to _rendering_ work. Choose by how aggressively you can skip work and whether the content must exist for SSR:
-
-| Helper        | Defers                              | In DOM? | In SSR HTML? | Use when                                           |
-| ------------- | ----------------------------------- | ------- | ------------ | -------------------------------------------------- |
-| `Defer`       | browser render (style/layout/paint) | yes     | yes          | content must stay crawlable but need not paint yet |
-| `WhenIdle`    | React mount until idle              | no      | no           | non-critical UI that shouldn't block first paint   |
-| `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading / reveals              |
-
-- **`Defer` is the safest default.** Children stay server-rendered and keep their reserved box (`contain-intrinsic-size: auto <est>`), so no layout shift. It defers rendering only, never hydration or mounting.
-- **`WhenIdle` / `WhenVisible` save more** but their children are absent from SSR HTML. Reserve them for non-critical content.
-
-For multi-signal rendering patterns (two-tier `Defer` + `WhenVisible`, idle-gated `lazy()`, gating raw loops with `useRenderState`, and what _not_ to compose), see [rendering-recipes.md](./rendering-recipes.md).
-
 ### Tier 4: External library
 
 Use when you need:
@@ -120,6 +96,22 @@ Use when you need:
 Recommended: `motion` (formerly Framer Motion). Alternatives: GSAP, react-spring, @use-gesture.
 
 phase does not handle these and will not grow to handle them. These are complementary, not competing.
+
+## Rendering and loading
+
+Phase's rendering helpers apply lifecycle signals to browser rendering and mount work. Choose by whether the content must exist in server-rendered HTML:
+
+| Helper        | Defers                              | In DOM? | In SSR HTML? | Use when                                            |
+| ------------- | ----------------------------------- | ------- | ------------ | --------------------------------------------------- |
+| `Defer`       | browser render (style/layout/paint) | yes     | yes          | content must stay crawlable but need not paint yet  |
+| `WhenIdle`    | React mount after idle scheduling   | no      | no           | non-critical UI safe to run on a next-task fallback |
+| `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading or reveals              |
+
+- **`Defer` keeps children server-rendered.** It reserves their box with `contain-intrinsic-size: auto <est>` and defers rendering, not hydration or mounting.
+- **`WhenIdle` and `WhenVisible` omit children from server HTML.** Use them only for non-critical content and reserve space when mounting changes the wrapper's in-flow size.
+- **`useWhenIdle` schedules a non-critical side effect.** It uses `requestIdleCallback` when available and a next-task fallback otherwise, so fallback work may run before the browser is idle. Use it to prefetch a dynamic import or warm a cache without gating render output.
+
+For loading choices and multi-signal rendering patterns, see [audit.md](./audit.md#classification-by-work-type) and [rendering-recipes.md](./rendering-recipes.md).
 
 ## Quick-decision flowchart
 

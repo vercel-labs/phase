@@ -16,7 +16,7 @@ export * from './index.ts';
 
 const USAGE = `Usage: node scan.mjs [options] <target> [...targets]
 
-Scans directories or files for animation anti-pattern candidates.
+Scans directories or files for browser runtime anti-pattern candidates.
 Findings are candidates, not verdicts: classify each against
 references/audit.md before recommending a change.
 
