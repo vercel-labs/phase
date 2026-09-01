@@ -92,6 +92,7 @@ export function usePointer<T extends Element = HTMLDivElement>(
         onPointerRef.current(pointerState);
       },
       onPhaseChange: (phase, reason) => {
+        stateRef.current.active = phase === 'tracking';
         phaseRef.current = phase;
         phaseReasonRef.current = reason;
         setState({ phase, phaseReason: reason });

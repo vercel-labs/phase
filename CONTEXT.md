@@ -110,6 +110,24 @@ The title, description, and phase exports shown by all variants in one export di
 **Predictable output**:
 An example's rendered HTML, attributes, class names, and text may depend only on when React adds it to the page, how many frames have passed, and explicit user actions. Animated numbers may vary, but random values, the current time, locale, and time zone must not affect the output. Owner: `packages/examples/CONVENTIONS.md`.
 
+## Testing
+
+**Unit project**:
+The Vitest project that runs deterministic logic, policy, fault-injection, and server-context specs in jsdom. It may replace browser APIs with simulated semantics. Owner: `packages/phase/vitest.config.ts`.
+
+**Browser project**:
+The Vitest project that runs native observer and scheduling behavior in headless Chromium, Firefox, and WebKit. Owner: `packages/phase/vitest.config.ts`.
+
+**Simulated semantics**:
+A replacement for browser behavior, such as a mock observer or scheduler installed in place of IO, RO, MQL, rAF, or idle callbacks. Browser-project specs must not use simulated semantics.
+_Avoid_: Browser mock
+
+**Synthetic event**:
+A real DOM event object dispatched through browser event plumbing when headless automation cannot produce the platform trigger directly, such as `visibilitychange` or persisted `pageshow`. Synthetic events are allowed in the browser project when the API being exercised remains native.
+
+**Residual spec**:
+The unit-project portion of a module's tests after its native observer or scheduling behavior moves to a co-located browser spec. It contains only deterministic policy or headless-unreachable scenarios, and no behavior appears in both files.
+
 ## Overloaded terms
 
 - **Tier** always needs a qualifier: severity tier describes impact when real, while noise tier describes detection trust. `dedup` marks optional cleanup, and execution is a class rather than another tier.
@@ -117,3 +135,4 @@ An example's rendered HTML, attributes, class names, and text may depend only on
 - **Evidence** means a named yes/no scanner check. Use **ground truth** for the findings an evaluation expects.
 - **Scenario**, **fixture**, and **golden** are distinct: a scenario is the complete evaluation, a fixture is sample input, and a golden is saved scanner output.
 - **Example** means React reference code from the examples package. **Fixture** means sample input used by a scenario.
+- **Unit project**, **browser project**, and future end-to-end tests name separate layers. The browser project tests library contracts in real engines; end-to-end tests drive an application page.

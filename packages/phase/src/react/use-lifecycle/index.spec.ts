@@ -1,3 +1,5 @@
+// Native observer coverage lives in index.browser.spec.ts. Keep only
+// deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
@@ -42,39 +44,6 @@ describe('useLifecycle', () => {
     expect(result.current.isActive).toBe(false);
   });
 
-  it('activates when the element becomes visible', async () => {
-    const useLifecycle = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() => useLifecycle({ ref }));
-
-    act(() => mockIO.trigger(el, true));
-    expect(result.current.phase).toBe('active');
-    expect(result.current.isActive).toBe(true);
-  });
-
-  it('pauses when the element leaves the viewport', async () => {
-    const useLifecycle = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() => useLifecycle({ ref }));
-
-    act(() => mockIO.trigger(el, true));
-    act(() => mockIO.trigger(el, false));
-    expect(result.current.phase).toBe('paused');
-    expect(result.current.phaseReason).toBe('sight');
-    expect(result.current.isActive).toBe(false);
-  });
-
-  it('pauses on reduced motion by default', async () => {
-    const useLifecycle = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() => useLifecycle({ ref }));
-
-    act(() => mockIO.trigger(el, true));
-    act(() => mockMM.setMatches('(prefers-reduced-motion: reduce)', true));
-    expect(result.current.phase).toBe('paused');
-    expect(result.current.phaseReason).toBe('reduced-motion');
-  });
-
   it('paused prop manually pauses and resumes', async () => {
     const useLifecycle = await getHook();
     const { ref, el } = createRefWithElement();
@@ -108,9 +77,16 @@ describe('useLifecycle', () => {
     const useLifecycle = await getHook();
     const { ref, el } = createRefWithElement();
     const { unmount } = renderHook(() => useLifecycle({ ref }));
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      true,
+    );
+    expect(mockMM.listenerCount('(prefers-reduced-motion: reduce)')).toBe(1);
 
     unmount();
-    expect(() => mockIO.trigger(el, true)).not.toThrow();
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      false,
+    );
+    expect(mockMM.listenerCount('(prefers-reduced-motion: reduce)')).toBe(0);
   });
 
   it('onPhaseChange fires synchronously on phase transitions', async () => {

@@ -1,3 +1,5 @@
+// Native observer coverage lives in index.browser.spec.ts. Keep only
+// deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
@@ -45,25 +47,6 @@ describe('useSight', () => {
     expect(result.current.ref.current).toBeNull();
   });
 
-  it('updates when IO triggers visible', async () => {
-    const useSight = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() => useSight({ ref }));
-
-    act(() => mockIO.trigger(el, true));
-    expect(result.current.phase).toBe('visible');
-  });
-
-  it('updates when IO triggers hidden', async () => {
-    const useSight = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() => useSight({ ref }));
-
-    act(() => mockIO.trigger(el, true));
-    act(() => mockIO.trigger(el, false));
-    expect(result.current.phase).toBe('hidden');
-  });
-
   it('observe: once freezes at visible after first intersection', async () => {
     const useSight = await getHook();
     const { ref, el } = createRefWithElement();
@@ -88,10 +71,14 @@ describe('useSight', () => {
     const useSight = await getHook();
     const { ref, el } = createRefWithElement();
     const { unmount } = renderHook(() => useSight({ ref }));
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      true,
+    );
 
     unmount();
-    // IO trigger after unmount should not throw
-    expect(() => mockIO.trigger(el, true)).not.toThrow();
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      false,
+    );
   });
 
   it('changing observe mode disposes old sight and creates new', async () => {

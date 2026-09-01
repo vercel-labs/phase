@@ -1,3 +1,5 @@
+// Native observer coverage lives in index.browser.spec.ts. Keep only
+// deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
@@ -40,25 +42,18 @@ describe('useScrollProgress', () => {
     expect(result.current.ref.current).toBeNull();
   });
 
-  it('updates progress on threshold crossings', async () => {
-    const useScrollProgress = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() => useScrollProgress({ ref }));
-
-    act(() => mockIO.triggerWithRatio(el, 0.5));
-    expect(result.current.progress).toBe(0.5);
-
-    act(() => mockIO.triggerWithRatio(el, 1.0));
-    expect(result.current.progress).toBe(1.0);
-  });
-
   it('cleans up on unmount', async () => {
     const useScrollProgress = await getHook();
     const { ref, el } = createRefWithElement();
     const { unmount } = renderHook(() => useScrollProgress({ ref }));
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      true,
+    );
 
     unmount();
-    expect(() => mockIO.triggerWithRatio(el, 0.5)).not.toThrow();
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      false,
+    );
   });
 
   it('re-subscribes when steps changes', async () => {

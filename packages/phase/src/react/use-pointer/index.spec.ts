@@ -1,5 +1,8 @@
+// Native event and scheduling coverage lives in index.browser.spec.ts. Keep
+// only deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
+import type { UsePointerResult } from '.';
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 
 // jsdom lacks PointerEvent — MouseEvent already carries clientX/clientY.
@@ -78,20 +81,6 @@ describe('reactive mode', () => {
     expect(result.current.phaseReason).toBe('initial');
   });
 
-  it('re-renders to tracking on pointer enter', async () => {
-    const usePointer = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() =>
-      usePointer({ ref, onPointer: vi.fn(), visibility: 'ignore' }),
-    );
-
-    act(() => {
-      el.dispatchEvent(new Event('pointerenter'));
-    });
-    expect(result.current.phase).toBe('tracking');
-    expect(result.current.phaseReason).toBe('enter');
-  });
-
   it('re-renders back to idle on pointer leave', async () => {
     const usePointer = await getHook();
     const { ref, el } = createRefWithElement();
@@ -109,20 +98,6 @@ describe('reactive mode', () => {
     });
     expect(result.current.phase).toBe('idle');
     expect(result.current.phaseReason).toBe('leave');
-  });
-
-  it('phaseRef is always current alongside state', async () => {
-    const usePointer = await getHook();
-    const { ref, el } = createRefWithElement();
-    const { result } = renderHook(() =>
-      usePointer({ ref, onPointer: vi.fn(), visibility: 'ignore' }),
-    );
-
-    act(() => {
-      el.dispatchEvent(new Event('pointerenter'));
-    });
-    expect(result.current.phaseRef.current).toBe('tracking');
-    expect(result.current.phaseReasonRef.current).toBe('enter');
   });
 
   it('does not track until the element is visible (visibility pause)', async () => {
@@ -186,25 +161,35 @@ describe('stateRef', () => {
     });
   });
 
-  it('mirrors the latest pointer position without a re-render', async () => {
+  it('marks active on pointer entry before the first move', async () => {
     const usePointer = await getHook();
     const { ref, el } = createRefWithElement();
     const { result } = renderHook(() =>
       usePointer({ ref, onPointer: vi.fn(), visibility: 'ignore' }),
     );
 
-    await act(async () => {
-      el.dispatchEvent(new Event('pointerenter'));
-      el.dispatchEvent(
-        new PointerEvent('pointermove', { clientX: 50, clientY: 60 }),
-      );
-      // rAF is stubbed to a macrotask; let the batched flush run.
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    act(() => el.dispatchEvent(new Event('pointerenter')));
 
-    expect(result.current.stateRef.current.x).toBe(50);
-    expect(result.current.stateRef.current.y).toBe(60);
     expect(result.current.stateRef.current.active).toBe(true);
+  });
+
+  it('clears active when visibility suspends tracking', async () => {
+    const usePointer = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() =>
+      usePointer({ ref, onPointer: vi.fn() }),
+    );
+
+    act(() => {
+      mockIO.trigger(el, true);
+      el.dispatchEvent(new Event('pointerenter'));
+    });
+    expect(result.current.stateRef.current.active).toBe(true);
+
+    // Scrolling a hovered element away dispatches pointerleave before IO in a
+    // real browser, so inject IO here to isolate visibility suspension policy.
+    act(() => mockIO.trigger(el, false));
+    expect(result.current.stateRef.current.active).toBe(false);
   });
 });
 
@@ -216,8 +201,24 @@ describe('onPointer', () => {
   it('forwards pointer state on leave', async () => {
     const usePointer = await getHook();
     const { ref, el } = createRefWithElement();
-    const onPointer = vi.fn();
-    renderHook(() => usePointer({ ref, onPointer, visibility: 'ignore' }));
+    let current: UsePointerResult | undefined;
+    const observedRefs: Array<{
+      active: boolean;
+      phase: string;
+      reason: string;
+    }> = [];
+    const onPointer = vi.fn(() => {
+      if (!current) throw new Error('hook result unavailable');
+      observedRefs.push({
+        active: current.stateRef.current.active,
+        phase: current.phaseRef.current,
+        reason: current.phaseReasonRef.current,
+      });
+    });
+    renderHook(() => {
+      current = usePointer({ ref, onPointer, visibility: 'ignore' });
+      return current;
+    });
 
     act(() => {
       el.dispatchEvent(new Event('pointerenter'));
@@ -227,6 +228,9 @@ describe('onPointer', () => {
     expect(onPointer).toHaveBeenCalledWith(
       expect.objectContaining({ active: false }),
     );
+    expect(observedRefs).toEqual([
+      { active: false, phase: 'idle', reason: 'leave' },
+    ]);
   });
 });
 

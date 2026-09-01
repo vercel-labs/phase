@@ -1,3 +1,5 @@
+// Native observer coverage lives in index.browser.spec.ts. Keep only
+// deterministic policy and headless-unreachable scenarios here.
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
@@ -21,19 +23,6 @@ async function getModule() {
 // ---------------------------------------------------------------------------
 
 describe('ratio updates', () => {
-  it('onProgress fires with the intersection ratio', async () => {
-    const { createScrollProgress } = await getModule();
-    const el = document.createElement('div');
-    const cb = vi.fn();
-    const progress = createScrollProgress({ target: el, onProgress: cb });
-
-    mockIO.triggerWithRatio(el, 0.5);
-
-    expect(cb).toHaveBeenCalledTimes(1);
-    expect(cb).toHaveBeenCalledWith(0.5);
-    progress.stop();
-  });
-
   it('onProgress does NOT fire when ratio is unchanged', async () => {
     const { createScrollProgress } = await getModule();
     const el = document.createElement('div');

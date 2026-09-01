@@ -10,41 +10,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('avoids the stale-then-fresh pointer sequence across frames', async () => {
-  const raf = createMockRequestAnimationFrame();
-  vi.stubGlobal('requestAnimationFrame', raf.request);
-  vi.stubGlobal('cancelAnimationFrame', raf.cancel);
-
-  const { createPointer, createTicker } = await import('../index');
-  const element = document.createElement('div');
-  element.getBoundingClientRect = () => ({ left: 10, top: 20 }) as DOMRect;
-
-  const pointer = createPointer({
-    target: element,
-    visibility: 'ignore',
-    onPointer: () => undefined,
-  });
-  const observedX: number[] = [];
-  const ticker = createTicker({
-    onTick: () => {
-      observedX.push(pointer.state.x);
-    },
-  });
-
-  ticker.start();
-  element.dispatchEvent(new Event('pointerenter'));
-  element.dispatchEvent(
-    new MouseEvent('pointermove', { clientX: 52, clientY: 63 }),
-  );
-
-  raf.frame(16);
-  raf.frame(32);
-
-  expect(observedX).toEqual([42, 42]);
-  ticker.stop();
-  pointer.stop();
-});
-
 it('flushes every event-derived primitive before tick across varied event timing', async () => {
   const raf = createMockRequestAnimationFrame();
   vi.stubGlobal('requestAnimationFrame', raf.request);

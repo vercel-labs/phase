@@ -1,4 +1,6 @@
-import { renderHook, act } from '@testing-library/react';
+// Native frame delivery and teardown coverage lives in index.browser.spec.ts.
+// Keep deterministic hook policy and target validation here.
+import { renderHook } from '@testing-library/react';
 
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 import { createMockMatchMedia } from '../../__mocks__/match-media';
@@ -102,19 +104,16 @@ describe('useLoop', () => {
 });
 
 describe('page target', () => {
-  it('runs a page-anchored loop with no observer', async () => {
+  it('creates no observer for a page-anchored loop', async () => {
     const useLoop = await getHook();
-    const onTick = vi.fn();
 
-    const { result } = renderHook(() => useLoop({ target: 'page', onTick }));
+    const { result, unmount } = renderHook(() =>
+      useLoop({ target: 'page', onTick: vi.fn() }),
+    );
 
     expect(result.current.phase).toBe('running');
     expect(mockIO.instances).toHaveLength(0);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(32);
-    });
-    expect(onTick).toHaveBeenCalled();
+    unmount();
   });
 
   it('throws when both ref and target are given', async () => {

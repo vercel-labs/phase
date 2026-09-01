@@ -1,4 +1,6 @@
-import { renderHook, act } from '@testing-library/react';
+// Native idle scheduling coverage lives in index.browser.spec.ts. Keep only
+// deterministic React wiring and headless-unreachable scenarios here.
+import { renderHook } from '@testing-library/react';
 
 import { createMockIdle } from '../../__mocks__/idle';
 
@@ -16,16 +18,6 @@ afterEach(() => {
 });
 
 describe('useIdle', () => {
-  it('starts false and flips to true once idle', async () => {
-    const { useIdle } = await import('.');
-    const { result } = renderHook(() => useIdle());
-
-    expect(result.current).toBe(false);
-
-    act(() => mockIdle.flush());
-    expect(result.current).toBe(true);
-  });
-
   it('forwards the timeout option', async () => {
     const spy = vi.spyOn(window, 'requestIdleCallback');
     const { useIdle } = await import('.');

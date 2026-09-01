@@ -14,6 +14,8 @@ interface IOPoolEntry {
 }
 
 const pool = new Map<string, IOPoolEntry>();
+const rootIds = new WeakMap<Element | Document, number>();
+let nextRootId = 1;
 
 /**
  * Observe an element via a shared IntersectionObserver pool.
@@ -83,7 +85,15 @@ export function observeIntersection(
  * IO options are immutable after construction, so identical options can share.
  */
 function getPoolKey(opts: IntersectionObserverInit): string {
-  const root = opts.root ? 'custom' : 'null';
+  let root = 'null';
+  if (opts.root) {
+    let rootId = rootIds.get(opts.root);
+    if (rootId === undefined) {
+      rootId = nextRootId++;
+      rootIds.set(opts.root, rootId);
+    }
+    root = String(rootId);
+  }
   const margin = opts.rootMargin ?? '0px';
   const threshold = Array.isArray(opts.threshold)
     ? opts.threshold.join(',')

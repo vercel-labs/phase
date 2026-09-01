@@ -12,11 +12,12 @@ The library has two layers: framework-agnostic core primitives and React binding
 | `src/core/`      | Framework-agnostic primitives and browser APIs. `_internal/` is package-private infrastructure. |
 | `src/react/`     | React hooks and components built on core. `_internal/` is package-private React infrastructure. |
 | `src/__tests__/` | Cross-cutting library suites such as performance budgets.                                       |
-| `src/__mocks__/` | Shared browser API mocks.                                                                       |
+| `src/__mocks__/` | Shared browser API mocks for deterministic unit tests.                                          |
 
 ### File organization
 
 - Give each module a kebab-case folder containing `index.ts` and a co-located `index.spec.ts` or `index.spec.tsx`.
+- Put native observer and scheduling coverage in `index.browser.spec.ts` or `index.browser.spec.tsx`.
 - Keep the only barrels at `src/index.ts`, `src/ease/index.ts`, and `src/react/index.ts`.
 - Keep `_internal/` helpers within their layer. Never export them or import them across layers.
 - Match the structure of a sibling module when adding a module.
@@ -94,7 +95,7 @@ Every public export is measured separately through the source barrels listed in 
 | Boolean props     | Only `enabled` may be boolean. Model other behavior with string unions. |
 | Exported types    | Do not shadow `lib.dom` globals.                                        |
 
-Tests use Vitest with `globals: true` and `environment: 'jsdom'`. Co-locate module tests and use shared mocks from `src/__mocks__/`.
+Tests use named Vitest projects. `unit` runs jsdom specs and is the default for `pnpm test`; `browser` runs `*.browser.spec.*` in headless Chromium, Firefox, and WebKit through Playwright. Run it with `pnpm test:browser` after installing the three Playwright browsers. Browser specs must exercise native observer and scheduling APIs, must not import `src/__mocks__/`, and should wait on observable state instead of fixed timing. Keep headless-unreachable fault injection in a residual `index.spec.*`; each behavior belongs to one project only.
 
 The package ships zero runtime dependencies. Never add one without explicit approval, and pin every dependency exactly.
 

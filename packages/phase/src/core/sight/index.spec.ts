@@ -1,3 +1,5 @@
+// Native observer coverage lives in index.browser.spec.ts. Keep only
+// deterministic policy and headless-unreachable scenarios here.
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 
 let mockIO: ReturnType<typeof createMockIntersectionObserver>;
@@ -61,32 +63,6 @@ describe('initial state', () => {
 // ---------------------------------------------------------------------------
 
 describe('phase transitions', () => {
-  describe('unknown -> visible', () => {
-    it('IO intersecting + doc visible -> visible', async () => {
-      const { createSight } = await getModule();
-      const el = document.createElement('div');
-      const sight = createSight({ target: el });
-
-      mockIO.trigger(el, true);
-      expect(sight.phase).toBe('visible');
-      sight.stop();
-    });
-  });
-
-  describe('unknown -> hidden', () => {
-    it('IO not intersecting -> hidden, reason=viewport', async () => {
-      const { createSight } = await getModule();
-      const el = document.createElement('div');
-      const cb = vi.fn();
-      const sight = createSight({ target: el, onPhaseChange: cb });
-
-      mockIO.trigger(el, false);
-      expect(sight.phase).toBe('hidden');
-      expect(sight.phaseReason).toBe('viewport');
-      sight.stop();
-    });
-  });
-
   describe('visible -> hidden', () => {
     it('document backgrounded -> hidden, reason=document', async () => {
       const { createSight } = await getModule();
@@ -99,19 +75,6 @@ describe('phase transitions', () => {
       setDocumentHidden(true);
       expect(sight.phase).toBe('hidden');
       expect(sight.phaseReason).toBe('document');
-      sight.stop();
-    });
-
-    it('element scrolled out -> hidden, reason=viewport', async () => {
-      const { createSight } = await getModule();
-      const el = document.createElement('div');
-      const sight = createSight({ target: el });
-
-      mockIO.trigger(el, true);
-      mockIO.trigger(el, false);
-
-      expect(sight.phase).toBe('hidden');
-      expect(sight.phaseReason).toBe('viewport');
       sight.stop();
     });
 
@@ -142,20 +105,6 @@ describe('phase transitions', () => {
   });
 
   describe('hidden -> visible', () => {
-    it('element scrolls back + doc visible -> visible', async () => {
-      const { createSight } = await getModule();
-      const el = document.createElement('div');
-      const sight = createSight({ target: el });
-
-      mockIO.trigger(el, true);
-      mockIO.trigger(el, false);
-      expect(sight.phase).toBe('hidden');
-
-      mockIO.trigger(el, true);
-      expect(sight.phase).toBe('visible');
-      sight.stop();
-    });
-
     it('tab foregrounded + element in view -> visible', async () => {
       const { createSight } = await getModule();
       const el = document.createElement('div');

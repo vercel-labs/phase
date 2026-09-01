@@ -1,3 +1,5 @@
+// Native idle scheduling coverage lives in index.browser.spec.tsx. Keep only
+// deterministic composition and headless-unreachable scenarios here.
 import { render, screen, act } from '@testing-library/react';
 import { createRef } from 'react';
 
@@ -61,20 +63,15 @@ describe('before idle', () => {
 // ---------------------------------------------------------------------------
 
 describe('after idle', () => {
-  it('mounts children once idle and stamps entered + animate', async () => {
+  it('stamps entered and animate when motion is allowed', async () => {
     const WhenIdle = await getWhenIdle();
-    render(
-      <WhenIdle data-testid="when-idle">
-        <span data-testid="child">content</span>
-      </WhenIdle>,
-    );
+    render(<WhenIdle data-testid="when-idle">content</WhenIdle>);
 
     act(() => mockIdle.flush());
 
-    const el = screen.getByTestId('when-idle');
-    expect(screen.getByTestId('child')).toBeTruthy();
-    expect(el.dataset.phase).toBe('entered');
-    expect(el.dataset.enter).toBe('animate');
+    const element = screen.getByTestId('when-idle');
+    expect(element.dataset.phase).toBe('entered');
+    expect(element.dataset.enter).toBe('animate');
   });
 
   it('does not stamp data-enter under reduced motion', async () => {

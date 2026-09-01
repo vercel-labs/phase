@@ -21,7 +21,8 @@ Scanner, audit, or eval changes must use the canonical vocabulary in [`CONTEXT.m
 
 ```bash
 pnpm build             # Build workspace packages
-pnpm test              # Run all tests
+pnpm test              # Run all unit tests
+pnpm test:browser      # Run phase browser tests in Chromium, Firefox, and WebKit
 pnpm typecheck         # Type check workspace packages
 pnpm lint              # Lint the repository
 pnpm lint:fix          # Lint and auto-fix

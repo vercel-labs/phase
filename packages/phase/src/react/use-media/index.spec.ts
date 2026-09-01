@@ -1,3 +1,5 @@
+// Native media-query coverage lives in index.browser.spec.ts. Keep only
+// deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockMatchMedia } from '../../__mocks__/match-media';
@@ -36,18 +38,6 @@ describe('useMediaQuery', () => {
     expect(result.current).toBe(true);
   });
 
-  it('updates when MQL change event fires', async () => {
-    const useMediaQuery = await getHook();
-    const { result } = renderHook(() => useMediaQuery('(max-width: 600px)'));
-    expect(result.current).toBe(false);
-
-    act(() => mockMM.setMatches('(max-width: 600px)', true));
-    expect(result.current).toBe(true);
-
-    act(() => mockMM.setMatches('(max-width: 600px)', false));
-    expect(result.current).toBe(false);
-  });
-
   it('re-subscribes when query string changes', async () => {
     const useMediaQuery = await getHook();
     const { result, rerender } = renderHook(
@@ -64,11 +54,11 @@ describe('useMediaQuery', () => {
   it('cleans up subscription on unmount', async () => {
     const useMediaQuery = await getHook();
     const { unmount } = renderHook(() => useMediaQuery('(max-width: 600px)'));
+    expect(mockMM.listenerCount('(max-width: 600px)')).toBe(1);
 
     unmount();
 
-    // After unmount, setting matches should not throw or affect anything
-    expect(() => mockMM.setMatches('(max-width: 600px)', true)).not.toThrow();
+    expect(mockMM.listenerCount('(max-width: 600px)')).toBe(0);
   });
 
   it('two instances with same query update independently', async () => {

@@ -1,3 +1,5 @@
+// Native observer delivery coverage lives in io-pool.browser.spec.ts. Keep only
+// deterministic pooling policy and teardown scenarios here.
 import { createMockIntersectionObserver } from '../../../__mocks__/intersection-observer';
 import { describePoolContract } from './pool-contract';
 
@@ -58,6 +60,41 @@ describe('pooling', () => {
 
     observeIntersection({ element: el1, onIntersect: vi.fn(), threshold: 0.5 });
     observeIntersection({ element: el2, onIntersect: vi.fn(), threshold: 1.0 });
+
+    expect(mockIO.instances).toHaveLength(2);
+  });
+
+  it('same custom root shares one IO instance', async () => {
+    const { observeIntersection } = await getModule();
+    const root = document.createElement('div');
+
+    observeIntersection({
+      element: document.createElement('div'),
+      root,
+      onIntersect: vi.fn(),
+    });
+    observeIntersection({
+      element: document.createElement('div'),
+      root,
+      onIntersect: vi.fn(),
+    });
+
+    expect(mockIO.instances).toHaveLength(1);
+  });
+
+  it('distinct custom roots create separate IO instances', async () => {
+    const { observeIntersection } = await getModule();
+
+    observeIntersection({
+      element: document.createElement('div'),
+      root: document.createElement('div'),
+      onIntersect: vi.fn(),
+    });
+    observeIntersection({
+      element: document.createElement('div'),
+      root: document.createElement('div'),
+      onIntersect: vi.fn(),
+    });
 
     expect(mockIO.instances).toHaveLength(2);
   });
@@ -144,11 +181,18 @@ describe('cleanup', () => {
   it('last element cleanup disconnects IO and removes pool entry', async () => {
     const { observeIntersection } = await getModule();
     const el = document.createElement('div');
-    const cleanup = observeIntersection({ element: el, onIntersect: vi.fn() });
+    const first = vi.fn();
+    const cleanup = observeIntersection({ element: el, onIntersect: first });
 
     cleanup();
 
     expect(firstInstance().observed.size).toBe(0);
+    const second = vi.fn();
+    observeIntersection({ element: el, onIntersect: second });
+    expect(mockIO.instances).toHaveLength(2);
+    mockIO.trigger(el, true);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledOnce();
   });
 
   it('removing one of two elements does NOT disconnect the IO', async () => {
@@ -224,24 +268,5 @@ describe('pool key stability', () => {
     observeIntersection({ element: el2, onIntersect: vi.fn(), threshold: 0.5 });
 
     expect(mockIO.instances).toHaveLength(2);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// State isolation
-// ---------------------------------------------------------------------------
-
-describe('state isolation', () => {
-  it('creating and fully cleaning up leaves no leaked state', async () => {
-    const { observeIntersection } = await getModule();
-    const el = document.createElement('div');
-    const cleanup = observeIntersection({ element: el, onIntersect: vi.fn() });
-
-    cleanup();
-
-    // Trigger should not fire anything
-    const cb = vi.fn();
-    mockIO.trigger(el, true);
-    expect(cb).not.toHaveBeenCalled();
   });
 });

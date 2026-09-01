@@ -1,3 +1,5 @@
+// Native observer coverage lives in index.browser.spec.ts. Keep only
+// deterministic policy and headless-unreachable scenarios here.
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 import { createMockMatchMedia } from '../../__mocks__/match-media';
 
@@ -61,20 +63,6 @@ describe('createLifecycle', () => {
       lifecycle.stop();
     });
 
-    it('auto-start pauses on sight until visible, then activates', async () => {
-      const { createLifecycle } = await getModule();
-      const el = document.createElement('div');
-      const lifecycle = createLifecycle({ target: el });
-      // Not visible yet → paused/sight
-      expect(lifecycle.phase).toBe('paused');
-      expect(lifecycle.phaseReason).toBe('sight');
-
-      makeVisible(el);
-      expect(lifecycle.phase).toBe('active');
-      expect(lifecycle.phaseReason).toBe('started');
-      lifecycle.stop();
-    });
-
     it('manual start stays idle until start()', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');
@@ -104,17 +92,6 @@ describe('createLifecycle', () => {
   });
 
   describe('reduced motion', () => {
-    it('pauses when reduced motion is active (default)', async () => {
-      const { createLifecycle } = await getModule();
-      const el = document.createElement('div');
-      const lifecycle = createLifecycle({ target: el });
-      makeVisible(el);
-      enableReducedMotion();
-      expect(lifecycle.phase).toBe('paused');
-      expect(lifecycle.phaseReason).toBe('reduced-motion');
-      lifecycle.stop();
-    });
-
     it('reduced motion takes priority over sight', async () => {
       const { createLifecycle } = await getModule();
       const el = document.createElement('div');

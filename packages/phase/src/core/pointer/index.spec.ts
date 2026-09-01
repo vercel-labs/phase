@@ -1,3 +1,5 @@
+// Native event and scheduling coverage lives in index.browser.spec.ts. Keep
+// only deterministic policy and headless-unreachable scenarios here.
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 
 // jsdom lacks PointerEvent — provide a minimal polyfill
@@ -88,31 +90,9 @@ describe('initial state', () => {
 // ---------------------------------------------------------------------------
 
 describe('pointer events', () => {
-  it('tracks pointer enter and leave', async () => {
+  it('coalesces synthetic pointer moves into one frame with the latest value', async () => {
     const { createPointer } = await getModule();
     const el = document.createElement('div');
-    const cb = vi.fn();
-    const pointer = createPointer({
-      target: el,
-      onPointer: cb,
-      visibility: 'ignore',
-    });
-
-    el.dispatchEvent(new Event('pointerenter'));
-    expect(pointer.phase).toBe('tracking');
-    expect(pointer.state.active).toBe(true);
-
-    el.dispatchEvent(new Event('pointerleave'));
-    expect(pointer.phase).toBe('idle');
-    expect(pointer.state.active).toBe(false);
-    expect(cb).toHaveBeenCalledWith(expect.objectContaining({ active: false }));
-    pointer.stop();
-  });
-
-  it('batches pointermove into rAF', async () => {
-    const { createPointer } = await getModule();
-    const el = document.createElement('div');
-
     el.getBoundingClientRect = () => ({
       x: 10,
       y: 20,
@@ -124,7 +104,6 @@ describe('pointer events', () => {
       bottom: 120,
       toJSON: () => undefined,
     });
-
     const cb = vi.fn();
     const pointer = createPointer({
       target: el,
@@ -133,21 +112,17 @@ describe('pointer events', () => {
     });
 
     el.dispatchEvent(new Event('pointerenter'));
-
     el.dispatchEvent(
       new PointerEvent('pointermove', { clientX: 50, clientY: 60 }),
     );
     el.dispatchEvent(
       new PointerEvent('pointermove', { clientX: 55, clientY: 65 }),
     );
-
-    expect(cb).toHaveBeenCalledTimes(0);
-
     flushRAF();
 
     expect(cb).toHaveBeenCalledTimes(1);
-    expect(pointer.state.x).toBe(45); // 55 - 10
-    expect(pointer.state.y).toBe(45); // 65 - 20
+    expect(pointer.state.x).toBe(45);
+    expect(pointer.state.y).toBe(45);
     pointer.stop();
   });
 

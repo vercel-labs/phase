@@ -1,3 +1,5 @@
+// Browser event coverage lives in index.browser.spec.ts. Keep only deterministic
+// policy and teardown scenarios here.
 import { createRenderState } from '.';
 
 function dispatchStateChange(element: Element, skipped: boolean): void {
@@ -14,35 +16,6 @@ describe('phase reporting', () => {
   it('starts rendered', () => {
     const el = document.createElement('div');
     const render = createRenderState({ target: el });
-    expect(render.phase).toBe('rendered');
-    render.stop();
-  });
-
-  it('reports skipped when the browser skips rendering', () => {
-    const el = document.createElement('div');
-    const cb = vi.fn();
-    const render = createRenderState({ target: el, onPhaseChange: cb });
-
-    dispatchStateChange(el, true);
-
-    expect(render.phase).toBe('skipped');
-    expect(cb).toHaveBeenCalledTimes(1);
-    expect(cb).toHaveBeenCalledWith('skipped');
-    render.stop();
-  });
-
-  it('reports rendered again when the browser resumes', () => {
-    const el = document.createElement('div');
-    const phases: string[] = [];
-    const render = createRenderState({
-      target: el,
-      onPhaseChange: (p) => phases.push(p),
-    });
-
-    dispatchStateChange(el, true);
-    dispatchStateChange(el, false);
-
-    expect(phases).toEqual(['skipped', 'rendered']);
     expect(render.phase).toBe('rendered');
     render.stop();
   });

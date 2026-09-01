@@ -1,3 +1,5 @@
+// Native observer and scheduling coverage lives in index.browser.spec.ts. Keep
+// only deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
@@ -159,23 +161,6 @@ describe('reactive phase', () => {
 // ---------------------------------------------------------------------------
 
 describe('scroll delivery', () => {
-  it('mirrors the latest scroll position without a re-render', async () => {
-    const useScroll = await getHook();
-    const { ref, el } = createRefWithElement(400, 100);
-    const { result } = renderHook(() =>
-      useScroll({ ref, onScroll: vi.fn(), visibility: 'ignore' }),
-    );
-
-    await act(async () => {
-      el.scrollLeft = 150;
-      el.dispatchEvent(new Event('scroll'));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    expect(result.current.stateRef.current.x).toBe(150);
-    expect(result.current.stateRef.current.progressX).toBeCloseTo(0.5);
-  });
-
   it('exposes a stable measure() that recomputes geometry', async () => {
     const useScroll = await getHook();
     const { ref, el } = createRefWithElement(400, 100);

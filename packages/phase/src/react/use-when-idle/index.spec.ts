@@ -1,3 +1,5 @@
+// Native idle scheduling coverage lives in index.browser.spec.ts. Keep only
+// deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockIdle } from '../../__mocks__/idle';
@@ -16,17 +18,6 @@ afterEach(() => {
 });
 
 describe('useWhenIdle', () => {
-  it('runs the callback once the browser is idle', async () => {
-    const { useWhenIdle } = await import('.');
-    const cb = vi.fn();
-    renderHook(() => useWhenIdle(cb));
-
-    expect(cb).not.toHaveBeenCalled();
-
-    act(() => mockIdle.flush());
-    expect(cb).toHaveBeenCalledTimes(1);
-  });
-
   it('does not run before idle', async () => {
     const { useWhenIdle } = await import('.');
     const cb = vi.fn();

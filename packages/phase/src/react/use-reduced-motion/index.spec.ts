@@ -1,3 +1,5 @@
+// Native media-query coverage lives in index.browser.spec.ts. Keep only
+// hydration and dynamic transition policy here.
 import { renderHook, act } from '@testing-library/react';
 
 import { createMockMatchMedia } from '../../__mocks__/match-media';
@@ -26,13 +28,6 @@ describe('usePrefersReducedMotion', () => {
     const usePrefersReducedMotion = await getHook();
     const { result } = renderHook(() => usePrefersReducedMotion());
     expect(result.current).toBe(false);
-  });
-
-  it('returns true when reduced motion is active', async () => {
-    mockMM.setMatches(REDUCED_MOTION_QUERY, true);
-    const usePrefersReducedMotion = await getHook();
-    const { result } = renderHook(() => usePrefersReducedMotion());
-    expect(result.current).toBe(true);
   });
 
   it('reacts to preference changes', async () => {

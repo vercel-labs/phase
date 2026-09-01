@@ -1,3 +1,5 @@
+// Native observer delivery coverage lives in ro-pool.browser.spec.ts. Keep only
+// deterministic pooling policy and teardown scenarios here.
 import { createMockResizeObserver } from '../../../__mocks__/resize-observer';
 import { describePoolContract } from './pool-contract';
 

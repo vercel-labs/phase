@@ -1,3 +1,5 @@
+// Native ResizeObserver, DPR fallback, and frame delivery coverage lives in
+// index.browser.spec.ts. Keep deterministic entry-shape policy here.
 import { act, renderHook } from '@testing-library/react';
 
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
