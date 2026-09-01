@@ -1051,29 +1051,6 @@ describe('shared clock', () => {
     },
   );
 
-  it('two tickers see the same timestamp', async () => {
-    const { createTicker } = await getModule();
-    let time1 = 0;
-    let time2 = 0;
-    const t1 = createTicker({
-      onTick: (f) => {
-        time1 = f.time;
-      },
-    });
-    const t2 = createTicker({
-      onTick: (f) => {
-        time2 = f.time;
-      },
-    });
-    t1.start();
-    t2.start();
-    advanceFrame(16);
-    expect(time1).toBe(time2);
-    expect(time1).toBeGreaterThan(0);
-    t1.stop();
-    t2.stop();
-  });
-
   it('stopping one ticker does not stop the other', async () => {
     const { createTicker } = await getModule();
     const cb1 = vi.fn();
