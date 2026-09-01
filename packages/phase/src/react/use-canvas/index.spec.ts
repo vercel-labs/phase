@@ -136,6 +136,32 @@ describe('devicePixelContentBoxSize', () => {
     expect(canvas.width).toBe(750);
     expect(canvas.height).toBe(1334);
   });
+
+  it('uses the current dpr when replaying a cached physical size', async () => {
+    vi.stubGlobal('devicePixelRatio', 1);
+    const useCanvas = await getHook();
+    const { useSize } = await import('../use-size');
+    const container = document.createElement('div');
+    const containerRef = { current: container };
+    const keeper = renderHook(() =>
+      useSize({ ref: containerRef, onResize: vi.fn() }),
+    );
+    mockRO.triggerWithPhysicalSize(container, 100, 50, 100, 50);
+    vi.stubGlobal('devicePixelRatio', 2);
+    const { canvas } = createCanvasWithMockContext();
+    const canvasRef = { current: canvas };
+
+    const view = renderHook(() =>
+      useCanvas({ containerRef, canvasRef, draw: vi.fn() }),
+    );
+    await Promise.resolve();
+
+    expect(canvas.width).toBe(200);
+    expect(canvas.height).toBe(100);
+
+    view.unmount();
+    keeper.unmount();
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,10 @@ import { cancelInput, scheduleInput } from '../_internal/clock';
 import { isDocument } from '../_internal/dom';
 import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
-import { observeResize } from '../_internal/pool/ro-pool';
+import {
+  observeResize,
+  type ResizeDeliverySource,
+} from '../_internal/pool/ro-pool';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -204,11 +207,19 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     scheduleInput(flush);
   }
 
+  function onObservedResize(
+    _entry: ResizeObserverEntry,
+    source: ResizeDeliverySource,
+  ): void {
+    if (source === 'replay') return;
+    onROResize();
+  }
+
   function attachListeners(): void {
     if (listenersAttached) return;
     listenersAttached = true;
     target.addEventListener('scroll', onScrollEvent, { passive: true });
-    unobserveRO = observeResize(scroller, onROResize);
+    unobserveRO = observeResize(scroller, onObservedResize);
     // A viewport height change (mobile URL bar, window resize) moves `maxY`
     // without resizing the scrolling element's content box, so the observer
     // alone would leave page geometry stale.

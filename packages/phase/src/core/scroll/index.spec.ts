@@ -242,6 +242,30 @@ describe('geometry', () => {
     expect(scroll.state.maxX).toBe(150); // 400 - 250
     scroll.stop();
   });
+
+  it('does not re-measure from a cached entry after attachment', async () => {
+    const { observeResize } = await import('../_internal/pool/ro-pool');
+    const { createScroll } = await getModule();
+    const el = document.createElement('div');
+    makeScrollable(el, { scrollWidth: 400, clientWidth: 100 });
+    const release = observeResize(el, vi.fn());
+    mockRO.trigger(el, 100, 50);
+    const cb = vi.fn();
+
+    const scroll = createScroll({
+      target: el,
+      onScroll: cb,
+      visibility: 'ignore',
+    });
+    expect(cb).toHaveBeenCalledTimes(1);
+
+    await Promise.resolve();
+    flushRAF();
+
+    expect(cb).toHaveBeenCalledTimes(1);
+    scroll.stop();
+    release();
+  });
 });
 
 // ---------------------------------------------------------------------------

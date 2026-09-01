@@ -76,3 +76,36 @@ it('tracks native measurements across conditional and keyed mounts', async () =>
 
   view.unmount();
 });
+
+it('updates after moving to an element the pool already observes', async () => {
+  const firstTarget = document.createElement('div');
+  firstTarget.style.cssText = 'width:100px;height:80px;';
+  const replacement = document.createElement('div');
+  replacement.style.cssText = 'width:200px;height:80px;';
+  document.body.append(firstTarget, replacement);
+
+  const existingRef = createRef<HTMLDivElement>();
+  existingRef.current = replacement;
+  const existing = renderHook(() => useSize({ ref: existingRef }));
+  await waitFor(() =>
+    expect(existing.result.current.size).toEqual({ width: 200, height: 80 }),
+  );
+
+  const movingRef = createRef<HTMLDivElement>();
+  movingRef.current = firstTarget;
+  const moving = renderHook(() => useSize({ ref: movingRef }));
+  await waitFor(() =>
+    expect(moving.result.current.size).toEqual({ width: 100, height: 80 }),
+  );
+
+  movingRef.current = replacement;
+  moving.rerender();
+  await waitFor(() =>
+    expect(moving.result.current.size).toEqual({ width: 200, height: 80 }),
+  );
+
+  moving.unmount();
+  existing.unmount();
+  firstTarget.remove();
+  replacement.remove();
+});

@@ -157,11 +157,11 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
 
     // --- Resize via shared RO pool ---
 
-    const unobserve: () => void = observeResize(container, (entry) => {
+    const unobserve: () => void = observeResize(container, (entry, source) => {
       const box = entry.contentBoxSize[0];
       if (!box) return;
       const physicalBox: ResizeObserverSize | undefined =
-        entry.devicePixelContentBoxSize?.[0];
+        source === 'replay' ? undefined : entry.devicePixelContentBoxSize?.[0];
       applySize(box.inlineSize, box.blockSize, physicalBox);
     });
 
