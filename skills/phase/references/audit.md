@@ -74,7 +74,7 @@ Scanner targets are literal and non-transitive: scanning a route does not follow
 | `--fail-on <severity>`    | Exit 1 if any new finding is at or above `critical`, `high`, or `medium`. Without a baseline, all findings are new                                                                       |
 | `--baseline <path>`       | Compare with an explicit baseline instead of auto-detecting `phase-baseline.json` at the scan root                                                                                       |
 | `--no-baseline`           | Ignore an explicit or auto-detected baseline                                                                                                                                             |
-| `--write-baseline <path>` | Write all current finding fingerprints as a sorted baseline and exit 0. Cannot be combined with `--baseline`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`            |
+| `--write-baseline <path>` | Write one complete directory scan as a sorted baseline and exit 0. Cannot be combined with `--baseline`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`                 |
 | `--signal <id>`           | Report only this signal. Repeatable                                                                                                                                                      |
 | `--severity <level>`      | Report only this severity. Repeatable                                                                                                                                                    |
 | `--noise <tier>`          | Report only this noise tier. Repeatable, so `--noise precise --noise normal` drops the noisy ones                                                                                        |
@@ -84,7 +84,7 @@ Scanner targets are literal and non-transitive: scanning a route does not follow
 
 Exit codes: `0` scan completed (the default even when findings exist; the audit is advisory), `1` a `--fail-on` threshold was hit, `2` usage error. Requires Node 20 or newer.
 
-When a baseline applies, the text report lists only new findings and summarizes the new, pre-existing, and stale counts. JSON retains both new and pre-existing findings for machine consumers. Version differences between the scanner and baseline produce a warning, not a failure. Rewriting a baseline removes stale fingerprints.
+Baselines store `{ schemaVersion, cliVersion, root, fingerprints }`, where `root` binds root-relative fingerprint paths to the scan root. A baseline from another root is a usage error. When a baseline applies, the text report lists only new findings and summarizes the new and pre-existing counts. Complete directory scans also report the stale count; partial file or multi-target scans report stale as unknown (`null` in JSON). JSON retains both new and pre-existing findings for machine consumers. Version differences between the scanner and baseline produce a warning, not a failure. Rewriting a baseline removes stale fingerprints.
 
 **Read the text output, not `--json`.** Text caps each signal's listing at 20 entries; `--json` does not, and on a large Tailwind codebase the full findings array runs to tens of thousands of tokens. When you need the entries a cap hid, scope the request: `--json --signal tailwind-transition-all`, optionally with `--limit`.
 

@@ -3,11 +3,16 @@ import { createHash } from 'node:crypto';
 import type { ScanFinding } from './detect.ts';
 
 export const BASELINE_SCHEMA_VERSION = 1;
+export const FINDING_IDENTITY_FILE: unique symbol = Symbol(
+  'findingIdentityFile',
+);
 export const FINDING_SOURCE_LINE: unique symbol = Symbol('findingSourceLine');
 
 export interface PhaseBaseline {
   schemaVersion: typeof BASELINE_SCHEMA_VERSION;
   cliVersion: string;
+  /** Scan root relative to the baseline file. */
+  root: string;
   fingerprints: string[];
 }
 
@@ -52,7 +57,8 @@ export function assignFingerprints<Finding extends ScanFinding>(
     const hash = hashFindingLine(
       normalizeLine(finding[FINDING_SOURCE_LINE] ?? finding.text),
     );
-    const identity = `${finding.signal}:${finding.file}:${hash}`;
+    const file = finding[FINDING_IDENTITY_FILE] ?? finding.file;
+    const identity = `${finding.signal}:${file}:${hash}`;
     const occurrence = (occurrences.get(identity) ?? 0) + 1;
     occurrences.set(identity, occurrence);
     assigned.set(index, `${identity}:${occurrence}`);
@@ -81,7 +87,9 @@ export function parseBaseline(json: string): PhaseBaseline {
 
   const baseline = value as Record<string, unknown>;
   for (const field of Object.keys(baseline)) {
-    if (!['schemaVersion', 'cliVersion', 'fingerprints'].includes(field)) {
+    if (
+      !['schemaVersion', 'cliVersion', 'root', 'fingerprints'].includes(field)
+    ) {
       throw new Error('baseline has unknown fields');
     }
   }
@@ -96,6 +104,9 @@ export function parseBaseline(json: string): PhaseBaseline {
   if (!isSafeCliVersion(baseline.cliVersion)) {
     throw new Error('baseline cliVersion must be a safe version token');
   }
+  if (!isRelativeRoot(baseline.root)) {
+    throw new Error('baseline root must be a relative path');
+  }
   if (!Array.isArray(baseline.fingerprints)) {
     throw new Error('baseline fingerprints must be an array');
   }
@@ -105,17 +116,19 @@ export function parseBaseline(json: string): PhaseBaseline {
   return {
     schemaVersion: BASELINE_SCHEMA_VERSION,
     cliVersion: baseline.cliVersion,
+    root: baseline.root,
     fingerprints,
   };
 }
 
 /**
- * Returns canonical baseline JSON with fingerprints sorted without mutating
- * the input. Throws when the CLI version or a fingerprint is invalid.
+ * Returns canonical baseline JSON with a relative root and sorted fingerprints
+ * without mutating the input. Throws when any value is invalid.
  */
 export function serializeBaseline(
   fingerprints: string[],
   cliVersion: string,
+  root: string,
 ): string {
   if (!cliVersion.trim()) {
     throw new Error('baseline cliVersion must be a non-empty string');
@@ -123,12 +136,16 @@ export function serializeBaseline(
   if (!isSafeCliVersion(cliVersion)) {
     throw new Error('baseline cliVersion must be a safe version token');
   }
+  if (!isRelativeRoot(root)) {
+    throw new Error('baseline root must be a relative path');
+  }
   validateFingerprints(fingerprints);
 
   return `${JSON.stringify(
     {
       schemaVersion: BASELINE_SCHEMA_VERSION,
       cliVersion,
+      root,
       fingerprints: fingerprints.toSorted(),
     },
     null,
@@ -195,5 +212,17 @@ function validateFingerprints(fingerprints: unknown[]): string[] {
 export function isSafeCliVersion(value: unknown): value is string {
   return (
     typeof value === 'string' && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(value)
+  );
+}
+
+function isRelativeRoot(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !value.startsWith('/') &&
+    !value.startsWith('\\') &&
+    !/^[A-Za-z]:[\\/]/.test(value) &&
+    // oxlint-disable-next-line no-control-regex -- baseline roots are untrusted input
+    !/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/.test(value)
   );
 }

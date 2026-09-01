@@ -1,6 +1,7 @@
 import { lstatSync, readFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 
+import { FINDING_IDENTITY_FILE } from './baseline.ts';
 import {
   detectAppRouterRoot,
   detectProjectRoot,
@@ -20,6 +21,8 @@ import {
 
 export interface ScanOptions {
   exclude?: string[];
+  /** Root used only for canonical fingerprint paths. */
+  root?: string;
 }
 
 interface ProjectRoots {
@@ -29,7 +32,8 @@ interface ProjectRoots {
 
 /**
  * Scans one or more directories or files. Returns all findings plus scan
- * metadata. Paths inside a target are reported relative to that target.
+ * metadata. Paths inside a target are reported relative to that target, while
+ * `options.root` can provide one root for stable fingerprint identity.
  */
 export function scanTargets(
   paths: string[],
@@ -45,6 +49,7 @@ export function scanTargets(
     evidence: [],
   };
   const excluded = (options.exclude ?? []).map(toPathMatcher);
+  const identityRoot = options.root ? resolve(options.root) : null;
   // Overlapping targets (`scan.mjs src src/components`) would otherwise
   // report the same file twice and double every count.
   const seen = new Set<string>();
@@ -110,7 +115,14 @@ export function scanTargets(
           : rel;
         updateContext(contextRel, content, context, rel, appRouterRoot);
       }
-      findings.push(...scanFile(rel, content, diag));
+      const scanned = scanFile(rel, content, diag);
+      if (identityRoot) {
+        const identityFile = toPosix(relative(identityRoot, filePath));
+        for (const finding of scanned) {
+          finding[FINDING_IDENTITY_FILE] = identityFile;
+        }
+      }
+      findings.push(...scanned);
     }
   }
 

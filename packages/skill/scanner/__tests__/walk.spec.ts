@@ -8,7 +8,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { newDiag, scanTargets } from '../index.ts';
+import { assignFingerprints, newDiag, scanTargets } from '../index.ts';
 import { toPathMatcher, walk } from '../walk.ts';
 
 describe('walk/toPathMatcher', () => {
@@ -78,6 +78,33 @@ describe('walk/toPathMatcher', () => {
       expect(excludedFile.filesSkipped.generated).toBe(0);
       expect(generatedFile.findings).toEqual([]);
       expect(excludedFile.findings).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fingerprints multiple targets relative to one canonical root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-target-root-'));
+    const one = join(root, 'one');
+    const two = join(root, 'two');
+    try {
+      mkdirSync(one);
+      mkdirSync(two);
+      const content = 'const width = target.offsetWidth;\n';
+      writeFileSync(join(one, 'index.ts'), content);
+      writeFileSync(join(two, 'index.ts'), content);
+
+      const findings = scanTargets([one, two], { root }).findings;
+      expect(findings.map((finding) => finding.file)).toEqual([
+        'index.ts',
+        'index.ts',
+      ]);
+      expect(
+        assignFingerprints(findings).map((finding) => finding.fingerprint),
+      ).toEqual([
+        expect.stringContaining(':one/index.ts:'),
+        expect.stringContaining(':two/index.ts:'),
+      ]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

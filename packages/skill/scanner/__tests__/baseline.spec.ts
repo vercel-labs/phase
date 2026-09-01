@@ -73,12 +73,14 @@ describe('baseline documents', () => {
         'forced-reflow:src/a.ts:aaaaaaaaaaaa:1',
       ],
       '0.0.45',
+      '..',
     );
 
     expect(serialized).toBe(
       '{\n' +
         '  "schemaVersion": 1,\n' +
         '  "cliVersion": "0.0.45",\n' +
+        '  "root": "..",\n' +
         '  "fingerprints": [\n' +
         '    "forced-reflow:src/a.ts:aaaaaaaaaaaa:1",\n' +
         '    "manual-raf:src/b.ts:bbbbbbbbbbbb:1"\n' +
@@ -88,6 +90,7 @@ describe('baseline documents', () => {
     expect(parseBaseline(serialized)).toEqual({
       schemaVersion: 1,
       cliVersion: '0.0.45',
+      root: '..',
       fingerprints: [
         'forced-reflow:src/a.ts:aaaaaaaaaaaa:1',
         'manual-raf:src/b.ts:bbbbbbbbbbbb:1',
@@ -100,17 +103,17 @@ describe('baseline documents', () => {
     ['the wrong schema', '{"schemaVersion":2}', 'schemaVersion must be 1'],
     [
       'an empty CLI version',
-      '{"schemaVersion":1,"cliVersion":"","fingerprints":[]}',
+      '{"schemaVersion":1,"cliVersion":"","root":".","fingerprints":[]}',
       'cliVersion must be a non-empty string',
     ],
     [
       'a malformed fingerprint',
-      '{"schemaVersion":1,"cliVersion":"1.0.0","fingerprints":["nope"]}',
+      '{"schemaVersion":1,"cliVersion":"1.0.0","root":".","fingerprints":["nope"]}',
       'fingerprints[0] is not a valid finding fingerprint',
     ],
     [
       'an unsafe CLI version',
-      '{"schemaVersion":1,"cliVersion":"1.0.0\\u001b[2J","fingerprints":[]}',
+      '{"schemaVersion":1,"cliVersion":"1.0.0\\u001b[2J","root":".","fingerprints":[]}',
       'cliVersion must be a safe version token',
     ],
   ])('rejects %s with an actionable error', (_, json, message) => {
@@ -122,6 +125,7 @@ describe('baseline documents', () => {
     const json = JSON.stringify({
       schemaVersion: 1,
       cliVersion: '1.0.0',
+      root: '.',
       fingerprints: [],
       [field]: true,
     });
@@ -138,9 +142,25 @@ describe('baseline documents', () => {
     const fingerprint = 'forced-reflow:src/a.ts:aaaaaaaaaaaa:1';
 
     expect(() =>
-      serializeBaseline([fingerprint, fingerprint], '1.0.0'),
+      serializeBaseline([fingerprint, fingerprint], '1.0.0', '.'),
     ).toThrow('baseline fingerprints must not contain duplicates');
   });
+
+  it.each(['', '/absolute', 'C:\\absolute'])(
+    'rejects an invalid baseline root %j',
+    (root) => {
+      expect(() =>
+        parseBaseline(
+          JSON.stringify({
+            schemaVersion: 1,
+            cliVersion: '1.0.0',
+            root,
+            fingerprints: [],
+          }),
+        ),
+      ).toThrow('baseline root must be a relative path');
+    },
+  );
 });
 
 describe('finding classification', () => {
@@ -154,6 +174,7 @@ describe('finding classification', () => {
           'manual-raf:src/removed.ts:aaaaaaaaaaaa:1',
         ],
         '0.0.44',
+        '.',
       ),
     );
 

@@ -7,7 +7,7 @@ import {
   realpathSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -48,7 +48,7 @@ Options
   --baseline <path>    compare findings with this baseline
   --no-baseline        ignore an explicit or auto-detected baseline
   --write-baseline <path>
-                       write all current findings as a baseline and exit 0
+                       write one complete directory scan as a baseline; exit 0
   --signal <id>        report only this signal (repeatable)
   --severity <level>   report only this severity (repeatable)
   --noise <tier>       report only this noise tier, e.g. --noise precise
@@ -226,11 +226,15 @@ function main(): void {
 
   validateOptions(opts);
   resolveTargets(opts);
-  const baseline = opts.writeBaselinePath !== null ? null : readBaseline(opts);
-  const result = scanTargets(opts.targets, { exclude: opts.exclude });
+  validateBaselineWriteTarget(opts);
+  const root = scanRoot(opts);
+  const baseline =
+    opts.writeBaselinePath !== null ? null : readBaseline(opts, root);
+  const result = scanTargets(opts.targets, { exclude: opts.exclude, root });
   const version = cliVersion();
-  applyBaseline(result, baseline, version);
-  writeBaseline(result, opts.writeBaselinePath, version);
+  const complete = isCompleteScan(opts, result);
+  applyBaseline(result, baseline, version, complete);
+  writeBaseline(result, opts.writeBaselinePath, version, root, complete);
   filterFindings(result, opts);
   printResult(result, opts);
 
@@ -280,9 +284,19 @@ function resolveTargets(opts: CliOptions): void {
   }
 }
 
-function readBaseline(opts: CliOptions): PhaseBaseline | null {
+function validateBaselineWriteTarget(opts: CliOptions): void {
+  if (opts.writeBaselinePath === null) return;
+  if (
+    opts.targets.length !== 1 ||
+    !lstatSync(opts.targets[0] as string).isDirectory()
+  ) {
+    failUsage('--write-baseline requires exactly one directory target');
+  }
+}
+
+function readBaseline(opts: CliOptions, root: string): PhaseBaseline | null {
   try {
-    return loadBaseline(opts);
+    return loadBaseline(opts, root);
   } catch (error) {
     failUsage(error instanceof Error ? error.message : String(error));
   }
@@ -292,11 +306,12 @@ function applyBaseline(
   result: ScanResult,
   baseline: PhaseBaseline | null,
   version: string,
+  complete: boolean,
 ): void {
   if (baseline) {
     const classified = classifyFindings(result.findings, baseline);
     result.findings = classified.findings;
-    result.baseline = { stale: classified.stale };
+    result.baseline = { stale: complete ? classified.stale : null };
     if (baseline.cliVersion !== version) {
       result.warnings.push(
         `baseline version ${baseline.cliVersion} differs from CLI version ${version}; continuing`,
@@ -309,8 +324,15 @@ function writeBaseline(
   result: ScanResult,
   path: string | null,
   version: string,
+  root: string,
+  complete: boolean,
 ): void {
   if (path !== null) {
+    if (!complete) {
+      failUsage(
+        '--write-baseline cannot run because scan coverage is incomplete',
+      );
+    }
     if (result.filesScanned === 0) {
       failUsage('--write-baseline cannot run because no files were scanned');
     }
@@ -325,7 +347,12 @@ function writeBaseline(
           `baseline write destination must be a regular file: ${baselinePath}`,
         );
       }
-      writeFileSync(baselinePath, serializeBaseline(fingerprints, version));
+      const baselineRoot =
+        toPosix(relative(dirname(baselinePath), root)) || '.';
+      writeFileSync(
+        baselinePath,
+        serializeBaseline(fingerprints, version, baselineRoot),
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failUsage(`cannot write baseline: ${path} (${message})`);
@@ -372,13 +399,13 @@ function hitsFailThreshold(findings: ScanFinding[], opts: CliOptions): boolean {
   );
 }
 
-function loadBaseline(opts: CliOptions): PhaseBaseline | null {
+function loadBaseline(opts: CliOptions, root: string): PhaseBaseline | null {
   if (opts.noBaseline) return null;
 
   const explicit = opts.baselinePath !== null;
   const path = explicit
     ? resolve(opts.baselinePath as string)
-    : join(scanRoot(opts), 'phase-baseline.json');
+    : join(root, 'phase-baseline.json');
   if (!explicit && !existsSync(path)) return null;
   if (!explicit && !lstatSync(path).isFile()) {
     throw new Error(
@@ -394,7 +421,11 @@ function loadBaseline(opts: CliOptions): PhaseBaseline | null {
   }
 
   try {
-    return parseBaseline(json);
+    const baseline = parseBaseline(json);
+    if (resolve(dirname(path), baseline.root) !== root) {
+      throw new Error('baseline root does not match the current scan root');
+    }
+    return baseline;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`invalid baseline ${path}: ${message}`, { cause: error });
@@ -404,7 +435,19 @@ function loadBaseline(opts: CliOptions): PhaseBaseline | null {
 function scanRoot(opts: CliOptions): string {
   if (opts.stdin0 || opts.targets.length !== 1) return process.cwd();
   const target = resolve(opts.targets[0] as string);
-  return lstatSync(target).isDirectory() ? target : dirname(target);
+  return lstatSync(target).isDirectory() ? target : process.cwd();
+}
+
+function isCompleteScan(opts: CliOptions, result: ScanResult): boolean {
+  return (
+    !opts.stdin0 &&
+    opts.exclude.length === 0 &&
+    opts.targets.length === 1 &&
+    lstatSync(opts.targets[0] as string).isDirectory() &&
+    result.filesSkipped.unreadable === 0 &&
+    result.filesSkipped.unreadableDirs === 0 &&
+    result.linesSkipped === 0
+  );
 }
 
 function failUsage(message: string): never {

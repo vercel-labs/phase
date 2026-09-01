@@ -22,7 +22,7 @@ export interface ScanResult {
   suppressed: number;
   warnings: string[];
   context: ScanContext;
-  baseline?: { stale: number } | null;
+  baseline?: { stale: number | null } | null;
 }
 
 type ScanJsonFinding = FingerprintedFinding &
@@ -46,7 +46,7 @@ export interface ScanJson {
     suppressed: number;
     new: number;
     preExisting: number;
-    stale: number;
+    stale: number | null;
     bySeverity: { critical: number; high: number; medium: number };
   };
   hotspots: { file: string; count: number }[];
@@ -91,7 +91,7 @@ export function formatJson(
       suppressed: result.suppressed ?? 0,
       new: result.findings.length - preExisting,
       preExisting,
-      stale: result.baseline?.stale ?? 0,
+      stale: result.baseline ? result.baseline.stale : 0,
       bySeverity: {
         critical: counts.critical,
         high: counts.high,
@@ -280,7 +280,11 @@ function renderSummary(result: ScanResult, findings: ScanFinding[]): string[] {
 function renderBaselineSummary(result: ScanResult): string {
   if (!result.baseline) return 'Baseline: not applied; 0 stale.';
   const preExisting = result.findings.filter(isPreExistingFinding).length;
-  return `Baseline: ${result.findings.length - preExisting} new, ${preExisting} pre-existing, ${result.baseline.stale} stale.`;
+  const stale =
+    result.baseline.stale === null
+      ? 'stale unknown (partial scan)'
+      : `${result.baseline.stale} stale`;
+  return `Baseline: ${result.findings.length - preExisting} new, ${preExisting} pre-existing, ${stale}.`;
 }
 
 /**

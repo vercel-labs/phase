@@ -3,6 +3,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, writeFi
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+const FINDING_IDENTITY_FILE = Symbol("findingIdentityFile");
 const FINDING_SOURCE_LINE = Symbol("findingSourceLine");
 /** Normalizes a finding's source line for location-independent identity. */
 function normalizeLine(text) {
@@ -22,7 +23,8 @@ function assignFingerprints(findings) {
 	})).toSorted((a, b) => a.finding.file.localeCompare(b.finding.file) || a.finding.line - b.finding.line || a.index - b.index);
 	for (const { finding, index } of fileOrdered) {
 		const hash = hashFindingLine(normalizeLine(finding[FINDING_SOURCE_LINE] ?? finding.text));
-		const identity = `${finding.signal}:${finding.file}:${hash}`;
+		const file = finding[FINDING_IDENTITY_FILE] ?? finding.file;
+		const identity = `${finding.signal}:${file}:${hash}`;
 		const occurrence = (occurrences.get(identity) ?? 0) + 1;
 		occurrences.set(identity, occurrence);
 		assigned.set(index, `${identity}:${occurrence}`);
@@ -48,30 +50,35 @@ function parseBaseline(json) {
 	for (const field of Object.keys(baseline)) if (![
 		"schemaVersion",
 		"cliVersion",
+		"root",
 		"fingerprints"
 	].includes(field)) throw new Error("baseline has unknown fields");
 	if (baseline.schemaVersion !== 1) throw new Error(`baseline schemaVersion must be 1`);
 	if (typeof baseline.cliVersion !== "string" || !baseline.cliVersion.trim()) throw new Error("baseline cliVersion must be a non-empty string");
 	if (!isSafeCliVersion(baseline.cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
+	if (!isRelativeRoot(baseline.root)) throw new Error("baseline root must be a relative path");
 	if (!Array.isArray(baseline.fingerprints)) throw new Error("baseline fingerprints must be an array");
 	const fingerprints = validateFingerprints(baseline.fingerprints);
 	return {
 		schemaVersion: 1,
 		cliVersion: baseline.cliVersion,
+		root: baseline.root,
 		fingerprints
 	};
 }
 /**
-* Returns canonical baseline JSON with fingerprints sorted without mutating
-* the input. Throws when the CLI version or a fingerprint is invalid.
+* Returns canonical baseline JSON with a relative root and sorted fingerprints
+* without mutating the input. Throws when any value is invalid.
 */
-function serializeBaseline(fingerprints, cliVersion) {
+function serializeBaseline(fingerprints, cliVersion, root) {
 	if (!cliVersion.trim()) throw new Error("baseline cliVersion must be a non-empty string");
 	if (!isSafeCliVersion(cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
+	if (!isRelativeRoot(root)) throw new Error("baseline root must be a relative path");
 	validateFingerprints(fingerprints);
 	return `${JSON.stringify({
 		schemaVersion: 1,
 		cliVersion,
+		root,
 		fingerprints: fingerprints.toSorted()
 	}, null, 2)}\n`;
 }
@@ -111,6 +118,9 @@ function validateFingerprints(fingerprints) {
 /** Whether a value is safe to use as a baseline CLI version and in output. */
 function isSafeCliVersion(value) {
 	return typeof value === "string" && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(value);
+}
+function isRelativeRoot(value) {
+	return typeof value === "string" && value.length > 0 && !value.startsWith("/") && !value.startsWith("\\") && !/^[A-Za-z]:[\\/]/.test(value) && !/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/.test(value);
 }
 //#endregion
 //#region scanner/lex.ts
@@ -2124,7 +2134,7 @@ function formatJson(result, limit = null) {
 			suppressed: result.suppressed ?? 0,
 			new: result.findings.length - preExisting,
 			preExisting,
-			stale: result.baseline?.stale ?? 0,
+			stale: result.baseline ? result.baseline.stale : 0,
 			bySeverity: {
 				critical: counts.critical,
 				high: counts.high,
@@ -2255,7 +2265,8 @@ function renderSummary(result, findings) {
 function renderBaselineSummary(result) {
 	if (!result.baseline) return "Baseline: not applied; 0 stale.";
 	const preExisting = result.findings.filter(isPreExistingFinding).length;
-	return `Baseline: ${result.findings.length - preExisting} new, ${preExisting} pre-existing, ${result.baseline.stale} stale.`;
+	const stale = result.baseline.stale === null ? "stale unknown (partial scan)" : `${result.baseline.stale} stale`;
+	return `Baseline: ${result.findings.length - preExisting} new, ${preExisting} pre-existing, ${stale}.`;
 }
 /**
 * Environment facts change what a safe recommendation looks like; hand them
@@ -2381,7 +2392,8 @@ function countBySeverity(findings) {
 //#region scanner/index.ts
 /**
 * Scans one or more directories or files. Returns all findings plus scan
-* metadata. Paths inside a target are reported relative to that target.
+* metadata. Paths inside a target are reported relative to that target, while
+* `options.root` can provide one root for stable fingerprint identity.
 */
 function scanTargets(paths, options = {}) {
 	const findings = [];
@@ -2394,6 +2406,7 @@ function scanTargets(paths, options = {}) {
 		evidence: []
 	};
 	const excluded = (options.exclude ?? []).map(toPathMatcher);
+	const identityRoot = options.root ? resolve(options.root) : null;
 	const seen = /* @__PURE__ */ new Set();
 	const projectRoots = /* @__PURE__ */ new Map();
 	for (const target of paths) {
@@ -2430,7 +2443,12 @@ function scanTargets(paths, options = {}) {
 				continue;
 			}
 			if (!EXCLUDED_PATHS.test(rel)) updateContext(projectRoot ? toPosix(relative(projectRoot, filePath)) : rel, content, context, rel, appRouterRoot);
-			findings.push(...scanFile(rel, content, diag));
+			const scanned = scanFile(rel, content, diag);
+			if (identityRoot) {
+				const identityFile = toPosix(relative(identityRoot, filePath));
+				for (const finding of scanned) finding[FINDING_IDENTITY_FILE] = identityFile;
+			}
+			findings.push(...scanned);
 		}
 	}
 	return {
@@ -2464,7 +2482,7 @@ Options
   --baseline <path>    compare findings with this baseline
   --no-baseline        ignore an explicit or auto-detected baseline
   --write-baseline <path>
-                       write all current findings as a baseline and exit 0
+                       write one complete directory scan as a baseline; exit 0
   --signal <id>        report only this signal (repeatable)
   --severity <level>   report only this severity (repeatable)
   --noise <tier>       report only this noise tier, e.g. --noise precise
@@ -2598,11 +2616,17 @@ function main() {
 	}
 	validateOptions(opts);
 	resolveTargets(opts);
-	const baseline = opts.writeBaselinePath !== null ? null : readBaseline(opts);
-	const result = scanTargets(opts.targets, { exclude: opts.exclude });
+	validateBaselineWriteTarget(opts);
+	const root = scanRoot(opts);
+	const baseline = opts.writeBaselinePath !== null ? null : readBaseline(opts, root);
+	const result = scanTargets(opts.targets, {
+		exclude: opts.exclude,
+		root
+	});
 	const version = cliVersion();
-	applyBaseline(result, baseline, version);
-	writeBaseline(result, opts.writeBaselinePath, version);
+	const complete = isCompleteScan(opts, result);
+	applyBaseline(result, baseline, version, complete);
+	writeBaseline(result, opts.writeBaselinePath, version, root, complete);
 	filterFindings(result, opts);
 	printResult(result, opts);
 	if (hitsFailThreshold(result.findings, opts)) process.exit(1);
@@ -2630,30 +2654,35 @@ function resolveTargets(opts) {
 		failUsage(`target does not exist: ${target}`);
 	}
 }
-function readBaseline(opts) {
+function validateBaselineWriteTarget(opts) {
+	if (opts.writeBaselinePath === null) return;
+	if (opts.targets.length !== 1 || !lstatSync(opts.targets[0]).isDirectory()) failUsage("--write-baseline requires exactly one directory target");
+}
+function readBaseline(opts, root) {
 	try {
-		return loadBaseline(opts);
+		return loadBaseline(opts, root);
 	} catch (error) {
 		failUsage(error instanceof Error ? error.message : String(error));
 	}
 }
-function applyBaseline(result, baseline, version) {
+function applyBaseline(result, baseline, version, complete) {
 	if (baseline) {
 		const classified = classifyFindings(result.findings, baseline);
 		result.findings = classified.findings;
-		result.baseline = { stale: classified.stale };
+		result.baseline = { stale: complete ? classified.stale : null };
 		if (baseline.cliVersion !== version) result.warnings.push(`baseline version ${baseline.cliVersion} differs from CLI version ${version}; continuing`);
 	}
 }
-function writeBaseline(result, path, version) {
+function writeBaseline(result, path, version, root, complete) {
 	if (path !== null) {
+		if (!complete) failUsage("--write-baseline cannot run because scan coverage is incomplete");
 		if (result.filesScanned === 0) failUsage("--write-baseline cannot run because no files were scanned");
 		const fingerprints = assignFingerprints(result.findings).map((finding) => finding.fingerprint);
 		const baselinePath = resolve(path);
 		try {
 			const destination = lstatSync(baselinePath, { throwIfNoEntry: false });
 			if (destination && !destination.isFile()) failUsage(`baseline write destination must be a regular file: ${baselinePath}`);
-			writeFileSync(baselinePath, serializeBaseline(fingerprints, version));
+			writeFileSync(baselinePath, serializeBaseline(fingerprints, version, toPosix(relative(dirname(baselinePath), root)) || "."));
 		} catch (error) {
 			failUsage(`cannot write baseline: ${path} (${error instanceof Error ? error.message : String(error)})`);
 		}
@@ -2676,10 +2705,10 @@ function hitsFailThreshold(findings, opts) {
 	const threshold = SEVERITY_ORDER.indexOf(opts.failOn);
 	return findings.some((finding) => !isPreExistingFinding(finding) && finding.severity !== "dedup" && SEVERITY_ORDER.indexOf(finding.severity) <= threshold);
 }
-function loadBaseline(opts) {
+function loadBaseline(opts, root) {
 	if (opts.noBaseline) return null;
 	const explicit = opts.baselinePath !== null;
-	const path = explicit ? resolve(opts.baselinePath) : join(scanRoot(opts), "phase-baseline.json");
+	const path = explicit ? resolve(opts.baselinePath) : join(root, "phase-baseline.json");
 	if (!explicit && !existsSync(path)) return null;
 	if (!explicit && !lstatSync(path).isFile()) throw new Error(`auto-detected baseline must be a regular file: ${path}; use --baseline to read it explicitly`);
 	let json;
@@ -2689,7 +2718,9 @@ function loadBaseline(opts) {
 		throw new Error(`cannot read baseline: ${path}`);
 	}
 	try {
-		return parseBaseline(json);
+		const baseline = parseBaseline(json);
+		if (resolve(dirname(path), baseline.root) !== root) throw new Error("baseline root does not match the current scan root");
+		return baseline;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		throw new Error(`invalid baseline ${path}: ${message}`, { cause: error });
@@ -2698,7 +2729,10 @@ function loadBaseline(opts) {
 function scanRoot(opts) {
 	if (opts.stdin0 || opts.targets.length !== 1) return process.cwd();
 	const target = resolve(opts.targets[0]);
-	return lstatSync(target).isDirectory() ? target : dirname(target);
+	return lstatSync(target).isDirectory() ? target : process.cwd();
+}
+function isCompleteScan(opts, result) {
+	return !opts.stdin0 && opts.exclude.length === 0 && opts.targets.length === 1 && lstatSync(opts.targets[0]).isDirectory() && result.filesSkipped.unreadable === 0 && result.filesSkipped.unreadableDirs === 0 && result.linesSkipped === 0;
 }
 function failUsage(message) {
 	console.error(`${message}\n\n${USAGE}`);

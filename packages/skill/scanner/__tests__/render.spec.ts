@@ -180,6 +180,7 @@ describe('render', () => {
           'forced-reflow:src/gone.ts:bbbbbbbbbbbb:1',
         ],
         '0.0.44',
+        '.',
       ),
     );
     const classified = classifyFindings([preExisting, added], baseline);
@@ -219,6 +220,15 @@ describe('render', () => {
     });
 
     expect(text).toContain('1 suppressed');
+  });
+
+  it('reports unknown stale state for a partial baseline scan', () => {
+    const text = formatText({
+      ...resultOf([]),
+      baseline: { stale: null },
+    });
+
+    expect(text).toContain('stale unknown (partial scan)');
   });
 });
 
@@ -627,6 +637,108 @@ describe('scan CLI', () => {
     }
   });
 
+  it('binds baseline identity to one canonical scan root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-baseline-root-'));
+    const one = join(root, 'one');
+    const two = join(root, 'two');
+    mkdirSync(one);
+    mkdirSync(two);
+    const original = join(one, 'index.ts');
+    const moved = join(two, 'index.ts');
+    writeFileSync(original, 'const width = target.offsetWidth;\n');
+
+    try {
+      const baselinePath = join(root, 'phase-baseline.json');
+      const written = runCli(
+        ['--write-baseline', 'phase-baseline.json', '.'],
+        root,
+      );
+      expect(written.status).toBe(0);
+      expect(parseBaseline(readFileSync(baselinePath, 'utf8')).root).toBe('.');
+
+      rmSync(original);
+      writeFileSync(moved, 'const width = target.offsetWidth;\n');
+      const changed = runCli(
+        [
+          '--json',
+          '--baseline',
+          'phase-baseline.json',
+          '--fail-on',
+          'critical',
+          'one',
+          'two',
+        ],
+        root,
+      );
+      expect(changed.status).toBe(1);
+      const json = JSON.parse(changed.stdout);
+      expect(json.summary.stale).toBe(null);
+      expect(json.findings).toEqual([
+        expect.objectContaining({
+          baselineState: 'new',
+          fingerprint: expect.stringContaining(':two/index.ts:'),
+        }),
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an explicit baseline from a different scan root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-baseline-wrong-root-'));
+    const one = join(root, 'one');
+    const two = join(root, 'two');
+    mkdirSync(one);
+    mkdirSync(two);
+    const content = 'const width = target.offsetWidth;\n';
+    writeFileSync(join(one, 'index.ts'), content);
+    writeFileSync(join(two, 'index.ts'), content);
+
+    try {
+      expect(
+        runCli(['--write-baseline', 'phase-baseline.json', '.'], one).status,
+      ).toBe(0);
+      const run = runCli(
+        ['--baseline', 'one/phase-baseline.json', 'two'],
+        root,
+      );
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('does not match the current scan root');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('marks partial stale state unknown and rejects partial baseline writes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-partial-baseline-'));
+    const src = join(root, 'src');
+    mkdirSync(src);
+    writeFileSync(join(src, 'a.ts'), 'const a = target.offsetWidth;\n');
+    writeFileSync(join(src, 'b.ts'), 'const b = target.offsetHeight;\n');
+
+    try {
+      expect(
+        runCli(['--write-baseline', 'phase-baseline.json', '.'], root).status,
+      ).toBe(0);
+      const partial = runCli(
+        ['--json', '--baseline', 'phase-baseline.json', 'src/a.ts'],
+        root,
+      );
+      expect(partial.status).toBe(0);
+      expect(JSON.parse(partial.stdout).summary.stale).toBe(null);
+
+      const write = runCli(
+        ['--write-baseline', 'phase-baseline.json', 'src/a.ts'],
+        root,
+      );
+      expect(write.status).toBe(2);
+      expect(write.stderr).toContain('exactly one directory target');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it.each([
     ['--signal', 'forced-reflow'],
     ['--severity', 'critical'],
@@ -712,6 +824,22 @@ describe('scan CLI', () => {
     }
   });
 
+  it('rejects a baseline write when scan coverage is incomplete', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-incomplete-baseline-'));
+    writeFileSync(join(root, 'generated.ts'), 'x'.repeat(1001));
+    try {
+      const run = runCli(
+        ['--write-baseline', 'phase-baseline.json', '.'],
+        root,
+      );
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('scan coverage is incomplete');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('reports an unusable baseline write path as a usage error', () => {
     const root = mkdtempSync(join(tmpdir(), 'phase-unusable-baseline-'));
     const parentFile = join(root, 'not-a-directory');
@@ -771,7 +899,7 @@ describe('scan CLI', () => {
     const outside = join(root, 'outside.json');
     writeFileSync(
       outside,
-      serializeBaseline([fingerprint as string], '0.0.45'),
+      serializeBaseline([fingerprint as string], '0.0.45', '.'),
     );
     symlinkSync(outside, join(workspace, 'phase-baseline.json'));
 
