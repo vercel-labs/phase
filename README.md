@@ -1251,7 +1251,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `createDevicePixelRatio`  |             544 B |
 | `createMutation`          |           1.54 kB |
 | `createPointer`           |           1.64 kB |
-| `createScroll`            |           2.08 kB |
+| `createScroll`            |           2.07 kB |
 | `createThrottle`          |             983 B |
 | `createDebounce`          |             559 B |
 | `whenIdle`                |             409 B |
@@ -1265,14 +1265,14 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useCanvas`               |           4.11 kB |
 | `useMutation`             |           1.72 kB |
 | `usePointer`              |           1.85 kB |
-| `useScroll`               |           2.42 kB |
+| `useScroll`               |           2.41 kB |
 | `useThrottledCallback`    |            1.1 kB |
 | `useDebouncedCallback`    |             685 B |
 | `useTween`                |             684 B |
 | `usePresence`             |             591 B |
 | `useScrollProgress`       |           1.06 kB |
-| `useSize`                 |             615 B |
-| `useContainerQuery`       |             499 B |
+| `useSize`                 |             599 B |
+| `useContainerQuery`       |             482 B |
 | `useMediaQuery`           |             246 B |
 | `usePrefersReducedMotion` |             274 B |
 | `useDevicePixelRatio`     |             230 B |

@@ -157,17 +157,13 @@ export function useCanvas(options: UseCanvasOptions): UseCanvasResult {
 
     // --- Resize via shared RO pool ---
 
-    const unobserve: () => void = observeResize(
-      container,
-      (entry, replayed) => {
-        const box = entry.contentBoxSize[0];
-        if (!box) return;
-        const physicalBox: ResizeObserverSize | undefined = replayed
-          ? undefined
-          : entry.devicePixelContentBoxSize?.[0];
-        applySize(box.inlineSize, box.blockSize, physicalBox);
-      },
-    );
+    const unobserve: () => void = observeResize(container, (entry, source) => {
+      const box = entry.contentBoxSize[0];
+      if (!box) return;
+      const physicalBox: ResizeObserverSize | undefined =
+        source === 'replay' ? undefined : entry.devicePixelContentBoxSize?.[0];
+      applySize(box.inlineSize, box.blockSize, physicalBox);
+    });
 
     // --- GPU context loss recovery ---
 

@@ -59,6 +59,7 @@ describe('callback dispatch', () => {
     observeResize(el, cb);
     mockRO.trigger(el, 200, 100);
     expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb).toHaveBeenCalledWith(expect.anything(), 'native');
     expect(cb.mock.calls[0]?.[0]?.contentBoxSize[0].inlineSize).toBe(200);
   });
 
@@ -91,6 +92,7 @@ describe('callback dispatch', () => {
     expect(late).not.toHaveBeenCalled();
     await Promise.resolve();
     expect(late).toHaveBeenCalledTimes(1);
+    expect(late).toHaveBeenCalledWith(expect.anything(), 'replay');
     expect(late.mock.calls[0]?.[0]?.contentBoxSize[0].inlineSize).toBe(200);
   });
 
@@ -130,6 +132,7 @@ describe('callback dispatch', () => {
     observeResize(el, () => observeResize(el, late));
 
     mockRO.trigger(el, 200, 100);
+    expect(late).not.toHaveBeenCalled();
     await Promise.resolve();
 
     expect(late).toHaveBeenCalledTimes(1);
@@ -150,7 +153,7 @@ describe('callback dispatch', () => {
     expect(recursive).toHaveBeenCalledTimes(1);
   });
 
-  it('delivers a reentrant subscriber before rethrowing an earlier error', async () => {
+  it('replays a reentrant subscriber after an earlier callback throws', async () => {
     const { observeResize } = await getModule();
     const el = document.createElement('div');
     const late = vi.fn();
@@ -161,9 +164,47 @@ describe('callback dispatch', () => {
     });
 
     expect(() => mockRO.trigger(el, 200, 100)).toThrow(error);
+    expect(late).not.toHaveBeenCalled();
     await Promise.resolve();
 
     expect(late).toHaveBeenCalledTimes(1);
+  });
+
+  it('delivers a subscriber joined before its later batch entry natively', async () => {
+    const { observeResize } = await getModule();
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const late = vi.fn();
+    observeResize(first, () => observeResize(second, late));
+    observeResize(second, vi.fn());
+
+    mockRO.triggerBatch([
+      { element: first, width: 100, height: 50 },
+      { element: second, width: 200, height: 100 },
+    ]);
+    await Promise.resolve();
+
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(late).toHaveBeenCalledWith(expect.anything(), 'native');
+  });
+
+  it('replays a subscriber joined after its earlier batch entry', async () => {
+    const { observeResize } = await getModule();
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const late = vi.fn();
+    observeResize(first, () => observeResize(second, late));
+    observeResize(second, vi.fn());
+
+    mockRO.triggerBatch([
+      { element: second, width: 200, height: 100 },
+      { element: first, width: 100, height: 50 },
+    ]);
+    expect(late).not.toHaveBeenCalled();
+    await Promise.resolve();
+
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(late).toHaveBeenCalledWith(expect.anything(), 'replay');
   });
 });
 

@@ -7,6 +7,13 @@ export interface MockResizeObserverResult {
   MockClass: typeof ResizeObserver;
   instances: MockROInstance[];
   trigger: (element: Element, width: number, height: number) => void;
+  triggerBatch: (
+    entries: ReadonlyArray<{
+      element: Element;
+      width: number;
+      height: number;
+    }>,
+  ) => void;
   triggerWithBorderBox: (
     element: Element,
     contentWidth: number,
@@ -54,33 +61,27 @@ export function createMockResizeObserver(): MockResizeObserverResult {
     }
   }
 
-  function trigger(element: Element, width: number, height: number): void {
+  function triggerBatch(
+    entries: ReadonlyArray<{
+      element: Element;
+      width: number;
+      height: number;
+    }>,
+  ): void {
     for (const inst of instances) {
-      if (inst.observed.has(element)) {
-        const cb = callbacksByInstance.get(inst);
-        if (cb) {
-          const entry = {
-            target: element,
-            contentBoxSize: [{ inlineSize: width, blockSize: height }],
-            borderBoxSize: [{ inlineSize: width, blockSize: height }],
-            devicePixelContentBoxSize: [
-              { inlineSize: width, blockSize: height },
-            ],
-            contentRect: {
-              width,
-              height,
-              x: 0,
-              y: 0,
-              top: 0,
-              left: 0,
-              bottom: height,
-              right: width,
-            } as DOMRectReadOnly,
-          } as ResizeObserverEntry;
-          cb([entry], inst as unknown as ResizeObserver);
-        }
+      const observedEntries: ResizeObserverEntry[] = [];
+      for (const { element, width, height } of entries) {
+        if (!inst.observed.has(element)) continue;
+        observedEntries.push(createEntry(element, width, height));
       }
+      const cb = callbacksByInstance.get(inst);
+      if (cb && observedEntries.length > 0)
+        cb(observedEntries, inst as unknown as ResizeObserver);
     }
+  }
+
+  function trigger(element: Element, width: number, height: number): void {
+    triggerBatch([{ element, width, height }]);
   }
 
   function triggerWithBorderBox(
@@ -191,8 +192,32 @@ export function createMockResizeObserver(): MockResizeObserverResult {
     MockClass: MockRO as unknown as typeof ResizeObserver,
     instances,
     trigger,
+    triggerBatch,
     triggerWithBorderBox,
     triggerWithPhysicalSize,
     triggerWithoutPhysicalSize,
   };
+}
+
+function createEntry(
+  element: Element,
+  width: number,
+  height: number,
+): ResizeObserverEntry {
+  return {
+    target: element,
+    contentBoxSize: [{ inlineSize: width, blockSize: height }],
+    borderBoxSize: [{ inlineSize: width, blockSize: height }],
+    devicePixelContentBoxSize: [{ inlineSize: width, blockSize: height }],
+    contentRect: {
+      width,
+      height,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      bottom: height,
+      right: width,
+    } as DOMRectReadOnly,
+  } as ResizeObserverEntry;
 }

@@ -3,7 +3,10 @@ import { cancelInput, scheduleInput } from '../_internal/clock';
 import { isDocument } from '../_internal/dom';
 import { noTargetError, serverContextError } from '../_internal/errors';
 import { observeIntersection } from '../_internal/pool/io-pool';
-import { observeResize } from '../_internal/pool/ro-pool';
+import {
+  observeResize,
+  type ResizeDeliverySource,
+} from '../_internal/pool/ro-pool';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -206,9 +209,9 @@ export function createScroll(options: CreateScrollOptions): Scroll {
 
   function onObservedResize(
     _entry: ResizeObserverEntry,
-    replayed?: true,
+    source: ResizeDeliverySource,
   ): void {
-    if (replayed) return;
+    if (source === 'replay') return;
     onROResize();
   }
 
