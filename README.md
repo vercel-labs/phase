@@ -926,7 +926,7 @@ Use it for custom cursors, canvas interaction, and tooltips—not simple hover o
 | Hook                      | Purpose                                                                               |
 | ------------------------- | ------------------------------------------------------------------------------------- |
 | `useSight`                | Element visibility as a phase. Pass `onVisibilityChange` for zero-re-render mode      |
-| `useSize`                 | Element dimensions via shared ResizeObserver. Pass `onResize` for zero-re-render mode |
+| `useSize`                 | Element dimensions via shared ResizeObserver. Pass `onResize` for render-free updates |
 | `useContainerQuery`       | Breakpoint matching against element width                                             |
 | `useScrollProgress`       | Element visibility ratio (0–1). Pass `onProgress` for zero-re-render mode             |
 | `useMediaQuery`           | CSS media query subscription (shared MQL pool)                                        |
@@ -935,7 +935,7 @@ Use it for custom cursors, canvas interaction, and tooltips—not simple hover o
 | `useSyncedRef`            | Ref always in sync with latest value                                                  |
 | `useStableCallback`       | Stable-identity function that calls latest closure                                    |
 
-`useSight`, `useSize`, and `useScrollProgress` each support a transient mode: pass a callback (`onVisibilityChange`, `onResize`, `onProgress`) and the hook delivers updates via callback with zero re-renders. The reactive state field is omitted from the return type so accessing it is a compile-time error. An always-current ref (`phaseRef`, `sizeRef`, `progressRef`) is available in both modes.
+`useSight`, `useSize`, and `useScrollProgress` each support a transient mode: pass a callback (`onVisibilityChange`, `onResize`, `onProgress`) and observer updates do not re-render. The reactive state field is omitted from the return type so accessing it is a compile-time error. An always-current ref (`phaseRef`, `sizeRef`, `progressRef`) is available in both modes. `useSize` may render once when its ref attaches to a different element so it can move the subscription.
 
 ## React components
 

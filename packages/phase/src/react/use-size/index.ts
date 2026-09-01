@@ -24,8 +24,8 @@ export interface UseSizeOptions<T extends Element = HTMLDivElement> {
   box?: 'content-box' | 'border-box';
   /**
    * Called on every resize. When provided, `size` is omitted from the return
-   * type and no re-renders occur, the right path for canvas and animation
-   * consumers that read dimensions imperatively.
+   * type and ResizeObserver deliveries do not re-render. Attaching a different
+   * element may require one lifecycle reconciliation render.
    */
   onResize?: SizeCallback;
 }
@@ -51,7 +51,8 @@ export type UseSizeResult<T extends Element = HTMLDivElement> =
 /**
  * Element dimensions via the shared ResizeObserver singleton.
  *
- * Pass `onResize` for zero-re-render mode (canvas, animation loops).
+ * Pass `onResize` for render-free ResizeObserver updates (canvas, animation
+ * loops).
  * Without it, `size` updates via state on every dimension change.
  * `sizeRef` is always current in both modes.
  *
@@ -59,7 +60,7 @@ export type UseSizeResult<T extends Element = HTMLDivElement> =
  * // Reactive (re-renders on resize)
  * const { ref, size } = useSize();
  *
- * // Transient (no re-renders — read sizeRef in onTick/draw)
+ * // Transient (resize updates do not re-render; read sizeRef in onTick/draw)
  * const { ref, sizeRef } = useSize({ onResize: (s) => applySize(s) });
  */
 export function useSize<T extends Element = HTMLDivElement>(
