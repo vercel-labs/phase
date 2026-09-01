@@ -2605,6 +2605,7 @@ function readOptions(argv) {
 	}
 }
 function validateOptions(opts) {
+	if (opts.writeBaselinePath && opts.baselinePath) failUsage("--baseline cannot be combined with --write-baseline");
 	if (opts.writeBaselinePath && (opts.signals.length > 0 || opts.severities.length > 0 || opts.noiseTiers.length > 0 || opts.exclude.length > 0 || opts.stdin0)) failUsage("--write-baseline requires a full unfiltered scan; remove --signal, --severity, --noise, --exclude, and --stdin0");
 }
 function resolveTargets(opts) {
@@ -2638,8 +2639,10 @@ function writeBaseline(result, path, version) {
 	if (path) {
 		if (result.filesScanned === 0) failUsage("--write-baseline cannot run because no files were scanned");
 		const fingerprints = assignFingerprints(result.findings).map((finding) => finding.fingerprint);
+		const baselinePath = resolve(path);
+		if (existsSync(baselinePath) && !lstatSync(baselinePath).isFile()) failUsage(`baseline write destination must be a regular file: ${baselinePath}`);
 		try {
-			writeFileSync(resolve(path), serializeBaseline(fingerprints, version));
+			writeFileSync(baselinePath, serializeBaseline(fingerprints, version));
 		} catch (error) {
 			failUsage(`cannot write baseline: ${path} (${error instanceof Error ? error.message : String(error)})`);
 		}

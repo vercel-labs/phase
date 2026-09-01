@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import {
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -663,6 +664,26 @@ describe('scan CLI', () => {
     }
   });
 
+  it('rejects an explicit baseline combined with a baseline write', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-double-baseline-'));
+    try {
+      const run = runCli([
+        '--baseline',
+        'missing.json',
+        '--write-baseline',
+        join(root, 'phase-baseline.json'),
+        'workspace',
+      ]);
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain(
+        '--baseline cannot be combined with --write-baseline',
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a baseline write when no files were scanned', () => {
     const root = mkdtempSync(join(tmpdir(), 'phase-empty-baseline-'));
     try {
@@ -730,6 +751,36 @@ describe('scan CLI', () => {
 
       expect(run.status).toBe(2);
       expect(run.stderr).toContain('regular file');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to replace a baseline symlink or its target', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-write-symlink-'));
+    const workspace = join(root, 'workspace');
+    const src = join(workspace, 'src');
+    mkdirSync(workspace);
+    mkdirSync(src);
+    writeFileSync(
+      join(src, 'finding.ts'),
+      'const width = target.offsetWidth;\n',
+    );
+    const victim = join(root, 'victim.txt');
+    writeFileSync(victim, 'keep me\n');
+    const baselinePath = join(workspace, 'phase-baseline.json');
+    symlinkSync(victim, baselinePath);
+
+    try {
+      const run = runCli(
+        ['--write-baseline', 'phase-baseline.json', '.'],
+        workspace,
+      );
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('regular file');
+      expect(readFileSync(victim, 'utf8')).toBe('keep me\n');
+      expect(lstatSync(baselinePath).isSymbolicLink()).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

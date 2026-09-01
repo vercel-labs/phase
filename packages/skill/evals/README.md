@@ -46,6 +46,25 @@ The root shape is:
 - `{"baseline": {...}}` for a baseline gate workflow. It writes a baseline, rescans unchanged, copies one planted source file into the workspace, and verifies only that new finding fails and appears in the text report.
 - `{"skip": "Reason this advisory-only scenario has no scan gate"}` for an intentional, explained scan skip.
 
+A baseline gate has this exact shape. `failOn` accepts `critical`, `high`, or `medium`. `target`, `plant.source`, and `plant.destination` must be relative paths that remain inside the scenario directory.
+
+```json
+{
+  "baseline": {
+    "target": "workspace",
+    "failOn": "critical",
+    "plant": {
+      "source": "plant/new.ts",
+      "destination": "workspace/src/new.ts"
+    },
+    "newFinding": {
+      "signal": "forced-reflow",
+      "file": "src/new.ts"
+    }
+  }
+}
+```
+
 An `assertions` object must contain at least one of:
 
 - `required`: entries shaped as `{"signal": "signal-id", "file": "optional/path", "count": 1}`. `file` and the non-negative integer `count` are optional.

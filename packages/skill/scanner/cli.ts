@@ -241,6 +241,9 @@ function readOptions(argv: string[]): CliOptions {
 }
 
 function validateOptions(opts: CliOptions): void {
+  if (opts.writeBaselinePath && opts.baselinePath) {
+    failUsage('--baseline cannot be combined with --write-baseline');
+  }
   if (
     opts.writeBaselinePath &&
     (opts.signals.length > 0 ||
@@ -309,8 +312,14 @@ function writeBaseline(
     const fingerprints = assignFingerprints(result.findings).map(
       (finding) => finding.fingerprint,
     );
+    const baselinePath = resolve(path);
+    if (existsSync(baselinePath) && !lstatSync(baselinePath).isFile()) {
+      failUsage(
+        `baseline write destination must be a regular file: ${baselinePath}`,
+      );
+    }
     try {
-      writeFileSync(resolve(path), serializeBaseline(fingerprints, version));
+      writeFileSync(baselinePath, serializeBaseline(fingerprints, version));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failUsage(`cannot write baseline: ${path} (${message})`);
