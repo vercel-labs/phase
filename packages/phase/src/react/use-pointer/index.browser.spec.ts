@@ -28,14 +28,13 @@ it('updates the hook from browser-driven pointer input', async () => {
   await vi.waitFor(() =>
     expect(states.some((state) => state.active)).toBe(true),
   );
-  const activeState = states.find((state) => state.active);
-  expect(activeState?.x).toBeCloseTo(25, 0);
-  expect(activeState?.y).toBeCloseTo(35, 0);
-  expect(result.current.phaseRef.current).toBe('tracking');
-  expect(result.current.phaseReasonRef.current).toBe('enter');
-  expect(result.current.stateRef.current.x).toBeCloseTo(25, 0);
-  expect(result.current.stateRef.current.y).toBeCloseTo(35, 0);
-  expect(result.current.stateRef.current.active).toBe(true);
+  await vi.waitFor(() => {
+    expect(result.current.phaseRef.current).toBe('tracking');
+    expect(result.current.phaseReasonRef.current).toBe('enter');
+    expect(result.current.stateRef.current.x).toBeCloseTo(25, 0);
+    expect(result.current.stateRef.current.y).toBeCloseTo(35, 0);
+    expect(result.current.stateRef.current.active).toBe(true);
+  });
 
   unmount();
   target.remove();

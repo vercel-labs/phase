@@ -1,15 +1,14 @@
-export interface ScrollFixture {
+interface ScrollFixture {
   root: HTMLDivElement;
   target: HTMLDivElement;
   cleanup(): void;
 }
 
 export function createScrollFixture(options?: {
-  rootSize?: number;
   targetSize?: number;
   beforeSize?: number;
 }): ScrollFixture {
-  const rootSize = options?.rootSize ?? 100;
+  const rootSize = 100;
   const targetSize = options?.targetSize ?? 100;
   const beforeSize = options?.beforeSize ?? 150;
   const root = document.createElement('div');

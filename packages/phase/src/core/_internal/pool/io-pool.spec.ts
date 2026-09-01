@@ -181,11 +181,18 @@ describe('cleanup', () => {
   it('last element cleanup disconnects IO and removes pool entry', async () => {
     const { observeIntersection } = await getModule();
     const el = document.createElement('div');
-    const cleanup = observeIntersection({ element: el, onIntersect: vi.fn() });
+    const first = vi.fn();
+    const cleanup = observeIntersection({ element: el, onIntersect: first });
 
     cleanup();
 
     expect(firstInstance().observed.size).toBe(0);
+    const second = vi.fn();
+    observeIntersection({ element: el, onIntersect: second });
+    expect(mockIO.instances).toHaveLength(2);
+    mockIO.trigger(el, true);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledOnce();
   });
 
   it('removing one of two elements does NOT disconnect the IO', async () => {
@@ -261,24 +268,5 @@ describe('pool key stability', () => {
     observeIntersection({ element: el2, onIntersect: vi.fn(), threshold: 0.5 });
 
     expect(mockIO.instances).toHaveLength(2);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// State isolation
-// ---------------------------------------------------------------------------
-
-describe('state isolation', () => {
-  it('creating and fully cleaning up leaves no leaked state', async () => {
-    const { observeIntersection } = await getModule();
-    const el = document.createElement('div');
-    const cleanup = observeIntersection({ element: el, onIntersect: vi.fn() });
-
-    cleanup();
-
-    // Trigger should not fire anything
-    const cb = vi.fn();
-    mockIO.trigger(el, true);
-    expect(cb).not.toHaveBeenCalled();
   });
 });

@@ -27,7 +27,7 @@
     "oxfmt": "0.44.0",
     "oxlint": "1.59.0",
     "turbo": "2.10.11",
-    "vitest": "4.1.4"
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": "24.x"

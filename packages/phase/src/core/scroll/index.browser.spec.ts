@@ -8,11 +8,10 @@ it('tracks native element scroll geometry on an animation frame', async () => {
   content.style.cssText = 'width:100px;height:300px;';
   target.append(content);
   document.body.append(target);
-  const states: Array<{ y: number; maxY: number; progressY: number }> = [];
   const scroll = createScroll({
     target,
     visibility: 'ignore',
-    onScroll: (state) => states.push({ ...state }),
+    onScroll: vi.fn(),
   });
 
   expect(scroll.state.maxY).toBe(200);

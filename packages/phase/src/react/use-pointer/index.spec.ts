@@ -2,6 +2,7 @@
 // only deterministic React wiring and headless-unreachable scenarios here.
 import { renderHook, act } from '@testing-library/react';
 
+import type { UsePointerResult } from '.';
 import { createMockIntersectionObserver } from '../../__mocks__/intersection-observer';
 
 // jsdom lacks PointerEvent — MouseEvent already carries clientX/clientY.
@@ -185,6 +186,8 @@ describe('stateRef', () => {
     });
     expect(result.current.stateRef.current.active).toBe(true);
 
+    // Scrolling a hovered element away dispatches pointerleave before IO in a
+    // real browser, so inject IO here to isolate visibility suspension policy.
     act(() => mockIO.trigger(el, false));
     expect(result.current.stateRef.current.active).toBe(false);
   });
@@ -198,8 +201,24 @@ describe('onPointer', () => {
   it('forwards pointer state on leave', async () => {
     const usePointer = await getHook();
     const { ref, el } = createRefWithElement();
-    const onPointer = vi.fn();
-    renderHook(() => usePointer({ ref, onPointer, visibility: 'ignore' }));
+    let current: UsePointerResult | undefined;
+    const observedRefs: Array<{
+      active: boolean;
+      phase: string;
+      reason: string;
+    }> = [];
+    const onPointer = vi.fn(() => {
+      if (!current) throw new Error('hook result unavailable');
+      observedRefs.push({
+        active: current.stateRef.current.active,
+        phase: current.phaseRef.current,
+        reason: current.phaseReasonRef.current,
+      });
+    });
+    renderHook(() => {
+      current = usePointer({ ref, onPointer, visibility: 'ignore' });
+      return current;
+    });
 
     act(() => {
       el.dispatchEvent(new Event('pointerenter'));
@@ -209,6 +228,9 @@ describe('onPointer', () => {
     expect(onPointer).toHaveBeenCalledWith(
       expect.objectContaining({ active: false }),
     );
+    expect(observedRefs).toEqual([
+      { active: false, phase: 'idle', reason: 'leave' },
+    ]);
   });
 });
 
