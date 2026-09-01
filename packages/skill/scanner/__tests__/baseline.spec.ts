@@ -133,6 +133,14 @@ describe('baseline documents', () => {
       expect(String(error)).not.toContain('\u001b');
     }
   });
+
+  it('refuses to serialize duplicate fingerprints', () => {
+    const fingerprint = 'forced-reflow:src/a.ts:aaaaaaaaaaaa:1';
+
+    expect(() =>
+      serializeBaseline([fingerprint, fingerprint], '1.0.0'),
+    ).toThrow('baseline fingerprints must not contain duplicates');
+  });
 });
 
 describe('finding classification', () => {

@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { assignFingerprints, isPreExistingFinding } from './baseline.ts';
+import {
+  assignFingerprints,
+  isPreExistingFinding,
+  isSafeCliVersion,
+} from './baseline.ts';
 import type { ClassifiedFinding, FingerprintedFinding } from './baseline.ts';
 import type { ScanContext } from './context.ts';
 import type { ScanExecution, ScanFinding } from './detect.ts';
@@ -241,9 +245,10 @@ function renderSummary(result: ScanResult, findings: ScanFinding[]): string[] {
     return ['', '⚠ No scannable files found. Check the target path.', baseline];
   }
   if (result.baseline && findings.length === 0) {
+    const suppressedNote = suppressed > 0 ? `, ${suppressed} suppressed` : '';
     return [
       '',
-      `✓ No new animation anti-pattern candidates found (${result.filesScanned} files scanned).`,
+      `✓ No new animation anti-pattern candidates found (${result.filesScanned} files scanned${suppressedNote}).`,
       baseline,
     ];
   }
@@ -343,9 +348,10 @@ export function cliVersion(): string {
     const metadataPath = fileURLToPath(
       new URL('../metadata.json', import.meta.url),
     );
-    return (
-      JSON.parse(readFileSync(metadataPath, 'utf8')) as { version: string }
+    const version = (
+      JSON.parse(readFileSync(metadataPath, 'utf8')) as { version?: unknown }
     ).version;
+    if (isSafeCliVersion(version)) return version;
   } catch {
     // Some skill installers omit generated metadata; SKILL.md is canonical.
   }
@@ -354,10 +360,10 @@ export function cliVersion(): string {
     const skillPath = fileURLToPath(new URL('../SKILL.md', import.meta.url));
     const skill = readFileSync(skillPath, 'utf8');
     const frontmatter = skill.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? '';
-    return (
-      frontmatter.match(/^\s+version:\s*['"]?([^'"\s]+)['"]?\s*$/m)?.[1] ??
-      'unknown'
-    );
+    const version = frontmatter.match(
+      /^\s+version:\s*['"]?([^'"\s]+)['"]?\s*$/m,
+    )?.[1];
+    return isSafeCliVersion(version) ? version : 'unknown';
   } catch {
     return 'unknown';
   }

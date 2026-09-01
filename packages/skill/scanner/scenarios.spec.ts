@@ -99,6 +99,30 @@ describe('eval scenario contract', () => {
     },
   );
 
+  it('rejects unsupported baseline new-finding fields', () => {
+    expect(() =>
+      parseEvalScenario('baseline', {
+        description: 'A scenario.',
+        scan: {
+          baseline: {
+            target: 'workspace',
+            failOn: 'critical',
+            plant: {
+              source: 'plant/new.ts',
+              destination: 'workspace/src/new.ts',
+            },
+            newFinding: {
+              signal: 'forced-reflow',
+              file: 'src/new.ts',
+              count: 2,
+            },
+          },
+        },
+        expectedBehavior: ['Answers the question.'],
+      }),
+    ).toThrow('baseline.scan.baseline.newFinding has unknown field `count`');
+  });
+
   it('requires the prompt claimed by the eval format', () => {
     const directory = mkdtempSync(join(tmpdir(), 'phase-eval-scenario-'));
     writeFileSync(

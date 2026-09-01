@@ -42,9 +42,9 @@ Options
   --json               emit machine-readable JSON (schemaVersion 1)
   --stdin0             read additional NUL-delimited targets from stdin;
                        an empty stream scans nothing instead of "."
-  --fail-on <severity> exit 1 if any finding is at or above the given
-                        severity (critical | high | medium); default is
-                        exit 0 regardless of findings (advisory)
+  --fail-on <severity> exit 1 if any new finding is at or above the given
+                       severity (critical | high | medium); without a baseline,
+                       all findings are new; default is advisory
   --baseline <path>    compare findings with this baseline
   --no-baseline        ignore an explicit or auto-detected baseline
   --write-baseline <path>
@@ -221,7 +221,7 @@ function main(): void {
 
   validateOptions(opts);
   resolveTargets(opts);
-  const baseline = readBaseline(opts);
+  const baseline = opts.writeBaselinePath ? null : readBaseline(opts);
   const result = scanTargets(opts.targets, { exclude: opts.exclude });
   const version = cliVersion();
   applyBaseline(result, baseline, version);
@@ -245,10 +245,12 @@ function validateOptions(opts: CliOptions): void {
     opts.writeBaselinePath &&
     (opts.signals.length > 0 ||
       opts.severities.length > 0 ||
-      opts.noiseTiers.length > 0)
+      opts.noiseTiers.length > 0 ||
+      opts.exclude.length > 0 ||
+      opts.stdin0)
   ) {
     failUsage(
-      '--write-baseline requires a full unfiltered scan; remove --signal, --severity, and --noise',
+      '--write-baseline requires a full unfiltered scan; remove --signal, --severity, --noise, --exclude, and --stdin0',
     );
   }
 }
@@ -301,6 +303,9 @@ function writeBaseline(
   version: string,
 ): void {
   if (path) {
+    if (result.filesScanned === 0) {
+      failUsage('--write-baseline cannot run because no files were scanned');
+    }
     const fingerprints = assignFingerprints(result.findings).map(
       (finding) => finding.fingerprint,
     );
@@ -360,6 +365,11 @@ function loadBaseline(opts: CliOptions): PhaseBaseline | null {
     ? resolve(opts.baselinePath as string)
     : join(scanRoot(opts), 'phase-baseline.json');
   if (!explicit && !existsSync(path)) return null;
+  if (!explicit && !lstatSync(path).isFile()) {
+    throw new Error(
+      `auto-detected baseline must be a regular file: ${path}; use --baseline to read it explicitly`,
+    );
+  }
 
   let json: string;
   try {

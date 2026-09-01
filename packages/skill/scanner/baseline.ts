@@ -93,24 +93,14 @@ export function parseBaseline(json: string): PhaseBaseline {
   if (typeof baseline.cliVersion !== 'string' || !baseline.cliVersion.trim()) {
     throw new Error('baseline cliVersion must be a non-empty string');
   }
-  if (!isCliVersion(baseline.cliVersion)) {
+  if (!isSafeCliVersion(baseline.cliVersion)) {
     throw new Error('baseline cliVersion must be a safe version token');
   }
   if (!Array.isArray(baseline.fingerprints)) {
     throw new Error('baseline fingerprints must be an array');
   }
 
-  const fingerprints = baseline.fingerprints.map((fingerprint, index) => {
-    if (typeof fingerprint !== 'string' || !isFingerprint(fingerprint)) {
-      throw new Error(
-        `baseline fingerprints[${index}] is not a valid finding fingerprint`,
-      );
-    }
-    return fingerprint;
-  });
-  if (new Set(fingerprints).size !== fingerprints.length) {
-    throw new Error('baseline fingerprints must not contain duplicates');
-  }
+  const fingerprints = validateFingerprints(baseline.fingerprints);
 
   return {
     schemaVersion: BASELINE_SCHEMA_VERSION,
@@ -130,16 +120,10 @@ export function serializeBaseline(
   if (!cliVersion.trim()) {
     throw new Error('baseline cliVersion must be a non-empty string');
   }
-  if (!isCliVersion(cliVersion)) {
+  if (!isSafeCliVersion(cliVersion)) {
     throw new Error('baseline cliVersion must be a safe version token');
   }
-  for (const [index, fingerprint] of fingerprints.entries()) {
-    if (!isFingerprint(fingerprint)) {
-      throw new Error(
-        `baseline fingerprints[${index}] is not a valid finding fingerprint`,
-      );
-    }
-  }
+  validateFingerprints(fingerprints);
 
   return `${JSON.stringify(
     {
@@ -192,6 +176,24 @@ function isFingerprint(value: string): boolean {
   return /^[^:]+:.+:[0-9a-f]{12}:[1-9]\d*$/.test(value);
 }
 
-function isCliVersion(value: string): boolean {
-  return /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(value);
+function validateFingerprints(fingerprints: unknown[]): string[] {
+  const validated = fingerprints.map((fingerprint, index) => {
+    if (typeof fingerprint !== 'string' || !isFingerprint(fingerprint)) {
+      throw new Error(
+        `baseline fingerprints[${index}] is not a valid finding fingerprint`,
+      );
+    }
+    return fingerprint;
+  });
+  if (new Set(validated).size !== validated.length) {
+    throw new Error('baseline fingerprints must not contain duplicates');
+  }
+  return validated;
+}
+
+/** Whether a value is safe to use as a baseline CLI version and in output. */
+export function isSafeCliVersion(value: unknown): value is string {
+  return (
+    typeof value === 'string' && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(value)
+  );
 }

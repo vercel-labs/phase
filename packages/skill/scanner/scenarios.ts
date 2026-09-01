@@ -138,7 +138,10 @@ export interface EvalBaselineWorkflow {
     source: string;
     destination: string;
   };
-  newFinding: EvalRequiredFinding & { file: string };
+  newFinding: {
+    signal: ScanSignalId;
+    file: string;
+  };
 }
 
 interface EvalScenarioAssertionScan {
@@ -233,10 +236,9 @@ function parseBaselineWorkflow(
   const plant = expectObject(plantPath, baseline.plant);
   rejectUnknownFields(plantPath, plant, ['source', 'destination']);
 
-  const newFinding = parseRequired(`${path}.newFinding`, baseline.newFinding);
-  if (!newFinding.file) {
-    throw new Error(`${path}.newFinding.file must be a non-empty string`);
-  }
+  const newFindingPath = `${path}.newFinding`;
+  const newFinding = expectObject(newFindingPath, baseline.newFinding);
+  rejectUnknownFields(newFindingPath, newFinding, ['signal', 'file']);
 
   return {
     target: expectScenarioPath(`${path}.target`, baseline.target),
@@ -248,7 +250,10 @@ function parseBaselineWorkflow(
         plant.destination,
       ),
     },
-    newFinding: { ...newFinding, file: newFinding.file },
+    newFinding: {
+      signal: expectSignal(`${newFindingPath}.signal`, newFinding.signal),
+      file: expectString(`${newFindingPath}.file`, newFinding.file),
+    },
   };
 }
 

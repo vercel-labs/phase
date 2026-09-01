@@ -52,13 +52,9 @@ function parseBaseline(json) {
 	].includes(field)) throw new Error("baseline has unknown fields");
 	if (baseline.schemaVersion !== 1) throw new Error(`baseline schemaVersion must be 1`);
 	if (typeof baseline.cliVersion !== "string" || !baseline.cliVersion.trim()) throw new Error("baseline cliVersion must be a non-empty string");
-	if (!isCliVersion(baseline.cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
+	if (!isSafeCliVersion(baseline.cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
 	if (!Array.isArray(baseline.fingerprints)) throw new Error("baseline fingerprints must be an array");
-	const fingerprints = baseline.fingerprints.map((fingerprint, index) => {
-		if (typeof fingerprint !== "string" || !isFingerprint(fingerprint)) throw new Error(`baseline fingerprints[${index}] is not a valid finding fingerprint`);
-		return fingerprint;
-	});
-	if (new Set(fingerprints).size !== fingerprints.length) throw new Error("baseline fingerprints must not contain duplicates");
+	const fingerprints = validateFingerprints(baseline.fingerprints);
 	return {
 		schemaVersion: 1,
 		cliVersion: baseline.cliVersion,
@@ -71,8 +67,8 @@ function parseBaseline(json) {
 */
 function serializeBaseline(fingerprints, cliVersion) {
 	if (!cliVersion.trim()) throw new Error("baseline cliVersion must be a non-empty string");
-	if (!isCliVersion(cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
-	for (const [index, fingerprint] of fingerprints.entries()) if (!isFingerprint(fingerprint)) throw new Error(`baseline fingerprints[${index}] is not a valid finding fingerprint`);
+	if (!isSafeCliVersion(cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
+	validateFingerprints(fingerprints);
 	return `${JSON.stringify({
 		schemaVersion: 1,
 		cliVersion,
@@ -104,8 +100,17 @@ function isPreExistingFinding(finding) {
 function isFingerprint(value) {
 	return /^[^:]+:.+:[0-9a-f]{12}:[1-9]\d*$/.test(value);
 }
-function isCliVersion(value) {
-	return /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(value);
+function validateFingerprints(fingerprints) {
+	const validated = fingerprints.map((fingerprint, index) => {
+		if (typeof fingerprint !== "string" || !isFingerprint(fingerprint)) throw new Error(`baseline fingerprints[${index}] is not a valid finding fingerprint`);
+		return fingerprint;
+	});
+	if (new Set(validated).size !== validated.length) throw new Error("baseline fingerprints must not contain duplicates");
+	return validated;
+}
+/** Whether a value is safe to use as a baseline CLI version and in output. */
+function isSafeCliVersion(value) {
+	return typeof value === "string" && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(value);
 }
 //#endregion
 //#region scanner/lex.ts
@@ -2220,11 +2225,14 @@ function renderSummary(result, findings) {
 		"⚠ No scannable files found. Check the target path.",
 		baseline
 	];
-	if (result.baseline && findings.length === 0) return [
-		"",
-		`✓ No new animation anti-pattern candidates found (${result.filesScanned} files scanned).`,
-		baseline
-	];
+	if (result.baseline && findings.length === 0) {
+		const suppressedNote = suppressed > 0 ? `, ${suppressed} suppressed` : "";
+		return [
+			"",
+			`✓ No new animation anti-pattern candidates found (${result.filesScanned} files scanned${suppressedNote}).`,
+			baseline
+		];
+	}
 	if (findings.length === 0 && suppressed === 0) return [
 		"",
 		`✓ No animation anti-pattern candidates found (${result.filesScanned} files scanned).`,
@@ -2285,10 +2293,12 @@ const EXECUTION_RANK = {
 function cliVersion() {
 	try {
 		const metadataPath = fileURLToPath(new URL("../metadata.json", import.meta.url));
-		return JSON.parse(readFileSync(metadataPath, "utf8")).version;
+		const version = JSON.parse(readFileSync(metadataPath, "utf8")).version;
+		if (isSafeCliVersion(version)) return version;
 	} catch {}
 	try {
-		return (readFileSync(fileURLToPath(new URL("../SKILL.md", import.meta.url)), "utf8").match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "").match(/^\s+version:\s*['"]?([^'"\s]+)['"]?\s*$/m)?.[1] ?? "unknown";
+		const version = (readFileSync(fileURLToPath(new URL("../SKILL.md", import.meta.url)), "utf8").match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "").match(/^\s+version:\s*['"]?([^'"\s]+)['"]?\s*$/m)?.[1];
+		return isSafeCliVersion(version) ? version : "unknown";
 	} catch {
 		return "unknown";
 	}
@@ -2448,9 +2458,9 @@ Options
   --json               emit machine-readable JSON (schemaVersion 1)
   --stdin0             read additional NUL-delimited targets from stdin;
                        an empty stream scans nothing instead of "."
-  --fail-on <severity> exit 1 if any finding is at or above the given
-                        severity (critical | high | medium); default is
-                        exit 0 regardless of findings (advisory)
+  --fail-on <severity> exit 1 if any new finding is at or above the given
+                       severity (critical | high | medium); without a baseline,
+                       all findings are new; default is advisory
   --baseline <path>    compare findings with this baseline
   --no-baseline        ignore an explicit or auto-detected baseline
   --write-baseline <path>
@@ -2578,7 +2588,7 @@ function main() {
 	}
 	validateOptions(opts);
 	resolveTargets(opts);
-	const baseline = readBaseline(opts);
+	const baseline = opts.writeBaselinePath ? null : readBaseline(opts);
 	const result = scanTargets(opts.targets, { exclude: opts.exclude });
 	const version = cliVersion();
 	applyBaseline(result, baseline, version);
@@ -2595,7 +2605,7 @@ function readOptions(argv) {
 	}
 }
 function validateOptions(opts) {
-	if (opts.writeBaselinePath && (opts.signals.length > 0 || opts.severities.length > 0 || opts.noiseTiers.length > 0)) failUsage("--write-baseline requires a full unfiltered scan; remove --signal, --severity, and --noise");
+	if (opts.writeBaselinePath && (opts.signals.length > 0 || opts.severities.length > 0 || opts.noiseTiers.length > 0 || opts.exclude.length > 0 || opts.stdin0)) failUsage("--write-baseline requires a full unfiltered scan; remove --signal, --severity, --noise, --exclude, and --stdin0");
 }
 function resolveTargets(opts) {
 	if (opts.stdin0) {
@@ -2626,6 +2636,7 @@ function applyBaseline(result, baseline, version) {
 }
 function writeBaseline(result, path, version) {
 	if (path) {
+		if (result.filesScanned === 0) failUsage("--write-baseline cannot run because no files were scanned");
 		const fingerprints = assignFingerprints(result.findings).map((finding) => finding.fingerprint);
 		try {
 			writeFileSync(resolve(path), serializeBaseline(fingerprints, version));
@@ -2656,6 +2667,7 @@ function loadBaseline(opts) {
 	const explicit = opts.baselinePath !== null;
 	const path = explicit ? resolve(opts.baselinePath) : join(scanRoot(opts), "phase-baseline.json");
 	if (!explicit && !existsSync(path)) return null;
+	if (!explicit && !lstatSync(path).isFile()) throw new Error(`auto-detected baseline must be a regular file: ${path}; use --baseline to read it explicitly`);
 	let json;
 	try {
 		json = readFileSync(path, "utf8");

@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -206,6 +207,16 @@ describe('render', () => {
     expect(formatText(resultOf([]))).toContain(
       'Baseline: not applied; 0 stale.',
     );
+  });
+
+  it('keeps suppression counts in a baseline scan with no new findings', () => {
+    const text = formatText({
+      ...resultOf([]),
+      suppressed: 1,
+      baseline: { stale: 0 },
+    });
+
+    expect(text).toContain('1 suppressed');
   });
 });
 
@@ -425,6 +436,40 @@ describe('scan CLI', () => {
     }
   });
 
+  it('does not trust an unsafe installed metadata version', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-installed-skill-'));
+    const scripts = join(root, 'scripts');
+    const workspace = join(root, 'workspace');
+    mkdirSync(scripts);
+    mkdirSync(workspace);
+
+    try {
+      const installedScript = join(scripts, 'scan.mjs');
+      writeFileSync(installedScript, readFileSync(SCRIPT, 'utf8'));
+      writeFileSync(
+        join(root, 'metadata.json'),
+        JSON.stringify({ version: '9.9.9\u001b[2JINJECT' }),
+      );
+      writeFileSync(
+        join(workspace, 'clean.ts'),
+        'export const clean = true;\n',
+      );
+
+      const run = spawnSync(
+        process.execPath,
+        [installedScript, '--json', workspace],
+        { encoding: 'utf8' },
+      );
+
+      expect(run.status).toBe(0);
+      expect(JSON.parse(run.stdout).skillVersion).toBe('unknown');
+      expect(run.stdout).not.toContain('\u001b');
+      expect(run.stderr).not.toContain('\u001b');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('reads the installed skill version when metadata.json is absent', () => {
     // Deliberately not realpath'd: on macOS this is a /var -> /private/var
     // symlink, which is the shape that made the CLI exit silently.
@@ -584,16 +629,110 @@ describe('scan CLI', () => {
     ['--signal', 'forced-reflow'],
     ['--severity', 'critical'],
     ['--noise', 'precise'],
+    ['--exclude', 'styles/'],
   ])('rejects --write-baseline with the %s report filter', (filter, value) => {
-    const run = runCli([
-      '--write-baseline',
-      'phase-baseline.json',
-      filter,
-      value,
-      'workspace',
-    ]);
-    expect(run.status).toBe(2);
-    expect(run.stderr).toContain('full unfiltered scan');
+    const root = mkdtempSync(join(tmpdir(), 'phase-filtered-baseline-'));
+    try {
+      const run = runCli([
+        '--write-baseline',
+        join(root, 'phase-baseline.json'),
+        filter,
+        value,
+        'workspace',
+      ]);
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('full unfiltered scan');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects --write-baseline with stdin targets', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-stdin-baseline-'));
+    try {
+      const run = runCli([
+        '--write-baseline',
+        join(root, 'phase-baseline.json'),
+        '--stdin0',
+      ]);
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('full unfiltered scan');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a baseline write when no files were scanned', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-empty-baseline-'));
+    try {
+      const baseline = join(root, 'phase-baseline.json');
+      const run = runCli([
+        '--write-baseline',
+        baseline,
+        join(REPO_ROOT, 'skills/phase/dist'),
+      ]);
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('no files were scanned');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('replaces a corrupt auto-detected baseline', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-repair-baseline-'));
+    const src = join(root, 'src');
+    mkdirSync(src);
+    writeFileSync(
+      join(src, 'finding.ts'),
+      'const width = target.offsetWidth;\n',
+    );
+    const baselinePath = join(root, 'phase-baseline.json');
+    writeFileSync(baselinePath, '{');
+
+    try {
+      const run = runCli(
+        ['--write-baseline', 'phase-baseline.json', '.'],
+        root,
+      );
+
+      expect(run.status).toBe(0);
+      expect(
+        parseBaseline(readFileSync(baselinePath, 'utf8')).fingerprints,
+      ).toHaveLength(1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to follow an auto-detected baseline symlink', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-symlink-baseline-'));
+    const workspace = join(root, 'workspace');
+    const src = join(workspace, 'src');
+    mkdirSync(workspace);
+    mkdirSync(src);
+    writeFileSync(
+      join(src, 'finding.ts'),
+      'const width = target.offsetWidth;\n',
+    );
+    const fingerprint = assignFingerprints([findingOf('src/finding.ts', 1)])[0]
+      ?.fingerprint;
+    const outside = join(root, 'outside.json');
+    writeFileSync(
+      outside,
+      serializeBaseline([fingerprint as string], '0.0.45'),
+    );
+    symlinkSync(outside, join(workspace, 'phase-baseline.json'));
+
+    try {
+      const run = runCli(['--fail-on', 'critical', '.'], workspace);
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('regular file');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('accepts individual files as targets, keeping the path as given', () => {
@@ -750,6 +889,10 @@ describe('scan CLI', () => {
     const run = runCli(['--help']);
     expect(run.status).toBe(0);
     expect(run.stdout).toContain('Usage:');
+    expect(run.stdout).toContain('any new finding');
+    expect(run.stdout.replace(/\s+/g, ' ')).toContain(
+      'without a baseline, all findings are new',
+    );
   });
 
   it('exits 2 with usage on an unknown option or missing target', () => {
