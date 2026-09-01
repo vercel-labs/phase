@@ -105,6 +105,14 @@ describe('walk/toPathMatcher', () => {
         expect.stringContaining(':one/index.ts:'),
         expect.stringContaining(':two/index.ts:'),
       ]);
+
+      const fromCwd = scanTargets([one, two], { root: '' }).findings;
+      expect(
+        assignFingerprints(fromCwd).map((finding) => finding.fingerprint),
+      ).toEqual([
+        expect.stringContaining('/one/index.ts:'),
+        expect.stringContaining('/two/index.ts:'),
+      ]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

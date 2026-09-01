@@ -2406,7 +2406,7 @@ function scanTargets(paths, options = {}) {
 		evidence: []
 	};
 	const excluded = (options.exclude ?? []).map(toPathMatcher);
-	const identityRoot = options.root ? resolve(options.root) : null;
+	const identityRoot = options.root === void 0 ? null : resolve(options.root);
 	const seen = /* @__PURE__ */ new Set();
 	const projectRoots = /* @__PURE__ */ new Map();
 	for (const target of paths) {

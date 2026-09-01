@@ -21,7 +21,10 @@ import {
 
 export interface ScanOptions {
   exclude?: string[];
-  /** Root used only for canonical fingerprint paths. */
+  /**
+   * Root used only for canonical fingerprint paths. Relative values resolve
+   * from the process working directory; omit it to use display paths.
+   */
   root?: string;
 }
 
@@ -49,7 +52,8 @@ export function scanTargets(
     evidence: [],
   };
   const excluded = (options.exclude ?? []).map(toPathMatcher);
-  const identityRoot = options.root ? resolve(options.root) : null;
+  const identityRoot =
+    options.root === undefined ? null : resolve(options.root);
   // Overlapping targets (`scan.mjs src src/components`) would otherwise
   // report the same file twice and double every count.
   const seen = new Set<string>();
