@@ -44,6 +44,10 @@ _Avoid_: Ignore comment, exemption
 
 ### Analysis and evidence
 
+**Performance trace**:
+A time-ordered Chrome DevTools recording used to measure page-load or interaction cost and, when attribution data is available, attribute that cost to source locations. Owner: `skills/phase/references/performance-trace.md`.
+_Avoid_: Performance profile, profile, performance recording
+
 **Analysis**:
 Facts about a scanned file that are computed once and reused by several signals. Owner: `packages/skill/scanner/analysis.ts`.
 

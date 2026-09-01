@@ -1,6 +1,6 @@
 {
   "name": "phase",
-  "version": "0.0.41",
+  "version": "0.0.42",
   "author": "vercel",
   "license": "MIT",
   "abstract": "Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library."
