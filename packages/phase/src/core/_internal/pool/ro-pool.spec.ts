@@ -78,6 +78,62 @@ describe('callback dispatch', () => {
     mockRO.trigger(el2, 300, 150);
     expect(cb2).toHaveBeenCalledTimes(1);
   });
+
+  it('replays the latest entry asynchronously to a late subscriber', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    observeResize(el, vi.fn());
+    mockRO.trigger(el, 200, 100);
+    const late = vi.fn();
+
+    observeResize(el, late);
+
+    expect(late).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(late.mock.calls[0]?.[0]?.contentBoxSize[0].inlineSize).toBe(200);
+  });
+
+  it('cancels a pending replay when the subscriber releases', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    observeResize(el, vi.fn());
+    mockRO.trigger(el, 200, 100);
+    const late = vi.fn();
+
+    const release = observeResize(el, late);
+    release();
+    await Promise.resolve();
+
+    expect(late).not.toHaveBeenCalled();
+  });
+
+  it('does not replay after a newer native entry', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    observeResize(el, vi.fn());
+    mockRO.trigger(el, 200, 100);
+    const late = vi.fn();
+
+    observeResize(el, late);
+    mockRO.trigger(el, 220, 100);
+    await Promise.resolve();
+
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(late.mock.calls[0]?.[0]?.contentBoxSize[0].inlineSize).toBe(220);
+  });
+
+  it('does not duplicate a reentrant subscriber during native fan-out', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    const late = vi.fn();
+    observeResize(el, () => observeResize(el, late));
+
+    mockRO.trigger(el, 200, 100);
+    await Promise.resolve();
+
+    expect(late).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -116,6 +172,20 @@ describe('cleanup', () => {
     observeResize(el2, vi.fn());
     expect(mockRO.instances).toHaveLength(1);
     expect(firstInstance().observed.has(el2)).toBe(true);
+  });
+
+  it('drops the latest entry when the final subscriber releases', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    const release = observeResize(el, vi.fn());
+    mockRO.trigger(el, 200, 100);
+    release();
+    const later = vi.fn();
+
+    observeResize(el, later);
+    await Promise.resolve();
+
+    expect(later).not.toHaveBeenCalled();
   });
 });
 

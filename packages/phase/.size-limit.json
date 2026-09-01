@@ -57,7 +57,7 @@
     "name": "createScroll",
     "path": "src/index.ts",
     "import": "{ createScroll }",
-    "limit": "2.1 kB"
+    "limit": "2.25 kB"
   },
   {
     "name": "createThrottle",
@@ -114,7 +114,7 @@
     "path": "src/react/index.ts",
     "import": "{ useCanvas }",
     "ignore": ["react"],
-    "limit": "4.3 kB"
+    "limit": "4.5 kB"
   },
   {
     "name": "useMutation",
@@ -135,7 +135,7 @@
     "path": "src/react/index.ts",
     "import": "{ useScroll }",
     "ignore": ["react"],
-    "limit": "2.5 kB"
+    "limit": "2.6 kB"
   },
   {
     "name": "useThrottledCallback",
@@ -177,14 +177,14 @@
     "path": "src/react/index.ts",
     "import": "{ useSize }",
     "ignore": ["react"],
-    "limit": "560 B"
+    "limit": "625 B"
   },
   {
     "name": "useContainerQuery",
     "path": "src/react/index.ts",
     "import": "{ useContainerQuery }",
     "ignore": ["react"],
-    "limit": "470 B"
+    "limit": "535 B"
   },
   {
     "name": "useMediaQuery",

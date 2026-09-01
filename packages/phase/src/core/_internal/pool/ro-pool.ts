@@ -2,12 +2,13 @@ type ROCallback = (entry: ResizeObserverEntry) => void;
 
 let observer: ResizeObserver | null = null;
 const callbacks = new Map<Element, Set<ROCallback>>();
+const latestEntries = new Map<Element, ResizeObserverEntry>();
 
 /**
  * Observe an element via a singleton ResizeObserver.
  * One RO instance for the entire page. An element may have any number of
- * subscribers; each receives every entry delivered after it subscribes, and
- * the element stays observed until the last one cleans up.
+ * subscribers; each receives the current entry and every entry delivered after
+ * it subscribes, and the element stays observed until the last one cleans up.
  *
  * Per-element `box` options are forwarded to `ResizeObserver.observe()`. A
  * single RO holds one observation per target, so when subscribers disagree on
@@ -23,15 +24,29 @@ export function observeResize(
   callback: ROCallback,
   box?: ResizeObserverBoxOptions,
 ): () => void {
+  const latestEntry: ResizeObserverEntry | undefined =
+    latestEntries.get(element);
+  let replayPending: boolean = latestEntry !== undefined;
+  let disposed = false;
+  const subscriber: ROCallback = (entry) => {
+    replayPending = false;
+    callback(entry);
+  };
+
   let subscribers: Set<ROCallback> | undefined = callbacks.get(element);
   if (!subscribers) {
     subscribers = new Set();
     callbacks.set(element, subscribers);
   }
-  subscribers.add(callback);
+  subscribers.add(subscriber);
   getObserver().observe(element, box ? { box } : undefined);
 
-  let disposed = false;
+  if (latestEntry) {
+    queueMicrotask(() => {
+      if (disposed || !replayPending) return;
+      subscriber(latestEntry);
+    });
+  }
 
   return () => {
     if (disposed) return;
@@ -40,10 +55,11 @@ export function observeResize(
     const current: Set<ROCallback> | undefined = callbacks.get(element);
     if (!current) return;
 
-    current.delete(callback);
+    current.delete(subscriber);
     if (current.size > 0) return;
 
     callbacks.delete(element);
+    latestEntries.delete(element);
     observer?.unobserve(element);
   };
 }
@@ -61,6 +77,7 @@ function getObserver(): ResizeObserver {
           entry.target,
         );
         if (!subscribers) continue;
+        latestEntries.set(entry.target, entry);
         // Iterated directly rather than copied: this runs on every resize
         // notification, and Set iteration already tolerates a subscriber
         // removing itself, which is the reentrant case that actually happens.
