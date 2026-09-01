@@ -47,7 +47,7 @@ Recommendations carry obligations that findings do not, and the obligations depe
 - **The framework and rendering model.** Next.js App Router? Server Components? PPR or streaming? The scanner stamps what it detects (see [Reading the output](#reading-the-output)), but its detection is best-effort; confirm from `package.json` and the config when it matters.
 - **What is server-rendered today.** Content in the initial SSR HTML is load-bearing for SEO, LCP, and any static shell. Changing that is never "just perf" (see [Step 2.5](#step-25-verify-the-blast-radius)).
 - **The entry points.** Skim the main routes/pages the user cares about so findings land in a mental map rather than a vacuum. For a route audit, read directly rendered local or shared components that own animation, chart, canvas, scroll, or rendering behavior. Stop there: do not expand into backend, data, generated, or unrelated workspace dependencies.
-- **Runtime evidence.** For reported jank, slow load, high CPU, dropped frames, or background work, offer load and interaction traces. Load [performance-trace.md](./performance-trace.md) only after the user supplies or accepts one.
+- **Runtime evidence.** For reported jank, slow load, high CPU, dropped frames, or background work, offer the matching load or interaction trace. Offer both only when the audit covers both. Load [performance-trace.md](./performance-trace.md) after the user supplies or accepts one.
 
 This costs a minute and is what separates a recommendation from a guess.
 

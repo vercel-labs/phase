@@ -11,12 +11,12 @@ A Chrome DevTools performance trace adds measured load or interaction evidence t
 
 Use this request:
 
-> A Chrome DevTools performance trace can add measured runtime evidence to this audit.
+> A Chrome DevTools performance trace can add measured runtime evidence to this audit. Record the trace that matches the symptom:
 > **Load:** Open DevTools > Performance, click **Record and reload**, and wait for the trace to stop.
 > **Interaction:** In a separate trace, click **Record**, reproduce the janky interaction for 5-10 seconds, then click **Stop**.
-> Export each with **Download > Save trace** and attach the `.json.gz` files or share their local paths.
+> Export each recording with **Download > Save trace** and attach the `.json.gz` file or share its local path.
 > If the issue only reproduces with production optimizations, record a local production build. Include browser source maps only if the source can be shared with the analyzer.
-> Send both if you can. Use one combined trace if the state is difficult to reproduce.
+> If the audit covers both load and interaction, send one trace for each. Use one combined trace only when the same hard-to-reproduce state must cover both.
 > Before sharing, review the trace for sensitive URLs, screenshots, annotations, and user data. Embedded resources or source maps can also expose source code.
 
 CPU throttling is optional. Record unthrottled first if the symptom reproduces; otherwise use a recommended or calibrated preset. Because slowdown is relative to the host computer, do not prescribe universal 4x or 6x settings.
