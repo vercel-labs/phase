@@ -149,6 +149,22 @@ describe('callback dispatch', () => {
 
     expect(recursive).toHaveBeenCalledTimes(1);
   });
+
+  it('delivers a reentrant subscriber before rethrowing an earlier error', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    const late = vi.fn();
+    const error = new Error('subscriber failed');
+    observeResize(el, () => {
+      observeResize(el, late);
+      throw error;
+    });
+
+    expect(() => mockRO.trigger(el, 200, 100)).toThrow(error);
+    await Promise.resolve();
+
+    expect(late).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

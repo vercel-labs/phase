@@ -11,7 +11,8 @@ const latestEntries = new Map<Element, ResizeObserverEntry>();
  * subscribers; each receives every entry delivered after it subscribes. A new
  * subscriber also receives the latest entry in a queued microtask unless it
  * cleans up or receives a native entry first. The replay passes `true` as the
- * callback's second argument.
+ * callback's second argument. Subscriber errors do not stop fan-out; the first
+ * error is rethrown after every current subscriber runs.
  *
  * Per-element `box` options are forwarded to `ResizeObserver.observe()`. A
  * single RO holds one observation per target, so when subscribers disagree on
@@ -82,10 +83,21 @@ function getObserver(): ResizeObserver {
         if (!subscribers) continue;
         latestEntries.set(entry.target, entry);
         delivering = entry.target;
+        let didThrow = false;
+        let firstError: unknown;
         try {
           // Set identity deduplicates recursive registration without allocating
           // a snapshot on every resize notification.
-          for (const cb of subscribers) cb(entry);
+          for (const cb of subscribers) {
+            try {
+              cb(entry);
+            } catch (error) {
+              if (didThrow) continue;
+              didThrow = true;
+              firstError = error;
+            }
+          }
+          if (didThrow) throw firstError;
         } finally {
           delivering = undefined;
         }

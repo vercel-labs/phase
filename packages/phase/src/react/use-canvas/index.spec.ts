@@ -140,12 +140,14 @@ describe('devicePixelContentBoxSize', () => {
   it('uses the current dpr when replaying a cached physical size', async () => {
     vi.stubGlobal('devicePixelRatio', 1);
     const useCanvas = await getHook();
-    const { observeResize } = await import('../../core/_internal/pool/ro-pool');
+    const { useSize } = await import('../use-size');
     const container = document.createElement('div');
-    const release = observeResize(container, vi.fn());
+    const containerRef = { current: container };
+    const keeper = renderHook(() =>
+      useSize({ ref: containerRef, onResize: vi.fn() }),
+    );
     mockRO.triggerWithPhysicalSize(container, 100, 50, 100, 50);
     vi.stubGlobal('devicePixelRatio', 2);
-    const containerRef = { current: container };
     const { canvas } = createCanvasWithMockContext();
     const canvasRef = { current: canvas };
 
@@ -158,7 +160,7 @@ describe('devicePixelContentBoxSize', () => {
     expect(canvas.height).toBe(100);
 
     view.unmount();
-    release();
+    keeper.unmount();
   });
 });
 
