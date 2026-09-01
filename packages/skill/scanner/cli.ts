@@ -119,8 +119,8 @@ const FLAGS: Record<string, BooleanOptionKey> = {
  * branch in a parser.
  */
 const VALUE_OPTIONS: Record<string, ValueOption> = {
-  '--baseline': { key: 'baselinePath' },
-  '--write-baseline': { key: 'writeBaselinePath' },
+  '--baseline': { key: 'baselinePath', map: toNonEmptyPath },
+  '--write-baseline': { key: 'writeBaselinePath', map: toNonEmptyPath },
   '--fail-on': {
     key: 'failOn',
     allowed: ['critical', 'high', 'medium'],
@@ -144,6 +144,11 @@ function toPositiveInt(raw: string, name: string): number {
     throw new Error(`${name} expects a positive integer (got: ${raw})`);
   }
   return value;
+}
+
+function toNonEmptyPath(raw: string, name: string): string {
+  if (raw.length === 0) throw new Error(`${name} expects a non-empty path`);
+  return raw;
 }
 
 function applyOption(
@@ -221,7 +226,7 @@ function main(): void {
 
   validateOptions(opts);
   resolveTargets(opts);
-  const baseline = opts.writeBaselinePath ? null : readBaseline(opts);
+  const baseline = opts.writeBaselinePath !== null ? null : readBaseline(opts);
   const result = scanTargets(opts.targets, { exclude: opts.exclude });
   const version = cliVersion();
   applyBaseline(result, baseline, version);
@@ -241,11 +246,11 @@ function readOptions(argv: string[]): CliOptions {
 }
 
 function validateOptions(opts: CliOptions): void {
-  if (opts.writeBaselinePath && opts.baselinePath) {
+  if (opts.writeBaselinePath !== null && opts.baselinePath !== null) {
     failUsage('--baseline cannot be combined with --write-baseline');
   }
   if (
-    opts.writeBaselinePath &&
+    opts.writeBaselinePath !== null &&
     (opts.signals.length > 0 ||
       opts.severities.length > 0 ||
       opts.noiseTiers.length > 0 ||
@@ -305,7 +310,7 @@ function writeBaseline(
   path: string | null,
   version: string,
 ): void {
-  if (path) {
+  if (path !== null) {
     if (result.filesScanned === 0) {
       failUsage('--write-baseline cannot run because no files were scanned');
     }
@@ -313,7 +318,8 @@ function writeBaseline(
       (finding) => finding.fingerprint,
     );
     const baselinePath = resolve(path);
-    if (existsSync(baselinePath) && !lstatSync(baselinePath).isFile()) {
+    const destination = lstatSync(baselinePath, { throwIfNoEntry: false });
+    if (destination && !destination.isFile()) {
       failUsage(
         `baseline write destination must be a regular file: ${baselinePath}`,
       );
@@ -356,7 +362,7 @@ function printResult(result: ScanResult, opts: CliOptions): void {
 }
 
 function hitsFailThreshold(findings: ScanFinding[], opts: CliOptions): boolean {
-  if (!opts.failOn || opts.writeBaselinePath) return false;
+  if (!opts.failOn || opts.writeBaselinePath !== null) return false;
   const threshold = SEVERITY_ORDER.indexOf(opts.failOn);
   return findings.some(
     (finding) =>

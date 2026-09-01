@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -684,6 +685,16 @@ describe('scan CLI', () => {
     }
   });
 
+  it.each(['--baseline', '--write-baseline'])(
+    'rejects an empty path for %s',
+    (option) => {
+      const run = runCli([option, '', 'workspace']);
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain(`${option} expects a non-empty path`);
+    },
+  );
+
   it('rejects a baseline write when no files were scanned', () => {
     const root = mkdtempSync(join(tmpdir(), 'phase-empty-baseline-'));
     try {
@@ -780,6 +791,35 @@ describe('scan CLI', () => {
       expect(run.status).toBe(2);
       expect(run.stderr).toContain('regular file');
       expect(readFileSync(victim, 'utf8')).toBe('keep me\n');
+      expect(lstatSync(baselinePath).isSymbolicLink()).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to follow a dangling baseline symlink while writing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-write-dangling-symlink-'));
+    const workspace = join(root, 'workspace');
+    const src = join(workspace, 'src');
+    mkdirSync(workspace);
+    mkdirSync(src);
+    writeFileSync(
+      join(src, 'finding.ts'),
+      'const width = target.offsetWidth;\n',
+    );
+    const victim = join(root, 'created-through-link.json');
+    const baselinePath = join(workspace, 'phase-baseline.json');
+    symlinkSync(victim, baselinePath);
+
+    try {
+      const run = runCli(
+        ['--write-baseline', 'phase-baseline.json', '.'],
+        workspace,
+      );
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('regular file');
+      expect(existsSync(victim)).toBe(false);
       expect(lstatSync(baselinePath).isSymbolicLink()).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });

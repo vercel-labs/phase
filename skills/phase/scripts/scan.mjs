@@ -2498,8 +2498,14 @@ const FLAGS = {
 * branch in a parser.
 */
 const VALUE_OPTIONS = {
-	"--baseline": { key: "baselinePath" },
-	"--write-baseline": { key: "writeBaselinePath" },
+	"--baseline": {
+		key: "baselinePath",
+		map: toNonEmptyPath
+	},
+	"--write-baseline": {
+		key: "writeBaselinePath",
+		map: toNonEmptyPath
+	},
 	"--fail-on": {
 		key: "failOn",
 		allowed: [
@@ -2539,6 +2545,10 @@ function toPositiveInt(raw, name) {
 	const value = Number(raw);
 	if (!Number.isInteger(value) || value < 1) throw new Error(`${name} expects a positive integer (got: ${raw})`);
 	return value;
+}
+function toNonEmptyPath(raw, name) {
+	if (raw.length === 0) throw new Error(`${name} expects a non-empty path`);
+	return raw;
 }
 function applyOption(opts, name, spec, raw) {
 	if (raw === void 0) throw new Error(`${name} expects a value`);
@@ -2588,7 +2598,7 @@ function main() {
 	}
 	validateOptions(opts);
 	resolveTargets(opts);
-	const baseline = opts.writeBaselinePath ? null : readBaseline(opts);
+	const baseline = opts.writeBaselinePath !== null ? null : readBaseline(opts);
 	const result = scanTargets(opts.targets, { exclude: opts.exclude });
 	const version = cliVersion();
 	applyBaseline(result, baseline, version);
@@ -2605,8 +2615,8 @@ function readOptions(argv) {
 	}
 }
 function validateOptions(opts) {
-	if (opts.writeBaselinePath && opts.baselinePath) failUsage("--baseline cannot be combined with --write-baseline");
-	if (opts.writeBaselinePath && (opts.signals.length > 0 || opts.severities.length > 0 || opts.noiseTiers.length > 0 || opts.exclude.length > 0 || opts.stdin0)) failUsage("--write-baseline requires a full unfiltered scan; remove --signal, --severity, --noise, --exclude, and --stdin0");
+	if (opts.writeBaselinePath !== null && opts.baselinePath !== null) failUsage("--baseline cannot be combined with --write-baseline");
+	if (opts.writeBaselinePath !== null && (opts.signals.length > 0 || opts.severities.length > 0 || opts.noiseTiers.length > 0 || opts.exclude.length > 0 || opts.stdin0)) failUsage("--write-baseline requires a full unfiltered scan; remove --signal, --severity, --noise, --exclude, and --stdin0");
 }
 function resolveTargets(opts) {
 	if (opts.stdin0) {
@@ -2636,11 +2646,12 @@ function applyBaseline(result, baseline, version) {
 	}
 }
 function writeBaseline(result, path, version) {
-	if (path) {
+	if (path !== null) {
 		if (result.filesScanned === 0) failUsage("--write-baseline cannot run because no files were scanned");
 		const fingerprints = assignFingerprints(result.findings).map((finding) => finding.fingerprint);
 		const baselinePath = resolve(path);
-		if (existsSync(baselinePath) && !lstatSync(baselinePath).isFile()) failUsage(`baseline write destination must be a regular file: ${baselinePath}`);
+		const destination = lstatSync(baselinePath, { throwIfNoEntry: false });
+		if (destination && !destination.isFile()) failUsage(`baseline write destination must be a regular file: ${baselinePath}`);
 		try {
 			writeFileSync(baselinePath, serializeBaseline(fingerprints, version));
 		} catch (error) {
@@ -2661,7 +2672,7 @@ function printResult(result, opts) {
 	else console.log(formatText(result));
 }
 function hitsFailThreshold(findings, opts) {
-	if (!opts.failOn || opts.writeBaselinePath) return false;
+	if (!opts.failOn || opts.writeBaselinePath !== null) return false;
 	const threshold = SEVERITY_ORDER.indexOf(opts.failOn);
 	return findings.some((finding) => !isPreExistingFinding(finding) && finding.severity !== "dedup" && SEVERITY_ORDER.indexOf(finding.severity) <= threshold);
 }
