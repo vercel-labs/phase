@@ -70,7 +70,6 @@ jobs:
             || (echo "Skill artifacts are stale. Run 'pnpm skill:package' and commit the result." && exit 1)
 
   browser:
-    name: Browser
     runs-on: ubuntu-latest
     permissions:
       contents: read

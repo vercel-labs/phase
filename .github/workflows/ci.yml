@@ -67,7 +67,6 @@ jobs:
             || (echo "Skill artifacts are stale. Run 'pnpm skill:package' and commit the result." && exit 1)
 
   browser:
-    name: Browser
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
