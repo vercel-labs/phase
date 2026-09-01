@@ -41,6 +41,7 @@ export function observeResize(
   const latestEntry: ResizeObserverEntry | undefined =
     latestEntries.get(element);
   if (latestEntry && isNewSubscriber && delivering !== element) {
+    // Keep replay non-reentrant and let cleanup cancel it before delivery.
     queueMicrotask(() => {
       if (
         disposed ||
