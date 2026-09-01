@@ -318,13 +318,13 @@ function writeBaseline(
       (finding) => finding.fingerprint,
     );
     const baselinePath = resolve(path);
-    const destination = lstatSync(baselinePath, { throwIfNoEntry: false });
-    if (destination && !destination.isFile()) {
-      failUsage(
-        `baseline write destination must be a regular file: ${baselinePath}`,
-      );
-    }
     try {
+      const destination = lstatSync(baselinePath, { throwIfNoEntry: false });
+      if (destination && !destination.isFile()) {
+        failUsage(
+          `baseline write destination must be a regular file: ${baselinePath}`,
+        );
+      }
       writeFileSync(baselinePath, serializeBaseline(fingerprints, version));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

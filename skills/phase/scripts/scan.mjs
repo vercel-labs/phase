@@ -2650,9 +2650,9 @@ function writeBaseline(result, path, version) {
 		if (result.filesScanned === 0) failUsage("--write-baseline cannot run because no files were scanned");
 		const fingerprints = assignFingerprints(result.findings).map((finding) => finding.fingerprint);
 		const baselinePath = resolve(path);
-		const destination = lstatSync(baselinePath, { throwIfNoEntry: false });
-		if (destination && !destination.isFile()) failUsage(`baseline write destination must be a regular file: ${baselinePath}`);
 		try {
+			const destination = lstatSync(baselinePath, { throwIfNoEntry: false });
+			if (destination && !destination.isFile()) failUsage(`baseline write destination must be a regular file: ${baselinePath}`);
 			writeFileSync(baselinePath, serializeBaseline(fingerprints, version));
 		} catch (error) {
 			failUsage(`cannot write baseline: ${path} (${error instanceof Error ? error.message : String(error)})`);

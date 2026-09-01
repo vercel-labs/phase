@@ -712,6 +712,24 @@ describe('scan CLI', () => {
     }
   });
 
+  it('reports an unusable baseline write path as a usage error', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-unusable-baseline-'));
+    const parentFile = join(root, 'not-a-directory');
+    writeFileSync(parentFile, 'file\n');
+    try {
+      const run = runCli([
+        '--write-baseline',
+        join(parentFile, 'phase-baseline.json'),
+        'workspace',
+      ]);
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('cannot write baseline');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('replaces a corrupt auto-detected baseline', () => {
     const root = mkdtempSync(join(tmpdir(), 'phase-repair-baseline-'));
     const src = join(root, 'src');
