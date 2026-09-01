@@ -134,6 +134,21 @@ describe('callback dispatch', () => {
 
     expect(late).toHaveBeenCalledTimes(1);
   });
+
+  it('does not consume recursive registrations in the current fan-out', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    let registrations = 0;
+    const recursive = vi.fn(() => {
+      if (registrations++ < 3) observeResize(el, recursive);
+    });
+    observeResize(el, recursive);
+
+    mockRO.trigger(el, 200, 100);
+    await Promise.resolve();
+
+    expect(recursive).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

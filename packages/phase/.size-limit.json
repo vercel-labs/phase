@@ -135,7 +135,7 @@
     "path": "src/react/index.ts",
     "import": "{ useScroll }",
     "ignore": ["react"],
-    "limit": "2.6 kB"
+    "limit": "2.65 kB"
   },
   {
     "name": "useThrottledCallback",
@@ -177,14 +177,14 @@
     "path": "src/react/index.ts",
     "import": "{ useSize }",
     "ignore": ["react"],
-    "limit": "625 B"
+    "limit": "650 B"
   },
   {
     "name": "useContainerQuery",
     "path": "src/react/index.ts",
     "import": "{ useContainerQuery }",
     "ignore": ["react"],
-    "limit": "535 B"
+    "limit": "570 B"
   },
   {
     "name": "useMediaQuery",

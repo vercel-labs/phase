@@ -1,14 +1,17 @@
-type ROCallback = (entry: ResizeObserverEntry) => void;
+type ROCallback = (entry: ResizeObserverEntry, replayed?: true) => void;
 
 let observer: ResizeObserver | null = null;
+let delivering: Element | undefined;
 const callbacks = new Map<Element, Set<ROCallback>>();
 const latestEntries = new Map<Element, ResizeObserverEntry>();
 
 /**
  * Observe an element via a singleton ResizeObserver.
  * One RO instance for the entire page. An element may have any number of
- * subscribers; each receives the current entry and every entry delivered after
- * it subscribes, and the element stays observed until the last one cleans up.
+ * subscribers; each receives every entry delivered after it subscribes. A new
+ * subscriber also receives the latest entry in a queued microtask unless it
+ * cleans up or receives a native entry first. The replay passes `true` as the
+ * callback's second argument.
  *
  * Per-element `box` options are forwarded to `ResizeObserver.observe()`. A
  * single RO holds one observation per target, so when subscribers disagree on
@@ -24,27 +27,27 @@ export function observeResize(
   callback: ROCallback,
   box?: ResizeObserverBoxOptions,
 ): () => void {
-  const latestEntry: ResizeObserverEntry | undefined =
-    latestEntries.get(element);
-  let replayPending: boolean = latestEntry !== undefined;
-  let disposed = false;
-  const subscriber: ROCallback = (entry) => {
-    replayPending = false;
-    callback(entry);
-  };
-
   let subscribers: Set<ROCallback> | undefined = callbacks.get(element);
   if (!subscribers) {
     subscribers = new Set();
     callbacks.set(element, subscribers);
   }
-  subscribers.add(subscriber);
+  const isNewSubscriber: boolean = !subscribers.has(callback);
+  subscribers.add(callback);
   getObserver().observe(element, box ? { box } : undefined);
 
-  if (latestEntry) {
+  let disposed = false;
+  const latestEntry: ResizeObserverEntry | undefined =
+    latestEntries.get(element);
+  if (latestEntry && isNewSubscriber && delivering !== element) {
     queueMicrotask(() => {
-      if (disposed || !replayPending) return;
-      subscriber(latestEntry);
+      if (
+        disposed ||
+        !callbacks.get(element)?.has(callback) ||
+        latestEntries.get(element) !== latestEntry
+      )
+        return;
+      callback(latestEntry, true);
     });
   }
 
@@ -55,7 +58,7 @@ export function observeResize(
     const current: Set<ROCallback> | undefined = callbacks.get(element);
     if (!current) return;
 
-    current.delete(subscriber);
+    current.delete(callback);
     if (current.size > 0) return;
 
     callbacks.delete(element);
@@ -78,10 +81,14 @@ function getObserver(): ResizeObserver {
         );
         if (!subscribers) continue;
         latestEntries.set(entry.target, entry);
-        // Iterated directly rather than copied: this runs on every resize
-        // notification, and Set iteration already tolerates a subscriber
-        // removing itself, which is the reentrant case that actually happens.
-        for (const cb of subscribers) cb(entry);
+        delivering = entry.target;
+        try {
+          // Set identity deduplicates recursive registration without allocating
+          // a snapshot on every resize notification.
+          for (const cb of subscribers) cb(entry);
+        } finally {
+          delivering = undefined;
+        }
       }
     });
   }

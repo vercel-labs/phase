@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- ResizeObserver-backed primitives now receive the current observed size when they subscribe to an element already held by the shared observer pool.
+- ResizeObserver-backed primitives now receive the latest delivered size when they subscribe to an element already held by the shared observer pool.
 - Raised ResizeObserver-dependent export size budgets to restore regression headroom.
 
 ## 0.5.3

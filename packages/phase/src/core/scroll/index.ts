@@ -204,11 +204,19 @@ export function createScroll(options: CreateScrollOptions): Scroll {
     scheduleInput(flush);
   }
 
+  function onObservedResize(
+    _entry: ResizeObserverEntry,
+    replayed?: true,
+  ): void {
+    if (replayed) return;
+    onROResize();
+  }
+
   function attachListeners(): void {
     if (listenersAttached) return;
     listenersAttached = true;
     target.addEventListener('scroll', onScrollEvent, { passive: true });
-    unobserveRO = observeResize(scroller, onROResize);
+    unobserveRO = observeResize(scroller, onObservedResize);
     // A viewport height change (mobile URL bar, window resize) moves `maxY`
     // without resizing the scrolling element's content box, so the observer
     // alone would leave page geometry stale.
