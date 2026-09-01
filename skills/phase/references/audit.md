@@ -298,7 +298,7 @@ Run this alongside the JS scan, before classifying. The scanner automates the CS
 - **Global `:has()` selectors** (scanner: `global-has-selector`). `body:has(...)`, `html:has(...)`, `:root:has(...)`, or `*:has(...)` in a global stylesheet can trigger broad style invalidation; cost scales with the argument selector and subtree size. Scope the rule to a subtree or replace with a data attribute.
 - **Missing `content-visibility`** (manual). Large repeated lists (`.map()` returning many items) without `content-visibility: auto` or `Defer` pay full off-screen style/layout cost.
 - **Permanent `will-change`** (scanner: `permanent-will-change` for CSS, `tailwind-permanent-will-change` for JSX). `will-change` that is never toggled wastes GPU memory when idle.
-- **SVG SMIL animation** (scanner: `svg-smil-animation`). Lowercase `<animate>`, `<animateMotion>`, and `<animateTransform>` elements use the SVG root timeline, not CSS `@keyframes` or `animation-play-state`. Require a static reduced-motion state, cancel delayed `beginElement()` calls, and use `useLifecycle` to control `pauseAnimations()`/`unpauseAnimations()` on the owning `<svg>` root where supported. Verify browser behavior before making compatibility claims ([smil.md](./smil.md)).
+- **SVG SMIL animation** (scanner: `svg-smil-animation`). SMIL uses the SVG root timeline, not CSS `@keyframes` or `animation-play-state`. Review static reduced-motion output, root lifecycle ownership, and delayed-start cleanup ([smil.md](./smil.md)).
 
 ### Loading checks (manual)
 
