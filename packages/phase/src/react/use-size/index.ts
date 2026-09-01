@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, type RefObject } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 
 import { observeResize } from '../../core/_internal/pool/ro-pool';
+import { useElementEffect } from '../_internal/use-element-effect';
 import { useSyncedRef } from '../use-synced-ref';
 
 export type SizeCallback = (size: Size) => void;
@@ -23,8 +24,8 @@ export interface UseSizeOptions<T extends Element = HTMLDivElement> {
   box?: 'content-box' | 'border-box';
   /**
    * Called on every resize. When provided, `size` is omitted from the return
-   * type and no re-renders occur, the right path for canvas and animation
-   * consumers that read dimensions imperatively.
+   * type and ResizeObserver deliveries do not re-render. Attaching a different
+   * element may require one lifecycle reconciliation render.
    */
   onResize?: SizeCallback;
 }
@@ -50,7 +51,8 @@ export type UseSizeResult<T extends Element = HTMLDivElement> =
 /**
  * Element dimensions via the shared ResizeObserver singleton.
  *
- * Pass `onResize` for zero-re-render mode (canvas, animation loops).
+ * Pass `onResize` for render-free ResizeObserver updates (canvas, animation
+ * loops).
  * Without it, `size` updates via state on every dimension change.
  * `sizeRef` is always current in both modes.
  *
@@ -58,7 +60,7 @@ export type UseSizeResult<T extends Element = HTMLDivElement> =
  * // Reactive (re-renders on resize)
  * const { ref, size } = useSize();
  *
- * // Transient (no re-renders — read sizeRef in onTick/draw)
+ * // Transient (resize updates do not re-render; read sizeRef in onTick/draw)
  * const { ref, sizeRef } = useSize({ onResize: (s) => applySize(s) });
  */
 export function useSize<T extends Element = HTMLDivElement>(
@@ -80,42 +82,48 @@ export function useSize<T extends Element = HTMLDivElement>(
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
   const boxOption: 'content-box' | 'border-box' | undefined = options?.box;
 
-  useEffect(() => {
-    const element: Element | null = ref.current;
-    if (!element) return;
+  useElementEffect(
+    ref,
+    (element) => {
+      prevWidth.current = null;
+      prevHeight.current = null;
 
-    const unobserve: () => void = observeResize(
-      element,
-      (entry) => {
-        const resolved: ResizeObserverSize | undefined =
-          boxOption === 'border-box'
-            ? entry.borderBoxSize[0]
-            : entry.contentBoxSize[0];
-        if (!resolved) return;
+      const unobserve = observeResize(
+        element,
+        (entry) => {
+          // A detached element may notify before the passive reconciliation.
+          if (entry.target !== ref.current) return;
 
-        const width: number = resolved.inlineSize;
-        const height: number = resolved.blockSize;
+          const resolved: ResizeObserverSize | undefined =
+            boxOption === 'border-box'
+              ? entry.borderBoxSize[0]
+              : entry.contentBoxSize[0];
+          if (!resolved) return;
 
-        if (width === prevWidth.current && height === prevHeight.current)
-          return;
-        prevWidth.current = width;
-        prevHeight.current = height;
+          const width: number = resolved.inlineSize;
+          const height: number = resolved.blockSize;
 
-        const next: Size = { width, height };
-        sizeRef.current = next;
+          if (width === prevWidth.current && height === prevHeight.current)
+            return;
+          prevWidth.current = width;
+          prevHeight.current = height;
 
-        if (onResizeRef.current) {
-          onResizeRef.current(next);
-        } else {
-          setSize(next);
-        }
-      },
-      boxOption,
-    );
+          const next: Size = { width, height };
+          sizeRef.current = next;
 
-    return unobserve;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boxOption]);
+          if (onResizeRef.current) {
+            onResizeRef.current(next);
+          } else {
+            setSize(next);
+          }
+        },
+        boxOption,
+      );
+
+      return unobserve;
+    },
+    [boxOption],
+  );
 
   return { ref, size, sizeRef };
 }

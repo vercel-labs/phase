@@ -12,7 +12,7 @@ import { useSize } from 'phase/react';
 // Reactive (re-renders on resize)
 const { ref, size, sizeRef } = useSize<T>(options?);
 
-// Transient (zero re-renders)
+// Transient (resize updates do not re-render)
 const { ref, sizeRef } = useSize<T>({ onResize: (s) => applySize(s) });
 ```
 
@@ -22,7 +22,7 @@ const { ref, sizeRef } = useSize<T>({ onResize: (s) => applySize(s) });
 | ---------- | ------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------ |
 | `ref`      | `RefObject<T \| null>`          | returned        | Bring your own ref                                                                                           |
 | `box`      | `'content-box' \| 'border-box'` | `'content-box'` | Which CSS box model to measure. Controls both the observation trigger and which size is read from the entry. |
-| `onResize` | `(size: Size) => void`          | —               | Called on every resize. When provided, `size` is omitted from the return type, no re-renders                 |
+| `onResize` | `(size: Size) => void`          | —               | Called on every resize. When provided, `size` is omitted and ResizeObserver deliveries do not re-render      |
 
 ### Return (reactive, no `onResize`)
 
@@ -40,6 +40,16 @@ const { ref, sizeRef } = useSize<T>({ onResize: (s) => applySize(s) });
 | `sizeRef` | `RefObject<Size \| null>` | Always-current dimensions via ref. Never triggers re-render |
 
 `size` is not available in transient mode. Accessing it is a TypeScript error.
+
+## Element lifecycle
+
+`useSize` tracks the element behind its ref across commits. Conditional mounts,
+keyed replacements, and remounts release the old observation and observe the
+new element.
+
+On initial mount, `size` remains `null` until ResizeObserver delivers its first
+measurement. Observation is asynchronous, and phase never forces a reflow to
+measure synchronously.
 
 ## When to use
 
@@ -76,7 +86,7 @@ const { ref, sizeRef } = useSize<T>({ onResize: (s) => applySize(s) });
   const { ref, size } = useSize({ box: 'border-box' });
   ```
 
-- Use `onResize` for zero-re-render canvas/animation sizing:
+- Use `onResize` for render-free ResizeObserver updates in canvas/animation sizing:
 
   ```tsx
   const { ref, sizeRef } = useSize({

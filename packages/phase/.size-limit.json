@@ -177,7 +177,7 @@
     "path": "src/react/index.ts",
     "import": "{ useSize }",
     "ignore": ["react"],
-    "limit": "500 B"
+    "limit": "560 B"
   },
   {
     "name": "useContainerQuery",
