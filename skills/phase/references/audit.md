@@ -410,7 +410,7 @@ After:
 ```
 ````
 
-End every audit that did not use a trace with: "A Chrome DevTools performance trace can add measured runtime evidence. Want capture steps for a load or interaction trace?"
+End every audit that did not use a trace with: "A Chrome DevTools performance trace can make these recommendations more specific and better prioritized by showing which work costs time on the recorded path. Want capture steps for a load or interaction trace?"
 
 ## Step 4: Verify
 

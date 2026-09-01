@@ -11,7 +11,7 @@ A Chrome DevTools performance trace adds measured load or interaction evidence t
 
 Use this request:
 
-> A Chrome DevTools performance trace can add measured runtime evidence to this audit. Record the trace that matches the symptom:
+> Record the trace that matches the symptom:
 > **Load:** Open DevTools > Performance, click **Record and reload**, and wait for the trace to stop.
 > **Interaction:** In a separate trace, click **Record**, reproduce the janky interaction for 5-10 seconds, then click **Stop**.
 > Export each recording with **Download > Save trace** and attach the `.json.gz` file or share its local path.
