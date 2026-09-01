@@ -224,7 +224,7 @@ function scanSignal(
     let matchOffset: number | null = null;
 
     if (signal.matcher) {
-      if (!signal.matcher(matchLines, i)) continue;
+      if (!signal.matcher(matchLines, i, relPath)) continue;
     } else {
       if (!matchesSignalContext(signal, codeLines, uncommentedLines, i))
         continue;

@@ -133,6 +133,12 @@ missing-reduced-motion — Animation without reduced-motion check (4) · noise: 
   · in a stylesheet:
   styles/globals.css:16  @keyframes float {
 
+svg-smil-animation — SVG SMIL animation needs lifecycle and reduced-motion review (1) · noise: normal
+  why: SMIL does not respect the reduced-motion preference or pause with the owning UI lifecycle automatically.
+  use: render a static reduced-motion state and useLifecycle to pause/resume the owning SVG root
+  read: references/smil.md#svg-smil-lifecycle-and-reduced-motion
+  src/smil-orbit.tsx:5  <animateTransform
+
 ## high
 
 manual-raf — Manual requestAnimationFrame loop (4, all per-frame) · noise: noisy
@@ -197,9 +203,9 @@ manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand)
   src/use-latest.ts:4  const valueRef = useRef(value);
 
 ─────────────────────────────────────────
-Scanned 9 files.
-Total: 19 actionable (8 critical, 7 high, 4 medium), 1 dedup.
-20 findings on 17 distinct lines; 13 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
+Scanned 10 files.
+Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup.
+21 findings on 18 distinct lines; 13 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
 Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
 
@@ -227,7 +233,7 @@ A triage pass on a large report is usually `--noise precise --noise normal` (dro
 
 ### Suppressions
 
-A comment `phase-scan-ignore <signal-id> -- <reason>` (colon after `ignore` also accepted) suppresses that signal on the same line and the next line. The reason is mandatory; the scanner warns about and ignores reason-less directives and directives naming unknown signal ids. For per-file signals (`missing-reduced-motion` and `timer-missing-reduced-motion`), a directive anywhere in the file suppresses its single finding. Suppressing a superseding signal (`setstate-in-raf`) re-exposes the general one (`manual-raf`) on that line; name both to silence both. Also note: the scanner cannot tell a dangling directive (nothing left to suppress) from an active one, so remove directives when the code they covered is gone.
+A comment `phase-scan-ignore <signal-id> -- <reason>` (colon after `ignore` also accepted) suppresses that signal on the same line and the next line. The reason is mandatory; the scanner warns about and ignores reason-less directives and directives naming unknown signal ids. For per-file signals (`missing-reduced-motion`, `timer-missing-reduced-motion`, and `svg-smil-animation`), a directive anywhere in the file suppresses its single finding. Suppressing a superseding signal (`setstate-in-raf`) re-exposes the general one (`manual-raf`) on that line; name both to silence both. Also note: the scanner cannot tell a dangling directive (nothing left to suppress) from an active one, so remove directives when the code they covered is gone.
 
 **Policy: suppressions record human decisions.** Never add a suppression yourself unless the user has explicitly accepted the finding. If the scanner warns about a reason-less directive, report it; do not silently add a reason or delete the directive.
 
@@ -239,7 +245,7 @@ The directive is the only sanctioned way to silence a finding, but it is not the
 
 ### Signals
 
-Severity and noise mirror the scanner's catalog; a repo check fails CI when this table drifts from `scan.mjs`. Signals marked **(CSS)** run only on stylesheet files (`.css`/`.scss`/`.sass`/`.less`); **(JSX)** only on `.tsx`/`.jsx`; the rest on all JS/TS files. Both reduced-motion signals report once per file.
+Severity and noise mirror the scanner's catalog; a repo check fails CI when this table drifts from `scan.mjs`. Signals marked **(CSS)** run only on stylesheet files (`.css`/`.scss`/`.sass`/`.less`); **(JSX)** only on `.tsx`/`.jsx`; the rest on all JS/TS files. Both reduced-motion signals and `svg-smil-animation` report once per file.
 
 <!-- signal-table:begin -->
 
@@ -251,6 +257,7 @@ Severity and noise mirror the scanner's catalog; a repo check fails CI when this
 | `forced-reflow`                  | critical | noisy   | Layout-reading member access or call (`getBoundingClientRect`, `.offset*`, `.scroll*`, `.client*`)                      | [performance.md](./performance.md#no-forced-reflows-in-animation-paths)                                                    |
 | `mutationobserver-layout`        | critical | normal  | MutationObserver watching inline styles or reading layout in its callback                                               | [performance.md](./performance.md#never-drive-layout-from-a-mutationobserver)                                              |
 | `missing-reduced-motion`         | critical | noisy   | Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling                                   | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
+| `svg-smil-animation`             | critical | normal  | Intrinsic SVG SMIL animation elements or imperative `beginElement()`/`beginElementAt()` playback                        | [smil.md](./smil.md#svg-smil-lifecycle-and-reduced-motion)                                                                 |
 | `timer-missing-reduced-motion`   | critical | noisy   | `setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity with no reduced-motion handling     | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
 | `bare-window-listener`           | critical | normal  | resize/scroll listener with a layout read in the handler                                                                | [performance-recipes.md](./performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer) |
 | `pointer-listener-layout-read`   | critical | normal  | pointermove/mousemove/touchmove listener, or intrinsic JSX move prop, with a layout read per event                      | [use-pointer.md](./use-pointer.md)                                                                                         |
@@ -291,6 +298,7 @@ Run this alongside the JS scan, before classifying. The scanner automates the CS
 - **Global `:has()` selectors** (scanner: `global-has-selector`). `body:has(...)`, `html:has(...)`, `:root:has(...)`, or `*:has(...)` in a global stylesheet can trigger broad style invalidation; cost scales with the argument selector and subtree size. Scope the rule to a subtree or replace with a data attribute.
 - **Missing `content-visibility`** (manual). Large repeated lists (`.map()` returning many items) without `content-visibility: auto` or `Defer` pay full off-screen style/layout cost.
 - **Permanent `will-change`** (scanner: `permanent-will-change` for CSS, `tailwind-permanent-will-change` for JSX). `will-change` that is never toggled wastes GPU memory when idle.
+- **SVG SMIL animation** (scanner: `svg-smil-animation`). Lowercase `<animate>`, `<animateMotion>`, and `<animateTransform>` elements use the SVG root timeline, not CSS `@keyframes` or `animation-play-state`. Require a static reduced-motion state, cancel delayed `beginElement()` calls, and use `useLifecycle` to control `pauseAnimations()`/`unpauseAnimations()` on the owning `<svg>` root where supported. Verify browser behavior before making compatibility claims ([smil.md](./smil.md)).
 
 ### Loading checks (manual)
 

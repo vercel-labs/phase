@@ -106,6 +106,7 @@ const crossCutting = new Set([
   'rendering-recipes.md',
   'abort-signals.md',
   'timed-sequences.md',
+  'smil.md',
 ]);
 
 // --- Check actual reference files ---

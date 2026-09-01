@@ -1,0 +1,36 @@
+{
+  "description": "Regression guard for SVG SMIL animation that keeps moving for reduced-motion users, starts from an uncancelled timer, and has no owner for page-visibility lifecycle changes.",
+  "scan": {
+    "assertions": {
+      "required": [
+        {
+          "signal": "svg-smil-animation",
+          "file": "src/route-indicator.tsx",
+          "count": 1
+        }
+      ],
+      "requiredAbsent": [
+        {
+          "signal": "missing-reduced-motion",
+          "reason": "SMIL reduced-motion and lifecycle review belongs to svg-smil-animation rather than the CSS/rAF signal"
+        }
+      ],
+      "outputExcludes": [
+        {
+          "text": "useSmilLifecycle",
+          "reason": "the existing useLifecycle hook owns browser-managed SMIL playback; no new public hook is needed"
+        }
+      ]
+    }
+  },
+  "expectedBehavior": [
+    "Runs the bundled scanner and treats svg-smil-animation as a candidate that needs source and browser-behavior inspection, not proof that the implementation is broken",
+    "Recommends omitting the animate, animateMotion, and animateTransform elements when reduced motion is preferred so the rendered SVG is genuinely static rather than merely repeating fewer times",
+    "Clears delayed beginElement timers when lifecycle pauses and when the component unmounts so a hidden or removed SVG cannot start later",
+    "Uses the existing useLifecycle hook to own the SVG root and call pauseAnimations or unpauseAnimations where supported; does not propose useSmilLifecycle or another public export",
+    "Keeps SMIL playback browser-managed and does not move per-frame values through React state or a requestAnimationFrame loop",
+    "Explains that document visibility and target visibility flow through useLifecycle rather than assuming the browser pauses SMIL in every background or off-screen case",
+    "Makes compatibility claims only for behavior verified in current supported Chrome, Firefox, and Safari, and otherwise gives conservative feature-detected guidance",
+    "Verifies pause before delayed begin, pause during playback, resume position versus restart, finite completion, backgrounding, visibility changes, and unmount cleanup before claiming cross-browser parity"
+  ]
+}

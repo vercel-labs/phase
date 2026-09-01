@@ -10,6 +10,7 @@
     "src/lazy-image.tsx: recommends useSight or WhenVisible over the raw IntersectionObserver",
     "src/theme-watcher.ts: recommends one shared useMutation (visibility: 'ignore') for the documentElement class watcher",
     "src/card.tsx: recommends naming the transitioned properties (transition-colors or similar) instead of transition-all",
+    "src/smil-orbit.tsx: recommends a static reduced-motion state and useLifecycle controlling the owning SVG root through browser SMIL pause/resume APIs",
     "src/use-latest.ts: classifies the manual synced ref as correct code with an optional useSyncedRef shorthand, not a defect",
     "src/phases/progress-meter.ts: recommends useLoop; does NOT claim the setAttribute/setProperty writes are setState-in-rAF",
     "src/suppressed-banner.ts: treats the one-shot rAF and nearby layout read as incidental, while reporting the reason-less forced-reflow directive without silently fixing it",

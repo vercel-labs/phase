@@ -39,6 +39,12 @@ missing-reduced-motion — Animation without reduced-motion check (4) · noise: 
   · in a stylesheet:
   styles/globals.css:16  @keyframes float {
 
+svg-smil-animation — SVG SMIL animation needs lifecycle and reduced-motion review (1) · noise: normal
+  why: SMIL does not respect the reduced-motion preference or pause with the owning UI lifecycle automatically.
+  use: render a static reduced-motion state and useLifecycle to pause/resume the owning SVG root
+  read: references/smil.md#svg-smil-lifecycle-and-reduced-motion
+  src/smil-orbit.tsx:5  <animateTransform
+
 ## high
 
 manual-raf — Manual requestAnimationFrame loop (4, all per-frame) · noise: noisy
@@ -103,9 +109,9 @@ manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand)
   src/use-latest.ts:4  const valueRef = useRef(value);
 
 ─────────────────────────────────────────
-Scanned 9 files.
-Total: 19 actionable (8 critical, 7 high, 4 medium), 1 dedup.
-20 findings on 17 distinct lines; 13 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
+Scanned 10 files.
+Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup.
+21 findings on 18 distinct lines; 13 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
 Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
 
