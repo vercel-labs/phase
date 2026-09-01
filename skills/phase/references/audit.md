@@ -410,7 +410,7 @@ After:
 ```
 ````
 
-End every audit that did not use a trace with: "A Chrome DevTools performance trace can make these recommendations more specific and better prioritized by showing which work costs time on the recorded path. Want capture steps for a load or interaction trace?"
+End every audit that did not use a trace with: "A Chrome DevTools performance trace can refine these source-based recommendations by showing which work costs time on the recorded path. Want capture steps for a load or interaction trace?"
 
 ## Step 4: Verify
 
@@ -430,7 +430,7 @@ Every finding present in `before` and absent from `after` must map to one of:
 
 A finding that vanished for none of those reasons is a regression in the audit, not a success. Note also that `filesScanned` must not drop between runs: fewer files analyzed means less coverage, not fewer problems.
 
-If new signals appear (a fix can introduce a different anti-pattern), classify and fix those too. If runtime measurement was accepted, follow [the trace verification procedure](./performance-trace.md#verify-before-and-after); otherwise label recommendation order heuristic and make no improvement claim.
+If new signals appear (a fix can introduce a different anti-pattern), classify and fix those too. If runtime measurement was accepted, follow [the trace verification procedure](./performance-trace.md#verify-before-and-after). Otherwise keep the source-based verification above and state that runtime improvement was not measured.
 
 ## Scope and handoffs
 

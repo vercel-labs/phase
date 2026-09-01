@@ -1,6 +1,6 @@
 # Performance traces for audits
 
-A Chrome DevTools performance trace adds measured load or interaction evidence to a phase audit.
+Scanner findings remain candidates until a phase audit reviews them against source code and produces source-based recommendations. An optional Chrome DevTools performance trace adds runtime measurements and, when available, source attribution for the recorded load or interaction, so exercised recommendations can be ordered by measured cost.
 
 ## Choose analysis or capture
 
@@ -15,7 +15,7 @@ Use this request:
 > **Load:** Open DevTools > Performance, click **Record and reload**, and wait for the trace to stop.
 > **Interaction:** In a separate trace, click **Record**, reproduce the janky interaction for 5-10 seconds, then click **Stop**.
 > Export each recording with **Download > Save trace** and attach the `.json.gz` file or share its local path.
-> If the issue only reproduces with production optimizations, record a local production build. Leave **Include resource content** and **Include script source maps** off. If attribution requires them, ask separately for approval before requesting a second trace with both options enabled.
+> If the issue only reproduces with production optimizations, record a local production build. Leave **Include resource content** and **Include script source maps** off. If attribution requires them, I will ask for your approval before requesting a second trace with both options enabled.
 > If the audit covers both load and interaction, send one trace for each. Use one combined trace only when the same hard-to-reproduce state must cover both.
 > Before sharing, review the trace for sensitive URLs, screenshots, annotations, and user data. Embedded resources or source maps can also expose source code.
 
