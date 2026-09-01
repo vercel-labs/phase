@@ -1321,6 +1321,106 @@ const SIGNAL_EXAMPLE_CATALOG = {
       },
     ],
   },
+  'svg-smil-animation': {
+    match: [
+      {
+        file: 'src/orbit.tsx',
+        content:
+          'return <svg><circle cx="20" cy="20" r="4"><animate attributeName="cx" values="20;80;20" dur="2s" repeatCount="indefinite" /></circle></svg>;\n',
+      },
+      {
+        file: 'src/route.tsx',
+        content:
+          'return <svg><path id="route" d="M0 0 L100 0" /><circle r="4"><animateMotion dur="2s" repeatCount="indefinite"><mpath href="#route" /></animateMotion></circle></svg>;\n',
+      },
+      {
+        file: 'src/spinner.tsx',
+        content:
+          'return <svg><path d="M10 10 H 90"><animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="1s" repeatCount="indefinite" /></path></svg>;\n',
+      },
+      {
+        // Formatters put the attributes on following lines, leaving the
+        // intrinsic tag name at end-of-line.
+        file: 'src/formatted-spinner.tsx',
+        content:
+          'return (\n  <svg>\n    <animateTransform\n      attributeName="transform"\n      dur="1s"\n    />\n  </svg>\n);\n',
+      },
+      {
+        file: 'src/expression-child.tsx',
+        content:
+          'return <svg>{label}<animate attributeName="opacity" values="0;1" /></svg>;\n',
+      },
+      {
+        file: 'src/text-child.tsx',
+        content:
+          'return <svg><text>Hello<animate attributeName="x" values="0;1" /></text></svg>;\n',
+      },
+      {
+        file: 'src/delayed-start.tsx',
+        content:
+          'useEffect(() => {\n  const timer = window.setTimeout(() => animationRef.current?.beginElement(), 500);\n  return () => window.clearTimeout(timer);\n}, []);\n',
+      },
+      {
+        file: 'src/delayed-offset.ts',
+        content: 'animation.beginElementAt(0.25);\n',
+      },
+      {
+        file: 'src/optional-start.ts',
+        content: 'animation.beginElement?.();\n',
+      },
+      {
+        // Lifecycle control alone does not prove a static reduced-motion state.
+        file: 'src/lifecycle-logo.tsx',
+        content:
+          'const { ref, isActive } = useLifecycle<SVGSVGElement>();\nuseEffect(() => {\n  const svg = ref.current;\n  if (!svg) return;\n  if (isActive) svg.unpauseAnimations();\n  else svg.pauseAnimations();\n}, [isActive, ref]);\nreturn <svg ref={ref}><animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite" /></svg>;\n',
+      },
+      {
+        // Controlling one SVG cannot suppress review of another root.
+        file: 'src/multiple-roots.tsx',
+        content:
+          'otherSvg.pauseAnimations();\nreturn <svg><animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite" /></svg>;\n',
+      },
+    ],
+    noMatch: [
+      {
+        file: 'src/component.tsx',
+        content: 'return <Animate repeatCount="indefinite" />;\n',
+      },
+      {
+        file: 'src/markup.ts',
+        content:
+          'const markup = `<animate repeatCount="indefinite" />`;\nconst method = "animation.beginElement()";\n',
+      },
+      {
+        file: 'src/notes.tsx',
+        content:
+          '// <animate repeatCount="indefinite" />\n/* animation.beginElement(); */\n',
+      },
+      {
+        file: 'src/static-icon.tsx',
+        content:
+          'return <svg viewBox="0 0 24 24"><path d="M4 12h16" /></svg>;\n',
+      },
+      {
+        file: 'src/pattern.tsx',
+        content:
+          'const smilElement = /<animate>/;\nconst smilTransform = /<animateTransform\\s/;\n',
+      },
+      {
+        file: 'src/math.ts',
+        content: 'const ratio = value<animate/2;\n',
+      },
+      {
+        file: 'src/generic.ts',
+        content:
+          'type animate = number;\nconst identity = <animate>(value: animate) => value;\n',
+      },
+      {
+        file: 'src/assertion.ts',
+        content: 'type animate = number;\nconst value = <animate>source;\n',
+      },
+    ],
+  },
   'reduced-motion-ignored': {
     match: [
       {

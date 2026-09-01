@@ -1207,6 +1207,9 @@ const NOISE_TIERS = [
 	"noisy"
 ];
 const NON_COMPOSITOR_TRANSITION = new RegExp(`${/(?<![\w-])transition(?:-property)?:\s*(?:all\b|[^;{}]*\b(?:width|height|top|left|right|bottom|margin|padding|inset)\b)/.source}|${/(?<![\w-])transition:\s*[\d.]+m?s(?:(?:\s*,\s*|\s+)(?:[\d.]+m?s|ease[\w-]*|linear|step[\w-]*|steps\([^)]*\)|cubic-bezier\([^)]*\)))*\s*(?:;|!|$)/.source}`);
+const PER_FRAME_ALLOCATION = /\.(?:map|filter)\s*(?:\?\.)?\s*\(|[[{]/;
+const SVG_SMIL_ELEMENT = /<(?:animate|animateMotion|animateTransform)(?=[\s/>]|$)/;
+const SVG_SMIL_IMPERATIVE_START = /\.beginElement(?:At)?(?:\?\.)?\s*\(/;
 const SIGNAL_CATALOG = [
 	{
 		id: "manual-raf",
@@ -1259,7 +1262,7 @@ const SIGNAL_CATALOG = [
 		detects: "An object or array literal (including a spread copy), `.map()`, or `.filter()` inside a proven recurring frame callback",
 		why: "Repeated allocations add garbage-collection pressure to the render path.",
 		fix: "references/performance.md#zero-per-frame-allocations",
-		pattern: /\.(?:map|filter)\s*(?:\?\.)?\s*\(|[[{]/,
+		pattern: PER_FRAME_ALLOCATION,
 		codeOnly: true,
 		evidence: "per-frame-allocation"
 	},
@@ -1358,6 +1361,19 @@ const SIGNAL_CATALOG = [
 		fileTypes: ["js", "css"],
 		codeOnly: true,
 		evidence: "recurring-raf-branch",
+		perFile: true
+	},
+	{
+		id: "svg-smil-animation",
+		replacement: "render a static reduced-motion state and useLifecycle to pause/resume the owning SVG root",
+		label: "SVG SMIL animation needs lifecycle and reduced-motion review",
+		severity: "critical",
+		noise: "normal",
+		detects: "Intrinsic SVG SMIL animation elements or imperative `beginElement()`/`beginElementAt()` playback",
+		why: "SMIL does not respect the reduced-motion preference or pause with the owning UI lifecycle automatically.",
+		fix: "references/smil.md#svg-smil-lifecycle-and-reduced-motion",
+		matcher: matchesSvgSmilAnimation,
+		codeOnly: true,
 		perFile: true
 	},
 	{
@@ -1584,6 +1600,21 @@ function matchesLayoutWrite(lines, i) {
 	const directStyle = /\.style\.([A-Za-z_$][\w$]*)\s*=/.exec(code);
 	if (directStyle && STYLE_LAYOUT_PROPERTY.test(directStyle[1] ?? "")) return true;
 	return hasLayoutPropertyCall(callSource, code, ".style.setProperty", CSS_LAYOUT_PROPERTY) || hasLayoutPropertyCall(callSource, code, ".setAttribute", SVG_LAYOUT_ATTRIBUTE);
+}
+/** Intrinsic SMIL JSX tags or imperative starts, excluding JS lookalikes. */
+function matchesSvgSmilAnimation(lines, i, file) {
+	const line = lines[i] ?? "";
+	if (SVG_SMIL_IMPERATIVE_START.test(line)) return true;
+	if (!/\.[jt]sx$/i.test(file)) return false;
+	let from = 0;
+	while (from < line.length) {
+		const match = SVG_SMIL_ELEMENT.exec(line.slice(from));
+		if (!match) return false;
+		const index = from + match.index;
+		if (!line.slice(0, index).trimEnd().endsWith("/")) return true;
+		from = index + match[0].length;
+	}
+	return false;
 }
 /** Matches a quoted first argument only when the method itself is real code. */
 function hasLayoutPropertyCall(source, code, method, properties) {
@@ -1850,7 +1881,7 @@ function scanSignal(signal, lines, uncommentedLines, codeLines, relPath, suppres
 		let matchIndex = 0;
 		let matchOffset = null;
 		if (signal.matcher) {
-			if (!signal.matcher(matchLines, i)) continue;
+			if (!signal.matcher(matchLines, i, relPath)) continue;
 		} else {
 			if (!matchesSignalContext(signal, codeLines, uncommentedLines, i)) continue;
 			if (!candidatePattern) continue;

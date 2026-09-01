@@ -24,7 +24,11 @@ export const NOISE_TIERS = ['precise', 'normal', 'noisy'] as const;
 export type ScanSeverity = (typeof SEVERITY_ORDER)[number];
 export type ScanNoise = (typeof NOISE_TIERS)[number];
 export type ScanFileType = 'js' | 'css' | 'jsx';
-export type ScanMatcher = (lines: string[], line: number) => boolean;
+export type ScanMatcher = (
+  lines: string[],
+  line: number,
+  file: string,
+) => boolean;
 
 export interface ScanExample {
   file: string;
@@ -73,6 +77,9 @@ const NON_COMPOSITOR_TRANSITION = new RegExp(
 );
 
 const PER_FRAME_ALLOCATION = /\.(?:map|filter)\s*(?:\?\.)?\s*\(|[[{]/;
+const SVG_SMIL_ELEMENT =
+  /<(?:animate|animateMotion|animateTransform)(?=[\s/>]|$)/;
+const SVG_SMIL_IMPERATIVE_START = /\.beginElement(?:At)?(?:\?\.)?\s*\(/;
 
 const SIGNAL_CATALOG = [
   {
@@ -255,6 +262,21 @@ const SIGNAL_CATALOG = [
     codeOnly: true,
     evidence: 'recurring-raf-branch',
     // The gap is a property of the whole file, not of each animating line.
+    perFile: true,
+  },
+  {
+    id: 'svg-smil-animation',
+    replacement:
+      'render a static reduced-motion state and useLifecycle to pause/resume the owning SVG root',
+    label: 'SVG SMIL animation needs lifecycle and reduced-motion review',
+    severity: 'critical',
+    noise: 'normal',
+    detects:
+      'Intrinsic SVG SMIL animation elements or imperative `beginElement()`/`beginElementAt()` playback',
+    why: 'SMIL does not respect the reduced-motion preference or pause with the owning UI lifecycle automatically.',
+    fix: 'references/smil.md#svg-smil-lifecycle-and-reduced-motion',
+    matcher: matchesSvgSmilAnimation,
+    codeOnly: true,
     perFile: true,
   },
   {
@@ -533,7 +555,7 @@ const CSS_LAYOUT_PROPERTY =
 const SVG_LAYOUT_ATTRIBUTE =
   /^(?:x|y|width|height|cx|cy|r|d|points|x1|y1|x2|y2|transform)$/;
 //
-// Custom matchers: `(lines: string[], i: number) => boolean`.
+// Custom matchers: `(lines: string[], i: number, file: string) => boolean`.
 // Called once per line per signal. Return true if line i should be reported.
 // Must be pure (no side effects, no mutation of lines). Declared before
 // SIGNALS because the catalog references them; grouped here with other
@@ -568,6 +590,29 @@ function matchesLayoutWrite(lines: string[], i: number): boolean {
       SVG_LAYOUT_ATTRIBUTE,
     )
   );
+}
+
+/** Intrinsic SMIL JSX tags or imperative starts, excluding JS lookalikes. */
+function matchesSvgSmilAnimation(
+  lines: string[],
+  i: number,
+  file: string,
+): boolean {
+  const line = lines[i] ?? '';
+  if (SVG_SMIL_IMPERATIVE_START.test(line)) return true;
+  if (!/\.[jt]sx$/i.test(file)) return false;
+
+  let from = 0;
+  while (from < line.length) {
+    const match = SVG_SMIL_ELEMENT.exec(line.slice(from));
+    if (!match) return false;
+
+    const index = from + match.index;
+    const prefix = line.slice(0, index).trimEnd();
+    if (!prefix.endsWith('/')) return true;
+    from = index + match[0].length;
+  }
+  return false;
 }
 
 /** Matches a quoted first argument only when the method itself is real code. */

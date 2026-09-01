@@ -103,7 +103,7 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 ## Don't
 
 - **Don't use `useLifecycle` as a frame driver.** It only supplies the active/paused decision. Let CSS/WAAPI own a browser-animatable timeline, or use `useLoop` when JavaScript must compute live frames.
-- **Don't combine `useLifecycle` with `setTimeout`/`setInterval` for animation sequencing.** The timers don't participate in phase's lifecycle. Use CSS/WAAPI when the sequence is predetermined and keyframe-friendly, or `useLoop` with `frame.elapsed` when JavaScript must own the steps. See [timed-sequences.md](./timed-sequences.md).
+- **Use browser or phase timing for animation sequences.** Timers don't participate in phase's lifecycle. Use CSS/WAAPI when the sequence is predetermined and keyframe-friendly, or `useLoop` with `frame.elapsed` when JavaScript must own the steps. Existing SMIL that requires one delayed `beginElement()` call needs synchronous timer cancellation and an eligibility recheck from the [SMIL lifecycle recipe](./smil.md). See [timed-sequences.md](./timed-sequences.md).
 - **Don't set `paused` to implement visibility pausing.** That's automatic. Manual pause is for UI scenarios only.
 - **Don't ship a generic `<Lifecycle>` component.** Unlike `Presence` (which has real transitionend/timeout logic), the lifecycle wrapper is 4 lines. Name it contextually and own those lines.
 

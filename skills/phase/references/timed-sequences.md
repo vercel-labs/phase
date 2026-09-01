@@ -29,6 +29,8 @@ This fails in three ways:
 2. **Timers don't participate in phase's lifecycle.** If the cleanup races or `isActive` flips rapidly, timers can fire out of order or after unmount.
 3. **Each step triggers a React re-render.** `setStep` causes reconciliation for what should be a DOM-only operation.
 
+An existing SMIL animation that must call `beginElement()` after one delay is a narrower compatibility case, not a general sequencing pattern. Follow the [SMIL lifecycle recipe](./smil.md): clear the timer synchronously from `onPhaseChange`, recheck eligibility when it fires, and let the SVG root timeline own every frame.
+
 ## First choose who owns the timeline
 
 Prefer browser keyframes when the whole timeline can be described before playback:
