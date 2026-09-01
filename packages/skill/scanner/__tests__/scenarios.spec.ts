@@ -61,6 +61,82 @@ describe('eval scenario ground truth', () => {
       if (!contract) return;
       const { scan } = contract;
 
+      if ('baseline' in scan) {
+        it('writes a baseline and fails only for the planted finding', () => {
+          const workflow = scan.baseline;
+          const baselinePath = join(workflow.target, 'phase-baseline.json');
+          const written = runCli(materializedDirectory, [
+            '--json',
+            '--write-baseline',
+            baselinePath,
+            '--fail-on',
+            workflow.failOn,
+            workflow.target,
+          ]);
+          expect(written.status).toBe(0);
+          const initial = JSON.parse(written.stdout) as {
+            findings: { file: string; line: number }[];
+          };
+
+          const unchanged = runCli(materializedDirectory, [
+            '--fail-on',
+            workflow.failOn,
+            workflow.target,
+          ]);
+          expect(unchanged.status).toBe(0);
+          for (const finding of initial.findings) {
+            expect(unchanged.stdout).not.toContain(
+              `${finding.file}:${finding.line}`,
+            );
+          }
+
+          cpSync(
+            join(materializedDirectory, workflow.plant.source),
+            join(materializedDirectory, workflow.plant.destination),
+          );
+          const changed = runCli(materializedDirectory, [
+            '--fail-on',
+            workflow.failOn,
+            workflow.target,
+          ]);
+          expect(changed.status).toBe(1);
+          expect(changed.stdout).toContain(workflow.newFinding.file);
+          for (const finding of initial.findings) {
+            expect(changed.stdout).not.toContain(
+              `${finding.file}:${finding.line}`,
+            );
+          }
+
+          const changedJson = runCli(materializedDirectory, [
+            '--json',
+            '--fail-on',
+            workflow.failOn,
+            workflow.target,
+          ]);
+          expect(changedJson.status).toBe(1);
+          const findings = JSON.parse(changedJson.stdout).findings as {
+            signal: string;
+            file: string;
+            baselineState: string;
+          }[];
+          const newFindings = findings.filter(
+            (finding) => finding.baselineState === 'new',
+          );
+          expect(newFindings).toEqual([
+            expect.objectContaining({
+              signal: workflow.newFinding.signal,
+              file: workflow.newFinding.file,
+            }),
+          ]);
+          expect(
+            findings.filter(
+              (finding) => finding.baselineState === 'pre-existing',
+            ).length,
+          ).toBeGreaterThan(0);
+        });
+        return;
+      }
+
       if ('skip' in scan) {
         it(`skips the scan: ${scan.skip}`, () => {
           expect(scan.skip.length).toBeGreaterThan(0);
@@ -158,7 +234,11 @@ function runCli(directory: string, args: string[]) {
     cwd: directory,
     encoding: 'utf8',
   });
-  return { status: run.status ?? -1, stdout: run.stdout };
+  return {
+    status: run.status ?? -1,
+    stdout: run.stdout,
+    stderr: run.stderr,
+  };
 }
 
 function normalizeSkillVersion(result: Record<string, unknown>) {

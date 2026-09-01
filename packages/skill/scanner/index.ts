@@ -130,9 +130,23 @@ export function scanTargets(
 }
 
 export { newDiag, scanFile } from './detect.ts';
+export {
+  assignFingerprints,
+  classifyFindings,
+  hashFindingLine,
+  normalizeLine,
+  parseBaseline,
+  serializeBaseline,
+} from './baseline.ts';
 export { formatJson, formatText } from './render.ts';
 export { SEVERITY_ORDER, SIGNALS } from './signals.ts';
 export type { ScanContext } from './context.ts';
+export type {
+  ClassifiedFinding,
+  FindingClassification,
+  FingerprintedFinding,
+  PhaseBaseline,
+} from './baseline.ts';
 export type { ScanExecution, ScanFinding } from './detect.ts';
 export type { ScanJson, ScanResult } from './render.ts';
 export type {

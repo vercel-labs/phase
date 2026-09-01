@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import type { ScanContext } from './context.ts';
-import type { ScanSignalId } from './signals.ts';
+import type { ScanSeverity, ScanSignalId } from './signals.ts';
 import { SIGNALS } from './signals.ts';
 
 const SIGNAL_IDS = new Set<string>(SIGNALS.map((signal) => signal.id));
@@ -79,7 +79,7 @@ export function parseEvalScenario(name: string, value: unknown): EvalScenario {
  * return no runs.
  */
 export function evalScenarioRuns(scan: EvalScenarioScan): EvalScenarioRun[] {
-  if ('skip' in scan || 'golden' in scan) return [];
+  if ('skip' in scan || 'golden' in scan || 'baseline' in scan) return [];
   const runs: EvalScenarioRunSpec[] =
     'runs' in scan ? scan.runs : [{ assertions: scan.assertions }];
   return runs.map((run) => ({
@@ -99,6 +99,7 @@ export type EvalScenarioScan =
   | EvalScenarioAssertionScan
   | EvalScenarioRunsScan
   | EvalScenarioGoldenScan
+  | EvalScenarioBaselineScan
   | EvalScenarioSkippedScan;
 
 export interface EvalScenarioRun {
@@ -130,6 +131,16 @@ export interface EvalOutputExclusion {
   reason: string;
 }
 
+export interface EvalBaselineWorkflow {
+  target: string;
+  failOn: Exclude<ScanSeverity, 'dedup'>;
+  plant: {
+    source: string;
+    destination: string;
+  };
+  newFinding: EvalRequiredFinding & { file: string };
+}
+
 interface EvalScenarioAssertionScan {
   target?: string;
   assertions: EvalScanAssertions;
@@ -142,6 +153,10 @@ interface EvalScenarioRunsScan {
 
 interface EvalScenarioGoldenScan {
   golden: string;
+}
+
+interface EvalScenarioBaselineScan {
+  baseline: EvalBaselineWorkflow;
 }
 
 interface EvalScenarioSkippedScan {
@@ -158,8 +173,8 @@ interface EvalScenarioRunSpec {
 function parseScan(name: string, value: unknown): EvalScenarioScan {
   const path = `${name}.scan`;
   const scan = expectObject(path, value);
-  const gates = ['assertions', 'runs', 'golden', 'skip'].filter((field) =>
-    Object.hasOwn(scan, field),
+  const gates = ['assertions', 'runs', 'golden', 'baseline', 'skip'].filter(
+    (field) => Object.hasOwn(scan, field),
   );
   if (gates.length === 0) throw new Error(`${name} has no scan gate`);
   if (gates.length > 1) {
@@ -187,9 +202,67 @@ function parseScan(name: string, value: unknown): EvalScenarioScan {
     rejectUnknownFields(path, scan, ['golden']);
     return { golden: expectString(`${path}.golden`, scan.golden) };
   }
+  if (gate === 'baseline') {
+    rejectUnknownFields(path, scan, ['baseline']);
+    return {
+      baseline: parseBaselineWorkflow(`${path}.baseline`, scan.baseline),
+    };
+  }
 
   rejectUnknownFields(path, scan, ['skip']);
   return { skip: expectString(`${path}.skip`, scan.skip) };
+}
+
+function parseBaselineWorkflow(
+  path: string,
+  value: unknown,
+): EvalBaselineWorkflow {
+  const baseline = expectObject(path, value);
+  rejectUnknownFields(path, baseline, [
+    'target',
+    'failOn',
+    'plant',
+    'newFinding',
+  ]);
+  const failOn = expectString(`${path}.failOn`, baseline.failOn);
+  if (!['critical', 'high', 'medium'].includes(failOn)) {
+    throw new Error(`${path}.failOn must be critical, high, or medium`);
+  }
+
+  const plantPath = `${path}.plant`;
+  const plant = expectObject(plantPath, baseline.plant);
+  rejectUnknownFields(plantPath, plant, ['source', 'destination']);
+
+  const newFinding = parseRequired(`${path}.newFinding`, baseline.newFinding);
+  if (!newFinding.file) {
+    throw new Error(`${path}.newFinding.file must be a non-empty string`);
+  }
+
+  return {
+    target: expectScenarioPath(`${path}.target`, baseline.target),
+    failOn: failOn as Exclude<ScanSeverity, 'dedup'>,
+    plant: {
+      source: expectScenarioPath(`${plantPath}.source`, plant.source),
+      destination: expectScenarioPath(
+        `${plantPath}.destination`,
+        plant.destination,
+      ),
+    },
+    newFinding: { ...newFinding, file: newFinding.file },
+  };
+}
+
+function expectScenarioPath(path: string, value: unknown): string {
+  const result = expectString(path, value);
+  const portable = result.replaceAll('\\', '/');
+  const escapes =
+    portable.startsWith('/') ||
+    /^[A-Za-z]:\//.test(portable) ||
+    portable.split('/').includes('..');
+  if (escapes) {
+    throw new Error(`${path} must be a relative path inside the scenario`);
+  }
+  return result;
 }
 
 function parseRun(path: string, value: unknown): EvalScenarioRunSpec {

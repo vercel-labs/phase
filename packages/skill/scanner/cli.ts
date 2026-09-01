@@ -1,11 +1,27 @@
 #!/usr/bin/env node
 
-import { lstatSync, readFileSync, realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  assignFingerprints,
+  classifyFindings,
+  isPreExistingFinding,
+  parseBaseline,
+  serializeBaseline,
+} from './baseline.ts';
+import type { PhaseBaseline } from './baseline.ts';
 import type { ScanFinding } from './detect.ts';
 import { formatJson, formatText, scanTargets } from './index.ts';
+import type { ScanResult } from './index.ts';
+import { cliVersion } from './render.ts';
 import { NOISE_TIERS, SEVERITY_ORDER, SIGNALS } from './signals.ts';
 import type { ScanNoise, ScanSeverity } from './signals.ts';
 import { toPosix } from './walk.ts';
@@ -27,8 +43,12 @@ Options
   --stdin0             read additional NUL-delimited targets from stdin;
                        an empty stream scans nothing instead of "."
   --fail-on <severity> exit 1 if any finding is at or above the given
-                       severity (critical | high | medium); default is
-                       exit 0 regardless of findings (advisory)
+                        severity (critical | high | medium); default is
+                        exit 0 regardless of findings (advisory)
+  --baseline <path>    compare findings with this baseline
+  --no-baseline        ignore an explicit or auto-detected baseline
+  --write-baseline <path>
+                       write all current findings as a baseline and exit 0
   --signal <id>        report only this signal (repeatable)
   --severity <level>   report only this severity (repeatable)
   --noise <tier>       report only this noise tier, e.g. --noise precise
@@ -53,7 +73,10 @@ interface CliOptions {
   json: boolean;
   stdin0: boolean;
   help: boolean;
+  noBaseline: boolean;
   failOn: Exclude<ScanSeverity, 'dedup'> | null;
+  baselinePath: string | null;
+  writeBaselinePath: string | null;
   signals: string[];
   severities: ScanSeverity[];
   noiseTiers: ScanNoise[];
@@ -62,9 +85,11 @@ interface CliOptions {
   targets: string[];
 }
 
-type BooleanOptionKey = 'json' | 'stdin0' | 'help';
+type BooleanOptionKey = 'json' | 'stdin0' | 'help' | 'noBaseline';
 type ValueOptionKey =
   | 'failOn'
+  | 'baselinePath'
+  | 'writeBaselinePath'
   | 'signals'
   | 'severities'
   | 'noiseTiers'
@@ -83,6 +108,7 @@ interface ValueOption {
 const FLAGS: Record<string, BooleanOptionKey> = {
   '--json': 'json',
   '--stdin0': 'stdin0',
+  '--no-baseline': 'noBaseline',
   '--help': 'help',
   '-h': 'help',
 };
@@ -93,6 +119,8 @@ const FLAGS: Record<string, BooleanOptionKey> = {
  * branch in a parser.
  */
 const VALUE_OPTIONS: Record<string, ValueOption> = {
+  '--baseline': { key: 'baselinePath' },
+  '--write-baseline': { key: 'writeBaselinePath' },
   '--fail-on': {
     key: 'failOn',
     allowed: ['critical', 'high', 'medium'],
@@ -145,6 +173,8 @@ function applyOption(
     opts.failOn = value as Exclude<ScanSeverity, 'dedup'>;
   } else if (spec.key === 'limit') {
     opts.limit = value as number;
+  } else if (spec.key === 'baselinePath' || spec.key === 'writeBaselinePath') {
+    opts[spec.key] = value as string;
   }
 }
 
@@ -153,7 +183,10 @@ function parseArgs(argv: string[]): CliOptions {
     json: false,
     stdin0: false,
     help: false,
+    noBaseline: false,
     failOn: null,
+    baselinePath: null,
+    writeBaselinePath: null,
     signals: [],
     severities: [],
     noiseTiers: [],
@@ -179,20 +212,48 @@ function parseArgs(argv: string[]): CliOptions {
 }
 
 function main(): void {
-  let opts: CliOptions;
-  try {
-    opts = parseArgs(process.argv.slice(2));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`${message}\n\n${USAGE}`);
-    process.exit(2);
-  }
+  const opts = readOptions(process.argv.slice(2));
 
   if (opts.help) {
     console.log(USAGE);
     return;
   }
 
+  validateOptions(opts);
+  resolveTargets(opts);
+  const baseline = readBaseline(opts);
+  const result = scanTargets(opts.targets, { exclude: opts.exclude });
+  const version = cliVersion();
+  applyBaseline(result, baseline, version);
+  writeBaseline(result, opts.writeBaselinePath, version);
+  filterFindings(result, opts);
+  printResult(result, opts);
+
+  if (hitsFailThreshold(result.findings, opts)) process.exit(1);
+}
+
+function readOptions(argv: string[]): CliOptions {
+  try {
+    return parseArgs(argv);
+  } catch (error) {
+    failUsage(error instanceof Error ? error.message : String(error));
+  }
+}
+
+function validateOptions(opts: CliOptions): void {
+  if (
+    opts.writeBaselinePath &&
+    (opts.signals.length > 0 ||
+      opts.severities.length > 0 ||
+      opts.noiseTiers.length > 0)
+  ) {
+    failUsage(
+      '--write-baseline requires a full unfiltered scan; remove --signal, --severity, and --noise',
+    );
+  }
+}
+
+function resolveTargets(opts: CliOptions): void {
   if (opts.stdin0) {
     const input = readFileSync(0, 'utf8');
     for (const target of input.split('\0')) {
@@ -204,13 +265,55 @@ function main(): void {
     try {
       lstatSync(target);
     } catch {
-      console.error(`target does not exist: ${target}\n\n${USAGE}`);
-      process.exit(2);
+      failUsage(`target does not exist: ${target}`);
     }
   }
+}
 
-  const result = scanTargets(opts.targets, { exclude: opts.exclude });
+function readBaseline(opts: CliOptions): PhaseBaseline | null {
+  try {
+    return loadBaseline(opts);
+  } catch (error) {
+    failUsage(error instanceof Error ? error.message : String(error));
+  }
+}
 
+function applyBaseline(
+  result: ScanResult,
+  baseline: PhaseBaseline | null,
+  version: string,
+): void {
+  if (baseline) {
+    const classified = classifyFindings(result.findings, baseline);
+    result.findings = classified.findings;
+    result.baseline = { stale: classified.stale };
+    if (baseline.cliVersion !== version) {
+      result.warnings.push(
+        `baseline version ${baseline.cliVersion} differs from CLI version ${version}; continuing`,
+      );
+    }
+  }
+}
+
+function writeBaseline(
+  result: ScanResult,
+  path: string | null,
+  version: string,
+): void {
+  if (path) {
+    const fingerprints = assignFingerprints(result.findings).map(
+      (finding) => finding.fingerprint,
+    );
+    try {
+      writeFileSync(resolve(path), serializeBaseline(fingerprints, version));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failUsage(`cannot write baseline: ${path} (${message})`);
+    }
+  }
+}
+
+function filterFindings(result: ScanResult, opts: CliOptions): void {
   const keep: ((finding: ScanFinding) => boolean)[] = [];
   if (opts.signals.length > 0) {
     keep.push((finding) => opts.signals.includes(finding.signal));
@@ -224,7 +327,9 @@ function main(): void {
   if (keep.length > 0) {
     result.findings = result.findings.filter((f) => keep.every((p) => p(f)));
   }
+}
 
+function printResult(result: ScanResult, opts: CliOptions): void {
   for (const warning of result.warnings) {
     console.error(`warning: ${warning}`);
   }
@@ -234,16 +339,52 @@ function main(): void {
   } else {
     console.log(formatText(result));
   }
+}
 
-  if (opts.failOn) {
-    const threshold = SEVERITY_ORDER.indexOf(opts.failOn);
-    const hit = result.findings.some(
-      (f) =>
-        f.severity !== 'dedup' &&
-        SEVERITY_ORDER.indexOf(f.severity) <= threshold,
-    );
-    if (hit) process.exit(1);
+function hitsFailThreshold(findings: ScanFinding[], opts: CliOptions): boolean {
+  if (!opts.failOn || opts.writeBaselinePath) return false;
+  const threshold = SEVERITY_ORDER.indexOf(opts.failOn);
+  return findings.some(
+    (finding) =>
+      !isPreExistingFinding(finding) &&
+      finding.severity !== 'dedup' &&
+      SEVERITY_ORDER.indexOf(finding.severity) <= threshold,
+  );
+}
+
+function loadBaseline(opts: CliOptions): PhaseBaseline | null {
+  if (opts.noBaseline) return null;
+
+  const explicit = opts.baselinePath !== null;
+  const path = explicit
+    ? resolve(opts.baselinePath as string)
+    : join(scanRoot(opts), 'phase-baseline.json');
+  if (!explicit && !existsSync(path)) return null;
+
+  let json: string;
+  try {
+    json = readFileSync(path, 'utf8');
+  } catch {
+    throw new Error(`cannot read baseline: ${path}`);
   }
+
+  try {
+    return parseBaseline(json);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`invalid baseline ${path}: ${message}`, { cause: error });
+  }
+}
+
+function scanRoot(opts: CliOptions): string {
+  if (opts.stdin0 || opts.targets.length !== 1) return process.cwd();
+  const target = resolve(opts.targets[0] as string);
+  return lstatSync(target).isDirectory() ? target : dirname(target);
+}
+
+function failUsage(message: string): never {
+  console.error(`${message}\n\n${USAGE}`);
+  process.exit(2);
 }
 
 // import.meta.url is already symlink-resolved, but argv[1] is whatever the

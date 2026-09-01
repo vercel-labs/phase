@@ -73,6 +73,32 @@ describe('eval scenario contract', () => {
     ]);
   });
 
+  it.each(['target', 'source', 'destination'])(
+    'keeps baseline workflow %s paths inside the scenario',
+    (field) => {
+      const baseline = {
+        target: 'workspace',
+        failOn: 'critical',
+        plant: {
+          source: 'plant/new.ts',
+          destination: 'workspace/src/new.ts',
+        },
+        newFinding: { signal: 'forced-reflow', file: 'src/new.ts' },
+      };
+      if (field === 'target') baseline.target = '../outside';
+      if (field === 'source') baseline.plant.source = '../outside';
+      if (field === 'destination') baseline.plant.destination = '../outside';
+
+      expect(() =>
+        parseEvalScenario('baseline', {
+          description: 'A scenario.',
+          scan: { baseline },
+          expectedBehavior: ['Answers the question.'],
+        }),
+      ).toThrow('must be a relative path inside the scenario');
+    },
+  );
+
   it('requires the prompt claimed by the eval format', () => {
     const directory = mkdtempSync(join(tmpdir(), 'phase-eval-scenario-'));
     writeFileSync(

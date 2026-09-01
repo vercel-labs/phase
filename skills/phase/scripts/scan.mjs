@@ -1,7 +1,113 @@
 #!/usr/bin/env node
-import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+const FINDING_SOURCE_LINE = Symbol("findingSourceLine");
+/** Normalizes a finding's source line for location-independent identity. */
+function normalizeLine(text) {
+	return text.trim().replace(/\s+/g, " ");
+}
+/** Returns the twelve-character SHA-256 prefix used in a fingerprint. */
+function hashFindingLine(normalized) {
+	return createHash("sha256").update(normalized).digest("hex").slice(0, 12);
+}
+/** Assigns stable fingerprints without changing finding order. */
+function assignFingerprints(findings) {
+	const assigned = /* @__PURE__ */ new Map();
+	const occurrences = /* @__PURE__ */ new Map();
+	const fileOrdered = findings.map((finding, index) => ({
+		finding,
+		index
+	})).toSorted((a, b) => a.finding.file.localeCompare(b.finding.file) || a.finding.line - b.finding.line || a.index - b.index);
+	for (const { finding, index } of fileOrdered) {
+		const hash = hashFindingLine(normalizeLine(finding[FINDING_SOURCE_LINE] ?? finding.text));
+		const identity = `${finding.signal}:${finding.file}:${hash}`;
+		const occurrence = (occurrences.get(identity) ?? 0) + 1;
+		occurrences.set(identity, occurrence);
+		assigned.set(index, `${identity}:${occurrence}`);
+	}
+	return findings.map((finding, index) => ({
+		...finding,
+		fingerprint: assigned.get(index)
+	}));
+}
+/**
+* Parses and validates a baseline document. Throws an actionable error for
+* malformed JSON, unknown fields, unsupported schemas, or invalid values.
+*/
+function parseBaseline(json) {
+	let value;
+	try {
+		value = JSON.parse(json);
+	} catch {
+		throw new Error("baseline must contain valid JSON");
+	}
+	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("baseline must be an object");
+	const baseline = value;
+	for (const field of Object.keys(baseline)) if (![
+		"schemaVersion",
+		"cliVersion",
+		"fingerprints"
+	].includes(field)) throw new Error("baseline has unknown fields");
+	if (baseline.schemaVersion !== 1) throw new Error(`baseline schemaVersion must be 1`);
+	if (typeof baseline.cliVersion !== "string" || !baseline.cliVersion.trim()) throw new Error("baseline cliVersion must be a non-empty string");
+	if (!isCliVersion(baseline.cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
+	if (!Array.isArray(baseline.fingerprints)) throw new Error("baseline fingerprints must be an array");
+	const fingerprints = baseline.fingerprints.map((fingerprint, index) => {
+		if (typeof fingerprint !== "string" || !isFingerprint(fingerprint)) throw new Error(`baseline fingerprints[${index}] is not a valid finding fingerprint`);
+		return fingerprint;
+	});
+	if (new Set(fingerprints).size !== fingerprints.length) throw new Error("baseline fingerprints must not contain duplicates");
+	return {
+		schemaVersion: 1,
+		cliVersion: baseline.cliVersion,
+		fingerprints
+	};
+}
+/**
+* Returns canonical baseline JSON with fingerprints sorted without mutating
+* the input. Throws when the CLI version or a fingerprint is invalid.
+*/
+function serializeBaseline(fingerprints, cliVersion) {
+	if (!cliVersion.trim()) throw new Error("baseline cliVersion must be a non-empty string");
+	if (!isCliVersion(cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
+	for (const [index, fingerprint] of fingerprints.entries()) if (!isFingerprint(fingerprint)) throw new Error(`baseline fingerprints[${index}] is not a valid finding fingerprint`);
+	return `${JSON.stringify({
+		schemaVersion: 1,
+		cliVersion,
+		fingerprints: fingerprints.toSorted()
+	}, null, 2)}\n`;
+}
+/**
+* Classifies current findings against a baseline and counts baseline entries
+* absent from the current finding set. The inputs are not mutated.
+*/
+function classifyFindings(findings, baseline) {
+	const baselineFingerprints = new Set(baseline.fingerprints);
+	const assigned = assignFingerprints(findings);
+	const currentFingerprints = new Set(assigned.map((finding) => finding.fingerprint));
+	const classified = [];
+	for (const finding of assigned) classified.push({
+		...finding,
+		baselineState: baselineFingerprints.has(finding.fingerprint) ? "pre-existing" : "new"
+	});
+	return {
+		findings: classified,
+		stale: baseline.fingerprints.filter((fingerprint) => !currentFingerprints.has(fingerprint)).length
+	};
+}
+/** Whether a classified finding matched the applied baseline. */
+function isPreExistingFinding(finding) {
+	return "baselineState" in finding && finding.baselineState === "pre-existing";
+}
+function isFingerprint(value) {
+	return /^[^:]+:.+:[0-9a-f]{12}:[1-9]\d*$/.test(value);
+}
+function isCliVersion(value) {
+	return /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(value);
+}
+//#endregion
 //#region scanner/lex.ts
 /**
 * Lexical masks preserve every input line's length. Consumers may therefore
@@ -1924,7 +2030,8 @@ function makeFinding(signal, file, line, text, matchIndex, execution) {
 		file,
 		line,
 		text: excerpt(text, matchIndex),
-		fix: signal.fix
+		fix: signal.fix,
+		[FINDING_SOURCE_LINE]: text
 	};
 }
 /**
@@ -1991,10 +2098,12 @@ function dedup(findings) {
 */
 function formatJson(result, limit = null) {
 	const counts = countBySeverity(result.findings);
-	const findings = limit === null ? result.findings : result.findings.slice(0, limit);
+	const fingerprinted = assignFingerprints(result.findings);
+	const findings = limit === null ? fingerprinted : fingerprinted.slice(0, limit);
+	const preExisting = result.findings.filter(isPreExistingFinding).length;
 	return {
 		schemaVersion: 1,
-		skillVersion: skillVersion(),
+		skillVersion: cliVersion(),
 		notice: result.findings.length > 0 ? EXCERPT_NOTICE : null,
 		targets: result.targets,
 		summary: {
@@ -2008,6 +2117,9 @@ function formatJson(result, limit = null) {
 			dedup: counts.dedup,
 			perFrame: result.findings.filter((f) => f.execution === "per-frame").length,
 			suppressed: result.suppressed ?? 0,
+			new: result.findings.length - preExisting,
+			preExisting,
+			stale: result.baseline?.stale ?? 0,
 			bySeverity: {
 				critical: counts.critical,
 				high: counts.high,
@@ -2025,17 +2137,18 @@ function formatJson(result, limit = null) {
 }
 /** Renders a scan result as human-readable text grouped by severity. */
 function formatText(result) {
-	const weight = fileWeights(result.findings);
-	const out = result.findings.length > 0 ? [EXCERPT_NOTICE] : [];
-	out.push(...renderHotspots(result.findings, weight));
-	const bySeverity = groupBySeverity(result.findings);
+	const findings = result.baseline ? result.findings.filter((finding) => !isPreExistingFinding(finding)) : result.findings;
+	const weight = fileWeights(findings);
+	const out = findings.length > 0 ? [EXCERPT_NOTICE] : [];
+	out.push(...renderHotspots(findings, weight));
+	const bySeverity = groupBySeverity(findings);
 	for (const severity of SEVERITY_ORDER) {
 		const group = bySeverity.get(severity);
 		if (!group || group.size === 0) continue;
 		out.push("", severity === "dedup" ? "## dedup (correct code, optional cleanup)" : `## ${severity}`);
 		for (const [id, items] of group) out.push(...renderSignal(id, items, weight));
 	}
-	out.push(...renderSummary(result));
+	out.push(...renderSummary(result, findings));
 	if (result.filesScanned > 0) out.push(...BEYOND_THE_SCAN);
 	const gaps = coverageGaps(result);
 	if (gaps) out.push("", `⚠ Incomplete coverage: ${gaps}`);
@@ -2097,24 +2210,44 @@ function selectListed(ordered) {
 	}
 	return shown;
 }
-function renderSummary(result) {
-	const counts = countBySeverity(result.findings);
+function renderSummary(result, findings) {
+	const counts = countBySeverity(findings);
 	const actionable = counts.critical + counts.high + counts.medium;
 	const suppressed = result.suppressed ?? 0;
-	if (result.filesScanned === 0) return ["", "⚠ No scannable files found. Check the target path."];
-	if (result.findings.length === 0 && suppressed === 0) return ["", `✓ No animation anti-pattern candidates found (${result.filesScanned} files scanned).`];
+	const baseline = renderBaselineSummary(result);
+	if (result.filesScanned === 0) return [
+		"",
+		"⚠ No scannable files found. Check the target path.",
+		baseline
+	];
+	if (result.baseline && findings.length === 0) return [
+		"",
+		`✓ No new animation anti-pattern candidates found (${result.filesScanned} files scanned).`,
+		baseline
+	];
+	if (findings.length === 0 && suppressed === 0) return [
+		"",
+		`✓ No animation anti-pattern candidates found (${result.filesScanned} files scanned).`,
+		baseline
+	];
 	const suppressedNote = suppressed > 0 ? `, ${suppressed} suppressed` : "";
-	const sites = countSites(result.findings);
-	const perFrame = result.findings.filter((f) => f.execution === "per-frame").length;
+	const sites = countSites(findings);
+	const perFrame = findings.filter((f) => f.execution === "per-frame").length;
 	return [
 		"",
 		"─────────────────────────────────────────",
 		`Scanned ${result.filesScanned} files.`,
 		`Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup${suppressedNote}.`,
-		`${result.findings.length} findings on ${sites} distinct lines; ${perFrame} sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.`,
+		`${findings.length} findings on ${sites} distinct lines; ${perFrame} sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.`,
+		baseline,
 		"Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.",
 		"Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending."
 	];
+}
+function renderBaselineSummary(result) {
+	if (!result.baseline) return "Baseline: not applied; 0 stale.";
+	const preExisting = result.findings.filter(isPreExistingFinding).length;
+	return `Baseline: ${result.findings.length - preExisting} new, ${preExisting} pre-existing, ${result.baseline.stale} stale.`;
 }
 /**
 * Environment facts change what a safe recommendation looks like; hand them
@@ -2149,7 +2282,7 @@ const EXECUTION_RANK = {
 	"per-frame": 0,
 	incidental: 1
 };
-function skillVersion() {
+function cliVersion() {
 	try {
 		const metadataPath = fileURLToPath(new URL("../metadata.json", import.meta.url));
 		return JSON.parse(readFileSync(metadataPath, "utf8")).version;
@@ -2316,8 +2449,12 @@ Options
   --stdin0             read additional NUL-delimited targets from stdin;
                        an empty stream scans nothing instead of "."
   --fail-on <severity> exit 1 if any finding is at or above the given
-                       severity (critical | high | medium); default is
-                       exit 0 regardless of findings (advisory)
+                        severity (critical | high | medium); default is
+                        exit 0 regardless of findings (advisory)
+  --baseline <path>    compare findings with this baseline
+  --no-baseline        ignore an explicit or auto-detected baseline
+  --write-baseline <path>
+                       write all current findings as a baseline and exit 0
   --signal <id>        report only this signal (repeatable)
   --severity <level>   report only this severity (repeatable)
   --noise <tier>       report only this noise tier, e.g. --noise precise
@@ -2341,6 +2478,7 @@ Exit codes: 0 = scan completed, 1 = --fail-on threshold hit, 2 = usage error.`;
 const FLAGS = {
 	"--json": "json",
 	"--stdin0": "stdin0",
+	"--no-baseline": "noBaseline",
 	"--help": "help",
 	"-h": "help"
 };
@@ -2350,6 +2488,8 @@ const FLAGS = {
 * branch in a parser.
 */
 const VALUE_OPTIONS = {
+	"--baseline": { key: "baselinePath" },
+	"--write-baseline": { key: "writeBaselinePath" },
 	"--fail-on": {
 		key: "failOn",
 		allowed: [
@@ -2401,13 +2541,17 @@ function applyOption(opts, name, spec, raw) {
 		else if (spec.key === "noiseTiers") opts.noiseTiers.push(value);
 	} else if (spec.key === "failOn") opts.failOn = value;
 	else if (spec.key === "limit") opts.limit = value;
+	else if (spec.key === "baselinePath" || spec.key === "writeBaselinePath") opts[spec.key] = value;
 }
 function parseArgs(argv) {
 	const opts = {
 		json: false,
 		stdin0: false,
 		help: false,
+		noBaseline: false,
 		failOn: null,
+		baselinePath: null,
+		writeBaselinePath: null,
 		signals: [],
 		severities: [],
 		noiseTiers: [],
@@ -2427,18 +2571,33 @@ function parseArgs(argv) {
 	return opts;
 }
 function main() {
-	let opts;
-	try {
-		opts = parseArgs(process.argv.slice(2));
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		console.error(`${message}\n\n${USAGE}`);
-		process.exit(2);
-	}
+	const opts = readOptions(process.argv.slice(2));
 	if (opts.help) {
 		console.log(USAGE);
 		return;
 	}
+	validateOptions(opts);
+	resolveTargets(opts);
+	const baseline = readBaseline(opts);
+	const result = scanTargets(opts.targets, { exclude: opts.exclude });
+	const version = cliVersion();
+	applyBaseline(result, baseline, version);
+	writeBaseline(result, opts.writeBaselinePath, version);
+	filterFindings(result, opts);
+	printResult(result, opts);
+	if (hitsFailThreshold(result.findings, opts)) process.exit(1);
+}
+function readOptions(argv) {
+	try {
+		return parseArgs(argv);
+	} catch (error) {
+		failUsage(error instanceof Error ? error.message : String(error));
+	}
+}
+function validateOptions(opts) {
+	if (opts.writeBaselinePath && (opts.signals.length > 0 || opts.severities.length > 0 || opts.noiseTiers.length > 0)) failUsage("--write-baseline requires a full unfiltered scan; remove --signal, --severity, and --noise");
+}
+function resolveTargets(opts) {
 	if (opts.stdin0) {
 		const input = readFileSync(0, "utf8");
 		for (const target of input.split("\0")) if (target !== "") opts.targets.push(target);
@@ -2447,22 +2606,77 @@ function main() {
 	for (const target of opts.targets) try {
 		lstatSync(target);
 	} catch {
-		console.error(`target does not exist: ${target}\n\n${USAGE}`);
-		process.exit(2);
+		failUsage(`target does not exist: ${target}`);
 	}
-	const result = scanTargets(opts.targets, { exclude: opts.exclude });
+}
+function readBaseline(opts) {
+	try {
+		return loadBaseline(opts);
+	} catch (error) {
+		failUsage(error instanceof Error ? error.message : String(error));
+	}
+}
+function applyBaseline(result, baseline, version) {
+	if (baseline) {
+		const classified = classifyFindings(result.findings, baseline);
+		result.findings = classified.findings;
+		result.baseline = { stale: classified.stale };
+		if (baseline.cliVersion !== version) result.warnings.push(`baseline version ${baseline.cliVersion} differs from CLI version ${version}; continuing`);
+	}
+}
+function writeBaseline(result, path, version) {
+	if (path) {
+		const fingerprints = assignFingerprints(result.findings).map((finding) => finding.fingerprint);
+		try {
+			writeFileSync(resolve(path), serializeBaseline(fingerprints, version));
+		} catch (error) {
+			failUsage(`cannot write baseline: ${path} (${error instanceof Error ? error.message : String(error)})`);
+		}
+	}
+}
+function filterFindings(result, opts) {
 	const keep = [];
 	if (opts.signals.length > 0) keep.push((finding) => opts.signals.includes(finding.signal));
 	if (opts.severities.length > 0) keep.push((finding) => opts.severities.includes(finding.severity));
 	if (opts.noiseTiers.length > 0) keep.push((finding) => opts.noiseTiers.includes(finding.noise));
 	if (keep.length > 0) result.findings = result.findings.filter((f) => keep.every((p) => p(f)));
+}
+function printResult(result, opts) {
 	for (const warning of result.warnings) console.error(`warning: ${warning}`);
 	if (opts.json) console.log(JSON.stringify(formatJson(result, opts.limit), null, 2));
 	else console.log(formatText(result));
-	if (opts.failOn) {
-		const threshold = SEVERITY_ORDER.indexOf(opts.failOn);
-		if (result.findings.some((f) => f.severity !== "dedup" && SEVERITY_ORDER.indexOf(f.severity) <= threshold)) process.exit(1);
+}
+function hitsFailThreshold(findings, opts) {
+	if (!opts.failOn || opts.writeBaselinePath) return false;
+	const threshold = SEVERITY_ORDER.indexOf(opts.failOn);
+	return findings.some((finding) => !isPreExistingFinding(finding) && finding.severity !== "dedup" && SEVERITY_ORDER.indexOf(finding.severity) <= threshold);
+}
+function loadBaseline(opts) {
+	if (opts.noBaseline) return null;
+	const explicit = opts.baselinePath !== null;
+	const path = explicit ? resolve(opts.baselinePath) : join(scanRoot(opts), "phase-baseline.json");
+	if (!explicit && !existsSync(path)) return null;
+	let json;
+	try {
+		json = readFileSync(path, "utf8");
+	} catch {
+		throw new Error(`cannot read baseline: ${path}`);
 	}
+	try {
+		return parseBaseline(json);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		throw new Error(`invalid baseline ${path}: ${message}`, { cause: error });
+	}
+}
+function scanRoot(opts) {
+	if (opts.stdin0 || opts.targets.length !== 1) return process.cwd();
+	const target = resolve(opts.targets[0]);
+	return lstatSync(target).isDirectory() ? target : dirname(target);
+}
+function failUsage(message) {
+	console.error(`${message}\n\n${USAGE}`);
+	process.exit(2);
 }
 function isEntryPoint(argvPath) {
 	const self = fileURLToPath(import.meta.url);
@@ -2474,4 +2688,4 @@ function isEntryPoint(argvPath) {
 }
 if (process.argv[1] && isEntryPoint(process.argv[1])) main();
 //#endregion
-export { SEVERITY_ORDER, SIGNALS, formatJson, formatText, newDiag, scanFile, scanTargets };
+export { SEVERITY_ORDER, SIGNALS, assignFingerprints, classifyFindings, formatJson, formatText, hashFindingLine, newDiag, normalizeLine, parseBaseline, scanFile, scanTargets, serializeBaseline };

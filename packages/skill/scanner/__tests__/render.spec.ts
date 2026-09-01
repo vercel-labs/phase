@@ -10,7 +10,15 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import type { ScanFinding, ScanResult } from '../index.ts';
-import { formatJson, formatText, scanFile } from '../index.ts';
+import {
+  assignFingerprints,
+  classifyFindings,
+  formatJson,
+  formatText,
+  scanFile,
+  serializeBaseline,
+  parseBaseline,
+} from '../index.ts';
 import { GOLDEN_SCENARIO_DIR } from '../scenarios.ts';
 
 const PACKAGE_ROOT = resolve(import.meta.dirname, '..', '..');
@@ -152,6 +160,52 @@ describe('render', () => {
       bySeverity: { critical: 3, high: 0, medium: 0 },
     });
     expect(json.hotspots).toEqual([{ file: 'src/a.ts', count: 2 }]);
+    expect(json.findings[0]?.fingerprint).toMatch(
+      /^forced-reflow:src\/a\.ts:[0-9a-f]{12}:1$/,
+    );
+  });
+
+  it('reports baseline classification in JSON and lists only new findings in text', () => {
+    const preExisting = findingOf('src/existing.ts', 3);
+    const added = findingOf('src/new.ts', 7);
+    const fingerprint = assignFingerprints([preExisting])[0]?.fingerprint;
+    const baseline = parseBaseline(
+      serializeBaseline(
+        [
+          fingerprint as string,
+          'manual-raf:src/removed.ts:aaaaaaaaaaaa:1',
+          'forced-reflow:src/gone.ts:bbbbbbbbbbbb:1',
+        ],
+        '0.0.44',
+      ),
+    );
+    const classified = classifyFindings([preExisting, added], baseline);
+    const result = {
+      ...resultOf(classified.findings),
+      baseline: { stale: classified.stale },
+    };
+
+    const json = formatJson(result);
+    expect(json.summary).toMatchObject({
+      new: 1,
+      preExisting: 1,
+      stale: 2,
+    });
+    expect(json.findings.map((finding) => finding.baselineState)).toEqual([
+      'pre-existing',
+      'new',
+    ]);
+
+    const text = formatText(result);
+    expect(text).not.toContain('src/existing.ts:3');
+    expect(text).toContain('src/new.ts:7');
+    expect(text).toContain('Baseline: 1 new, 1 pre-existing, 2 stale.');
+  });
+
+  it('surfaces a zero stale count when no baseline applies', () => {
+    expect(formatText(resultOf([]))).toContain(
+      'Baseline: not applied; 0 stale.',
+    );
   });
 });
 
@@ -428,6 +482,118 @@ describe('scan CLI', () => {
   it('--fail-on exits 1 when the threshold is hit', () => {
     expect(runCli(['--fail-on', 'critical', 'workspace']).status).toBe(1);
     expect(runCli(['workspace']).status).toBe(0);
+  });
+
+  it('writes, auto-detects, overrides, and ignores baselines', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-baseline-cli-'));
+    const src = join(root, 'src');
+    mkdirSync(src);
+    writeFileSync(
+      join(src, 'existing.ts'),
+      'const width = target.offsetWidth;\n',
+    );
+
+    try {
+      const baselinePath = join(root, 'phase-baseline.json');
+      const written = runCli(
+        [
+          '--write-baseline',
+          'phase-baseline.json',
+          '--fail-on',
+          'critical',
+          '.',
+        ],
+        root,
+      );
+      expect(written.status).toBe(0);
+      const baseline = parseBaseline(readFileSync(baselinePath, 'utf8'));
+      expect(baseline.fingerprints).toHaveLength(1);
+
+      const unchanged = runCli(['--fail-on', 'critical', '.'], root);
+      expect(unchanged.status).toBe(0);
+      expect(unchanged.stdout).toContain(
+        'Baseline: 0 new, 1 pre-existing, 0 stale.',
+      );
+      expect(unchanged.stdout).not.toContain('src/existing.ts:1');
+
+      const oneStdinTarget = runCli(
+        ['--stdin0', '--fail-on', 'critical'],
+        root,
+        'src/existing.ts\0',
+      );
+      expect(oneStdinTarget.status).toBe(0);
+
+      writeFileSync(
+        join(src, 'new.ts'),
+        'const height = target.offsetHeight;\n',
+      );
+      const changed = runCli(['--fail-on', 'critical', '.'], root);
+      expect(changed.status).toBe(1);
+      expect(changed.stdout).toContain('src/new.ts:1');
+      expect(changed.stdout).not.toContain('src/existing.ts:1');
+
+      const customPath = join(root, 'custom-baseline.json');
+      writeFileSync(customPath, readFileSync(baselinePath, 'utf8'));
+      rmSync(baselinePath);
+      expect(
+        runCli(
+          ['--baseline', 'custom-baseline.json', '--fail-on', 'critical', '.'],
+          root,
+        ).status,
+      ).toBe(1);
+      expect(
+        runCli(
+          [
+            '--baseline',
+            'custom-baseline.json',
+            '--no-baseline',
+            '--fail-on',
+            'critical',
+            '.',
+          ],
+          root,
+        ).status,
+      ).toBe(1);
+      expect(
+        runCli(['--no-baseline', '--fail-on', 'critical', '.'], root).status,
+      ).toBe(1);
+
+      const skewed = { ...baseline, cliVersion: '0.0.1' };
+      writeFileSync(customPath, `${JSON.stringify(skewed, null, 2)}\n`);
+      const skewRun = runCli(['--baseline', 'custom-baseline.json', '.'], root);
+      expect(skewRun.status).toBe(0);
+      expect(skewRun.stderr).toContain('baseline version 0.0.1 differs');
+
+      const missing = runCli(['--baseline', 'missing.json', '.'], root);
+      expect(missing.status).toBe(2);
+      expect(missing.stderr).toContain('cannot read baseline');
+
+      writeFileSync(
+        customPath,
+        JSON.stringify({ ...baseline, cliVersion: '0.0.1\u001b[2JINJECT' }),
+      );
+      const unsafe = runCli(['--baseline', 'custom-baseline.json', '.'], root);
+      expect(unsafe.status).toBe(2);
+      expect(unsafe.stderr).not.toContain('\u001b');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ['--signal', 'forced-reflow'],
+    ['--severity', 'critical'],
+    ['--noise', 'precise'],
+  ])('rejects --write-baseline with the %s report filter', (filter, value) => {
+    const run = runCli([
+      '--write-baseline',
+      'phase-baseline.json',
+      filter,
+      value,
+      'workspace',
+    ]);
+    expect(run.status).toBe(2);
+    expect(run.stderr).toContain('full unfiltered scan');
   });
 
   it('accepts individual files as targets, keeping the path as given', () => {

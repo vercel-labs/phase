@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import { assignFingerprints, isPreExistingFinding } from './baseline.ts';
+import type { ClassifiedFinding, FingerprintedFinding } from './baseline.ts';
 import type { ScanContext } from './context.ts';
 import type { ScanExecution, ScanFinding } from './detect.ts';
 import { SEVERITY_ORDER, SIGNALS } from './signals.ts';
@@ -16,7 +18,11 @@ export interface ScanResult {
   suppressed: number;
   warnings: string[];
   context: ScanContext;
+  baseline?: { stale: number } | null;
 }
+
+type ScanJsonFinding = FingerprintedFinding &
+  Partial<Pick<ClassifiedFinding, 'baselineState'>>;
 
 export interface ScanJson {
   schemaVersion: number;
@@ -34,12 +40,15 @@ export interface ScanJson {
     dedup: number;
     perFrame: number;
     suppressed: number;
+    new: number;
+    preExisting: number;
+    stale: number;
     bySeverity: { critical: number; high: number; medium: number };
   };
   hotspots: { file: string; count: number }[];
   context: ScanContext | null;
   warnings: string[];
-  findings: ScanFinding[];
+  findings: ScanJsonFinding[];
 }
 
 type FileWeights = Map<string, number>;
@@ -55,11 +64,13 @@ export function formatJson(
   limit: number | null = null,
 ): ScanJson {
   const counts = countBySeverity(result.findings);
+  const fingerprinted = assignFingerprints(result.findings);
   const findings =
-    limit === null ? result.findings : result.findings.slice(0, limit);
+    limit === null ? fingerprinted : fingerprinted.slice(0, limit);
+  const preExisting = result.findings.filter(isPreExistingFinding).length;
   return {
     schemaVersion: 1,
-    skillVersion: skillVersion(),
+    skillVersion: cliVersion(),
     notice: result.findings.length > 0 ? EXCERPT_NOTICE : null,
     targets: result.targets,
     summary: {
@@ -74,6 +85,9 @@ export function formatJson(
       perFrame: result.findings.filter((f) => f.execution === 'per-frame')
         .length,
       suppressed: result.suppressed ?? 0,
+      new: result.findings.length - preExisting,
+      preExisting,
+      stale: result.baseline?.stale ?? 0,
       bySeverity: {
         critical: counts.critical,
         high: counts.high,
@@ -91,11 +105,14 @@ export function formatJson(
 
 /** Renders a scan result as human-readable text grouped by severity. */
 export function formatText(result: ScanResult): string {
-  const weight = fileWeights(result.findings);
-  const out = result.findings.length > 0 ? [EXCERPT_NOTICE] : [];
-  out.push(...renderHotspots(result.findings, weight));
+  const findings = result.baseline
+    ? result.findings.filter((finding) => !isPreExistingFinding(finding))
+    : result.findings;
+  const weight = fileWeights(findings);
+  const out = findings.length > 0 ? [EXCERPT_NOTICE] : [];
+  out.push(...renderHotspots(findings, weight));
 
-  const bySeverity = groupBySeverity(result.findings);
+  const bySeverity = groupBySeverity(findings);
   for (const severity of SEVERITY_ORDER) {
     const group = bySeverity.get(severity);
     if (!group || group.size === 0) continue;
@@ -111,7 +128,7 @@ export function formatText(result: ScanResult): string {
     }
   }
 
-  out.push(...renderSummary(result));
+  out.push(...renderSummary(result, findings));
 
   // The scan is the floor of an audit. Saying so only when there are
   // findings gets it backwards: a green check with no next step is exactly
@@ -211,40 +228,54 @@ function selectListed(ordered: ScanFinding[]): ScanFinding[] {
   return shown;
 }
 
-function renderSummary(result: ScanResult): string[] {
-  const counts = countBySeverity(result.findings);
+function renderSummary(result: ScanResult, findings: ScanFinding[]): string[] {
+  const counts = countBySeverity(findings);
   const actionable = counts.critical + counts.high + counts.medium;
   const suppressed = result.suppressed ?? 0;
+  const baseline = renderBaselineSummary(result);
 
   // A clean result must be distinguishable from scanning nothing: an empty
   // or mistyped target reading as "no findings" would be false confidence.
   // filesScanned counts files actually analyzed, never files merely opened.
   if (result.filesScanned === 0) {
-    return ['', '⚠ No scannable files found. Check the target path.'];
+    return ['', '⚠ No scannable files found. Check the target path.', baseline];
   }
-  if (result.findings.length === 0 && suppressed === 0) {
+  if (result.baseline && findings.length === 0) {
+    return [
+      '',
+      `✓ No new animation anti-pattern candidates found (${result.filesScanned} files scanned).`,
+      baseline,
+    ];
+  }
+  if (findings.length === 0 && suppressed === 0) {
     return [
       '',
       `✓ No animation anti-pattern candidates found (${result.filesScanned} files scanned).`,
+      baseline,
     ];
   }
 
   const suppressedNote = suppressed > 0 ? `, ${suppressed} suppressed` : '';
   // Findings are not problems: one rAF loop reports twice (the call and the
   // recursive call), and a line can carry two signals.
-  const sites = countSites(result.findings);
-  const perFrame = result.findings.filter(
-    (f) => f.execution === 'per-frame',
-  ).length;
+  const sites = countSites(findings);
+  const perFrame = findings.filter((f) => f.execution === 'per-frame').length;
   return [
     '',
     '─────────────────────────────────────────',
     `Scanned ${result.filesScanned} files.`,
     `Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup${suppressedNote}.`,
-    `${result.findings.length} findings on ${sites} distinct lines; ${perFrame} sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.`,
+    `${findings.length} findings on ${sites} distinct lines; ${perFrame} sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.`,
+    baseline,
     'Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.',
     'Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.',
   ];
+}
+
+function renderBaselineSummary(result: ScanResult): string {
+  if (!result.baseline) return 'Baseline: not applied; 0 stale.';
+  const preExisting = result.findings.filter(isPreExistingFinding).length;
+  return `Baseline: ${result.findings.length - preExisting} new, ${preExisting} pre-existing, ${result.baseline.stale} stale.`;
 }
 
 /**
@@ -307,7 +338,7 @@ const EXECUTION_RANK: Record<ScanExecution, number> = {
   incidental: 1,
 };
 
-function skillVersion(): string {
+export function cliVersion(): string {
   try {
     const metadataPath = fileURLToPath(
       new URL('../metadata.json', import.meta.url),

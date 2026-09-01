@@ -5,6 +5,7 @@ import {
   EVIDENCE_REGISTRY,
 } from './analysis.ts';
 import type { FileAnalysis } from './analysis.ts';
+import { FINDING_SOURCE_LINE } from './baseline.ts';
 import {
   commentText,
   maskComments,
@@ -28,6 +29,7 @@ export interface ScanFinding {
   line: number;
   text: string;
   fix: string;
+  [FINDING_SOURCE_LINE]?: string;
 }
 
 type Suppressions = Map<number, Set<string>>;
@@ -319,6 +321,7 @@ function makeFinding(
     line,
     text: excerpt(text, matchIndex),
     fix: signal.fix,
+    [FINDING_SOURCE_LINE]: text,
   };
 }
 

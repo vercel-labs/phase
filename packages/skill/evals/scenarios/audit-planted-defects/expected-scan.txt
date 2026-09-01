@@ -112,6 +112,7 @@ manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand)
 Scanned 10 files.
 Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup.
 21 findings on 18 distinct lines; 13 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
+Baseline: not applied; 0 stale.
 Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
 
