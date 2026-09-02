@@ -7,6 +7,7 @@ export const FINDING_IDENTITY_FILE: unique symbol = Symbol(
   'findingIdentityFile',
 );
 export const FINDING_SOURCE_LINE: unique symbol = Symbol('findingSourceLine');
+const FINDING_FINGERPRINT = /^[^:]+:.+:[0-9a-f]{12}:[1-9]\d*$/;
 
 export interface PhaseBaseline {
   schemaVersion: typeof BASELINE_SCHEMA_VERSION;
@@ -190,7 +191,7 @@ export function isPreExistingFinding(finding: ScanFinding): boolean {
 }
 
 function isFingerprint(value: string): boolean {
-  return /^[^:]+:.+:[0-9a-f]{12}:[1-9]\d*$/.test(value);
+  return FINDING_FINGERPRINT.test(value);
 }
 
 function validateFingerprints(fingerprints: unknown[]): string[] {

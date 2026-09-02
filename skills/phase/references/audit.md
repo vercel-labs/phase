@@ -62,7 +62,7 @@ node <skill-dir>/scripts/scan.mjs <target-dir>
 Targets can be directories or individual files, so a scan can cover only changed files:
 
 ```bash
-git diff --name-only --diff-filter=ACMR -z | node <skill-dir>/scripts/scan.mjs --stdin0
+node <skill-dir>/scripts/scan.mjs --diff origin/main
 ```
 
 Scanner targets are literal and non-transitive: scanning a route does not follow its imports. Run the primary route scan first, then scan the smallest focused files or directories for the directly rendered relevant UI dependencies identified in Step 0. Do not turn this into automatic import traversal or a workspace-wide scan.
@@ -70,11 +70,13 @@ Scanner targets are literal and non-transitive: scanning a route does not follow
 | Option                    | Effect                                                                                                                                                                                   |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--json`                  | Machine-readable output (schemaVersion 1): summary counts plus flat findings with a stable `fingerprint` and optional `baselineState`, stamped with the skill version that produced them |
+| `--format <format>`       | Output as `text`, `json`, or GitHub workflow-command annotations plus a Markdown job summary                                                                                             |
 | `--stdin0`                | Read NUL-delimited targets from stdin. An empty stream scans nothing. Intended for changed-file scans                                                                                    |
-| `--fail-on <severity>`    | Exit 1 if any new finding is at or above `critical`, `high`, or `medium`. Without a baseline, all findings are new                                                                       |
+| `--diff <ref>`            | Scan committed added, copied, modified, or renamed files since the three-dot merge base with this Git ref                                                                                |
+| `--fail-on <severity>`    | Exit 1 if any new finding is at or above `critical`, `high`, or `medium`; `none` is report-only. Without a baseline, all findings are new                                                |
 | `--baseline <path>`       | Compare with an explicit baseline instead of auto-detecting `phase-baseline.json` at the scan root                                                                                       |
 | `--no-baseline`           | Ignore an explicit or auto-detected baseline                                                                                                                                             |
-| `--write-baseline <path>` | Write one complete directory scan as a sorted baseline and exit 0. Cannot be combined with `--baseline`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`                 |
+| `--write-baseline <path>` | Write one complete directory scan as a sorted baseline and exit 0. Cannot be combined with `--baseline`, `--diff`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`       |
 | `--signal <id>`           | Report only this signal. Repeatable                                                                                                                                                      |
 | `--severity <level>`      | Report only this severity. Repeatable                                                                                                                                                    |
 | `--noise <tier>`          | Report only this noise tier. Repeatable, so `--noise precise --noise normal` drops the noisy ones                                                                                        |
@@ -84,7 +86,11 @@ Scanner targets are literal and non-transitive: scanning a route does not follow
 
 Exit codes: `0` scan completed (the default even when findings exist; the audit is advisory), `1` a `--fail-on` threshold was hit, `2` usage error. Requires Node 20 or newer.
 
-Baselines store `{ schemaVersion, cliVersion, root, fingerprints }`, where `root` binds root-relative fingerprint paths to the scan root. A baseline from another root is a usage error. When a baseline applies, the text report lists only new findings and summarizes the new and pre-existing counts. Complete directory scans also report the stale count; partial file or multi-target scans report stale as unknown (`null` in JSON). JSON retains both new and pre-existing findings for machine consumers. Version differences between the scanner and baseline produce a warning, not a failure. Rewriting a baseline removes stale fingerprints.
+Baselines store `{ schemaVersion, cliVersion, root, fingerprints }`, where `root` binds root-relative fingerprint paths to the scan root. A baseline from another root is a usage error. When a baseline applies, the text report lists only new findings and summarizes the new and pre-existing counts. Complete directory scans also report the stale count; partial file, multi-target, and `--diff` scans report stale as unknown (`null` in JSON). JSON retains both new and pre-existing findings for machine consumers. Version differences between the scanner and baseline produce a warning, not a failure. Rewriting a baseline removes stale fingerprints.
+
+JSON schema version 1 is additive: new object fields may appear without a version bump, so consumers must ignore fields they do not recognize.
+
+`--format github` emits errors for new findings that meet the gate threshold, warnings for other new findings, and no annotations for pre-existing findings. It caps each annotation type at ten and appends the report to `GITHUB_STEP_SUMMARY`, including annotation overflow, counts, and new-finding hotspots. Oversized finding tables state how many rows were omitted instead of exceeding GitHub's 1 MiB summary limit. Without a baseline, the summary warns that net-new comparison is unarmed and all findings are treated as new.
 
 **Read the text output, not `--json`.** Text caps each signal's listing at 20 entries; `--json` does not, and on a large Tailwind codebase the full findings array runs to tens of thousands of tokens. When you need the entries a cap hid, scope the request: `--json --signal tailwind-transition-all`, optionally with `--limit`.
 

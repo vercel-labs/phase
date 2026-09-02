@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 
+import { spawnSync } from 'node:child_process';
 import {
+  appendFileSync,
   existsSync,
   lstatSync,
   readFileSync,
   realpathSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -19,9 +22,20 @@ import {
 } from './baseline.ts';
 import type { PhaseBaseline } from './baseline.ts';
 import type { ScanFinding } from './detect.ts';
-import { formatJson, formatText, scanTargets } from './index.ts';
+import {
+  formatGithubAnnotations,
+  formatGithubSummary,
+  formatJson,
+  formatText,
+  scanTargets,
+} from './index.ts';
 import type { ScanResult } from './index.ts';
-import { cliVersion } from './render.ts';
+import {
+  cliVersion,
+  findingFailsGate,
+  GITHUB_STEP_SUMMARY_LIMIT,
+} from './render.ts';
+import type { ScanFailOn } from './render.ts';
 import { NOISE_TIERS, SEVERITY_ORDER, SIGNALS } from './signals.ts';
 import type { ScanNoise, ScanSeverity } from './signals.ts';
 import { toPosix } from './walk.ts';
@@ -39,12 +53,15 @@ references/audit.md before recommending a change.
 Targets   directories or individual files (default: current directory)
 
 Options
-  --json               emit machine-readable JSON (schemaVersion 1)
+  --json               emit machine-readable JSON (alias for --format json)
+  --format <format>    output format (text | json | github); default is text
   --stdin0             read additional NUL-delimited targets from stdin;
                        an empty stream scans nothing instead of "."
+  --diff <ref>         scan committed files changed since the merge base with
+                       this Git ref (added, copied, modified, or renamed)
   --fail-on <severity> exit 1 if any new finding is at or above the given
-                       severity (critical | high | medium); without a baseline,
-                       all findings are new; default is advisory
+                        severity (critical | high | medium | none); without a
+                        baseline, all findings are new; none is report-only
   --baseline <path>    compare findings with this baseline
   --no-baseline        ignore an explicit or auto-detected baseline
   --write-baseline <path>
@@ -71,12 +88,14 @@ Exit codes: 0 = scan completed, 1 = --fail-on threshold hit, 2 = usage error.`;
 
 interface CliOptions {
   json: boolean;
+  format: OutputFormat | null;
   stdin0: boolean;
   help: boolean;
   noBaseline: boolean;
-  failOn: Exclude<ScanSeverity, 'dedup'> | null;
+  failOn: ScanFailOn;
   baselinePath: string | null;
   writeBaselinePath: string | null;
+  diffRef: string | null;
   signals: string[];
   severities: ScanSeverity[];
   noiseTiers: ScanNoise[];
@@ -85,11 +104,15 @@ interface CliOptions {
   targets: string[];
 }
 
+type OutputFormat = 'text' | 'json' | 'github';
+
 type BooleanOptionKey = 'json' | 'stdin0' | 'help' | 'noBaseline';
 type ValueOptionKey =
   | 'failOn'
+  | 'format'
   | 'baselinePath'
   | 'writeBaselinePath'
+  | 'diffRef'
   | 'signals'
   | 'severities'
   | 'noiseTiers'
@@ -119,12 +142,14 @@ const FLAGS: Record<string, BooleanOptionKey> = {
  * branch in a parser.
  */
 const VALUE_OPTIONS: Record<string, ValueOption> = {
+  '--format': { key: 'format', allowed: ['text', 'json', 'github'] },
   '--baseline': { key: 'baselinePath', map: toNonEmptyPath },
   '--write-baseline': { key: 'writeBaselinePath', map: toNonEmptyPath },
+  '--diff': { key: 'diffRef', map: toNonEmptyPath },
   '--fail-on': {
     key: 'failOn',
-    allowed: ['critical', 'high', 'medium'],
-    expects: 'critical, high, or medium',
+    allowed: ['critical', 'high', 'medium', 'none'],
+    expects: 'critical, high, medium, or none',
   },
   '--signal': {
     key: 'signals',
@@ -175,10 +200,16 @@ function applyOption(
       opts.noiseTiers.push(value as ScanNoise);
     }
   } else if (spec.key === 'failOn') {
-    opts.failOn = value as Exclude<ScanSeverity, 'dedup'>;
+    opts.failOn = value as ScanFailOn;
+  } else if (spec.key === 'format') {
+    opts.format = value as OutputFormat;
   } else if (spec.key === 'limit') {
     opts.limit = value as number;
-  } else if (spec.key === 'baselinePath' || spec.key === 'writeBaselinePath') {
+  } else if (
+    spec.key === 'baselinePath' ||
+    spec.key === 'writeBaselinePath' ||
+    spec.key === 'diffRef'
+  ) {
     opts[spec.key] = value as string;
   }
 }
@@ -186,12 +217,14 @@ function applyOption(
 function parseArgs(argv: string[]): CliOptions {
   const opts: CliOptions = {
     json: false,
+    format: null,
     stdin0: false,
     help: false,
     noBaseline: false,
     failOn: null,
     baselinePath: null,
     writeBaselinePath: null,
+    diffRef: null,
     signals: [],
     severities: [],
     noiseTiers: [],
@@ -250,8 +283,20 @@ function readOptions(argv: string[]): CliOptions {
 }
 
 function validateOptions(opts: CliOptions): void {
+  if (opts.json && opts.format !== null && opts.format !== 'json') {
+    failUsage('--json cannot be combined with a non-JSON --format');
+  }
   if (opts.writeBaselinePath !== null && opts.baselinePath !== null) {
     failUsage('--baseline cannot be combined with --write-baseline');
+  }
+  if (opts.writeBaselinePath !== null && opts.diffRef !== null) {
+    failUsage('--write-baseline cannot be combined with --diff');
+  }
+  if (opts.diffRef !== null && opts.stdin0) {
+    failUsage('--diff cannot be combined with --stdin0');
+  }
+  if (opts.diffRef !== null && opts.targets.length > 0) {
+    failUsage('--diff cannot be combined with explicit targets');
   }
   if (
     opts.writeBaselinePath !== null &&
@@ -274,14 +319,112 @@ function resolveTargets(opts: CliOptions): void {
       if (target !== '') opts.targets.push(target);
     }
   }
-  if (opts.targets.length === 0 && !opts.stdin0) opts.targets.push('.');
+  if (opts.diffRef !== null) {
+    try {
+      if (opts.baselinePath !== null) {
+        opts.baselinePath = resolve(opts.baselinePath);
+      }
+      const diff = resolveDiffTargets(opts.diffRef);
+      process.chdir(diff.root);
+      opts.targets.push(...diff.targets);
+    } catch (error) {
+      failUsage(error instanceof Error ? error.message : String(error));
+    }
+  }
+  if (opts.targets.length === 0 && !opts.stdin0 && opts.diffRef === null) {
+    opts.targets.push('.');
+  }
+  const targets: string[] = [];
   for (const target of opts.targets) {
     try {
-      lstatSync(target);
+      const targetType = lstatSync(target);
+      if (opts.diffRef !== null) {
+        if (targetType.isSymbolicLink()) {
+          failUsage(`diff target must be a regular file: ${target}`);
+        }
+        if (!targetType.isFile()) continue;
+      }
+      targets.push(target);
     } catch {
       failUsage(`target does not exist: ${target}`);
     }
   }
+  opts.targets = targets;
+}
+
+interface DiffTargets {
+  root: string;
+  targets: string[];
+}
+
+function resolveDiffTargets(ref: string): DiffTargets {
+  const rootRun = spawnGit(['rev-parse', '--show-toplevel']);
+  if (rootRun.status !== 0) {
+    throw new Error('cannot resolve --diff outside a Git worktree');
+  }
+  const root = rootRun.stdout.replace(/\r?\n$/, '');
+  const refRun = spawnGit(
+    ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`],
+    root,
+  );
+  if (refRun.status !== 0) {
+    throw new Error(`cannot resolve --diff ref ${JSON.stringify(ref)}`);
+  }
+  const oid = refRun.stdout.trim();
+  const run = spawnGit(
+    [
+      'diff',
+      '--raw',
+      '--diff-filter=ACMR',
+      '--find-renames',
+      '-z',
+      `${oid}...HEAD`,
+      '--',
+    ],
+    root,
+  );
+  if (run.status !== 0) {
+    throw new Error(`cannot resolve --diff ref ${JSON.stringify(ref)}`);
+  }
+  const targets: string[] = [];
+  const fields = run.stdout.split('\0');
+  for (let index = 0; fields[index]; ) {
+    const metadata = fields[index++] as string;
+    const parsed = /^:\d{6} (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(
+      metadata,
+    );
+    if (!parsed) throw new Error('git returned an invalid diff record');
+    const newMode = parsed[1];
+    const status = parsed[2] as string;
+    const first = fields[index++] as string;
+    if (status === 'R' || status === 'C') {
+      const destination = fields[index++] as string;
+      if (newMode !== '160000') targets.push(destination);
+    } else {
+      if (newMode !== '160000') targets.push(first);
+    }
+  }
+  for (const target of targets) {
+    const fromRoot = relative(root, resolve(root, target));
+    if (
+      fromRoot === '..' ||
+      fromRoot.startsWith(`..${sep}`) ||
+      isAbsolute(fromRoot)
+    ) {
+      throw new Error('git returned a path outside the worktree');
+    }
+  }
+  return { root, targets };
+}
+
+function spawnGit(args: string[], cwd?: string) {
+  const run = spawnSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (run.error) throw new Error('cannot run Git to resolve --diff');
+  return run;
 }
 
 function validateBaselineWriteTarget(opts: CliOptions): void {
@@ -381,21 +524,45 @@ function printResult(result: ScanResult, opts: CliOptions): void {
     console.error(`warning: ${warning}`);
   }
 
-  if (opts.json) {
+  const format = opts.format ?? (opts.json ? 'json' : 'text');
+  if (format === 'json') {
     console.log(JSON.stringify(formatJson(result, opts.limit), null, 2));
+  } else if (format === 'github') {
+    const scan = formatJson(result);
+    const annotations = formatGithubAnnotations(scan, opts.failOn);
+    if (annotations) process.stdout.write(annotations);
+
+    const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+    if (!summaryPath) {
+      process.stdout.write(formatGithubSummary(scan, opts.failOn));
+      return;
+    }
+    try {
+      const existing =
+        statSync(summaryPath, { throwIfNoEntry: false })?.size ?? 0;
+      const available = Math.max(0, GITHUB_STEP_SUMMARY_LIMIT - existing);
+      const summary = formatGithubSummary(scan, opts.failOn, available);
+      if (summary) appendFileSync(summaryPath, summary, 'utf8');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failUsage(`cannot write GitHub job summary: ${message}`);
+    }
   } else {
     console.log(formatText(result));
   }
 }
 
 function hitsFailThreshold(findings: ScanFinding[], opts: CliOptions): boolean {
-  if (!opts.failOn || opts.writeBaselinePath !== null) return false;
-  const threshold = SEVERITY_ORDER.indexOf(opts.failOn);
+  if (
+    !opts.failOn ||
+    opts.failOn === 'none' ||
+    opts.writeBaselinePath !== null
+  ) {
+    return false;
+  }
   return findings.some(
     (finding) =>
-      !isPreExistingFinding(finding) &&
-      finding.severity !== 'dedup' &&
-      SEVERITY_ORDER.indexOf(finding.severity) <= threshold,
+      !isPreExistingFinding(finding) && findingFailsGate(finding, opts.failOn),
   );
 }
 
@@ -433,7 +600,9 @@ function loadBaseline(opts: CliOptions, root: string): PhaseBaseline | null {
 }
 
 function scanRoot(opts: CliOptions): string {
-  if (opts.stdin0 || opts.targets.length !== 1) return process.cwd();
+  if (opts.stdin0 || opts.diffRef !== null || opts.targets.length !== 1) {
+    return process.cwd();
+  }
   const target = resolve(opts.targets[0] as string);
   return lstatSync(target).isDirectory() ? target : process.cwd();
 }

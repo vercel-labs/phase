@@ -154,7 +154,12 @@ export {
   parseBaseline,
   serializeBaseline,
 } from './baseline.ts';
-export { formatJson, formatText } from './render.ts';
+export {
+  formatGithubAnnotations,
+  formatGithubSummary,
+  formatJson,
+  formatText,
+} from './render.ts';
 export { SEVERITY_ORDER, SIGNALS } from './signals.ts';
 export type { ScanContext } from './context.ts';
 export type {
@@ -164,7 +169,7 @@ export type {
   PhaseBaseline,
 } from './baseline.ts';
 export type { ScanExecution, ScanFinding } from './detect.ts';
-export type { ScanJson, ScanResult } from './render.ts';
+export type { ScanFailOn, ScanJson, ScanResult } from './render.ts';
 export type {
   ScanExample,
   ScanNoise,
