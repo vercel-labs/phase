@@ -1075,12 +1075,18 @@ describe('scan CLI', () => {
       join(root, 'line\u2028FORGED.ts'),
       'const height = target.offsetHeight;\n',
     );
+    writeFileSync(
+      join(root, 'excerpt.ts'),
+      'const top = target.offsetTop; // excerpt\u2028FORGED-TEXT\n',
+    );
     try {
       const text = runCli(['.'], root);
       expect(text.stdout).not.toContain('\nFORGED.ts');
       expect(text.stdout).toContain('file\\nFORGED.ts');
       expect(text.stdout).not.toContain('\u2028FORGED.ts');
       expect(text.stdout).toContain('line\\u2028FORGED.ts');
+      expect(text.stdout).not.toContain('\u2028FORGED-TEXT');
+      expect(text.stdout).toContain('excerpt\\u2028FORGED-TEXT');
 
       const error = runCli(
         ['--baseline', 'missing\nFORGED\u2029.json', '.'],

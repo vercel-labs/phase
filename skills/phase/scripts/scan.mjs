@@ -105,7 +105,7 @@ function isPreExistingFinding(finding) {
 	return "baselineState" in finding && finding.baselineState === "pre-existing";
 }
 function isFingerprint(value) {
-	return /^[^:]+:.+:[0-9a-f]{12}:[1-9]\d*$/.test(value);
+	return /^[^:]+:[\s\S]+:[0-9a-f]{12}:[1-9]\d*$/.test(value);
 }
 function validateFingerprints(fingerprints) {
 	const validated = fingerprints.map((fingerprint, index) => {
@@ -2212,7 +2212,7 @@ function renderSignal(id, items, weight) {
 			out.push(`  ${EXECUTION_HEADINGS[item.execution ?? "none"]}`);
 			lastExecution = item.execution;
 		}
-		out.push(`  ${sanitizeTerminalLine(item.file)}:${item.line}  ${item.text}`);
+		out.push(`  ${sanitizeTerminalLine(item.file)}:${item.line}  ${sanitizeTerminalLine(item.text)}`);
 	}
 	if (ordered.length > shown.length) out.push(`  … and ${ordered.length - shown.length} more (--json --signal ${id} for the full list)`);
 	return out;

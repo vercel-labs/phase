@@ -214,7 +214,9 @@ function renderSignal(
       out.push(`  ${EXECUTION_HEADINGS[item.execution ?? 'none']}`);
       lastExecution = item.execution;
     }
-    out.push(`  ${sanitizeTerminalLine(item.file)}:${item.line}  ${item.text}`);
+    out.push(
+      `  ${sanitizeTerminalLine(item.file)}:${item.line}  ${sanitizeTerminalLine(item.text)}`,
+    );
   }
   if (ordered.length > shown.length) {
     // Point at the scoped drill-down, not at bare --json: a storm's full

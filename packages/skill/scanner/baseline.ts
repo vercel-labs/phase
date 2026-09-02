@@ -190,7 +190,7 @@ export function isPreExistingFinding(finding: ScanFinding): boolean {
 }
 
 function isFingerprint(value: string): boolean {
-  return /^[^:]+:.+:[0-9a-f]{12}:[1-9]\d*$/.test(value);
+  return /^[^:]+:[\s\S]+:[0-9a-f]{12}:[1-9]\d*$/.test(value);
 }
 
 function validateFingerprints(fingerprints: unknown[]): string[] {
