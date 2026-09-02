@@ -10,7 +10,7 @@ import {
 import type { ScanContext } from './context.ts';
 import { newDiag, scanFile } from './detect.ts';
 import type { ScanFinding } from './detect.ts';
-import type { ScanResult } from './render.ts';
+import type { UnbaselinedScanResult } from './render.ts';
 import {
   EXCLUDED_PATHS,
   SKIP_FILES,
@@ -22,8 +22,9 @@ import {
 export interface ScanOptions {
   exclude?: string[];
   /**
-   * Root used only for canonical fingerprint paths. Relative values resolve
-   * from the process working directory; omit it to use display paths.
+   * Existing root used for canonical fingerprint paths and physical-target
+   * deduplication. Relative values resolve from the process working directory;
+   * omit it to use display paths and lexical target identity.
    */
   root?: string;
 }
@@ -41,7 +42,7 @@ interface ProjectRoots {
 export function scanTargets(
   paths: string[],
   options: ScanOptions = {},
-): ScanResult {
+): UnbaselinedScanResult {
   const findings: ScanFinding[] = [];
   const diag = newDiag();
   const context: ScanContext = {
@@ -145,6 +146,7 @@ export function scanTargets(
     suppressed: diag.suppressed,
     warnings: diag.warnings,
     context,
+    baseline: null,
   };
 }
 

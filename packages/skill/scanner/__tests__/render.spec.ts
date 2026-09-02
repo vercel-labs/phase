@@ -1038,6 +1038,63 @@ describe('scan CLI', () => {
     }
   });
 
+  it('escapes hostile JSON paths without changing their fingerprints', () => {
+    if (process.platform === 'win32') return;
+
+    const root = mkdtempSync(join(tmpdir(), 'phase-json-path-'));
+    writeFileSync(
+      join(root, 'evil\u202e.ts'),
+      'const width = target.offsetWidth;\n',
+    );
+    try {
+      expect(
+        runCli(['--write-baseline', 'phase-baseline.json', '.'], root).status,
+      ).toBe(0);
+      const [fingerprint] = parseBaseline(
+        readFileSync(join(root, 'phase-baseline.json'), 'utf8'),
+      ).fingerprints;
+
+      const run = runCli(['--json', '.'], root);
+      expect(run.status).toBe(0);
+      expect(run.stdout).not.toContain('\u202e');
+      expect(JSON.parse(run.stdout).findings[0].fingerprint).toBe(fingerprint);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('visibly escapes untrusted newlines in text and usage errors', () => {
+    if (process.platform === 'win32') return;
+
+    const root = mkdtempSync(join(tmpdir(), 'phase-newline-path-'));
+    writeFileSync(
+      join(root, 'file\nFORGED.ts'),
+      'const width = target.offsetWidth;\n',
+    );
+    writeFileSync(
+      join(root, 'line\u2028FORGED.ts'),
+      'const height = target.offsetHeight;\n',
+    );
+    try {
+      const text = runCli(['.'], root);
+      expect(text.stdout).not.toContain('\nFORGED.ts');
+      expect(text.stdout).toContain('file\\nFORGED.ts');
+      expect(text.stdout).not.toContain('\u2028FORGED.ts');
+      expect(text.stdout).toContain('line\\u2028FORGED.ts');
+
+      const error = runCli(
+        ['--baseline', 'missing\nFORGED\u2029.json', '.'],
+        root,
+      );
+      expect(error.status).toBe(2);
+      expect(error.stderr).not.toContain('\nFORGED\u2029.json');
+      expect(error.stderr).not.toContain('\u2029.json');
+      expect(error.stderr).toContain('missing\\nFORGED\\u2029.json');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('refuses to replace a baseline symlink or its target', () => {
     const root = mkdtempSync(join(tmpdir(), 'phase-write-symlink-'));
     const workspace = join(root, 'workspace');

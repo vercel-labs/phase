@@ -7,6 +7,7 @@ import {
   lstatSync,
   openSync,
   readFileSync,
+  readSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -23,7 +24,7 @@ import {
   serializeBaseline,
 } from './baseline.ts';
 import type { PhaseBaseline } from './baseline.ts';
-import { sanitizeTerminalText } from './detect.ts';
+import { sanitizeTerminalLine, sanitizeTerminalText } from './detect.ts';
 import type { ScanFinding } from './detect.ts';
 import { formatJson, formatText, scanTargets } from './index.ts';
 import type { ScanResult } from './index.ts';
@@ -369,10 +370,11 @@ function writeBaseline(
       }
       const baselineRoot =
         toPosix(relative(dirname(baselinePath), root)) || '.';
-      writeBaselineFile(
-        baselinePath,
-        serializeBaseline(fingerprints, version, baselineRoot),
-      );
+      const content = serializeBaseline(fingerprints, version, baselineRoot);
+      if (Buffer.byteLength(content) > MAX_BASELINE_BYTES) {
+        failUsage('generated baseline exceeds 16 MiB');
+      }
+      writeBaselineFile(baselinePath, content);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failUsage(`cannot write baseline: ${path} (${message})`);
@@ -425,18 +427,25 @@ function filterFindings(result: ScanResult, opts: CliOptions): ScanResult {
 
 function printResult(result: ScanResult, opts: CliOptions): void {
   for (const warning of result.warnings) {
-    console.error(sanitizeTerminalText(`warning: ${warning}`));
+    console.error(`warning: ${sanitizeTerminalLine(warning)}`);
   }
 
   if (opts.json) {
-    console.log(
-      sanitizeTerminalText(
-        JSON.stringify(formatJson(result, opts.limit), null, 2),
-      ),
-    );
+    console.log(terminalSafeJson(formatJson(result, opts.limit)));
   } else {
     console.log(sanitizeTerminalText(formatText(result)));
   }
+}
+
+function terminalSafeJson(value: unknown): string {
+  const json = JSON.stringify(value, null, 2);
+  /* oxlint-disable no-control-regex -- escaping terminal-sensitive JSON code points */
+  return json.replace(
+    /[\u007f-\u009f\u2028-\u202e\u2066-\u2069]/g,
+    (character) =>
+      `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+  /* oxlint-enable no-control-regex */
 }
 
 function hitsFailThreshold(findings: ScanFinding[], opts: CliOptions): boolean {
@@ -518,14 +527,31 @@ function readBaselineFile(
     if (stat.size > MAX_BASELINE_BYTES) {
       throw new Error(`baseline exceeds 16 MiB: ${requestedPath}`);
     }
-    const json = readFileSync(descriptor, 'utf8');
-    if (Buffer.byteLength(json) > MAX_BASELINE_BYTES) {
-      throw new Error(`baseline exceeds 16 MiB: ${requestedPath}`);
-    }
+    const json = readBoundedBaseline(descriptor, requestedPath);
     return { path, json };
   } finally {
     closeSync(descriptor);
   }
+}
+
+function readBoundedBaseline(descriptor: number, path: string): string {
+  const buffer = Buffer.allocUnsafe(MAX_BASELINE_BYTES + 1);
+  let bytesRead = 0;
+  while (bytesRead < buffer.length) {
+    const read = readSync(
+      descriptor,
+      buffer,
+      bytesRead,
+      buffer.length - bytesRead,
+      null,
+    );
+    if (read === 0) break;
+    bytesRead += read;
+  }
+  if (bytesRead > MAX_BASELINE_BYTES) {
+    throw new Error(`baseline exceeds 16 MiB: ${path}`);
+  }
+  return buffer.toString('utf8', 0, bytesRead);
 }
 
 function scanRoot(opts: CliOptions): string {
@@ -551,7 +577,7 @@ function isCompleteScan(opts: CliOptions, result: ScanResult): boolean {
 }
 
 function failUsage(message: string): never {
-  console.error(sanitizeTerminalText(`${message}\n\n${USAGE}`));
+  console.error(`${sanitizeTerminalLine(message)}\n\n${USAGE}`);
   process.exit(2);
 }
 

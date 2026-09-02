@@ -8,6 +8,7 @@ import {
 } from './baseline.ts';
 import type { ClassifiedFinding, FingerprintedFinding } from './baseline.ts';
 import type { ScanContext } from './context.ts';
+import { sanitizeTerminalLine } from './detect.ts';
 import type { ScanExecution, ScanFinding } from './detect.ts';
 import { SEVERITY_ORDER, SIGNALS } from './signals.ts';
 import type { ScanSeverity } from './signals.ts';
@@ -81,7 +82,9 @@ export function formatJson(
   const fingerprinted = assignFingerprints(result.findings);
   const findings =
     limit === null ? fingerprinted : fingerprinted.slice(0, limit);
-  const preExisting = result.findings.filter(isPreExistingFinding).length;
+  const preExisting = result.baseline
+    ? result.findings.filter(isPreExistingFinding).length
+    : 0;
   return {
     schemaVersion: 1,
     skillVersion: cliVersion(),
@@ -176,7 +179,7 @@ function renderHotspots(
   const out = ['', '## hotspots (most candidates per file)'];
   for (const { file, items } of hotspots) {
     out.push(
-      `  ${String(items.length).padStart(3)}  ${file}`,
+      `  ${String(items.length).padStart(3)}  ${sanitizeTerminalLine(file)}`,
       `       ${summarizeSignals(items)}`,
     );
   }
@@ -211,7 +214,7 @@ function renderSignal(
       out.push(`  ${EXECUTION_HEADINGS[item.execution ?? 'none']}`);
       lastExecution = item.execution;
     }
-    out.push(`  ${item.file}:${item.line}  ${item.text}`);
+    out.push(`  ${sanitizeTerminalLine(item.file)}:${item.line}  ${item.text}`);
   }
   if (ordered.length > shown.length) {
     // Point at the scoped drill-down, not at bare --json: a storm's full
@@ -309,7 +312,7 @@ function renderContext(context: ScanContext): string[] {
   // Name the evidence: in a monorepo the marker can come from an example
   // app, and a bare assertion gives the reader no way to notice.
   const evidence = context.evidence?.length
-    ? ` (from ${context.evidence.join(', ')})`
+    ? ` (from ${context.evidence.map(sanitizeTerminalLine).join(', ')})`
     : '';
   return [
     '',

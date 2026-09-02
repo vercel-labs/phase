@@ -388,6 +388,17 @@ export function sanitizeTerminalText(text: string): string {
   return text.replace(ANSI_SEQUENCE, '').replace(INVISIBLE_CONTROL, '');
 }
 
+/** Sanitizes one untrusted value while visibly escaping line breaks. */
+export function sanitizeTerminalLine(text: string): string {
+  return sanitizeTerminalText(
+    text
+      .replaceAll('\r', '\\r')
+      .replaceAll('\n', '\\n')
+      .replaceAll('\u2028', '\\u2028')
+      .replaceAll('\u2029', '\\u2029'),
+  );
+}
+
 /**
  * The quoted source line, windowed around the match and stripped of
  * control characters. Truncating from column zero hid the matched token in

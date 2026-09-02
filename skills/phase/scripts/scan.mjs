@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
@@ -2009,6 +2009,10 @@ const INVISIBLE_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e
 function sanitizeTerminalText(text) {
 	return text.replace(ANSI_SEQUENCE, "").replace(INVISIBLE_CONTROL, "");
 }
+/** Sanitizes one untrusted value while visibly escaping line breaks. */
+function sanitizeTerminalLine(text) {
+	return sanitizeTerminalText(text.replaceAll("\r", "\\r").replaceAll("\n", "\\n").replaceAll("\u2028", "\\u2028").replaceAll("\u2029", "\\u2029"));
+}
 /**
 * The quoted source line, windowed around the match and stripped of
 * control characters. Truncating from column zero hid the matched token in
@@ -2120,7 +2124,7 @@ function formatJson(result, limit = null) {
 	const counts = countBySeverity(result.findings);
 	const fingerprinted = assignFingerprints(result.findings);
 	const findings = limit === null ? fingerprinted : fingerprinted.slice(0, limit);
-	const preExisting = result.findings.filter(isPreExistingFinding).length;
+	const preExisting = result.baseline ? result.findings.filter(isPreExistingFinding).length : 0;
 	return {
 		schemaVersion: 1,
 		skillVersion: cliVersion(),
@@ -2185,7 +2189,7 @@ function renderHotspots(findings, weight) {
 	const hotspots = rankHotspots(findings, weight);
 	if (hotspots.length === 0 || findings.length < MIN_FINDINGS_FOR_ROLLUP) return [];
 	const out = ["", "## hotspots (most candidates per file)"];
-	for (const { file, items } of hotspots) out.push(`  ${String(items.length).padStart(3)}  ${file}`, `       ${summarizeSignals(items)}`);
+	for (const { file, items } of hotspots) out.push(`  ${String(items.length).padStart(3)}  ${sanitizeTerminalLine(file)}`, `       ${summarizeSignals(items)}`);
 	return out;
 }
 function renderSignal(id, items, weight) {
@@ -2208,7 +2212,7 @@ function renderSignal(id, items, weight) {
 			out.push(`  ${EXECUTION_HEADINGS[item.execution ?? "none"]}`);
 			lastExecution = item.execution;
 		}
-		out.push(`  ${item.file}:${item.line}  ${item.text}`);
+		out.push(`  ${sanitizeTerminalLine(item.file)}:${item.line}  ${item.text}`);
 	}
 	if (ordered.length > shown.length) out.push(`  … and ${ordered.length - shown.length} more (--json --signal ${id} for the full list)`);
 	return out;
@@ -2282,7 +2286,7 @@ function renderContext(context) {
 	const bits = ["Next.js"];
 	if (context.appRouter) bits.push("App Router");
 	if (context.ppr) bits.push("PPR");
-	const evidence = context.evidence?.length ? ` (from ${context.evidence.join(", ")})` : "";
+	const evidence = context.evidence?.length ? ` (from ${context.evidence.map(sanitizeTerminalLine).join(", ")})` : "";
 	return ["", `Context: ${bits.join(" + ")} detected${evidence}. Rendering recommendations must pass the blast-radius check (references/audit.md Step 2.5) before changing SSR content or mount timing.`];
 }
 const MAX_LISTED_PER_SIGNAL = 20;
@@ -2463,7 +2467,8 @@ function scanTargets(paths, options = {}) {
 		findings,
 		suppressed: diag.suppressed,
 		warnings: diag.warnings,
-		context
+		context,
+		baseline: null
 	};
 }
 function canonicalTargetPath(root, identityRoot) {
@@ -2698,7 +2703,9 @@ function writeBaseline(result, path, version, root, complete) {
 			const baselinePath = join(realpathSync(dirname(requestedPath)), basename(requestedPath));
 			const destination = lstatSync(baselinePath, { throwIfNoEntry: false });
 			if (destination && !destination.isFile()) failUsage(`baseline write destination must be a regular file: ${baselinePath}`);
-			writeBaselineFile(baselinePath, serializeBaseline(fingerprints, version, toPosix(relative(dirname(baselinePath), root)) || "."));
+			const content = serializeBaseline(fingerprints, version, toPosix(relative(dirname(baselinePath), root)) || ".");
+			if (Buffer.byteLength(content) > MAX_BASELINE_BYTES) failUsage("generated baseline exceeds 16 MiB");
+			writeBaselineFile(baselinePath, content);
 		} catch (error) {
 			failUsage(`cannot write baseline: ${path} (${error instanceof Error ? error.message : String(error)})`);
 		}
@@ -2730,9 +2737,12 @@ function filterFindings(result, opts) {
 	};
 }
 function printResult(result, opts) {
-	for (const warning of result.warnings) console.error(sanitizeTerminalText(`warning: ${warning}`));
-	if (opts.json) console.log(sanitizeTerminalText(JSON.stringify(formatJson(result, opts.limit), null, 2)));
+	for (const warning of result.warnings) console.error(`warning: ${sanitizeTerminalLine(warning)}`);
+	if (opts.json) console.log(terminalSafeJson(formatJson(result, opts.limit)));
 	else console.log(sanitizeTerminalText(formatText(result)));
+}
+function terminalSafeJson(value) {
+	return JSON.stringify(value, null, 2).replace(/[\u007f-\u009f\u2028-\u202e\u2066-\u2069]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
 function hitsFailThreshold(findings, opts) {
 	if (!opts.failOn || opts.writeBaselinePath !== null) return false;
@@ -2777,8 +2787,7 @@ function readBaselineFile(requestedPath, explicit) {
 		const stat = fstatSync(descriptor);
 		if (!stat.isFile()) throw new Error(`baseline must be a regular file: ${requestedPath}`);
 		if (stat.size > MAX_BASELINE_BYTES) throw new Error(`baseline exceeds 16 MiB: ${requestedPath}`);
-		const json = readFileSync(descriptor, "utf8");
-		if (Buffer.byteLength(json) > MAX_BASELINE_BYTES) throw new Error(`baseline exceeds 16 MiB: ${requestedPath}`);
+		const json = readBoundedBaseline(descriptor, requestedPath);
 		return {
 			path,
 			json
@@ -2786,6 +2795,17 @@ function readBaselineFile(requestedPath, explicit) {
 	} finally {
 		closeSync(descriptor);
 	}
+}
+function readBoundedBaseline(descriptor, path) {
+	const buffer = Buffer.allocUnsafe(MAX_BASELINE_BYTES + 1);
+	let bytesRead = 0;
+	while (bytesRead < buffer.length) {
+		const read = readSync(descriptor, buffer, bytesRead, buffer.length - bytesRead, null);
+		if (read === 0) break;
+		bytesRead += read;
+	}
+	if (bytesRead > MAX_BASELINE_BYTES) throw new Error(`baseline exceeds 16 MiB: ${path}`);
+	return buffer.toString("utf8", 0, bytesRead);
 }
 function scanRoot(opts) {
 	if (opts.stdin0 || opts.targets.length !== 1) return realpathSync(process.cwd());
@@ -2796,7 +2816,7 @@ function isCompleteScan(opts, result) {
 	return !opts.stdin0 && opts.exclude.length === 0 && opts.targets.length === 1 && lstatSync(opts.targets[0]).isDirectory() && result.filesSkipped.unreadable === 0 && result.filesSkipped.unreadableDirs === 0 && result.linesSkipped === 0;
 }
 function failUsage(message) {
-	console.error(sanitizeTerminalText(`${message}\n\n${USAGE}`));
+	console.error(`${sanitizeTerminalLine(message)}\n\n${USAGE}`);
 	process.exit(2);
 }
 function isEntryPoint(argvPath) {
