@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 const FINDING_IDENTITY_FILE = Symbol("findingIdentityFile");
@@ -222,177 +222,6 @@ function parseSuppressionDirective(comment) {
 		signalId: match[1] ?? "",
 		reason: match[2] ?? null
 	};
-}
-//#endregion
-//#region scanner/walk.ts
-const FILE_TYPE_EXTENSIONS = {
-	js: new Set([
-		".ts",
-		".tsx",
-		".js",
-		".jsx",
-		".mjs",
-		".cjs"
-	]),
-	css: new Set([
-		".css",
-		".scss",
-		".sass",
-		".less"
-	])
-};
-const JSX_EXTENSIONS = new Set([".tsx", ".jsx"]);
-const EXCLUDED_PATHS = /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__|\.agents\/|\.claude\/|\.cursor\/|\.yarn\/|^evals\/|skills\/phase\/scripts\//;
-const SKIP_DIRS = new Set([
-	"node_modules",
-	".git",
-	"dist",
-	".next",
-	"build",
-	"out",
-	"coverage",
-	".turbo",
-	".vercel",
-	"storybook-static",
-	".agents",
-	".claude",
-	".cursor",
-	".github",
-	".yarn"
-]);
-const SKIP_FILES = /\.min\.|\.d\.ts$|\.d\.mts$/;
-function toPosix(path) {
-	return path.split("\\").join("/");
-}
-/**
-* A --exclude value. Patterns with a wildcard are globs (`*` within a path
-* segment, `**` across); anything else is a plain path prefix or substring,
-* so `--exclude examples/` does what it looks like.
-*/
-function toPathMatcher(pattern) {
-	if (!pattern.includes("*") && !pattern.includes("?")) return (path) => path.includes(pattern);
-	let body = "";
-	for (let i = 0; i < pattern.length; i++) {
-		const ch = pattern[i];
-		if (ch === "*" && pattern[i + 1] === "*") if (pattern[i + 2] === "/") {
-			body += "(?:.*/)?";
-			i += 2;
-		} else {
-			body += ".*";
-			i++;
-		}
-		else if (ch === "*") body += "[^/]*";
-		else if (ch === "?") body += "[^/]";
-		else body += escapeRegExp(ch);
-	}
-	const re = new RegExp(`^${body}$`);
-	const matchBase = !pattern.includes("/");
-	return (path) => re.test(matchBase ? basename(path) : path);
-}
-function extOf(path) {
-	const dot = path.lastIndexOf(".");
-	if (dot <= path.lastIndexOf("/")) return null;
-	return path.slice(dot).toLowerCase();
-}
-function typeOf(ext) {
-	if (ext === null) return null;
-	if (FILE_TYPE_EXTENSIONS.js.has(ext)) return "js";
-	if (FILE_TYPE_EXTENSIONS.css.has(ext)) return "css";
-	return null;
-}
-function signalAppliesTo(signal, type, ext) {
-	const declared = signal.fileTypes ?? "js";
-	const types = Array.isArray(declared) ? declared : [declared];
-	for (const t of types) if (t === "jsx") {
-		if (JSX_EXTENSIONS.has(ext)) return true;
-	} else if (t === type) return true;
-	return false;
-}
-function walk(dir, diag, results = []) {
-	let entries;
-	try {
-		entries = readdirSync(dir, { withFileTypes: true }).toSorted((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
-	} catch {
-		diag.skipped.unreadableDirs++;
-		diag.warnings.push(`${toPosix(dir)}  directory could not be read; skipped`);
-		return results;
-	}
-	for (const entry of entries) {
-		if (SKIP_DIRS.has(entry.name)) continue;
-		const full = join(dir, entry.name);
-		if (entry.isSymbolicLink()) continue;
-		if (entry.isDirectory()) walk(full, diag, results);
-		else if (entry.isFile() && !SKIP_FILES.test(entry.name) && typeOf(extOf(entry.name)) !== null) results.push(full);
-	}
-	return results;
-}
-//#endregion
-//#region scanner/context.ts
-function detectProjectRoot(root, context) {
-	let dir = root;
-	for (let depth = 0; depth < 10; depth++) {
-		let entries;
-		try {
-			entries = readdirSync(dir);
-		} catch {
-			return null;
-		}
-		const config = entries.find((e) => /^next\.config\.(js|mjs|ts|cjs)$/.test(e));
-		if (config) {
-			context.framework = "next";
-			noteEvidence(context, toPosix(relative(process.cwd(), join(dir, config))));
-			try {
-				const content = readFileSync(join(dir, config), "utf8");
-				if (/\b(?:ppr|experimental_ppr|cacheComponents)\s*[:=]\s*(?:true|['"]incremental['"])/.test(content)) context.ppr = true;
-			} catch {}
-			return dir;
-		}
-		if (entries.includes("package.json") || entries.includes(".git")) return dir;
-		const parent = dirname(dir);
-		if (parent === dir) return null;
-		dir = parent;
-	}
-	return null;
-}
-const ROUTE_FILE = /^(?:page|layout|template|default|route)\.[jt]sx?$/;
-function detectAppRouterRoot(base) {
-	for (const prefix of ["app", "src/app"]) if (containsRouteFile(join(base, prefix))) return prefix;
-	return null;
-}
-function containsRouteFile(appRoot) {
-	const queue = [appRoot];
-	for (let visited = 0; visited < 64 && queue.length > 0; visited++) {
-		const dir = queue.shift();
-		let entries;
-		try {
-			entries = readdirSync(dir, { withFileTypes: true });
-		} catch {
-			continue;
-		}
-		for (const entry of entries) {
-			if (entry.isFile() && ROUTE_FILE.test(entry.name)) return true;
-			if (entry.isDirectory() && !SKIP_DIRS.has(entry.name)) queue.push(join(dir, entry.name));
-		}
-	}
-	return false;
-}
-function updateContext(projectRel, content, context, evidencePath = projectRel, appRouterRoot = null) {
-	if (appRouterRoot && (projectRel === appRouterRoot || projectRel.startsWith(`${appRouterRoot}/`))) {
-		context.appRouter = true;
-		context.framework ??= "next";
-		noteEvidence(context, evidencePath);
-	}
-	if (/\bexport\s+const\s+experimental_ppr\s*=\s*true\b/.test(content)) {
-		context.ppr = true;
-		context.framework ??= "next";
-		noteEvidence(context, evidencePath);
-	}
-	if (/^\s*['"]use client['"]/m.test(content)) context.clientComponents++;
-}
-const MAX_EVIDENCE = 3;
-function noteEvidence(context, path) {
-	if (context.evidence.length >= MAX_EVIDENCE) return;
-	if (!context.evidence.includes(path)) context.evidence.push(path);
 }
 //#endregion
 //#region scanner/vocabulary.ts
@@ -1322,6 +1151,11 @@ const SEVERITY_ORDER = [
 	"medium",
 	"dedup"
 ];
+const FAIL_ON_SEVERITIES = [
+	"critical",
+	"high",
+	"medium"
+];
 const NOISE_TIERS = [
 	"precise",
 	"normal",
@@ -1905,6 +1739,109 @@ function matchesUngatedLazyMount(lines, i) {
 	return !/\bfallback\s*=/.test(tag);
 }
 //#endregion
+//#region scanner/walk.ts
+const FILE_TYPE_EXTENSIONS = {
+	js: new Set([
+		".ts",
+		".tsx",
+		".js",
+		".jsx",
+		".mjs",
+		".cjs"
+	]),
+	css: new Set([
+		".css",
+		".scss",
+		".sass",
+		".less"
+	])
+};
+const JSX_EXTENSIONS = new Set([".tsx", ".jsx"]);
+const EXCLUDED_PATHS = /node_modules|\.spec\.|\.test\.|\.stories\.|__tests__|__mocks__|\.agents\/|\.claude\/|\.cursor\/|\.yarn\/|^evals\/|skills\/phase\/scripts\//;
+const SKIP_DIRS = new Set([
+	"node_modules",
+	".git",
+	"dist",
+	".next",
+	"build",
+	"out",
+	"coverage",
+	".turbo",
+	".vercel",
+	"storybook-static",
+	".agents",
+	".claude",
+	".cursor",
+	".github",
+	".yarn"
+]);
+const SKIP_FILES = /\.min\.|\.d\.ts$|\.d\.mts$/;
+function toPosix(path) {
+	return path.split(sep).join("/");
+}
+/**
+* A --exclude value. Patterns with a wildcard are globs (`*` within a path
+* segment, `**` across); anything else is a plain path prefix or substring,
+* so `--exclude examples/` does what it looks like.
+*/
+function toPathMatcher(pattern) {
+	if (!pattern.includes("*") && !pattern.includes("?")) return (path) => path.includes(pattern);
+	let body = "";
+	for (let i = 0; i < pattern.length; i++) {
+		const ch = pattern[i];
+		if (ch === "*" && pattern[i + 1] === "*") if (pattern[i + 2] === "/") {
+			body += "(?:.*/)?";
+			i += 2;
+		} else {
+			body += ".*";
+			i++;
+		}
+		else if (ch === "*") body += "[^/]*";
+		else if (ch === "?") body += "[^/]";
+		else body += escapeRegExp(ch);
+	}
+	const re = new RegExp(`^${body}$`);
+	const matchBase = !pattern.includes("/");
+	return (path) => re.test(matchBase ? basename(path) : path);
+}
+function extOf(path) {
+	const dot = path.lastIndexOf(".");
+	if (dot <= path.lastIndexOf("/")) return null;
+	return path.slice(dot).toLowerCase();
+}
+function typeOf(ext) {
+	if (ext === null) return null;
+	if (FILE_TYPE_EXTENSIONS.js.has(ext)) return "js";
+	if (FILE_TYPE_EXTENSIONS.css.has(ext)) return "css";
+	return null;
+}
+function signalAppliesTo(signal, type, ext) {
+	const declared = signal.fileTypes ?? "js";
+	const types = Array.isArray(declared) ? declared : [declared];
+	for (const t of types) if (t === "jsx") {
+		if (JSX_EXTENSIONS.has(ext)) return true;
+	} else if (t === type) return true;
+	return false;
+}
+function walk(dir, diag, results = []) {
+	let entries;
+	try {
+		entries = readdirSync(dir, { withFileTypes: true }).toSorted((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+	} catch {
+		diag.skipped.unreadableDirs++;
+		diag.warnings.push(`${toPosix(dir)}  directory could not be read; skipped`);
+		return results;
+	}
+	for (const entry of entries) {
+		if (SKIP_DIRS.has(entry.name)) continue;
+		const full = join(dir, entry.name);
+		if (entry.isSymbolicLink()) continue;
+		if (entry.isDirectory()) walk(full, diag, results);
+		else if (entry.isFile() && !SKIP_FILES.test(entry.name) && typeOf(extOf(entry.name)) !== null) results.push(full);
+	}
+	return results;
+}
+//#endregion
 //#region scanner/detect.ts
 /** Diagnostics sink shared by scanTargets, walk, and scanFile. */
 function newDiag() {
@@ -2069,7 +2006,7 @@ function executionOf(lines, i, type, analysis, matchOffset) {
 }
 const ANSI_SEQUENCE = /\u001b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\u0007\u001b]*(?:\u0007|\u001b\\)?|[@-Z\\-_])/g;
 const INVISIBLE_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
-function sanitize(text) {
+function sanitizeTerminalText(text) {
 	return text.replace(ANSI_SEQUENCE, "").replace(INVISIBLE_CONTROL, "");
 }
 /**
@@ -2080,13 +2017,13 @@ function sanitize(text) {
 */
 function excerpt(line, matchIndex) {
 	const text = line.trim();
-	if (text.length <= MAX_FINDING_TEXT) return sanitize(text);
+	if (text.length <= MAX_FINDING_TEXT) return sanitizeTerminalText(text);
 	const offset = matchIndex - (line.length - line.trimStart().length);
-	if (offset < 0 || offset >= text.length) return sanitize(`${text.slice(0, MAX_FINDING_TEXT)}…`);
+	if (offset < 0 || offset >= text.length) return sanitizeTerminalText(`${text.slice(0, MAX_FINDING_TEXT)}…`);
 	const lead = Math.floor(MAX_FINDING_TEXT / 4);
 	const start = Math.max(0, Math.min(offset - lead, text.length - MAX_FINDING_TEXT));
 	const end = start + MAX_FINDING_TEXT;
-	return sanitize(`${start > 0 ? "…" : ""}${text.slice(start, end)}${end < text.length ? "…" : ""}`);
+	return sanitizeTerminalText(`${start > 0 ? "…" : ""}${text.slice(start, end)}${end < text.length ? "…" : ""}`);
 }
 /** Drops a finding when a more specific signal fired on the same line. */
 function dedup(findings) {
@@ -2103,6 +2040,74 @@ function dedup(findings) {
 		const lines = supersededLines.get(f.signal);
 		return !lines || !lines.has(f.line);
 	});
+}
+//#endregion
+//#region scanner/context.ts
+function detectProjectRoot(root, context) {
+	let dir = root;
+	for (let depth = 0; depth < 10; depth++) {
+		let entries;
+		try {
+			entries = readdirSync(dir);
+		} catch {
+			return null;
+		}
+		const config = entries.find((e) => /^next\.config\.(js|mjs|ts|cjs)$/.test(e));
+		if (config) {
+			context.framework = "next";
+			noteEvidence(context, toPosix(relative(process.cwd(), join(dir, config))));
+			try {
+				const content = readFileSync(join(dir, config), "utf8");
+				if (/\b(?:ppr|experimental_ppr|cacheComponents)\s*[:=]\s*(?:true|['"]incremental['"])/.test(content)) context.ppr = true;
+			} catch {}
+			return dir;
+		}
+		if (entries.includes("package.json") || entries.includes(".git")) return dir;
+		const parent = dirname(dir);
+		if (parent === dir) return null;
+		dir = parent;
+	}
+	return null;
+}
+const ROUTE_FILE = /^(?:page|layout|template|default|route)\.[jt]sx?$/;
+function detectAppRouterRoot(base) {
+	for (const prefix of ["app", "src/app"]) if (containsRouteFile(join(base, prefix))) return prefix;
+	return null;
+}
+function containsRouteFile(appRoot) {
+	const queue = [appRoot];
+	for (let visited = 0; visited < 64 && queue.length > 0; visited++) {
+		const dir = queue.shift();
+		let entries;
+		try {
+			entries = readdirSync(dir, { withFileTypes: true });
+		} catch {
+			continue;
+		}
+		for (const entry of entries) {
+			if (entry.isFile() && ROUTE_FILE.test(entry.name)) return true;
+			if (entry.isDirectory() && !SKIP_DIRS.has(entry.name)) queue.push(join(dir, entry.name));
+		}
+	}
+	return false;
+}
+function updateContext(projectRel, content, context, evidencePath = projectRel, appRouterRoot = null) {
+	if (appRouterRoot && (projectRel === appRouterRoot || projectRel.startsWith(`${appRouterRoot}/`))) {
+		context.appRouter = true;
+		context.framework ??= "next";
+		noteEvidence(context, evidencePath);
+	}
+	if (/\bexport\s+const\s+experimental_ppr\s*=\s*true\b/.test(content)) {
+		context.ppr = true;
+		context.framework ??= "next";
+		noteEvidence(context, evidencePath);
+	}
+	if (/^\s*['"]use client['"]/m.test(content)) context.clientComponents++;
+}
+const MAX_EVIDENCE = 3;
+function noteEvidence(context, path) {
+	if (context.evidence.length >= MAX_EVIDENCE) return;
+	if (!context.evidence.includes(path)) context.evidence.push(path);
 }
 //#endregion
 //#region scanner/render.ts
@@ -2406,12 +2411,13 @@ function scanTargets(paths, options = {}) {
 		evidence: []
 	};
 	const excluded = (options.exclude ?? []).map(toPathMatcher);
-	const identityRoot = options.root === void 0 ? null : resolve(options.root);
+	const identityRoot = options.root === void 0 ? null : realpathSync(resolve(options.root));
 	const seen = /* @__PURE__ */ new Set();
 	const projectRoots = /* @__PURE__ */ new Map();
 	for (const target of paths) {
 		const root = resolve(target);
 		const stat = lstatSync(root);
+		const canonicalTarget = canonicalTargetPath(root, identityRoot);
 		const base = stat.isDirectory() ? root : dirname(root);
 		const files = stat.isDirectory() ? walk(root, diag) : [root];
 		const configRoot = stat.isDirectory() ? root : base;
@@ -2424,8 +2430,9 @@ function scanTargets(paths, options = {}) {
 		}
 		const { projectRoot, appRouterRoot } = projectRoots.get(configRoot);
 		for (const filePath of files) {
-			if (seen.has(filePath)) continue;
-			seen.add(filePath);
+			const identityPath = findingIdentityPath(filePath, root, canonicalTarget, stat.isDirectory(), identityRoot);
+			if (seen.has(identityPath)) continue;
+			seen.add(identityPath);
 			const rel = stat.isDirectory() ? toPosix(relative(base, filePath)) : toPosix(target).replace(/^\.\//, "");
 			if (SKIP_FILES.test(rel)) {
 				diag.skipped.generated++;
@@ -2444,10 +2451,7 @@ function scanTargets(paths, options = {}) {
 			}
 			if (!EXCLUDED_PATHS.test(rel)) updateContext(projectRoot ? toPosix(relative(projectRoot, filePath)) : rel, content, context, rel, appRouterRoot);
 			const scanned = scanFile(rel, content, diag);
-			if (identityRoot) {
-				const identityFile = toPosix(relative(identityRoot, filePath));
-				for (const finding of scanned) finding[FINDING_IDENTITY_FILE] = identityFile;
-			}
+			stampIdentityFiles(scanned, identityRoot, identityPath);
 			findings.push(...scanned);
 		}
 	}
@@ -2461,6 +2465,18 @@ function scanTargets(paths, options = {}) {
 		warnings: diag.warnings,
 		context
 	};
+}
+function canonicalTargetPath(root, identityRoot) {
+	return identityRoot ? realpathSync(root) : root;
+}
+function findingIdentityPath(filePath, targetRoot, canonicalTarget, targetIsDirectory, identityRoot) {
+	if (!identityRoot) return filePath;
+	return targetIsDirectory ? resolve(canonicalTarget, relative(targetRoot, filePath)) : canonicalTarget;
+}
+function stampIdentityFiles(findings, identityRoot, identityPath) {
+	if (!identityRoot) return;
+	const identityFile = toPosix(relative(identityRoot, identityPath));
+	for (const finding of findings) finding[FINDING_IDENTITY_FILE] = identityFile;
 }
 //#endregion
 //#region scanner/cli.ts
@@ -2526,11 +2542,7 @@ const VALUE_OPTIONS = {
 	},
 	"--fail-on": {
 		key: "failOn",
-		allowed: [
-			"critical",
-			"high",
-			"medium"
-		],
+		allowed: FAIL_ON_SEVERITIES,
 		expects: "critical, high, or medium"
 	},
 	"--signal": {
@@ -2619,17 +2631,17 @@ function main() {
 	validateBaselineWriteTarget(opts);
 	const root = scanRoot(opts);
 	const baseline = opts.writeBaselinePath !== null ? null : readBaseline(opts, root);
-	const result = scanTargets(opts.targets, {
+	const scanned = scanTargets(opts.targets, {
 		exclude: opts.exclude,
 		root
 	});
 	const version = cliVersion();
-	const complete = isCompleteScan(opts, result);
-	applyBaseline(result, baseline, version, complete);
+	const complete = isCompleteScan(opts, scanned);
+	const result = applyBaseline(scanned, baseline, version, complete);
 	writeBaseline(result, opts.writeBaselinePath, version, root, complete);
-	filterFindings(result, opts);
-	printResult(result, opts);
-	if (hitsFailThreshold(result.findings, opts)) process.exit(1);
+	const filtered = filterFindings(result, opts);
+	printResult(filtered, opts);
+	if (hitsFailThreshold(filtered.findings, opts)) process.exit(1);
 }
 function readOptions(argv) {
 	try {
@@ -2666,26 +2678,40 @@ function readBaseline(opts, root) {
 	}
 }
 function applyBaseline(result, baseline, version, complete) {
-	if (baseline) {
-		const classified = classifyFindings(result.findings, baseline);
-		result.findings = classified.findings;
-		result.baseline = { stale: complete ? classified.stale : null };
-		if (baseline.cliVersion !== version) result.warnings.push(`baseline version ${baseline.cliVersion} differs from CLI version ${version}; continuing`);
-	}
+	if (!baseline) return result;
+	const classified = classifyFindings(result.findings, baseline);
+	const versionWarning = baseline.cliVersion === version ? [] : [`baseline version ${baseline.cliVersion} differs from CLI version ${version}; continuing`];
+	return {
+		...result,
+		findings: classified.findings,
+		warnings: [...result.warnings, ...versionWarning],
+		baseline: { stale: complete ? classified.stale : null }
+	};
 }
 function writeBaseline(result, path, version, root, complete) {
 	if (path !== null) {
 		if (!complete) failUsage("--write-baseline cannot run because scan coverage is incomplete");
 		if (result.filesScanned === 0) failUsage("--write-baseline cannot run because no files were scanned");
 		const fingerprints = assignFingerprints(result.findings).map((finding) => finding.fingerprint);
-		const baselinePath = resolve(path);
+		const requestedPath = resolve(path);
 		try {
+			const baselinePath = join(realpathSync(dirname(requestedPath)), basename(requestedPath));
 			const destination = lstatSync(baselinePath, { throwIfNoEntry: false });
 			if (destination && !destination.isFile()) failUsage(`baseline write destination must be a regular file: ${baselinePath}`);
-			writeFileSync(baselinePath, serializeBaseline(fingerprints, version, toPosix(relative(dirname(baselinePath), root)) || "."));
+			writeBaselineFile(baselinePath, serializeBaseline(fingerprints, version, toPosix(relative(dirname(baselinePath), root)) || "."));
 		} catch (error) {
 			failUsage(`cannot write baseline: ${path} (${error instanceof Error ? error.message : String(error)})`);
 		}
+	}
+}
+let baselineWriteSequence = 0;
+function writeBaselineFile(path, content) {
+	const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.${baselineWriteSequence++}.tmp`);
+	try {
+		writeFileSync(temporary, content, { flag: "wx" });
+		renameSync(temporary, path);
+	} finally {
+		rmSync(temporary, { force: true });
 	}
 }
 function filterFindings(result, opts) {
@@ -2693,12 +2719,20 @@ function filterFindings(result, opts) {
 	if (opts.signals.length > 0) keep.push((finding) => opts.signals.includes(finding.signal));
 	if (opts.severities.length > 0) keep.push((finding) => opts.severities.includes(finding.severity));
 	if (opts.noiseTiers.length > 0) keep.push((finding) => opts.noiseTiers.includes(finding.noise));
-	if (keep.length > 0) result.findings = result.findings.filter((f) => keep.every((p) => p(f)));
+	if (keep.length === 0) return result;
+	if (result.baseline) return {
+		...result,
+		findings: result.findings.filter((finding) => keep.every((predicate) => predicate(finding)))
+	};
+	return {
+		...result,
+		findings: result.findings.filter((finding) => keep.every((predicate) => predicate(finding)))
+	};
 }
 function printResult(result, opts) {
-	for (const warning of result.warnings) console.error(`warning: ${warning}`);
-	if (opts.json) console.log(JSON.stringify(formatJson(result, opts.limit), null, 2));
-	else console.log(formatText(result));
+	for (const warning of result.warnings) console.error(sanitizeTerminalText(`warning: ${warning}`));
+	if (opts.json) console.log(sanitizeTerminalText(JSON.stringify(formatJson(result, opts.limit), null, 2)));
+	else console.log(sanitizeTerminalText(formatText(result)));
 }
 function hitsFailThreshold(findings, opts) {
 	if (!opts.failOn || opts.writeBaselinePath !== null) return false;
@@ -2708,34 +2742,61 @@ function hitsFailThreshold(findings, opts) {
 function loadBaseline(opts, root) {
 	if (opts.noBaseline) return null;
 	const explicit = opts.baselinePath !== null;
-	const path = explicit ? resolve(opts.baselinePath) : join(root, "phase-baseline.json");
-	if (!explicit && !existsSync(path)) return null;
-	if (!explicit && !lstatSync(path).isFile()) throw new Error(`auto-detected baseline must be a regular file: ${path}; use --baseline to read it explicitly`);
-	let json;
-	try {
-		json = readFileSync(path, "utf8");
-	} catch {
-		throw new Error(`cannot read baseline: ${path}`);
-	}
+	const source = readBaselineFile(explicit ? resolve(opts.baselinePath) : join(root, "phase-baseline.json"), explicit);
+	if (!source) return null;
+	const { path, json } = source;
 	try {
 		const baseline = parseBaseline(json);
-		if (resolve(dirname(path), baseline.root) !== root) throw new Error("baseline root does not match the current scan root");
+		if (realpathSync(resolve(dirname(path), baseline.root)) !== root) throw new Error("baseline root does not match the current scan root");
 		return baseline;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		throw new Error(`invalid baseline ${path}: ${message}`, { cause: error });
 	}
 }
+const MAX_BASELINE_BYTES = 16 * 1024 * 1024;
+function readBaselineFile(requestedPath, explicit) {
+	let path = requestedPath;
+	if (explicit) try {
+		path = realpathSync(requestedPath);
+	} catch (error) {
+		throw new Error(`cannot read baseline: ${requestedPath}`, { cause: error });
+	}
+	else {
+		const entry = lstatSync(requestedPath, { throwIfNoEntry: false });
+		if (!entry) return null;
+		if (!entry.isFile()) throw new Error(`auto-detected baseline must be a regular file: ${requestedPath}; use --baseline to read it explicitly`);
+	}
+	let descriptor;
+	try {
+		descriptor = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW);
+	} catch (error) {
+		throw new Error(`cannot read baseline: ${requestedPath}`, { cause: error });
+	}
+	try {
+		const stat = fstatSync(descriptor);
+		if (!stat.isFile()) throw new Error(`baseline must be a regular file: ${requestedPath}`);
+		if (stat.size > MAX_BASELINE_BYTES) throw new Error(`baseline exceeds 16 MiB: ${requestedPath}`);
+		const json = readFileSync(descriptor, "utf8");
+		if (Buffer.byteLength(json) > MAX_BASELINE_BYTES) throw new Error(`baseline exceeds 16 MiB: ${requestedPath}`);
+		return {
+			path,
+			json
+		};
+	} finally {
+		closeSync(descriptor);
+	}
+}
 function scanRoot(opts) {
-	if (opts.stdin0 || opts.targets.length !== 1) return process.cwd();
+	if (opts.stdin0 || opts.targets.length !== 1) return realpathSync(process.cwd());
 	const target = resolve(opts.targets[0]);
-	return lstatSync(target).isDirectory() ? target : process.cwd();
+	return lstatSync(target).isDirectory() ? realpathSync(target) : realpathSync(process.cwd());
 }
 function isCompleteScan(opts, result) {
 	return !opts.stdin0 && opts.exclude.length === 0 && opts.targets.length === 1 && lstatSync(opts.targets[0]).isDirectory() && result.filesSkipped.unreadable === 0 && result.filesSkipped.unreadableDirs === 0 && result.linesSkipped === 0;
 }
 function failUsage(message) {
-	console.error(`${message}\n\n${USAGE}`);
+	console.error(sanitizeTerminalText(`${message}\n\n${USAGE}`));
 	process.exit(2);
 }
 function isEntryPoint(argvPath) {

@@ -13,17 +13,27 @@ import { SEVERITY_ORDER, SIGNALS } from './signals.ts';
 import type { ScanSeverity } from './signals.ts';
 import type { ScanSkipped } from './walk.ts';
 
-export interface ScanResult {
+interface ScanResultBase {
   targets: string[];
   filesScanned: number;
   filesSkipped: ScanSkipped;
   linesSkipped: number;
-  findings: ScanFinding[];
   suppressed: number;
   warnings: string[];
   context: ScanContext;
-  baseline?: { stale: number | null } | null;
 }
+
+export interface UnbaselinedScanResult extends ScanResultBase {
+  findings: ScanFinding[];
+  baseline?: null;
+}
+
+export interface BaselinedScanResult extends ScanResultBase {
+  findings: ClassifiedFinding[];
+  baseline: { stale: number | null };
+}
+
+export type ScanResult = UnbaselinedScanResult | BaselinedScanResult;
 
 type ScanJsonFinding = FingerprintedFinding &
   Partial<Pick<ClassifiedFinding, 'baselineState'>>;

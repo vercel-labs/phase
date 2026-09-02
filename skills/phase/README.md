@@ -56,7 +56,7 @@ git diff --name-only --diff-filter=ACMR -z | node <skill-dir>/scripts/scan.mjs -
 | `--json`                  | Machine-readable output: summary, environment context, warnings, flat findings |
 | `--stdin0`                | Read NUL-delimited targets from stdin; empty input scans nothing               |
 | `--fail-on <severity>`    | Exit 1 at or above `critical`/`high`/`medium` (for CI); default always exits 0 |
-| `--baseline <path>`       | Compare with an explicit baseline instead of auto-detection                    |
+| `--baseline <path>`       | Compare with an explicit regular-file baseline up to 16 MiB                    |
 | `--no-baseline`           | Ignore an explicit or auto-detected baseline                                   |
 | `--write-baseline <path>` | Write one complete directory scan as a baseline and exit 0                     |
 | `--signal <id>`           | Report only this signal (repeatable)                                           |
@@ -72,7 +72,7 @@ The scanner auto-detects `phase-baseline.json` at the scan root. Baselines recor
 
 With a baseline, `--fail-on` evaluates only new findings, text output lists only those new findings, and JSON marks findings as `new` or `pre-existing`. Every JSON finding includes a stable `fingerprint`. A complete directory scan reports the stale count; file and multi-target scans report `stale: null` (`stale unknown (partial scan)` in text) because they cannot prove a baseline entry disappeared. Baseline version differences warn without failing.
 
-`--write-baseline` requires exactly one directory target with complete scan coverage, writes sorted `{ schemaVersion, cliVersion, root, fingerprints }` JSON, and prunes stale fingerprints. It cannot be combined with `--baseline`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`.
+`--write-baseline` requires exactly one directory target with complete scan coverage, atomically writes sorted `{ schemaVersion, cliVersion, root, fingerprints }` JSON, and prunes stale fingerprints. It cannot be combined with `--baseline`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`.
 
 The report opens with the files carrying the most candidates, and within each signal it lists the lines a proven recurring frame callback, observer, or move handler runs before the incidental ones. A one-shot rAF does not make nearby work per-frame. Every block names why it matters and what to use instead, so you can act without opening the reference.
 
