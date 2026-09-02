@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 const FINDING_IDENTITY_FILE = Symbol("findingIdentityFile");
 const FINDING_SOURCE_LINE = Symbol("findingSourceLine");
-const FINDING_FINGERPRINT = /^[^:]+:.+:[0-9a-f]{12}:[1-9]\d*$/;
 /** Normalizes a finding's source line for location-independent identity. */
 function normalizeLine(text) {
 	return text.trim().replace(/\s+/g, " ");
@@ -107,7 +106,7 @@ function isPreExistingFinding(finding) {
 	return "baselineState" in finding && finding.baselineState === "pre-existing";
 }
 function isFingerprint(value) {
-	return FINDING_FINGERPRINT.test(value);
+	return /^[^:]+:.+:[0-9a-f]{12}:[1-9]\d*$/.test(value);
 }
 function validateFingerprints(fingerprints) {
 	const validated = fingerprints.map((fingerprint, index) => {
