@@ -66,7 +66,7 @@ git diff --name-only --diff-filter=ACMR -z | node <skill-dir>/scripts/scan.mjs -
 | `--limit <n>`             | Cap the findings array in `--json` output                                      |
 | `-h`, `--help`            | Usage                                                                          |
 
-Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit, `2` usage error. A clean scan reports how many files it scanned; zero scannable files prints a warning instead of a green result. Requires Node 20 or newer.
+Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit, `2` usage error. A clean scan reports how many files it scanned; zero scannable files prints a warning instead of a green result. Requires Node 24 or newer.
 
 The scanner auto-detects `phase-baseline.json` at the scan root. Baselines record that root relative to the baseline file, and the CLI rejects a baseline whose recorded root does not match the current scan. Fingerprints use root-relative file paths, so separate targets with the same internal path remain distinct.
 
