@@ -456,7 +456,6 @@ function validateBaselineWriteTarget(opts: CliOptions): void {
     failUsage('--write-baseline requires exactly one directory target');
   }
 }
-
 function readBaseline(opts: CliOptions, root: string): PhaseBaseline | null {
   try {
     return loadBaseline(opts, root);

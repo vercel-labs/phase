@@ -59,6 +59,7 @@ describe('callback dispatch', () => {
     observeResize(el, cb);
     mockRO.trigger(el, 200, 100);
     expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb).toHaveBeenCalledWith(expect.anything(), 'native');
     expect(cb.mock.calls[0]?.[0]?.contentBoxSize[0].inlineSize).toBe(200);
   });
 
@@ -77,6 +78,133 @@ describe('callback dispatch', () => {
 
     mockRO.trigger(el2, 300, 150);
     expect(cb2).toHaveBeenCalledTimes(1);
+  });
+
+  it('replays the latest entry asynchronously to a late subscriber', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    observeResize(el, vi.fn());
+    mockRO.trigger(el, 200, 100);
+    const late = vi.fn();
+
+    observeResize(el, late);
+
+    expect(late).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(late).toHaveBeenCalledWith(expect.anything(), 'replay');
+    expect(late.mock.calls[0]?.[0]?.contentBoxSize[0].inlineSize).toBe(200);
+  });
+
+  it('cancels a pending replay when the subscriber releases', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    observeResize(el, vi.fn());
+    mockRO.trigger(el, 200, 100);
+    const late = vi.fn();
+
+    const release = observeResize(el, late);
+    release();
+    await Promise.resolve();
+
+    expect(late).not.toHaveBeenCalled();
+  });
+
+  it('does not replay after a newer native entry', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    observeResize(el, vi.fn());
+    mockRO.trigger(el, 200, 100);
+    const late = vi.fn();
+
+    observeResize(el, late);
+    mockRO.trigger(el, 220, 100);
+    await Promise.resolve();
+
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(late.mock.calls[0]?.[0]?.contentBoxSize[0].inlineSize).toBe(220);
+  });
+
+  it('does not duplicate a reentrant subscriber during native fan-out', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    const late = vi.fn();
+    observeResize(el, () => observeResize(el, late));
+
+    mockRO.trigger(el, 200, 100);
+    expect(late).not.toHaveBeenCalled();
+    await Promise.resolve();
+
+    expect(late).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not consume recursive registrations in the current fan-out', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    let registrations = 0;
+    const recursive = vi.fn(() => {
+      if (registrations++ < 3) observeResize(el, recursive);
+    });
+    observeResize(el, recursive);
+
+    mockRO.trigger(el, 200, 100);
+    await Promise.resolve();
+
+    expect(recursive).toHaveBeenCalledTimes(1);
+  });
+
+  it('replays a reentrant subscriber after an earlier callback throws', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    const late = vi.fn();
+    const error = new Error('subscriber failed');
+    observeResize(el, () => {
+      observeResize(el, late);
+      throw error;
+    });
+
+    expect(() => mockRO.trigger(el, 200, 100)).toThrow(error);
+    expect(late).not.toHaveBeenCalled();
+    await Promise.resolve();
+
+    expect(late).toHaveBeenCalledTimes(1);
+  });
+
+  it('delivers a subscriber joined before its later batch entry natively', async () => {
+    const { observeResize } = await getModule();
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const late = vi.fn();
+    observeResize(first, () => observeResize(second, late));
+    observeResize(second, vi.fn());
+
+    mockRO.triggerBatch([
+      { element: first, width: 100, height: 50 },
+      { element: second, width: 200, height: 100 },
+    ]);
+    await Promise.resolve();
+
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(late).toHaveBeenCalledWith(expect.anything(), 'native');
+  });
+
+  it('replays a subscriber joined after its earlier batch entry', async () => {
+    const { observeResize } = await getModule();
+    const first = document.createElement('div');
+    const second = document.createElement('div');
+    const late = vi.fn();
+    observeResize(first, () => observeResize(second, late));
+    observeResize(second, vi.fn());
+
+    mockRO.triggerBatch([
+      { element: second, width: 200, height: 100 },
+      { element: first, width: 100, height: 50 },
+    ]);
+    expect(late).not.toHaveBeenCalled();
+    await Promise.resolve();
+
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(late).toHaveBeenCalledWith(expect.anything(), 'replay');
   });
 });
 
@@ -116,6 +244,20 @@ describe('cleanup', () => {
     observeResize(el2, vi.fn());
     expect(mockRO.instances).toHaveLength(1);
     expect(firstInstance().observed.has(el2)).toBe(true);
+  });
+
+  it('drops the latest entry when the final subscriber releases', async () => {
+    const { observeResize } = await getModule();
+    const el = document.createElement('div');
+    const release = observeResize(el, vi.fn());
+    mockRO.trigger(el, 200, 100);
+    release();
+    const later = vi.fn();
+
+    observeResize(el, later);
+    await Promise.resolve();
+
+    expect(later).not.toHaveBeenCalled();
   });
 });
 
