@@ -4,12 +4,21 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
 
 import { formatText, scanTargets } from '../index.ts';
 import type { EvalScenario } from '../scenarios.ts';
@@ -60,6 +69,89 @@ describe('eval scenario ground truth', () => {
 
       if (!contract) return;
       const { scan } = contract;
+
+      if ('baseline' in scan) {
+        it('writes a baseline and fails only for the planted finding', () => {
+          const workflow = scan.baseline;
+          const target = scenarioEntryPath(
+            materializedDirectory,
+            workflow.target,
+          );
+          const baselinePath = join(target, 'phase-baseline.json');
+          const written = runCli(materializedDirectory, [
+            '--json',
+            '--write-baseline',
+            baselinePath,
+            '--fail-on',
+            workflow.failOn,
+            target,
+          ]);
+          expect(written.status).toBe(0);
+          const initial = JSON.parse(written.stdout) as {
+            findings: { file: string; line: number }[];
+          };
+
+          const unchanged = runCli(materializedDirectory, [
+            '--fail-on',
+            workflow.failOn,
+            target,
+          ]);
+          expect(unchanged.status).toBe(0);
+          for (const finding of initial.findings) {
+            expect(unchanged.stdout).not.toContain(
+              `${finding.file}:${finding.line}`,
+            );
+          }
+
+          cpSync(
+            scenarioEntryPath(materializedDirectory, workflow.plant.source),
+            scenarioDestinationPath(
+              materializedDirectory,
+              workflow.plant.destination,
+            ),
+          );
+          const changed = runCli(materializedDirectory, [
+            '--fail-on',
+            workflow.failOn,
+            target,
+          ]);
+          expect(changed.status).toBe(1);
+          expect(changed.stdout).toContain(workflow.newFinding.file);
+          for (const finding of initial.findings) {
+            expect(changed.stdout).not.toContain(
+              `${finding.file}:${finding.line}`,
+            );
+          }
+
+          const changedJson = runCli(materializedDirectory, [
+            '--json',
+            '--fail-on',
+            workflow.failOn,
+            target,
+          ]);
+          expect(changedJson.status).toBe(1);
+          const findings = JSON.parse(changedJson.stdout).findings as {
+            signal: string;
+            file: string;
+            baselineState: string;
+          }[];
+          const newFindings = findings.filter(
+            (finding) => finding.baselineState === 'new',
+          );
+          expect(newFindings).toEqual([
+            expect.objectContaining({
+              signal: workflow.newFinding.signal,
+              file: workflow.newFinding.file,
+            }),
+          ]);
+          expect(
+            findings.filter(
+              (finding) => finding.baselineState === 'pre-existing',
+            ).length,
+          ).toBeGreaterThan(0);
+        });
+        return;
+      }
 
       if ('skip' in scan) {
         it(`skips the scan: ${scan.skip}`, () => {
@@ -158,11 +250,40 @@ function runCli(directory: string, args: string[]) {
     cwd: directory,
     encoding: 'utf8',
   });
-  return { status: run.status ?? -1, stdout: run.stdout };
+  return {
+    status: run.status ?? -1,
+    stdout: run.stdout,
+    stderr: run.stderr,
+  };
 }
 
 function normalizeSkillVersion(result: Record<string, unknown>) {
   return { ...result, skillVersion: '<normalized>' };
+}
+
+function scenarioEntryPath(root: string, path: string): string {
+  return assertWithinScenario(root, realpathSync(resolve(root, path)));
+}
+
+function scenarioDestinationPath(root: string, path: string): string {
+  const destination = resolve(root, path);
+  return assertWithinScenario(
+    root,
+    join(realpathSync(dirname(destination)), basename(destination)),
+  );
+}
+
+function assertWithinScenario(root: string, path: string): string {
+  const canonicalRoot = realpathSync(root);
+  const fromRoot = relative(canonicalRoot, path);
+  if (
+    fromRoot === '..' ||
+    fromRoot.startsWith(`..${sep}`) ||
+    isAbsolute(fromRoot)
+  ) {
+    throw new Error(`${path} resolves outside eval scenario ${canonicalRoot}`);
+  }
+  return path;
 }
 
 function materializeScenario(source: string): string {

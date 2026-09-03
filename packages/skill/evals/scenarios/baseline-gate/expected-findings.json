@@ -1,0 +1,22 @@
+{
+  "description": "A baseline accepts existing findings while a newly planted critical finding fails the gate and is the only source location listed.",
+  "scan": {
+    "baseline": {
+      "target": "workspace",
+      "failOn": "critical",
+      "plant": {
+        "source": "plant/new.ts",
+        "destination": "workspace/src/new.ts"
+      },
+      "newFinding": {
+        "signal": "forced-reflow",
+        "file": "src/new.ts"
+      }
+    }
+  },
+  "expectedBehavior": [
+    "Writes phase-baseline.json from a full unfiltered scan",
+    "Keeps pre-existing findings visible in machine-readable output but out of the text finding list",
+    "Fails the critical gate only after the new finding is introduced"
+  ]
+}

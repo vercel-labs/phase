@@ -6,12 +6,18 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 
-import { newDiag, scanTargets } from '../index.ts';
-import { toPathMatcher, walk } from '../walk.ts';
+import { assignFingerprints, newDiag, scanTargets } from '../index.ts';
+import { toPathMatcher, toPosix, walk } from '../walk.ts';
 
 describe('walk/toPathMatcher', () => {
+  it('normalizes only the platform path separator', () => {
+    expect(toPosix('back\\slash.ts')).toBe(
+      sep === '\\' ? 'back/slash.ts' : 'back\\slash.ts',
+    );
+  });
+
   it('matches plain patterns as substrings, including in absolute paths', () => {
     const matches = toPathMatcher('test');
     expect(matches('/tmp/contest/src/file.ts')).toBe(true);
@@ -78,6 +84,63 @@ describe('walk/toPathMatcher', () => {
       expect(excludedFile.filesSkipped.generated).toBe(0);
       expect(generatedFile.findings).toEqual([]);
       expect(excludedFile.findings).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fingerprints multiple targets relative to one canonical root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-target-root-'));
+    const one = join(root, 'one');
+    const two = join(root, 'two');
+    try {
+      mkdirSync(one);
+      mkdirSync(two);
+      const content = 'const width = target.offsetWidth;\n';
+      writeFileSync(join(one, 'index.ts'), content);
+      writeFileSync(join(two, 'index.ts'), content);
+
+      const findings = scanTargets([one, two], { root }).findings;
+      expect(findings.map((finding) => finding.file)).toEqual([
+        'index.ts',
+        'index.ts',
+      ]);
+      expect(
+        assignFingerprints(findings).map((finding) => finding.fingerprint),
+      ).toEqual([
+        expect.stringContaining(':one/index.ts:'),
+        expect.stringContaining(':two/index.ts:'),
+      ]);
+
+      const fromCwd = scanTargets([one, two], { root: '' }).findings;
+      expect(
+        assignFingerprints(fromCwd).map((finding) => finding.fingerprint),
+      ).toEqual([
+        expect.stringContaining('/one/index.ts:'),
+        expect.stringContaining('/two/index.ts:'),
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps POSIX backslashes distinct from directory separators', () => {
+    if (sep !== '/') return;
+
+    const root = mkdtempSync(join(tmpdir(), 'phase-backslash-path-'));
+    try {
+      mkdirSync(join(root, 'back'));
+      const content = 'const width = target.offsetWidth;\n';
+      writeFileSync(join(root, 'back\\slash.ts'), content);
+      writeFileSync(join(root, 'back', 'slash.ts'), content);
+
+      const fingerprints = assignFingerprints(
+        scanTargets([root], { root }).findings,
+      ).map((finding) => finding.fingerprint);
+      expect(fingerprints).toEqual([
+        expect.stringContaining(':back/slash.ts:'),
+        expect.stringContaining(':back\\slash.ts:'),
+      ]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

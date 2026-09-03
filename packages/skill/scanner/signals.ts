@@ -19,6 +19,7 @@ import {
 } from './vocabulary.ts';
 
 export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'dedup'] as const;
+export const FAIL_ON_SEVERITIES = ['critical', 'high', 'medium'] as const;
 export const NOISE_TIERS = ['precise', 'normal', 'noisy'] as const;
 
 export type ScanSeverity = (typeof SEVERITY_ORDER)[number];

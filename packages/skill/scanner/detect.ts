@@ -5,6 +5,7 @@ import {
   EVIDENCE_REGISTRY,
 } from './analysis.ts';
 import type { FileAnalysis } from './analysis.ts';
+import { FINDING_IDENTITY_FILE, FINDING_SOURCE_LINE } from './baseline.ts';
 import {
   commentText,
   maskComments,
@@ -28,6 +29,8 @@ export interface ScanFinding {
   line: number;
   text: string;
   fix: string;
+  [FINDING_IDENTITY_FILE]?: string;
+  [FINDING_SOURCE_LINE]?: string;
 }
 
 type Suppressions = Map<number, Set<string>>;
@@ -319,6 +322,7 @@ function makeFinding(
     line,
     text: excerpt(text, matchIndex),
     fix: signal.fix,
+    [FINDING_SOURCE_LINE]: text,
   };
 }
 
@@ -380,8 +384,19 @@ const INVISIBLE_CONTROL =
   /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
 /* oxlint-enable no-control-regex */
 
-function sanitize(text: string): string {
+export function sanitizeTerminalText(text: string): string {
   return text.replace(ANSI_SEQUENCE, '').replace(INVISIBLE_CONTROL, '');
+}
+
+/** Sanitizes one untrusted value while visibly escaping line breaks. */
+export function sanitizeTerminalLine(text: string): string {
+  return sanitizeTerminalText(
+    text
+      .replaceAll('\r', '\\r')
+      .replaceAll('\n', '\\n')
+      .replaceAll('\u2028', '\\u2028')
+      .replaceAll('\u2029', '\\u2029'),
+  );
 }
 
 /**
@@ -392,11 +407,11 @@ function sanitize(text: string): string {
  */
 function excerpt(line: string, matchIndex: number): string {
   const text = line.trim();
-  if (text.length <= MAX_FINDING_TEXT) return sanitize(text);
+  if (text.length <= MAX_FINDING_TEXT) return sanitizeTerminalText(text);
 
   const offset = matchIndex - (line.length - line.trimStart().length);
   if (offset < 0 || offset >= text.length) {
-    return sanitize(`${text.slice(0, MAX_FINDING_TEXT)}…`);
+    return sanitizeTerminalText(`${text.slice(0, MAX_FINDING_TEXT)}…`);
   }
 
   const lead = Math.floor(MAX_FINDING_TEXT / 4);
@@ -405,7 +420,7 @@ function excerpt(line: string, matchIndex: number): string {
     Math.min(offset - lead, text.length - MAX_FINDING_TEXT),
   );
   const end = start + MAX_FINDING_TEXT;
-  return sanitize(
+  return sanitizeTerminalText(
     `${start > 0 ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}`,
   );
 }

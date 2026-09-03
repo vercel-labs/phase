@@ -1,5 +1,5 @@
 import { readdirSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, join, sep } from 'node:path';
 
 import { escapeRegExp } from './lex.ts';
 import type { ScanSignal } from './signals.ts';
@@ -61,7 +61,7 @@ export const SKIP_DIRS = new Set([
 export const SKIP_FILES = /\.min\.|\.d\.ts$|\.d\.mts$/;
 
 export function toPosix(path: string): string {
-  return path.split('\\').join('/');
+  return path.split(sep).join('/');
 }
 
 /**

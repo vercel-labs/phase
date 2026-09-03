@@ -51,19 +51,28 @@ node <skill-dir>/scripts/scan.mjs <dir-or-files...>
 git diff --name-only --diff-filter=ACMR -z | node <skill-dir>/scripts/scan.mjs --stdin0
 ```
 
-| Option                 | Effect                                                                         |
-| ---------------------- | ------------------------------------------------------------------------------ |
-| `--json`               | Machine-readable output: summary, environment context, warnings, flat findings |
-| `--stdin0`             | Read NUL-delimited targets from stdin; empty input scans nothing               |
-| `--fail-on <severity>` | Exit 1 at or above `critical`/`high`/`medium` (for CI); default always exits 0 |
-| `--signal <id>`        | Report only this signal (repeatable)                                           |
-| `--severity <level>`   | Report only this severity (repeatable)                                         |
-| `--noise <tier>`       | Report only this noise tier (repeatable)                                       |
-| `--exclude <path>`     | Skip paths containing this text, or matching it as a glob (repeatable)         |
-| `--limit <n>`          | Cap the findings array in `--json` output                                      |
-| `-h`, `--help`         | Usage                                                                          |
+| Option                    | Effect                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| `--json`                  | Machine-readable output: summary, environment context, warnings, flat findings |
+| `--stdin0`                | Read NUL-delimited targets from stdin; empty input scans nothing               |
+| `--fail-on <severity>`    | Exit 1 at or above `critical`/`high`/`medium` (for CI); default always exits 0 |
+| `--baseline <path>`       | Compare with an explicit regular-file baseline up to 16 MiB                    |
+| `--no-baseline`           | Ignore an explicit or auto-detected baseline                                   |
+| `--write-baseline <path>` | Write one complete directory scan as a baseline and exit 0                     |
+| `--signal <id>`           | Report only this signal (repeatable)                                           |
+| `--severity <level>`      | Report only this severity (repeatable)                                         |
+| `--noise <tier>`          | Report only this noise tier (repeatable)                                       |
+| `--exclude <path>`        | Skip paths containing this text, or matching it as a glob (repeatable)         |
+| `--limit <n>`             | Cap the findings array in `--json` output                                      |
+| `-h`, `--help`            | Usage                                                                          |
 
-Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit, `2` usage error. A clean scan reports how many files it scanned; zero scannable files prints a warning instead of a green result. Requires Node 20 or newer.
+Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit, `2` usage error. A clean scan reports how many files it scanned; zero scannable files prints a warning instead of a green result.
+
+The scanner auto-detects `phase-baseline.json` at the scan root. Baselines record that root relative to the baseline file, and the CLI rejects a baseline whose recorded root does not match the current scan. Fingerprints use root-relative file paths, so separate targets with the same internal path remain distinct.
+
+With a baseline, `--fail-on` evaluates only new findings, text output lists only those new findings, and JSON marks findings as `new` or `pre-existing`. Every JSON finding includes a stable `fingerprint`. A complete directory scan reports the stale count; file and multi-target scans report `stale: null` (`stale unknown (partial scan)` in text) because they cannot prove a baseline entry disappeared. Baseline version differences warn without failing.
+
+`--write-baseline` requires exactly one directory target with complete scan coverage, atomically writes sorted `{ schemaVersion, cliVersion, root, fingerprints }` JSON, and prunes stale fingerprints. It cannot be combined with `--baseline`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`.
 
 The report opens with the files carrying the most candidates, and within each signal it lists the lines a proven recurring frame callback, observer, or move handler runs before the incidental ones. A one-shot rAF does not make nearby work per-frame. Every block names why it matters and what to use instead, so you can act without opening the reference.
 

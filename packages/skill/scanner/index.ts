@@ -1,6 +1,7 @@
-import { lstatSync, readFileSync } from 'node:fs';
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 
+import { FINDING_IDENTITY_FILE } from './baseline.ts';
 import {
   detectAppRouterRoot,
   detectProjectRoot,
@@ -9,7 +10,7 @@ import {
 import type { ScanContext } from './context.ts';
 import { newDiag, scanFile } from './detect.ts';
 import type { ScanFinding } from './detect.ts';
-import type { ScanResult } from './render.ts';
+import type { UnbaselinedScanResult } from './render.ts';
 import {
   EXCLUDED_PATHS,
   SKIP_FILES,
@@ -20,6 +21,12 @@ import {
 
 export interface ScanOptions {
   exclude?: string[];
+  /**
+   * Existing root used for canonical fingerprint paths and physical-target
+   * deduplication. Relative values resolve from the process working directory;
+   * omit it to use display paths and lexical target identity.
+   */
+  root?: string;
 }
 
 interface ProjectRoots {
@@ -29,12 +36,13 @@ interface ProjectRoots {
 
 /**
  * Scans one or more directories or files. Returns all findings plus scan
- * metadata. Paths inside a target are reported relative to that target.
+ * metadata. Paths inside a target are reported relative to that target, while
+ * `options.root` can provide one root for stable fingerprint identity.
  */
 export function scanTargets(
   paths: string[],
   options: ScanOptions = {},
-): ScanResult {
+): UnbaselinedScanResult {
   const findings: ScanFinding[] = [];
   const diag = newDiag();
   const context: ScanContext = {
@@ -45,6 +53,8 @@ export function scanTargets(
     evidence: [],
   };
   const excluded = (options.exclude ?? []).map(toPathMatcher);
+  const identityRoot =
+    options.root === undefined ? null : realpathSync(resolve(options.root));
   // Overlapping targets (`scan.mjs src src/components`) would otherwise
   // report the same file twice and double every count.
   const seen = new Set<string>();
@@ -53,6 +63,7 @@ export function scanTargets(
   for (const target of paths) {
     const root = resolve(target);
     const stat = lstatSync(root);
+    const canonicalTarget = canonicalTargetPath(root, identityRoot);
     const base = stat.isDirectory() ? root : dirname(root);
     const files = stat.isDirectory() ? walk(root, diag) : [root];
 
@@ -73,8 +84,15 @@ export function scanTargets(
     const { projectRoot, appRouterRoot } = roots;
 
     for (const filePath of files) {
-      if (seen.has(filePath)) continue;
-      seen.add(filePath);
+      const identityPath = findingIdentityPath(
+        filePath,
+        root,
+        canonicalTarget,
+        stat.isDirectory(),
+        identityRoot,
+      );
+      if (seen.has(identityPath)) continue;
+      seen.add(identityPath);
 
       // File targets keep the path as the caller gave it, so directory-based
       // exclusions (__tests__, node_modules) still apply in diff-scoped scans.
@@ -110,7 +128,9 @@ export function scanTargets(
           : rel;
         updateContext(contextRel, content, context, rel, appRouterRoot);
       }
-      findings.push(...scanFile(rel, content, diag));
+      const scanned = scanFile(rel, content, diag);
+      stampIdentityFiles(scanned, identityRoot, identityPath);
+      findings.push(...scanned);
     }
   }
 
@@ -126,15 +146,67 @@ export function scanTargets(
     suppressed: diag.suppressed,
     warnings: diag.warnings,
     context,
+    baseline: null,
   };
 }
 
+function canonicalTargetPath(
+  root: string,
+  identityRoot: string | null,
+): string {
+  return identityRoot ? realpathSync(root) : root;
+}
+
+function findingIdentityPath(
+  filePath: string,
+  targetRoot: string,
+  canonicalTarget: string,
+  targetIsDirectory: boolean,
+  identityRoot: string | null,
+): string {
+  if (!identityRoot) return filePath;
+  return targetIsDirectory
+    ? resolve(canonicalTarget, relative(targetRoot, filePath))
+    : canonicalTarget;
+}
+
+function stampIdentityFiles(
+  findings: ScanFinding[],
+  identityRoot: string | null,
+  identityPath: string,
+): void {
+  if (!identityRoot) return;
+  const identityFile = toPosix(relative(identityRoot, identityPath));
+  for (const finding of findings) {
+    finding[FINDING_IDENTITY_FILE] = identityFile;
+  }
+}
+
 export { newDiag, scanFile } from './detect.ts';
+export {
+  assignFingerprints,
+  classifyFindings,
+  hashFindingLine,
+  normalizeLine,
+  parseBaseline,
+  serializeBaseline,
+} from './baseline.ts';
 export { formatJson, formatText } from './render.ts';
 export { SEVERITY_ORDER, SIGNALS } from './signals.ts';
 export type { ScanContext } from './context.ts';
+export type {
+  ClassifiedFinding,
+  FindingClassification,
+  FingerprintedFinding,
+  PhaseBaseline,
+} from './baseline.ts';
 export type { ScanExecution, ScanFinding } from './detect.ts';
-export type { ScanJson, ScanResult } from './render.ts';
+export type {
+  BaselinedScanResult,
+  ScanJson,
+  ScanResult,
+  UnbaselinedScanResult,
+} from './render.ts';
 export type {
   ScanExample,
   ScanNoise,

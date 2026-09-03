@@ -67,19 +67,24 @@ git diff --name-only --diff-filter=ACMR -z | node <skill-dir>/scripts/scan.mjs -
 
 Scanner targets are literal and non-transitive: scanning a route does not follow its imports. Run the primary route scan first, then scan the smallest focused files or directories for the directly rendered relevant UI dependencies identified in Step 0. Do not turn this into automatic import traversal or a workspace-wide scan.
 
-| Option                 | Effect                                                                                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--json`               | Machine-readable output (schemaVersion 1): summary counts plus a flat findings array (`{signal, severity, noise, file, line, text, fix}`), stamped with the skill version that produced it |
-| `--stdin0`             | Read NUL-delimited targets from stdin. An empty stream scans nothing. Intended for changed-file scans                                                                                      |
-| `--fail-on <severity>` | Exit 1 if any finding is at or above `critical`, `high`, or `medium`. For CI gating                                                                                                        |
-| `--signal <id>`        | Report only this signal. Repeatable                                                                                                                                                        |
-| `--severity <level>`   | Report only this severity. Repeatable                                                                                                                                                      |
-| `--noise <tier>`       | Report only this noise tier. Repeatable, so `--noise precise --noise normal` drops the noisy ones                                                                                          |
-| `--exclude <path>`     | Skip paths containing this text, or matching it as a glob when it has a wildcard. Repeatable                                                                                               |
-| `--limit <n>`          | Cap the `findings` array in `--json` output (`summary.total` still reports the true count)                                                                                                 |
-| `-h`, `--help`         | Usage                                                                                                                                                                                      |
+| Option                    | Effect                                                                                                                                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--json`                  | Machine-readable output (schemaVersion 1): summary counts plus flat findings with a stable `fingerprint` and optional `baselineState`, stamped with the skill version that produced them |
+| `--stdin0`                | Read NUL-delimited targets from stdin. An empty stream scans nothing. Intended for changed-file scans                                                                                    |
+| `--fail-on <severity>`    | Exit 1 if any new finding is at or above `critical`, `high`, or `medium`. Without a baseline, all findings are new                                                                       |
+| `--baseline <path>`       | Compare with an explicit regular-file baseline up to 16 MiB instead of auto-detecting `phase-baseline.json` at the scan root                                                             |
+| `--no-baseline`           | Ignore an explicit or auto-detected baseline                                                                                                                                             |
+| `--write-baseline <path>` | Write one complete directory scan as a sorted baseline and exit 0. Cannot be combined with `--baseline`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`                 |
+| `--signal <id>`           | Report only this signal. Repeatable                                                                                                                                                      |
+| `--severity <level>`      | Report only this severity. Repeatable                                                                                                                                                    |
+| `--noise <tier>`          | Report only this noise tier. Repeatable, so `--noise precise --noise normal` drops the noisy ones                                                                                        |
+| `--exclude <path>`        | Skip paths containing this text, or matching it as a glob when it has a wildcard. Repeatable                                                                                             |
+| `--limit <n>`             | Cap the `findings` array in `--json` output (`summary.total` still reports the true count)                                                                                               |
+| `-h`, `--help`            | Usage                                                                                                                                                                                    |
 
-Exit codes: `0` scan completed (the default even when findings exist; the audit is advisory), `1` a `--fail-on` threshold was hit, `2` usage error. Requires Node 20 or newer.
+Exit codes: `0` scan completed (the default even when findings exist; the audit is advisory), `1` a `--fail-on` threshold was hit, `2` usage error.
+
+Baselines store `{ schemaVersion, cliVersion, root, fingerprints }`, where `root` binds root-relative fingerprint paths to the scan root. A baseline from another root is a usage error. Baseline reads accept regular files up to 16 MiB. When a baseline applies, the text report lists only new findings and summarizes the new and pre-existing counts. Complete directory scans also report the stale count; partial file or multi-target scans report stale as unknown (`null` in JSON). JSON retains both new and pre-existing findings for machine consumers. Version differences between the scanner and baseline produce a warning, not a failure. Rewriting a baseline atomically replaces the file and removes stale fingerprints.
 
 **Read the text output, not `--json`.** Text caps each signal's listing at 20 entries; `--json` does not, and on a large Tailwind codebase the full findings array runs to tens of thousands of tokens. When you need the entries a cap hid, scope the request: `--json --signal tailwind-transition-all`, optionally with `--limit`.
 
@@ -206,6 +211,7 @@ manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand)
 Scanned 10 files.
 Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup.
 21 findings on 18 distinct lines; 13 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
+Baseline: not applied; 0 stale.
 Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.
 Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.
 
