@@ -1,0 +1,40 @@
+{
+  "name": "@usephase/cli",
+  "version": "0.1.0",
+  "description": "Command-line scanner for animation and rendering performance",
+  "author": "Vercel",
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/vercel-labs/phase.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "private": true,
+  "type": "module",
+  "bin": {
+    "phase": "./dist/phase.mjs"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0",
+    "tsdown": "0.21.7",
+    "typescript": "6.0.2",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

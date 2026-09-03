@@ -27,6 +27,21 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@25.6.0)(@vitest/browser-playwright@4.1.11)(jsdom@23.2.0)(vite@8.0.16(@types/node@25.6.0)(esbuild@0.28.1))
 
+  packages/cli:
+    devDependencies:
+      '@types/node':
+        specifier: 25.6.0
+        version: 25.6.0
+      tsdown:
+        specifier: 0.21.7
+        version: 0.21.7(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(typescript@6.0.2)
+      typescript:
+        specifier: 6.0.2
+        version: 6.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@25.6.0)(@vitest/browser-playwright@4.1.11)(jsdom@23.2.0)(vite@8.0.16(@types/node@25.6.0)(esbuild@0.28.1))
+
   packages/examples:
     dependencies:
       phase:

@@ -101,7 +101,7 @@ export function parseBaseline(json: string): PhaseBaseline {
   if (typeof baseline.cliVersion !== 'string' || !baseline.cliVersion.trim()) {
     throw new Error('baseline cliVersion must be a non-empty string');
   }
-  if (!isSafeCliVersion(baseline.cliVersion)) {
+  if (!isSafeScannerVersion(baseline.cliVersion)) {
     throw new Error('baseline cliVersion must be a safe version token');
   }
   if (!isRelativeRoot(baseline.root)) {
@@ -133,7 +133,7 @@ export function serializeBaseline(
   if (!cliVersion.trim()) {
     throw new Error('baseline cliVersion must be a non-empty string');
   }
-  if (!isSafeCliVersion(cliVersion)) {
+  if (!isSafeScannerVersion(cliVersion)) {
     throw new Error('baseline cliVersion must be a safe version token');
   }
   if (!isRelativeRoot(root)) {
@@ -208,8 +208,8 @@ function validateFingerprints(fingerprints: unknown[]): string[] {
   return validated;
 }
 
-/** Whether a value is safe to use as a baseline CLI version and in output. */
-export function isSafeCliVersion(value: unknown): value is string {
+/** Whether a scanner version is safe to store in a baseline and print. */
+export function isSafeScannerVersion(value: unknown): value is string {
   return (
     typeof value === 'string' && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(value)
   );

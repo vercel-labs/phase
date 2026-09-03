@@ -39,6 +39,18 @@
     "@usephase/examples#typecheck": {
       "dependsOn": ["phase#build", "^typecheck"]
     },
+    "@usephase/cli#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/skill/scanner/**",
+        "$TURBO_ROOT$/skills/phase/metadata.json"
+      ],
+      "outputs": ["dist/**"]
+    },
+    "@usephase/cli#test": {
+      "dependsOn": ["build", "^test", "//#test:root"]
+    },
     "@usephase/skill#test": {
       "cache": false
     }

@@ -102,7 +102,7 @@ describe('baseline documents', () => {
     ['not JSON', '{', 'valid JSON'],
     ['the wrong schema', '{"schemaVersion":2}', 'schemaVersion must be 1'],
     [
-      'an empty CLI version',
+      'an empty scanner version',
       '{"schemaVersion":1,"cliVersion":"","root":".","fingerprints":[]}',
       'cliVersion must be a non-empty string',
     ],
@@ -112,7 +112,7 @@ describe('baseline documents', () => {
       'fingerprints[0] is not a valid finding fingerprint',
     ],
     [
-      'an unsafe CLI version',
+      'an unsafe scanner version',
       '{"schemaVersion":1,"cliVersion":"1.0.0\\u001b[2J","root":".","fingerprints":[]}',
       'cliVersion must be a safe version token',
     ],

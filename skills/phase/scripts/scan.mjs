@@ -56,7 +56,7 @@ function parseBaseline(json) {
 	].includes(field)) throw new Error("baseline has unknown fields");
 	if (baseline.schemaVersion !== 1) throw new Error(`baseline schemaVersion must be 1`);
 	if (typeof baseline.cliVersion !== "string" || !baseline.cliVersion.trim()) throw new Error("baseline cliVersion must be a non-empty string");
-	if (!isSafeCliVersion(baseline.cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
+	if (!isSafeScannerVersion(baseline.cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
 	if (!isRelativeRoot(baseline.root)) throw new Error("baseline root must be a relative path");
 	if (!Array.isArray(baseline.fingerprints)) throw new Error("baseline fingerprints must be an array");
 	const fingerprints = validateFingerprints(baseline.fingerprints);
@@ -73,7 +73,7 @@ function parseBaseline(json) {
 */
 function serializeBaseline(fingerprints, cliVersion, root) {
 	if (!cliVersion.trim()) throw new Error("baseline cliVersion must be a non-empty string");
-	if (!isSafeCliVersion(cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
+	if (!isSafeScannerVersion(cliVersion)) throw new Error("baseline cliVersion must be a safe version token");
 	if (!isRelativeRoot(root)) throw new Error("baseline root must be a relative path");
 	validateFingerprints(fingerprints);
 	return `${JSON.stringify({
@@ -116,8 +116,8 @@ function validateFingerprints(fingerprints) {
 	if (new Set(validated).size !== validated.length) throw new Error("baseline fingerprints must not contain duplicates");
 	return validated;
 }
-/** Whether a value is safe to use as a baseline CLI version and in output. */
-function isSafeCliVersion(value) {
+/** Whether a scanner version is safe to store in a baseline and print. */
+function isSafeScannerVersion(value) {
 	return typeof value === "string" && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(value);
 }
 function isRelativeRoot(value) {
@@ -2170,17 +2170,17 @@ function noteEvidence(context, path) {
 //#region scanner/render.ts
 /**
 * Renders a scan result as a stable machine-readable object
-* (schemaVersion 1). skillVersion records which signal catalog produced
+* (schemaVersion 1). skillVersion records which scanner version produced
 * the findings.
 */
-function formatJson(result, limit = null) {
+function formatJson(result, scannerVersion, limit = null) {
 	const counts = countBySeverity(result.findings);
 	const fingerprinted = assignFingerprints(result.findings);
 	const findings = limit === null ? fingerprinted : fingerprinted.slice(0, limit);
 	const preExisting = result.baseline ? result.findings.filter(isPreExistingFinding).length : 0;
 	return {
 		schemaVersion: 1,
-		skillVersion: cliVersion(),
+		skillVersion: scannerVersion,
 		notice: result.findings.length > 0 ? EXCERPT_NOTICE : null,
 		targets: result.targets,
 		summary: {
@@ -2358,7 +2358,7 @@ function renderSignal(id, items, weight) {
 		`${id} — ${signal.label} (${items.length}${allPerFrame ? ", all per-frame" : ""}) · noise: ${signal.noise}`,
 		`  why: ${signal.why}`,
 		`  use: ${signal.replacement}`,
-		`  read: ${signal.fix}`
+		`  read: ${fixUrl(signal.fix)}`
 	];
 	const ordered = rankFindings(items, weight);
 	const shown = selectListed(ordered);
@@ -2424,7 +2424,7 @@ function renderSummary(result, findings) {
 		`Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup${suppressedNote}.`,
 		`${findings.length} findings on ${sites} distinct lines; ${perFrame} sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.`,
 		baseline,
-		"Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.",
+		`Next: start with the hotspots above, then classify each candidate against the decision ladder (Step 2: ${fixUrl("references/audit.md#step-2-classify-each-candidate")}). Findings are candidates, not verdicts.`,
 		"Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending."
 	];
 }
@@ -2444,7 +2444,7 @@ function renderContext(context) {
 	if (context.appRouter) bits.push("App Router");
 	if (context.ppr) bits.push("PPR");
 	const evidence = context.evidence?.length ? ` (from ${context.evidence.map(sanitizeTerminalLine).join(", ")})` : "";
-	return ["", `Context: ${bits.join(" + ")} detected${evidence}. Rendering recommendations must pass the blast-radius check (references/audit.md Step 2.5) before changing SSR content or mount timing.`];
+	return ["", `Context: ${bits.join(" + ")} detected${evidence}. Rendering recommendations must pass the blast-radius check (Step 2.5: ${fixUrl("references/audit.md#step-25-verify-the-blast-radius")}) before changing SSR content or mount timing.`];
 }
 const MAX_LISTED_PER_SIGNAL = 20;
 const MAX_GITHUB_ANNOTATIONS = 10;
@@ -2459,7 +2459,7 @@ const BEYOND_THE_SCAN = [
 	"Beyond the scan: no pattern here matches an infinite CSS animation nobody gated, a transitionend",
 	"listener driving unmount, eagerly mounted below-fold UI, a finite timer sequence that changes UI state, a canvas",
 	"sized from devicePixelRatio once, or JS still running inside a skipped content-visibility subtree.",
-	"Run the manual and opportunity passes (references/audit.md Step 1.5) before concluding an audit."
+	`Run the manual and opportunity passes (Step 1.5: ${fixUrl("references/audit.md#step-15-css-loading-and-architecture-pass")}) before concluding an audit.`
 ];
 const EXECUTION_HEADINGS = {
 	"per-frame": "↑ in a per-frame path:",
@@ -2470,19 +2470,6 @@ const EXECUTION_RANK = {
 	"per-frame": 0,
 	incidental: 1
 };
-function cliVersion() {
-	try {
-		const metadataPath = fileURLToPath(new URL("../metadata.json", import.meta.url));
-		const version = JSON.parse(readFileSync(metadataPath, "utf8")).version;
-		if (isSafeCliVersion(version)) return version;
-	} catch {}
-	try {
-		const version = (readFileSync(fileURLToPath(new URL("../SKILL.md", import.meta.url)), "utf8").match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "").match(/^\s+version:\s*['"]?([^'"\s]+)['"]?\s*$/m)?.[1];
-		return isSafeCliVersion(version) ? version : "unknown";
-	} catch {
-		return "unknown";
-	}
-}
 /** Findings per file, the proxy for "this file is the problem". */
 function fileWeights(findings) {
 	const weight = /* @__PURE__ */ new Map();
@@ -2644,15 +2631,16 @@ function stampIdentityFiles(findings, identityRoot, identityPath) {
 }
 //#endregion
 //#region scanner/cli.ts
-const USAGE = `Usage: node scan.mjs [options] <target> [...targets]
+const USAGE = `Usage: node scan.mjs [scan] [options] <target> [...targets]
        node scan.mjs explain [signal-id]
+       node scan.mjs --version
 
 Scans directories or files for animation anti-pattern candidates.
-Findings are candidates, not verdicts: classify each against
-references/audit.md before recommending a change.
+Findings are candidates, not verdicts. Run
+node scan.mjs explain <signal-id> before recommending a change.
 
 Targets   directories or individual files (default: current directory)
-          use "-- explain" to scan a target named "explain"
+          use "-- scan" or "-- explain" to scan a target with that name
 
 Options
   --json               emit machine-readable JSON (alias for --format json)
@@ -2684,9 +2672,9 @@ Suppression
   signal on the same and the next line. The reason is mandatory.
 
 Reading a large report
-  Prefer the text output: it caps each signal's listing. Reach for --json
-  scoped to one signal (--json --signal <id>) rather than dumping every
-  finding, which on a large codebase runs to tens of thousands of tokens.
+  Use text output for large scans; it caps each signal's listing. For JSON,
+  use --json --signal <id> to select one signal. Unfiltered JSON can contain
+  tens of thousands of tokens.
 
 Exit codes: 0 = scan completed, 1 = --fail-on threshold hit, 2 = usage error.`;
 const EXPLAIN_USAGE = `Usage: node scan.mjs explain [signal-id]
@@ -2818,11 +2806,15 @@ function parseArgs(argv) {
 }
 function main() {
 	const argv = process.argv.slice(2);
+	if (argv[0] === "--version") {
+		console.log(formatVersion(resolveScannerVersion()));
+		return;
+	}
 	if (argv[0] === "explain") {
 		explain(argv.slice(1));
 		return;
 	}
-	const opts = readOptions(argv);
+	const opts = readOptions(argv[0] === "scan" ? argv.slice(1) : argv);
 	if (opts.help) {
 		console.log(USAGE);
 		return;
@@ -2836,12 +2828,12 @@ function main() {
 		exclude: opts.exclude,
 		root
 	});
-	const version = cliVersion();
+	const version = resolveScannerVersion();
 	const complete = isCompleteScan(opts, scanned);
 	const result = applyBaseline(scanned, baseline, version, complete);
 	writeBaseline(result, opts.writeBaselinePath, version, root, complete);
 	const filtered = filterFindings(result, opts);
-	printResult(filtered, opts);
+	printResult(filtered, opts, version);
 	if (hitsFailThreshold(filtered.findings, opts)) process.exit(1);
 }
 function explain(argv) {
@@ -2975,7 +2967,7 @@ function readBaseline(opts, root) {
 function applyBaseline(result, baseline, version, complete) {
 	if (!baseline) return result;
 	const classified = classifyFindings(result.findings, baseline);
-	const versionWarning = baseline.cliVersion === version ? [] : [`baseline version ${baseline.cliVersion} differs from CLI version ${version}; continuing`];
+	const versionWarning = baseline.cliVersion === version ? [] : [`baseline scanner version ${baseline.cliVersion} differs from current scanner version ${version}; continuing`];
 	return {
 		...result,
 		findings: classified.findings,
@@ -3026,12 +3018,12 @@ function filterFindings(result, opts) {
 		findings: result.findings.filter((finding) => keep.every((predicate) => predicate(finding)))
 	};
 }
-function printResult(result, opts) {
+function printResult(result, opts, scannerVersion) {
 	for (const warning of result.warnings) console.error(`warning: ${sanitizeTerminalLine(warning)}`);
 	const format = opts.format ?? (opts.json ? "json" : "text");
-	if (format === "json") console.log(terminalSafeJson(formatJson(result, opts.limit)));
+	if (format === "json") console.log(terminalSafeJson(formatJson(result, scannerVersion, opts.limit)));
 	else if (format === "github") {
-		const scan = formatJson(result);
+		const scan = formatJson(result, scannerVersion);
 		if (!opts.noAnnotations) {
 			const annotations = formatGithubAnnotations(scan, opts.failOn);
 			if (annotations) process.stdout.write(annotations);
@@ -3050,6 +3042,23 @@ function printResult(result, opts) {
 			failUsage(`cannot write GitHub job summary: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	} else console.log(sanitizeTerminalText(formatText(result)));
+}
+function resolveScannerVersion() {
+	if (isSafeScannerVersion(null)) return null;
+	try {
+		const metadataPath = fileURLToPath(new URL("../metadata.json", import.meta.url));
+		const version = JSON.parse(readFileSync(metadataPath, "utf8")).version;
+		if (isSafeScannerVersion(version)) return version;
+	} catch {}
+	try {
+		const version = (readFileSync(fileURLToPath(new URL("../SKILL.md", import.meta.url)), "utf8").match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "").match(/^\s+version:\s*['"]?([^'"\s]+)['"]?\s*$/m)?.[1];
+		return isSafeScannerVersion(version) ? version : "unknown";
+	} catch {
+		return "unknown";
+	}
+}
+function formatVersion(scannerVersion) {
+	return `scan.mjs (scanner ${scannerVersion})`;
 }
 function terminalSafeJson(value) {
 	return JSON.stringify(value, null, 2).replace(/[\u007f-\u009f\u2028-\u202e\u2066-\u2069]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
@@ -3138,4 +3147,4 @@ function isEntryPoint(argvPath) {
 }
 if (process.argv[1] && isEntryPoint(process.argv[1])) main();
 //#endregion
-export { SEVERITY_ORDER, SIGNALS, assignFingerprints, classifyFindings, formatGithubAnnotations, formatGithubSummary, formatJson, formatText, hashFindingLine, newDiag, normalizeLine, parseBaseline, scanFile, scanTargets, serializeBaseline };
+export {};

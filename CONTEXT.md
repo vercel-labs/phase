@@ -92,9 +92,21 @@ Repeating calibration after a detection change, a field report, or before a rele
 
 ### Packaging
 
+**Scanner**:
+The source-code analyzer that applies phase signals and produces findings. Every distribution uses the same scanner behavior.
+_Avoid_: Engine, scanner engine
+
+**Distribution**:
+A consumer-facing form of the scanner: the installable skill, npm command-line package, or GitHub Action. A distribution may adapt invocation and packaging, but not which findings the scanner produces.
+_Avoid_: Door, surface
+
 **Consumer artifact**:
-The generated single scanner file users receive with phase's installable agent skill at `skills/phase/scripts/scan.mjs`, distinct from its typed source modules. Owner: `packages/skill/tsdown.scanner.config.ts`.
-_Avoid_: Built scanner, bundled scanner
+A generated single-file scanner bundled for a distribution. The installable skill ships `scan.mjs`, the npm command-line package ships `phase.mjs`, and the GitHub Action executes the skill's consumer artifact.
+_Avoid_: Built scanner, bundled scanner, CLI artifact
+
+**Scanner version**:
+The version recorded in scan JSON and baselines to identify scanner behavior. Every distribution uses the current skill version as its scanner version.
+_Avoid_: CLI version, engine version
 
 ## Examples
 
@@ -148,3 +160,4 @@ The unit-project portion of a module's tests after its native observer or schedu
 - **Scenario**, **fixture**, and **golden** are distinct: a scenario is the complete evaluation, a fixture is sample input, and a golden is saved scanner output.
 - **Example** means React reference code from the examples package. **Fixture** means sample input used by a scenario.
 - **Unit project**, **browser project**, and future end-to-end tests name separate layers. The browser project tests library contracts in real engines; end-to-end tests drive an application page.
+- **Version** always needs a qualifier: package version identifies an npm release, skill version identifies the installable skill, and scanner version identifies the behavior recorded in scan output and baselines.

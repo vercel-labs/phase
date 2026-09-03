@@ -45,6 +45,13 @@ jobs:
       - name: Build, typecheck, test, and size
         run: pnpm exec turbo run build typecheck test size
 
+      - name: Upload phase command
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase-command
+          path: packages/cli/dist/phase.mjs
+          if-no-files-found: error
+
       - name: Check examples manifest
         run: |
           pnpm --filter @usephase/examples generate-manifest
@@ -65,6 +72,31 @@ jobs:
           pnpm skill:package
           git diff --exit-code packages/skill/scanner/fix-sections.gen.ts skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip \
             || (echo "Skill artifacts are stale. Run 'pnpm skill:package' and commit the result." && exit 1)
+
+  cli:
+    needs: ci
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20.0.0", "22", "24"]
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Download phase command
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phase-command
+          path: packages/cli/dist
+
+      - name: Smoke test phase command
+        run: |
+          node packages/cli/dist/phase.mjs --help >/dev/null
+          node packages/cli/dist/phase.mjs explain setstate-in-raf >/dev/null
+          node packages/cli/dist/phase.mjs scan --json packages/skill/evals/scenarios/audit-planted-defects/workspace/src/hero-animation.tsx >/dev/null
 
   action:
     runs-on: ubuntu-latest

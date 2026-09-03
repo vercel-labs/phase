@@ -1,4 +1,4 @@
-import { scannerImportErrors } from './distribution.mjs';
+import { consumerArtifactImportErrors } from './distribution.mjs';
 
 describe('skill distribution guard', () => {
   it.each([
@@ -14,13 +14,14 @@ describe('skill distribution guard', () => {
       'const specifier = "node:fs"; void import(specifier);',
     ],
   ])('rejects a scanner bundle with %s', (_, scanner) => {
-    expect(scannerImportErrors(scanner)).not.toEqual([]);
+    expect(consumerArtifactImportErrors(scanner, 'scan.mjs')).not.toEqual([]);
   });
 
   it('accepts static node builtin imports and import.meta', () => {
     expect(
-      scannerImportErrors(
+      consumerArtifactImportErrors(
         'import { readFileSync } from "node:fs";\nconsole.log(import.meta.url, readFileSync);',
+        'scan.mjs',
       ),
     ).toEqual([]);
   });

@@ -31,6 +31,7 @@ import {
   assignFingerprints,
   classifyFindings,
   isPreExistingFinding,
+  isSafeScannerVersion,
   parseBaseline,
   serializeBaseline,
 } from './baseline.ts';
@@ -46,11 +47,7 @@ import {
   scanTargets,
 } from './index.ts';
 import type { ScanResult } from './index.ts';
-import {
-  cliVersion,
-  findingFailsGate,
-  GITHUB_STEP_SUMMARY_LIMIT,
-} from './render.ts';
+import { findingFailsGate, GITHUB_STEP_SUMMARY_LIMIT } from './render.ts';
 import type { ScanFailOn } from './render.ts';
 import {
   FAIL_ON_SEVERITIES,
@@ -61,21 +58,32 @@ import {
 import type { ScanNoise, ScanSeverity } from './signals.ts';
 import { toPosix } from './walk.ts';
 
-export * from './index.ts';
+declare const __PHASE_COMMAND__: string;
+declare const __PHASE_PACKAGE_VERSION__: string | null;
+declare const __PHASE_SCANNER_VERSION__: string | null;
 
 // --- CLI --------------------------------------------------------------------
 
-const USAGE = `Usage: node scan.mjs [options] <target> [...targets]
-       node scan.mjs explain [signal-id]
+const USAGE = `Usage: ${__PHASE_COMMAND__} [scan] [options] <target> [...targets]
+       ${__PHASE_COMMAND__} explain [signal-id]
+       ${__PHASE_COMMAND__} --version
 
 Scans directories or files for animation anti-pattern candidates.
-Findings are candidates, not verdicts: classify each against
-references/audit.md before recommending a change.
+Findings are candidates, not verdicts. Run
+${__PHASE_COMMAND__} explain <signal-id> before recommending a change.
 
 Targets   directories or individual files (default: current directory)
-          use "-- explain" to scan a target named "explain"
+          use "-- scan" or "-- explain" to scan a target with that name
 
-Options
+${
+  __PHASE_PACKAGE_VERSION__ === null
+    ? ''
+    : `Start with
+  ${__PHASE_COMMAND__} scan --diff origin/main
+  ${__PHASE_COMMAND__} scan <path>
+
+`
+}Options
   --json               emit machine-readable JSON (alias for --format json)
   --format <format>    output format (text | json | github); default is text
   --no-annotations     omit annotations from --format github output
@@ -105,13 +113,13 @@ Suppression
   signal on the same and the next line. The reason is mandatory.
 
 Reading a large report
-  Prefer the text output: it caps each signal's listing. Reach for --json
-  scoped to one signal (--json --signal <id>) rather than dumping every
-  finding, which on a large codebase runs to tens of thousands of tokens.
+  Use text output for large scans; it caps each signal's listing. For JSON,
+  use --json --signal <id> to select one signal. Unfiltered JSON can contain
+  tens of thousands of tokens.
 
 Exit codes: 0 = scan completed, 1 = --fail-on threshold hit, 2 = usage error.`;
 
-const EXPLAIN_USAGE = `Usage: node scan.mjs explain [signal-id]
+const EXPLAIN_USAGE = `Usage: ${__PHASE_COMMAND__} explain [signal-id]
 
 Print one signal's triage metadata and bundled fix section.
 Without a signal id, list every signal one per line.`;
@@ -293,12 +301,20 @@ function parseArgs(argv: string[]): CliOptions {
 
 function main(): void {
   const argv = process.argv.slice(2);
+  if (__PHASE_PACKAGE_VERSION__ !== null && argv.length === 0) {
+    console.log(USAGE);
+    return;
+  }
+  if (argv[0] === '--version') {
+    console.log(formatVersion(resolveScannerVersion()));
+    return;
+  }
   if (argv[0] === 'explain') {
     explain(argv.slice(1));
     return;
   }
 
-  const opts = readOptions(argv);
+  const opts = readOptions(argv[0] === 'scan' ? argv.slice(1) : argv);
 
   if (opts.help) {
     console.log(USAGE);
@@ -312,12 +328,12 @@ function main(): void {
   const baseline =
     opts.writeBaselinePath !== null ? null : readBaseline(opts, root);
   const scanned = scanTargets(opts.targets, { exclude: opts.exclude, root });
-  const version = cliVersion();
+  const version = resolveScannerVersion();
   const complete = isCompleteScan(opts, scanned);
   const result = applyBaseline(scanned, baseline, version, complete);
   writeBaseline(result, opts.writeBaselinePath, version, root, complete);
   const filtered = filterFindings(result, opts);
-  printResult(filtered, opts);
+  printResult(filtered, opts, version);
 
   if (hitsFailThreshold(filtered.findings, opts)) process.exit(1);
 }
@@ -534,7 +550,7 @@ function applyBaseline(
     baseline.cliVersion === version
       ? []
       : [
-          `baseline version ${baseline.cliVersion} differs from CLI version ${version}; continuing`,
+          `baseline scanner version ${baseline.cliVersion} differs from current scanner version ${version}; continuing`,
         ];
   return {
     ...result,
@@ -632,16 +648,22 @@ function filterFindings(result: ScanResult, opts: CliOptions): ScanResult {
   };
 }
 
-function printResult(result: ScanResult, opts: CliOptions): void {
+function printResult(
+  result: ScanResult,
+  opts: CliOptions,
+  scannerVersion: string,
+): void {
   for (const warning of result.warnings) {
     console.error(`warning: ${sanitizeTerminalLine(warning)}`);
   }
 
   const format = opts.format ?? (opts.json ? 'json' : 'text');
   if (format === 'json') {
-    console.log(terminalSafeJson(formatJson(result, opts.limit)));
+    console.log(
+      terminalSafeJson(formatJson(result, scannerVersion, opts.limit)),
+    );
   } else if (format === 'github') {
-    const scan = formatJson(result);
+    const scan = formatJson(result, scannerVersion);
     if (!opts.noAnnotations) {
       const annotations = formatGithubAnnotations(scan, opts.failOn);
       if (annotations) process.stdout.write(annotations);
@@ -665,6 +687,42 @@ function printResult(result: ScanResult, opts: CliOptions): void {
   } else {
     console.log(sanitizeTerminalText(formatText(result)));
   }
+}
+
+function resolveScannerVersion(): string {
+  if (isSafeScannerVersion(__PHASE_SCANNER_VERSION__)) {
+    return __PHASE_SCANNER_VERSION__;
+  }
+
+  try {
+    const metadataPath = fileURLToPath(
+      new URL('../metadata.json', import.meta.url),
+    );
+    const version = (
+      JSON.parse(readFileSync(metadataPath, 'utf8')) as { version?: unknown }
+    ).version;
+    if (isSafeScannerVersion(version)) return version;
+  } catch {
+    // Some skill installers omit generated metadata; SKILL.md is canonical.
+  }
+
+  try {
+    const skillPath = fileURLToPath(new URL('../SKILL.md', import.meta.url));
+    const skill = readFileSync(skillPath, 'utf8');
+    const frontmatter = skill.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? '';
+    const version = frontmatter.match(
+      /^\s+version:\s*['"]?([^'"\s]+)['"]?\s*$/m,
+    )?.[1];
+    return isSafeScannerVersion(version) ? version : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+function formatVersion(scannerVersion: string): string {
+  return __PHASE_PACKAGE_VERSION__ === null
+    ? `scan.mjs (scanner ${scannerVersion})`
+    : `${__PHASE_COMMAND__} ${__PHASE_PACKAGE_VERSION__} (scanner ${scannerVersion})`;
 }
 
 function terminalSafeJson(value: unknown): string {

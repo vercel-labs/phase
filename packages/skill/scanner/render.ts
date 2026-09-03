@@ -1,11 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
-import {
-  assignFingerprints,
-  isPreExistingFinding,
-  isSafeCliVersion,
-} from './baseline.ts';
+import { assignFingerprints, isPreExistingFinding } from './baseline.ts';
 import type { ClassifiedFinding, FingerprintedFinding } from './baseline.ts';
 import type { ScanContext } from './context.ts';
 import { sanitizeTerminalLine } from './detect.ts';
@@ -72,11 +65,12 @@ type SeverityGroups = Map<ScanSeverity, Map<string, ScanFinding[]>>;
 
 /**
  * Renders a scan result as a stable machine-readable object
- * (schemaVersion 1). skillVersion records which signal catalog produced
+ * (schemaVersion 1). skillVersion records which scanner version produced
  * the findings.
  */
 export function formatJson(
   result: ScanResult,
+  scannerVersion: string,
   limit: number | null = null,
 ): ScanJson {
   const counts = countBySeverity(result.findings);
@@ -88,7 +82,7 @@ export function formatJson(
     : 0;
   return {
     schemaVersion: 1,
-    skillVersion: cliVersion(),
+    skillVersion: scannerVersion,
     notice: result.findings.length > 0 ? EXCERPT_NOTICE : null,
     targets: result.targets,
     summary: {
@@ -393,7 +387,7 @@ function renderSignal(
     `${id} — ${signal.label} (${items.length}${allPerFrame ? ', all per-frame' : ''}) · noise: ${signal.noise}`,
     `  why: ${signal.why}`,
     `  use: ${signal.replacement}`,
-    `  read: ${signal.fix}`,
+    `  read: ${fixUrl(signal.fix)}`,
   ];
 
   const ordered = rankFindings(items, weight);
@@ -481,7 +475,7 @@ function renderSummary(result: ScanResult, findings: ScanFinding[]): string[] {
     `Total: ${actionable} actionable (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium), ${counts.dedup} dedup${suppressedNote}.`,
     `${findings.length} findings on ${sites} distinct lines; ${perFrame} sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.`,
     baseline,
-    'Next: start with the hotspots above, then classify each candidate against the decision ladder (references/audit.md Step 2). Findings are candidates, not verdicts.',
+    `Next: start with the hotspots above, then classify each candidate against the decision ladder (Step 2: ${fixUrl('references/audit.md#step-2-classify-each-candidate')}). Findings are candidates, not verdicts.`,
     'Noise tiers: precise = trust it, normal = verify quickly, noisy = verify before recommending.',
   ];
 }
@@ -512,7 +506,7 @@ function renderContext(context: ScanContext): string[] {
     : '';
   return [
     '',
-    `Context: ${bits.join(' + ')} detected${evidence}. Rendering recommendations must pass the blast-radius check (references/audit.md Step 2.5) before changing SSR content or mount timing.`,
+    `Context: ${bits.join(' + ')} detected${evidence}. Rendering recommendations must pass the blast-radius check (Step 2.5: ${fixUrl('references/audit.md#step-25-verify-the-blast-radius')}) before changing SSR content or mount timing.`,
   ];
 }
 
@@ -544,7 +538,7 @@ const BEYOND_THE_SCAN = [
   'Beyond the scan: no pattern here matches an infinite CSS animation nobody gated, a transitionend',
   'listener driving unmount, eagerly mounted below-fold UI, a finite timer sequence that changes UI state, a canvas',
   'sized from devicePixelRatio once, or JS still running inside a skipped content-visibility subtree.',
-  'Run the manual and opportunity passes (references/audit.md Step 1.5) before concluding an audit.',
+  `Run the manual and opportunity passes (Step 1.5: ${fixUrl('references/audit.md#step-15-css-loading-and-architecture-pass')}) before concluding an audit.`,
 ];
 
 const EXECUTION_HEADINGS: Record<ScanExecution | 'none', string> = {
@@ -559,32 +553,6 @@ const EXECUTION_RANK: Record<ScanExecution, number> = {
   'per-frame': 0,
   incidental: 1,
 };
-
-export function cliVersion(): string {
-  try {
-    const metadataPath = fileURLToPath(
-      new URL('../metadata.json', import.meta.url),
-    );
-    const version = (
-      JSON.parse(readFileSync(metadataPath, 'utf8')) as { version?: unknown }
-    ).version;
-    if (isSafeCliVersion(version)) return version;
-  } catch {
-    // Some skill installers omit generated metadata; SKILL.md is canonical.
-  }
-
-  try {
-    const skillPath = fileURLToPath(new URL('../SKILL.md', import.meta.url));
-    const skill = readFileSync(skillPath, 'utf8');
-    const frontmatter = skill.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? '';
-    const version = frontmatter.match(
-      /^\s+version:\s*['"]?([^'"\s]+)['"]?\s*$/m,
-    )?.[1];
-    return isSafeCliVersion(version) ? version : 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
 
 /** Findings per file, the proxy for "this file is the problem". */
 function fileWeights(findings: ScanFinding[]): FileWeights {
