@@ -42,11 +42,15 @@ The scan job needs only `contents: read`. Job summaries and annotations do not r
 | `targets`     | `.`           | Space-separated files or directories. Paths containing whitespace are not supported.              |
 | `annotations` | `true`        | Set to `false` for a summary without inline annotations.                                          |
 
-The scanner auto-detects `phase-baseline.json` at the scan root. With a baseline, `fail-on` evaluates only new findings. Without one, every finding is new. Use a workflow `paths:` filter and scoped `targets` to limit the files scanned; this action does not expose the scanner's Git diff mode.
+For one directory target, that directory is the scan root. For a file or multiple targets, the workflow's working directory is the scan root. phase auto-detects `<scan-root>/phase-baseline.json`; set `baseline` explicitly for any other location. With a baseline, `fail-on` evaluates only new findings. Without one, every finding is new.
+
+The workflow's `paths:` filter controls when the workflow runs. `targets` controls what phase scans. A baseline limits gate failures to new findings. The action does not expose the scanner's Git diff mode.
 
 ## Action-free workflow
 
 Some organizations allow GitHub's checkout action but not third-party actions. A second checkout provides the same scanner without invoking this composite action. Pin the phase checkout to a reviewed 40-character commit SHA rather than a branch or floating tag.
+
+This example is intentionally report-only and summary-only. Change `--fail-on none` to a severity and remove `--no-annotations` when the workflow is ready to block pull requests and annotate findings.
 
 ```yaml
 name: phase

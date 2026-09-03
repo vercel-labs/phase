@@ -3,7 +3,7 @@ description: Scan source code for animation and rendering performance findings
 
 inputs:
   fail-on:
-    description: Fail when a new finding meets this severity (critical, high, medium, or none)
+    description: Fail when a new finding is at or above this severity (critical, high, medium, or none)
     required: false
     default: critical
   noise:
@@ -67,6 +67,7 @@ runs:
             ;;
         esac
 
+        # Split the documented whitespace list without evaluating shell syntax or globs.
         IFS=$' \t\n' read -r -d '' -a targets < <(printf '%s\0' "$PHASE_TARGETS")
         if (( ${#targets[@]} == 0 )); then
           echo "phase targets input must contain at least one path" >&2
