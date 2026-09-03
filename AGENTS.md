@@ -40,7 +40,7 @@ pnpm skill:package     # Rebuild the deterministic skill zip
 ## Automation
 
 - `skill:check` runs as part of `pnpm validate` and in CI on every PR.
-- `skill:build` and `skill:package` run on pre-commit whenever `skills/phase/` or `packages/skill/` changes. Lefthook re-stages `metadata.json`, `scripts/scan.mjs`, the generated audit regions, and the zip.
+- `skill:build` and `skill:package` run on pre-commit whenever `skills/phase/` or `packages/skill/` changes. Lefthook re-stages `packages/skill/scanner/fix-sections.gen.ts`, `metadata.json`, `scripts/scan.mjs`, the generated audit regions, and the zip.
 - The examples manifest is regenerated and staged on pre-commit whenever `packages/examples/` changes.
 - CI and the release workflow rebuild committed artifacts and fail on a diff.
 - Tree-writing tasks (`goldens`, `skill:build`, and `skill:package`) stay uncached. A cache hit would skip regeneration and make a freshness check inspect the wrong tree.

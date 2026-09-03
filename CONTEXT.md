@@ -26,6 +26,14 @@ _Avoid_: Rule, check
 A source-code location reported by a signal. It must be reviewed before being treated as a problem. Owners: `packages/skill/scanner/detect.ts` and `packages/skill/scanner/render.ts`.
 _Avoid_: Problem, defect, violation
 
+**Fix pointer**:
+The reference file and heading anchor where a signal sends a reviewer for repair guidance. Owner: `packages/skill/scanner/signals.ts`.
+_Avoid_: Fix reference, documentation link
+
+**Fix section**:
+The anchored Markdown guidance selected by a fix pointer. Owner: `skills/phase/references/`.
+_Avoid_: Fix excerpt
+
 **Severity tier**:
 The worst-case impact of an actionable finding: `critical`, `high`, or `medium`. `dedup` is separate: it marks correct code that phase can shorten. Owner: `packages/skill/scanner/signals.ts`.
 _Avoid_: Priority tier

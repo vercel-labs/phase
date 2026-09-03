@@ -4,7 +4,7 @@ description: 'Use when optimizing, auditing, or preparing to ship web animations
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.47'
+  version: '0.0.48'
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library.'
 ---
 
@@ -136,7 +136,7 @@ The audit procedure and invariants above catch JS anti-patterns. These rules cat
 
 ## Audit
 
-When you review, optimize, or audit animation code, follow [references/audit.md](references/audit.md). It provides a repeatable procedure backed by a deterministic scanner (`scripts/scan.mjs`) that surfaces anti-pattern candidates before judgment. The scan is the floor of an audit, not the whole of it: audit.md's manual and opportunity passes cover what regex cannot see (scanner-silent phase wins like ungated infinite CSS animations, `transitionend` unmount wiring, and eagerly mounted non-critical UI), so a clean scan alone never concludes an audit.
+When you review, optimize, or audit animation code, follow [references/audit.md](references/audit.md). It provides a repeatable procedure backed by a deterministic scanner (`scripts/scan.mjs`) that surfaces anti-pattern candidates before judgment. Run `scripts/scan.mjs explain <signal-id>` for the signal's triage metadata and fix section. The scan is the floor of an audit, not the whole of it: audit.md's manual and opportunity passes cover what regex cannot see (scanner-silent phase wins like ungated infinite CSS animations, `transitionend` unmount wiring, and eagerly mounted non-critical UI), so a clean scan alone never concludes an audit.
 
 When the user supplies or accepts a Chrome DevTools performance trace, read [references/performance-trace.md](references/performance-trace.md).
 

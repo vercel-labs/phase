@@ -11,9 +11,11 @@ This private package owns scanner source, scanner tests, eval scenarios, and the
 - `../../skills/phase/` contains only consumer content and committed artifacts. `pnpm skill:check` enforces its allowlist and the scanner's `node:`-builtin-only import contract.
 
 Hand-edit `../../skills/phase/SKILL.md`, `README.md`, and `references/*.md`. Start references from `../../skills/phase/references/_template.md`.
+Fix sections use ATX headings. Avoid setext headings and thematic breaks in files targeted by signal fix pointers because extraction rejects their ambiguous underline syntax.
 
 Never hand-edit these generated artifacts:
 
+- `scanner/fix-sections.gen.ts`
 - `../../skills/phase/metadata.json`
 - `../../skills/phase/scripts/scan.mjs`
 - `../../skills/phase/dist/phase-skill.zip`
@@ -28,7 +30,7 @@ The scanner reports anti-pattern candidates, not confirmed defects. Every signal
 3. Add at least one `match` and one `noMatch` example under the same id in `scanner/examples.ts`. Add a `noMatch` regression for every false-positive class the signal must avoid.
 4. Make the example test red before tuning detection: `pnpm --filter @usephase/skill exec vitest run scanner/__tests__/examples.spec.ts`. Set severity for worst-case impact and let execution class rank per-frame findings above incidental findings.
 5. Probe, do not only read: run `pnpm skill:build && node skills/phase/scripts/scan.mjs <path>` against representative real code. Hand-classify a bounded sample, set the noise tier from evidence, and record the profile and actions in the PR description.
-6. Run `pnpm skill:build`. `pnpm skill:check` verifies the generated signal table, fix pointers, eval contracts, and distribution boundary.
+6. Run `pnpm skill:build`. `pnpm skill:check` verifies fix-section extraction, the generated signal table, eval contracts, and the distribution boundary.
 7. If the signal changes `evals/scenarios/audit-planted-defects/workspace`, run `pnpm goldens` to regenerate both goldens and the audit sample in order.
 8. Run `pnpm format:fix && pnpm validate`.
 

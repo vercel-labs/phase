@@ -5,8 +5,7 @@
  * and that reference links resolve:
  *
  * 1. audit.md's generated signal table and sample scan output are fresh.
- * 2. Every signal's fix pointer resolves to a real reference file, and its
- *    anchor to a real heading.
+ * 2. Every signal's fix pointer extracts a non-empty, bundled fix section.
  * 3. Every relative link in references/*.md resolves (file and anchor).
  * 4. Every eval scenario satisfies the shared scenario contract.
  * 5. The untrusted-content guardrails exist in audit.md and SKILL.md.
@@ -17,11 +16,14 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { FIX_SECTIONS } from '../../scanner/fix-sections.gen.ts';
 import {
   GOLDEN_SCENARIO_DIR,
   loadEvalScenario,
 } from '../../scanner/scenarios.ts';
 import { NOISE_TIERS, SEVERITY_ORDER, SIGNALS } from '../../scanner/signals.ts';
+import { collectFixSections } from './fix-sections.mjs';
+import { parseMarkdown } from './markdown.mjs';
 import { readMarkerBlock } from './marker-block.mjs';
 import { isSignalTableFresh } from './scan-docs.mjs';
 
@@ -38,41 +40,11 @@ function fail(message) {
   errors++;
 }
 
-// GitHub-style heading slugs: lowercase, strip punctuation, spaces to dashes.
-function slugify(heading) {
-  return heading
-    .toLowerCase()
-    .replace(/[^\w\- ]/g, '')
-    .replace(/ /g, '-');
-}
-
-// Headings and non-code lines of a markdown file (code fences excluded).
-// A fence only closes on a marker of at least its own backtick count, so
-// ``` blocks nested inside ```` blocks (audit.md's recommendation template)
-// do not flip the parser back into prose mid-fence.
-function parseMarkdown(path) {
-  const lines = readFileSync(path, 'utf8').split('\n');
-  const anchors = new Set();
-  const proseLines = [];
-  let fence = null;
-  for (const line of lines) {
-    const marker = /^\s*(`{3,})/.exec(line);
-    if (marker) {
-      if (fence === null) fence = marker[1].length;
-      else if (marker[1].length >= fence) fence = null;
-      continue;
-    }
-    if (fence !== null) continue;
-    proseLines.push(line);
-    const heading = /^#{1,6}\s+(.+?)\s*$/.exec(line);
-    if (heading) anchors.add(slugify(heading[1]));
-  }
-  return { anchors, proseLines };
-}
-
 const markdownCache = new Map();
 function markdownInfo(path) {
-  if (!markdownCache.has(path)) markdownCache.set(path, parseMarkdown(path));
+  if (!markdownCache.has(path)) {
+    markdownCache.set(path, parseMarkdown(readFileSync(path, 'utf8')));
+  }
   return markdownCache.get(path);
 }
 
@@ -93,7 +65,7 @@ try {
   fail(error.message);
 }
 
-// --- 2. Fix pointers resolve ---
+// --- 2. Fix sections extract and match the bundled map ---
 
 for (const signal of SIGNALS) {
   if (!SEVERITY_ORDER.includes(signal.severity)) {
@@ -102,20 +74,21 @@ for (const signal of SIGNALS) {
   if (!NOISE_TIERS.includes(signal.noise)) {
     fail(`${signal.id} has unknown noise tier: ${signal.noise}`);
   }
-  const match = /^references\/([\w./-]+?)(?:#([\w-]+))?$/.exec(signal.fix);
-  if (!match) {
-    fail(`${signal.id} fix pointer is malformed: ${signal.fix}`);
-    continue;
+}
+
+try {
+  const sections = collectFixSections(SIGNALS, refsDir);
+  const bundledEntries = Object.entries(FIX_SECTIONS);
+  const stale =
+    bundledEntries.length !== sections.size ||
+    bundledEntries.some(
+      ([pointer, section]) => sections.get(pointer) !== section,
+    );
+  if (stale) {
+    fail('bundled fix sections are stale (run pnpm skill:build)');
   }
-  const [, file, anchor] = match;
-  const filePath = join(refsDir, file);
-  if (!existsSync(filePath)) {
-    fail(`${signal.id} fix points to missing file: ${signal.fix}`);
-    continue;
-  }
-  if (anchor && !markdownInfo(filePath).anchors.has(anchor)) {
-    fail(`${signal.id} fix anchor not found: ${signal.fix}`);
-  }
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error));
 }
 
 // --- 3. Relative links in references resolve ---
@@ -186,6 +159,6 @@ if (errors > 0) {
   process.exit(1);
 } else {
   console.log(
-    `✓ Signal table (${SIGNALS.length} signals), ${scenarios.length} eval scenarios, fix pointers, golden sample, and reference links are in sync.`,
+    `✓ Signal table (${SIGNALS.length} signals), ${scenarios.length} eval scenarios, fix sections, golden sample, and reference links are in sync.`,
   );
 }
