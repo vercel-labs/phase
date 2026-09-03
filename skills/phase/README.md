@@ -48,14 +48,16 @@ A pattern scanner finds what is wrong. An audit also asks what phase would make 
 
 ```bash
 node <skill-dir>/scripts/scan.mjs <dir-or-files...>
-git diff --name-only --diff-filter=ACMR -z | node <skill-dir>/scripts/scan.mjs --stdin0
+node <skill-dir>/scripts/scan.mjs --diff origin/main
 ```
 
 | Option                    | Effect                                                                         |
 | ------------------------- | ------------------------------------------------------------------------------ |
 | `--json`                  | Machine-readable output: summary, environment context, warnings, flat findings |
+| `--format <format>`       | Output as `text`, `json`, or GitHub annotations plus a job summary             |
 | `--stdin0`                | Read NUL-delimited targets from stdin; empty input scans nothing               |
-| `--fail-on <severity>`    | Exit 1 at or above `critical`/`high`/`medium` (for CI); default always exits 0 |
+| `--diff <ref>`            | Scan committed added, copied, modified, or renamed files since the merge base  |
+| `--fail-on <severity>`    | Exit 1 at or above `critical`/`high`/`medium`; `none` is report-only           |
 | `--baseline <path>`       | Compare with an explicit regular-file baseline up to 16 MiB                    |
 | `--no-baseline`           | Ignore an explicit or auto-detected baseline                                   |
 | `--write-baseline <path>` | Write one complete directory scan as a baseline and exit 0                     |
@@ -70,9 +72,13 @@ Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit
 
 The scanner auto-detects `phase-baseline.json` at the scan root. Baselines record that root relative to the baseline file, and the CLI rejects a baseline whose recorded root does not match the current scan. Fingerprints use root-relative file paths, so separate targets with the same internal path remain distinct.
 
-With a baseline, `--fail-on` evaluates only new findings, text output lists only those new findings, and JSON marks findings as `new` or `pre-existing`. Every JSON finding includes a stable `fingerprint`. A complete directory scan reports the stale count; file and multi-target scans report `stale: null` (`stale unknown (partial scan)` in text) because they cannot prove a baseline entry disappeared. Baseline version differences warn without failing.
+With a baseline, `--fail-on` evaluates only new findings, text output lists only those new findings, and JSON marks findings as `new` or `pre-existing`. Every JSON finding includes a stable `fingerprint`. A complete directory scan reports the stale count; file, multi-target, and `--diff` scans report `stale: null` (`stale unknown (partial scan)` in text) because they cannot prove a baseline entry disappeared. Baseline version differences warn without failing.
 
-`--write-baseline` requires exactly one directory target with complete scan coverage, atomically writes sorted `{ schemaVersion, cliVersion, root, fingerprints }` JSON, and prunes stale fingerprints. It cannot be combined with `--baseline`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`.
+`--write-baseline` requires exactly one directory target with complete scan coverage, atomically writes sorted `{ schemaVersion, cliVersion, root, fingerprints }` JSON, and prunes stale fingerprints. It cannot be combined with `--baseline`, `--diff`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`.
+
+JSON schema version 1 is additive: new object fields may appear without a version bump, so consumers must ignore fields they do not recognize.
+
+`--format github` emits at most ten error and ten warning annotations, links every annotation to its hosted fix guide, and appends a Markdown report to `GITHUB_STEP_SUMMARY`. Gate-failing new findings are errors, other new findings are warnings, and pre-existing findings are summary-only. Annotation overflow continues in the report; oversized finding tables state how many rows were omitted instead of exceeding GitHub's 1 MiB summary limit. Without `GITHUB_STEP_SUMMARY`, the Markdown report is printed to stdout.
 
 The report opens with the files carrying the most candidates, and within each signal it lists the lines a proven recurring frame callback, observer, or move handler runs before the incidental ones. A one-shot rAF does not make nearby work per-frame. Every block names why it matters and what to use instead, so you can act without opening the reference.
 

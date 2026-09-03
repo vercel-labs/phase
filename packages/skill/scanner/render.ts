@@ -58,6 +58,7 @@ export interface ScanJson {
     new: number;
     preExisting: number;
     stale: number | null;
+    baselineApplied: boolean;
     bySeverity: { critical: number; high: number; medium: number };
   };
   hotspots: { file: string; count: number }[];
@@ -105,6 +106,7 @@ export function formatJson(
       new: result.findings.length - preExisting,
       preExisting,
       stale: result.baseline ? result.baseline.stale : 0,
+      baselineApplied: Boolean(result.baseline),
       bySeverity: {
         critical: counts.critical,
         high: counts.high,
@@ -118,6 +120,198 @@ export function formatJson(
     warnings: result.warnings ?? [],
     findings,
   };
+}
+
+export type ScanFailOn = Exclude<ScanSeverity, 'dedup'> | 'none' | null;
+/** GitHub's maximum total contribution to one step summary. */
+export const GITHUB_STEP_SUMMARY_LIMIT = 1024 * 1024;
+
+/** Renders the GitHub Actions job summary from stable scanner JSON. */
+export function formatGithubSummary(
+  scan: ScanJson,
+  failOn: ScanFailOn,
+  maxBytes = GITHUB_STEP_SUMMARY_LIMIT,
+): string {
+  const findings = scan.findings.filter(
+    (finding) => finding.baselineState !== 'pre-existing',
+  );
+  const failing = findings.filter((finding) =>
+    findingFailsGate(finding, failOn),
+  );
+  const out = [
+    '# phase scan',
+    '',
+    scan.summary.filesScanned === 0
+      ? '**Gate: not evaluated.** No scannable files were found for these targets.'
+      : renderGateVerdict(failing.length, failOn),
+  ];
+
+  if (!scan.summary.baselineApplied) {
+    out.push(
+      '',
+      '> [!WARNING]',
+      '> **Net-new comparison is unarmed.** No baseline was applied, so every finding is treated as new.',
+    );
+  }
+
+  const coverage = coverageGaps(
+    scan.summary.filesSkipped,
+    scan.summary.linesSkipped,
+  );
+  if (coverage) {
+    out.push('', '> [!WARNING]', `> **Incomplete coverage.** ${coverage}`);
+  }
+
+  const errors = failing.length;
+  const warnings = findings.length - errors;
+  if (errors > MAX_GITHUB_ANNOTATIONS || warnings > MAX_GITHUB_ANNOTATIONS) {
+    out.push(
+      '',
+      `Inline annotations show ${Math.min(errors, MAX_GITHUB_ANNOTATIONS)} of ${errors} errors and ${Math.min(warnings, MAX_GITHUB_ANNOTATIONS)} of ${warnings} warnings. Annotation overflow continues in the table below.`,
+    );
+  }
+
+  out.push(
+    '',
+    '| New | Pre-existing | Stale baseline entries | Suppressed |',
+    '| ---: | -----------: | ---------------------: | ---------: |',
+    `| ${scan.summary.new} | ${scan.summary.preExisting} | ${scan.summary.stale ?? 'unknown'} | ${scan.summary.suppressed} |`,
+    '',
+    '## New findings',
+  );
+
+  if (findings.length === 0) {
+    out.push('', 'No new findings.');
+  } else {
+    out.push(
+      '',
+      '| Severity | Signal | Location | Fix |',
+      '| --- | --- | --- | --- |',
+    );
+    let shown = 0;
+    let bytes = markdownBytes(out);
+    const findingsBudget = Math.min(
+      MAX_GITHUB_FINDINGS_BYTES,
+      Math.max(0, maxBytes - GITHUB_SUMMARY_RESERVE_BYTES),
+    );
+    for (const finding of findings) {
+      const row = `| ${finding.severity} | ${markdownCode(finding.signal)} | ${markdownCode(`${finding.file}:${finding.line}`)} | [Open guide](${fixUrl(finding.fix)}) |`;
+      const rowBytes = Buffer.byteLength(`${row}\n`, 'utf8');
+      if (bytes + rowBytes > findingsBudget) break;
+      out.push(row);
+      bytes += rowBytes;
+      shown++;
+    }
+    if (shown < findings.length) {
+      const omitted = findings.length - shown;
+      out.push(
+        '',
+        `_${omitted} additional new finding${omitted === 1 ? '' : 's'} omitted to stay within GitHub's 1 MiB job-summary limit._`,
+      );
+    }
+  }
+
+  const hotspots = rankHotspots(findings, fileWeights(findings));
+  if (hotspots.length > 0) {
+    out.push(
+      '',
+      '## Hotspots',
+      '',
+      '| File | New findings |',
+      '| --- | ---: |',
+    );
+    for (const { file, items } of hotspots) {
+      const row = `| ${markdownCode(file)} | ${items.length} |`;
+      if (markdownBytes([...out, row]) > maxBytes) break;
+      out.push(row);
+    }
+  }
+
+  const summary = `${out.join('\n')}\n`;
+  if (Buffer.byteLength(summary, 'utf8') <= maxBytes) return summary;
+
+  const compact = `${out.slice(0, 3).join('\n')}\n\n_Report details omitted because the GitHub step summary has reached its 1 MiB limit._\n`;
+  return Buffer.byteLength(compact, 'utf8') <= maxBytes ? compact : '';
+}
+
+/** Renders capped GitHub Actions workflow-command annotations. */
+export function formatGithubAnnotations(
+  scan: ScanJson,
+  failOn: ScanFailOn,
+): string {
+  const shown = { error: 0, warning: 0 };
+  const out: string[] = [];
+
+  for (const finding of scan.findings) {
+    if (finding.baselineState === 'pre-existing') continue;
+    const type = findingFailsGate(finding, failOn) ? 'error' : 'warning';
+    if (shown[type] >= MAX_GITHUB_ANNOTATIONS) continue;
+    shown[type]++;
+
+    const label =
+      SIGNALS.find((signal) => signal.id === finding.signal)?.label ??
+      finding.signal;
+    const properties = [
+      `file=${escapeGithubProperty(finding.file)}`,
+      `line=${finding.line}`,
+      `title=${escapeGithubProperty(`phase: ${finding.signal}`)}`,
+    ].join(',');
+    const message = `${label}: ${finding.text} Fix: ${fixUrl(finding.fix)}`;
+    out.push(`::${type} ${properties}::${escapeGithubData(message)}`);
+  }
+
+  return out.length > 0 ? `${out.join('\n')}\n` : '';
+}
+
+function renderGateVerdict(failing: number, failOn: ScanFailOn): string {
+  if (failOn === null || failOn === 'none') {
+    return '**Gate: report only.** Findings cannot fail this run.';
+  }
+  if (failing === 0) {
+    return `**Gate: passed.** No new findings meet the \`${failOn}\` threshold.`;
+  }
+  return `**Gate: failed.** ${failing} new finding${failing === 1 ? '' : 's'} ${failing === 1 ? 'meets' : 'meet'} the \`${failOn}\` threshold.`;
+}
+
+/** Whether a new finding fails the configured gate threshold. */
+export function findingFailsGate(
+  finding: Pick<ScanFinding, 'severity'>,
+  failOn: ScanFailOn,
+): boolean {
+  if (failOn === null || failOn === 'none' || finding.severity === 'dedup') {
+    return false;
+  }
+  return (
+    SEVERITY_ORDER.indexOf(finding.severity) <= SEVERITY_ORDER.indexOf(failOn)
+  );
+}
+
+function markdownCode(value: string): string {
+  const flattened = value.replace(/[\r\n]/g, ' ').replace(/\|/g, '\\|');
+  const longestRun = Math.max(
+    0,
+    ...(flattened.match(/`+/g)?.map((run) => run.length) ?? []),
+  );
+  const fence = '`'.repeat(longestRun + 1);
+  const padding =
+    flattened.startsWith('`') || flattened.endsWith('`') ? ' ' : '';
+  return `${fence}${padding}${flattened}${padding}${fence}`;
+}
+
+function markdownBytes(lines: string[]): number {
+  return Buffer.byteLength(`${lines.join('\n')}\n`, 'utf8');
+}
+
+function fixUrl(fix: string): string {
+  return `https://github.com/vercel-labs/phase/blob/main/skills/phase/${fix}`;
+}
+
+function escapeGithubData(value: string): string {
+  return value.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+}
+
+function escapeGithubProperty(value: string): string {
+  return escapeGithubData(value).replace(/:/g, '%3A').replace(/,/g, '%2C');
 }
 
 /** Renders a scan result as human-readable text grouped by severity. */
@@ -154,7 +348,7 @@ export function formatText(result: ScanResult): string {
 
   // Coverage the scan did not have. Stating it is the difference between
   // "clean" and "clean over the part I could read".
-  const gaps = coverageGaps(result);
+  const gaps = coverageGaps(result.filesSkipped, result.linesSkipped);
   if (gaps) out.push('', `⚠ Incomplete coverage: ${gaps}`);
 
   out.push(...renderContext(result.context));
@@ -323,6 +517,10 @@ function renderContext(context: ScanContext): string[] {
 }
 
 const MAX_LISTED_PER_SIGNAL = 20;
+
+const MAX_GITHUB_ANNOTATIONS = 10;
+const MAX_GITHUB_FINDINGS_BYTES = 900 * 1024;
+const GITHUB_SUMMARY_RESERVE_BYTES = 64 * 1024;
 // Printed above the findings because the excerpts under them quote the
 // scanned code verbatim, and the scanned repository is not a trusted party.
 const EXCERPT_NOTICE =
@@ -470,11 +668,13 @@ function groupBySeverity(findings: ScanFinding[]): SeverityGroups {
  * complete. Deliberately excludes the by-design exclusions (tests, mocks,
  * agent config): those are policy, not gaps.
  */
-function coverageGaps(result: ScanResult): string | null {
+function coverageGaps(
+  filesSkipped: ScanSkipped | null,
+  linesSkipped: number,
+): string | null {
   const parts: string[] = [];
-  const unreadable = result.filesSkipped?.unreadable ?? 0;
-  const unreadableDirs = result.filesSkipped?.unreadableDirs ?? 0;
-  const linesSkipped = result.linesSkipped ?? 0;
+  const unreadable = filesSkipped?.unreadable ?? 0;
+  const unreadableDirs = filesSkipped?.unreadableDirs ?? 0;
   if (unreadable > 0) parts.push(`${unreadable} file(s) unreadable`);
   if (unreadableDirs > 0) {
     parts.push(`${unreadableDirs} directory/directories unreadable`);

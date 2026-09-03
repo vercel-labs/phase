@@ -191,7 +191,12 @@ export {
   parseBaseline,
   serializeBaseline,
 } from './baseline.ts';
-export { formatJson, formatText } from './render.ts';
+export {
+  formatGithubAnnotations,
+  formatGithubSummary,
+  formatJson,
+  formatText,
+} from './render.ts';
 export { SEVERITY_ORDER, SIGNALS } from './signals.ts';
 export type { ScanContext } from './context.ts';
 export type {
@@ -203,6 +208,7 @@ export type {
 export type { ScanExecution, ScanFinding } from './detect.ts';
 export type {
   BaselinedScanResult,
+  ScanFailOn,
   ScanJson,
   ScanResult,
   UnbaselinedScanResult,
