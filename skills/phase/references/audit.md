@@ -71,6 +71,7 @@ Scanner targets are literal and non-transitive: scanning a route does not follow
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--json`                  | Machine-readable output (schemaVersion 1): summary counts plus flat findings with a stable `fingerprint` and optional `baselineState`, stamped with the skill version that produced them |
 | `--format <format>`       | Output as `text`, `json`, or GitHub workflow-command annotations plus a Markdown job summary                                                                                             |
+| `--no-annotations`        | Omit annotations from `--format github` while keeping the Markdown job summary                                                                                                           |
 | `--stdin0`                | Read NUL-delimited targets from stdin. An empty stream scans nothing. Intended for changed-file scans                                                                                    |
 | `--diff <ref>`            | Scan committed added, copied, modified, or renamed files since the three-dot merge base with this Git ref                                                                                |
 | `--fail-on <severity>`    | Exit 1 if any new finding is at or above `critical`, `high`, or `medium`; `none` is report-only. Without a baseline, all findings are new                                                |
@@ -82,6 +83,7 @@ Scanner targets are literal and non-transitive: scanning a route does not follow
 | `--noise <tier>`          | Report only this noise tier. Repeatable, so `--noise precise --noise normal` drops the noisy ones                                                                                        |
 | `--exclude <path>`        | Skip paths containing this text, or matching it as a glob when it has a wildcard. Repeatable                                                                                             |
 | `--limit <n>`             | Cap the `findings` array in `--json` output (`summary.total` still reports the true count)                                                                                               |
+| `--`                      | Treat every remaining argument as a target                                                                                                                                               |
 | `-h`, `--help`            | Usage                                                                                                                                                                                    |
 
 Exit codes: `0` scan completed (the default even when findings exist; the audit is advisory), `1` a `--fail-on` threshold was hit, `2` usage error.

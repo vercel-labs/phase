@@ -292,6 +292,34 @@ describe('GitHub annotations', () => {
 });
 
 describe('GitHub CLI output', () => {
+  it('treats every argument after -- as a target', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-end-options-'));
+    writeFileSync(join(root, '--fail-on'), 'export const first = true;\n');
+    writeFileSync(join(root, 'none'), 'export const second = true;\n');
+
+    try {
+      const run = spawnSync(
+        process.execPath,
+        [
+          SCRIPT,
+          '--format',
+          'json',
+          '--fail-on',
+          'critical',
+          '--',
+          '--fail-on',
+          'none',
+        ],
+        { cwd: root, encoding: 'utf8' },
+      );
+
+      expect(run.status).toBe(0);
+      expect(JSON.parse(run.stdout).targets).toEqual(['--fail-on', 'none']);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('accepts report-only mode and writes the job summary file', () => {
     const root = mkdtempSync(join(tmpdir(), 'phase-github-output-'));
     const summaryPath = join(root, 'summary.md');
@@ -309,6 +337,40 @@ describe('GitHub CLI output', () => {
 
       expect(run.status).toBe(0);
       expect(run.stdout).toContain('::warning file=');
+      expect(run.stdout).not.toContain('::error file=');
+      expect(readFileSync(summaryPath, 'utf8')).toContain(
+        '**Gate: report only.**',
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('can write a job summary without emitting annotations', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-github-summary-only-'));
+    const summaryPath = join(root, 'summary.md');
+
+    try {
+      const run = spawnSync(
+        process.execPath,
+        [
+          SCRIPT,
+          '--format',
+          'github',
+          '--no-annotations',
+          '--fail-on',
+          'none',
+          'workspace',
+        ],
+        {
+          cwd: SCENARIO_DIR,
+          encoding: 'utf8',
+          env: { ...process.env, GITHUB_STEP_SUMMARY: summaryPath },
+        },
+      );
+
+      expect(run.status).toBe(0);
+      expect(run.stdout).not.toContain('::warning file=');
       expect(run.stdout).not.toContain('::error file=');
       expect(readFileSync(summaryPath, 'utf8')).toContain(
         '**Gate: report only.**',

@@ -2603,6 +2603,7 @@ Targets   directories or individual files (default: current directory)
 Options
   --json               emit machine-readable JSON (alias for --format json)
   --format <format>    output format (text | json | github); default is text
+  --no-annotations     omit annotations from --format github output
   --stdin0             read additional NUL-delimited targets from stdin;
                        an empty stream scans nothing instead of "."
   --diff <ref>         scan committed files changed since the merge base with
@@ -2621,6 +2622,7 @@ Options
   --exclude <path>     skip paths containing this substring, or matching it
                        as a glob when it has a wildcard (repeatable)
   --limit <n>          cap the findings array in --json output
+  --                   treat every remaining argument as a target
   -h, --help           show this help
 
 Suppression
@@ -2637,6 +2639,7 @@ Exit codes: 0 = scan completed, 1 = --fail-on threshold hit, 2 = usage error.`;
 const FLAGS = {
 	"--json": "json",
 	"--stdin0": "stdin0",
+	"--no-annotations": "noAnnotations",
 	"--no-baseline": "noBaseline",
 	"--help": "help",
 	"-h": "help"
@@ -2727,6 +2730,7 @@ function parseArgs(argv) {
 		format: null,
 		stdin0: false,
 		help: false,
+		noAnnotations: false,
 		noBaseline: false,
 		failOn: null,
 		baselinePath: null,
@@ -2741,6 +2745,10 @@ function parseArgs(argv) {
 	};
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
+		if (arg === "--") {
+			opts.targets.push(...argv.slice(i + 1));
+			break;
+		}
 		const flag = FLAGS[arg];
 		const valueOption = VALUE_OPTIONS[arg];
 		if (flag) opts[flag] = true;
@@ -2939,8 +2947,10 @@ function printResult(result, opts) {
 	if (format === "json") console.log(terminalSafeJson(formatJson(result, opts.limit)));
 	else if (format === "github") {
 		const scan = formatJson(result);
-		const annotations = formatGithubAnnotations(scan, opts.failOn);
-		if (annotations) process.stdout.write(annotations);
+		if (!opts.noAnnotations) {
+			const annotations = formatGithubAnnotations(scan, opts.failOn);
+			if (annotations) process.stdout.write(annotations);
+		}
 		const summaryPath = process.env.GITHUB_STEP_SUMMARY;
 		if (!summaryPath) {
 			process.stdout.write(formatGithubSummary(scan, opts.failOn));

@@ -55,6 +55,7 @@ node <skill-dir>/scripts/scan.mjs --diff origin/main
 | ------------------------- | ------------------------------------------------------------------------------ |
 | `--json`                  | Machine-readable output: summary, environment context, warnings, flat findings |
 | `--format <format>`       | Output as `text`, `json`, or GitHub annotations plus a job summary             |
+| `--no-annotations`        | Omit annotations from `--format github` while keeping the job summary          |
 | `--stdin0`                | Read NUL-delimited targets from stdin; empty input scans nothing               |
 | `--diff <ref>`            | Scan committed added, copied, modified, or renamed files since the merge base  |
 | `--fail-on <severity>`    | Exit 1 at or above `critical`/`high`/`medium`; `none` is report-only           |
@@ -66,6 +67,7 @@ node <skill-dir>/scripts/scan.mjs --diff origin/main
 | `--noise <tier>`          | Report only this noise tier (repeatable)                                       |
 | `--exclude <path>`        | Skip paths containing this text, or matching it as a glob (repeatable)         |
 | `--limit <n>`             | Cap the findings array in `--json` output                                      |
+| `--`                      | Treat every remaining argument as a target                                     |
 | `-h`, `--help`            | Usage                                                                          |
 
 Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit, `2` usage error. A clean scan reports how many files it scanned; zero scannable files prints a warning instead of a green result.

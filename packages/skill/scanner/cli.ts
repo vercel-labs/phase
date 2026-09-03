@@ -75,6 +75,7 @@ Targets   directories or individual files (default: current directory)
 Options
   --json               emit machine-readable JSON (alias for --format json)
   --format <format>    output format (text | json | github); default is text
+  --no-annotations     omit annotations from --format github output
   --stdin0             read additional NUL-delimited targets from stdin;
                        an empty stream scans nothing instead of "."
   --diff <ref>         scan committed files changed since the merge base with
@@ -93,6 +94,7 @@ Options
   --exclude <path>     skip paths containing this substring, or matching it
                        as a glob when it has a wildcard (repeatable)
   --limit <n>          cap the findings array in --json output
+  --                   treat every remaining argument as a target
   -h, --help           show this help
 
 Suppression
@@ -111,6 +113,7 @@ interface CliOptions {
   format: OutputFormat | null;
   stdin0: boolean;
   help: boolean;
+  noAnnotations: boolean;
   noBaseline: boolean;
   failOn: ScanFailOn;
   baselinePath: string | null;
@@ -126,7 +129,12 @@ interface CliOptions {
 
 type OutputFormat = 'text' | 'json' | 'github';
 
-type BooleanOptionKey = 'json' | 'stdin0' | 'help' | 'noBaseline';
+type BooleanOptionKey =
+  | 'json'
+  | 'stdin0'
+  | 'help'
+  | 'noAnnotations'
+  | 'noBaseline';
 type ValueOptionKey =
   | 'failOn'
   | 'format'
@@ -151,6 +159,7 @@ interface ValueOption {
 const FLAGS: Record<string, BooleanOptionKey> = {
   '--json': 'json',
   '--stdin0': 'stdin0',
+  '--no-annotations': 'noAnnotations',
   '--no-baseline': 'noBaseline',
   '--help': 'help',
   '-h': 'help',
@@ -240,6 +249,7 @@ function parseArgs(argv: string[]): CliOptions {
     format: null,
     stdin0: false,
     help: false,
+    noAnnotations: false,
     noBaseline: false,
     failOn: null,
     baselinePath: null,
@@ -254,6 +264,10 @@ function parseArgs(argv: string[]): CliOptions {
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] as string;
+    if (arg === '--') {
+      opts.targets.push(...argv.slice(i + 1));
+      break;
+    }
     const flag = FLAGS[arg];
     const valueOption = VALUE_OPTIONS[arg];
     if (flag) {
@@ -585,8 +599,10 @@ function printResult(result: ScanResult, opts: CliOptions): void {
     console.log(terminalSafeJson(formatJson(result, opts.limit)));
   } else if (format === 'github') {
     const scan = formatJson(result);
-    const annotations = formatGithubAnnotations(scan, opts.failOn);
-    if (annotations) process.stdout.write(annotations);
+    if (!opts.noAnnotations) {
+      const annotations = formatGithubAnnotations(scan, opts.failOn);
+      if (annotations) process.stdout.write(annotations);
+    }
 
     const summaryPath = process.env.GITHUB_STEP_SUMMARY;
     if (!summaryPath) {
