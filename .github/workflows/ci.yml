@@ -66,6 +66,45 @@ jobs:
           git diff --exit-code skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip \
             || (echo "Skill artifacts are stale. Run 'pnpm skill:package' and commit the result." && exit 1)
 
+  action:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Run the report-only action without annotations
+        uses: ./action
+        with:
+          targets: packages/skill/evals/scenarios/audit-planted-defects/workspace/src/hero-animation.tsx
+          fail-on: none
+          noise: normal
+          annotations: false
+
+      - name: Run the failing action with annotations
+        id: failing-gate
+        continue-on-error: true
+        uses: ./action
+        with:
+          targets: packages/skill/evals/scenarios/audit-planted-defects/workspace/src/hero-animation.tsx
+          fail-on: critical
+          noise: normal
+          annotations: true
+
+      - name: Check the gate failed
+        env:
+          GATE_OUTCOME: ${{ steps.failing-gate.outcome }}
+        run: |
+          if [[ "$GATE_OUTCOME" != "failure" ]]; then
+            echo "Expected setstate-in-raf to fail the critical gate." >&2
+            exit 1
+          fi
+
   browser:
     runs-on: ubuntu-latest
     steps:

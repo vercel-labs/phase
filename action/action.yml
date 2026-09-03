@@ -1,0 +1,80 @@
+name: phase scan
+description: Scan source code for animation and rendering performance findings
+
+inputs:
+  fail-on:
+    description: Fail when a new finding is at or above this severity (critical, high, medium, or none)
+    required: false
+    default: critical
+  noise:
+    description: Report only this noise tier (precise, normal, or noisy)
+    required: false
+    default: precise
+  baseline:
+    description: Path to a phase baseline; auto-detected at the scan root when omitted
+    required: false
+  targets:
+    description: Space-separated files or directories to scan
+    required: false
+    default: .
+  annotations:
+    description: Emit GitHub annotations as well as the job summary
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Check Node.js version
+      shell: bash
+      run: |
+        if ! command -v node >/dev/null 2>&1; then
+          echo "phase requires Node.js 22 or newer, but node is not on PATH." >&2
+          exit 2
+        fi
+
+        node_major=$(node -p "Number(process.versions.node.split('.')[0])")
+        if (( node_major < 22 )); then
+          echo "phase requires Node.js 22 or newer; found $(node --version). Run phase before an older setup-node step or in its own job." >&2
+          exit 2
+        fi
+
+    - name: Scan with phase
+      shell: bash
+      env:
+        PHASE_ANNOTATIONS: ${{ inputs.annotations }}
+        PHASE_BASELINE: ${{ inputs.baseline }}
+        PHASE_FAIL_ON: ${{ inputs.fail-on }}
+        PHASE_NOISE: ${{ inputs.noise }}
+        PHASE_TARGETS: ${{ inputs.targets }}
+      run: |
+        args=(
+          --format github
+          --fail-on "$PHASE_FAIL_ON"
+          --noise "$PHASE_NOISE"
+        )
+
+        if [[ -n "$PHASE_BASELINE" ]]; then
+          args+=(--baseline "$PHASE_BASELINE")
+        fi
+
+        case "$PHASE_ANNOTATIONS" in
+          true) ;;
+          false) args+=(--no-annotations) ;;
+          *)
+            echo "phase annotations input must be true or false" >&2
+            exit 2
+            ;;
+        esac
+
+        # Split the documented whitespace list without evaluating shell syntax or globs.
+        IFS=$' \t\n' read -r -d '' -a targets < <(printf '%s\0' "$PHASE_TARGETS")
+        if (( ${#targets[@]} == 0 )); then
+          echo "phase targets input must contain at least one path" >&2
+          exit 2
+        fi
+
+        node "$GITHUB_ACTION_PATH/../skills/phase/scripts/scan.mjs" \
+          "${args[@]}" \
+          -- \
+          "${targets[@]}"
