@@ -202,7 +202,7 @@ const SIGNAL_CATALOG = [
     noise: 'normal',
     detects: '`matchMedia(` with a listener on the result, outside the pool',
     why: 'Unpooled MediaQueryList subscriptions; phase pools them by query.',
-    fix: 'references/use-media-query.md',
+    fix: 'references/use-media-query.md#when-to-use',
     pattern: MATCH_MEDIA_CALL,
     // A `.matches` snapshot subscribes to nothing, so the finding needs a
     // listener on the same receiver. Strings are masked out of the match so an
@@ -311,7 +311,7 @@ const SIGNAL_CATALOG = [
     detects:
       '`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity work',
     why: 'Timers keep firing off-screen and in background tabs.',
-    fix: 'references/timed-sequences.md',
+    fix: 'references/timed-sequences.md#first-choose-who-owns-the-timeline',
     pattern: TIMER_REFERENCE,
     contextPattern: /transform|opacity|translate|\banimate\b/,
     evidence: 'recurring-timer',
@@ -324,7 +324,7 @@ const SIGNAL_CATALOG = [
     noise: 'precise',
     detects: '`useRef(v)` + unconditional `ref.current = v` (shorthand exists)',
     why: 'Correct React idiom; useSyncedRef is a one-line shorthand.',
-    fix: 'references/use-synced-ref.md',
+    fix: 'references/use-synced-ref.md#when-to-use',
     matcher: matchesSyncedRef,
   },
   {
@@ -336,7 +336,7 @@ const SIGNAL_CATALOG = [
     noise: 'precise',
     detects: '`useCallback` with empty deps calling through a ref **(JSX)**',
     why: 'Correct React idiom; useStableCallback is a one-line shorthand.',
-    fix: 'references/use-stable-callback.md',
+    fix: 'references/use-stable-callback.md#when-to-use',
     matcher: matchesStableCallback,
     fileTypes: 'jsx',
   },
@@ -422,7 +422,7 @@ const SIGNAL_CATALOG = [
     detects:
       'pointermove/mousemove/touchmove listener, or intrinsic JSX move prop, with a layout read per event',
     why: 'A synchronous reflow per event; move events fire far above 60/sec.',
-    fix: 'references/use-pointer.md',
+    fix: 'references/use-pointer.md#when-to-use',
     // Raw listeners and intrinsic JSX move props can both read layout at event
     // frequency. A raw listener requires a nearby layout read through
     // contextPattern. A JSX prop requires a layout read inside the associated
@@ -518,7 +518,7 @@ const SIGNAL_CATALOG = [
     detects:
       '`WhenVisible`/`WhenIdle` without a fallback; verify whether mount changes in-flow size **(JSX)**',
     why: 'Children are absent until triggered; unreserved in-flow size can shift layout.',
-    fix: 'references/rendering-recipes.md',
+    fix: 'references/rendering-recipes.md#what-not-to-compose',
     matcher: matchesUngatedLazyMount,
     fileTypes: 'jsx',
   },

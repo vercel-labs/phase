@@ -105,7 +105,7 @@ redundant-mutation-observers — MutationObserver on html/documentElement (coale
 manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand) (1) · noise: precise
   why: Correct React idiom; useSyncedRef is a one-line shorthand.
   use: useSyncedRef(value)
-  read: references/use-synced-ref.md
+  read: references/use-synced-ref.md#when-to-use
   src/use-latest.ts:4  const valueRef = useRef(value);
 
 ─────────────────────────────────────────

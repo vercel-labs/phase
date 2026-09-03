@@ -36,6 +36,13 @@ for (const file of readdirSync(join(scenario, 'workspace'), {
 
 // Goldens must reflect shipped output, so they come from the built bundle.
 // Rebuild it first, or a scanner/ edit would regenerate them from a stale one.
+const fixSections = spawnSync(
+  process.execPath,
+  ['scripts/skill/generate-fix-sections.mjs'],
+  { cwd: packageRoot, stdio: 'inherit' },
+);
+if (fixSections.status !== 0) process.exit(fixSections.status ?? 1);
+
 const bundle = spawnSync(
   'pnpm',
   ['exec', 'tsdown', '-c', 'tsdown.scanner.config.ts'],

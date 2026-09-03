@@ -37,6 +37,7 @@ import {
 import type { PhaseBaseline } from './baseline.ts';
 import { sanitizeTerminalLine, sanitizeTerminalText } from './detect.ts';
 import type { ScanFinding } from './detect.ts';
+import { formatSignalExplanation, formatSignalList } from './explain.ts';
 import {
   formatGithubAnnotations,
   formatGithubSummary,
@@ -65,12 +66,14 @@ export * from './index.ts';
 // --- CLI --------------------------------------------------------------------
 
 const USAGE = `Usage: node scan.mjs [options] <target> [...targets]
+       node scan.mjs explain [signal-id]
 
 Scans directories or files for animation anti-pattern candidates.
 Findings are candidates, not verdicts: classify each against
 references/audit.md before recommending a change.
 
 Targets   directories or individual files (default: current directory)
+          use "-- explain" to scan a target named "explain"
 
 Options
   --json               emit machine-readable JSON (alias for --format json)
@@ -107,6 +110,11 @@ Reading a large report
   finding, which on a large codebase runs to tens of thousands of tokens.
 
 Exit codes: 0 = scan completed, 1 = --fail-on threshold hit, 2 = usage error.`;
+
+const EXPLAIN_USAGE = `Usage: node scan.mjs explain [signal-id]
+
+Print one signal's triage metadata and bundled fix section.
+Without a signal id, list every signal one per line.`;
 
 interface CliOptions {
   json: boolean;
@@ -284,7 +292,13 @@ function parseArgs(argv: string[]): CliOptions {
 }
 
 function main(): void {
-  const opts = readOptions(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv[0] === 'explain') {
+    explain(argv.slice(1));
+    return;
+  }
+
+  const opts = readOptions(argv);
 
   if (opts.help) {
     console.log(USAGE);
@@ -306,6 +320,35 @@ function main(): void {
   printResult(filtered, opts);
 
   if (hitsFailThreshold(filtered.findings, opts)) process.exit(1);
+}
+
+function explain(argv: string[]): void {
+  if (argv.length === 0) {
+    console.log(formatSignalList(SIGNALS));
+    return;
+  }
+  if (argv.length === 1 && (argv[0] === '--help' || argv[0] === '-h')) {
+    console.log(EXPLAIN_USAGE);
+    return;
+  }
+
+  const id = argv[0] as string;
+  if (argv.length > 1 || id.startsWith('-')) {
+    const message = id.startsWith('-')
+      ? `unknown option: ${id}`
+      : 'explain expects one signal id';
+    console.error(`${sanitizeTerminalLine(message)}\n\n${EXPLAIN_USAGE}`);
+    process.exit(2);
+  }
+
+  const signal = SIGNALS.find((candidate) => candidate.id === id);
+  if (!signal) {
+    console.error(
+      `explain expects a known signal id (got: ${sanitizeTerminalLine(id)})\n\n${formatSignalList(SIGNALS)}\n\n${EXPLAIN_USAGE}`,
+    );
+    process.exit(2);
+  }
+  console.log(formatSignalExplanation(signal));
 }
 
 function readOptions(argv: string[]): CliOptions {

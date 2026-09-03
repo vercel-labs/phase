@@ -10,6 +10,7 @@ pre-commit:
       # staging only evals files hands oxfmt zero targets and it exits 2.
       exclude:
         - 'skills/phase/metadata.json'
+        - 'packages/skill/scanner/fix-sections.gen.ts'
         - 'packages/examples/manifest.ts'
         - 'packages/skill/evals/**'
       run: pnpm oxfmt --check {staged_files}
@@ -17,16 +18,17 @@ pre-commit:
       glob: '**/*.{ts,tsx}'
       exclude:
         - 'packages/examples/manifest.ts'
+        - 'packages/skill/scanner/fix-sections.gen.ts'
       run: pnpm oxlint {staged_files}
-    # Regenerate metadata.json + the downloadable zip whenever skill sources
-    # change, then stage the regenerated outputs into the same commit.
+    # Regenerate fix sections, consumer artifacts, and the downloadable zip
+    # whenever skill sources change, then stage the outputs into the same commit.
     # `git add` is explicit (not stage_fixed) because the outputs are not part
     # of the originally-staged set, so stage_fixed would leave them unstaged and
-    # force a follow-up commit. Both outputs are deterministic — no spurious
+    # force a follow-up commit. All outputs are deterministic — no spurious
     # churn. Runs only when a skill source or its maintainer tooling is staged.
     skill-sync:
       glob: '{skills/phase/**/*,packages/skill/**/*}'
-      run: pnpm skill:package && git add skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip
+      run: pnpm skill:package && git add packages/skill/scanner/fix-sections.gen.ts skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip
     generate-examples-manifest:
       glob: 'packages/examples/**/*'
       run: pnpm --filter @usephase/examples generate-manifest && git add packages/examples/manifest.ts

@@ -31,6 +31,7 @@ import {
   parseBaseline,
 } from '../index.ts';
 import { GOLDEN_SCENARIO_DIR } from '../scenarios.ts';
+import { SIGNALS } from '../signals.ts';
 
 const PACKAGE_ROOT = resolve(import.meta.dirname, '..', '..');
 const REPO_ROOT = resolve(PACKAGE_ROOT, '..', '..');
@@ -1241,6 +1242,46 @@ describe('scan CLI', () => {
     const run = runCli(['--signal', 'no-such-signal', 'workspace']);
     expect(run.status).toBe(2);
     expect(run.stderr).toContain('known signal id');
+  });
+
+  it('lists every signal with bare explain', () => {
+    const run = runCli(['explain']);
+    expect(run.status).toBe(0);
+    const ids = run.stdout
+      .trim()
+      .split('\n')
+      .map((line) => line.trim().split(/\s+/)[0]);
+    expect(ids).toEqual(SIGNALS.map((signal) => signal.id));
+  });
+
+  it('explains one signal with its bundled fix section and source link', () => {
+    const signal = SIGNALS.find(
+      (candidate) => candidate.id === 'forced-reflow',
+    );
+    if (!signal) throw new Error('forced-reflow signal is missing');
+    const run = runCli(['explain', 'forced-reflow']);
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain('Signal: forced-reflow');
+    expect(run.stdout).toContain(`Label: ${signal.label}`);
+    expect(run.stdout).toContain(`Severity: ${signal.severity}`);
+    expect(run.stdout).toContain(`Noise tier: ${signal.noise}`);
+    expect(run.stdout).toContain(`Detects: ${signal.detects}`);
+    expect(run.stdout).toContain(`Why: ${signal.why}`);
+    expect(run.stdout).toContain(`Replacement: ${signal.replacement}`);
+    expect(run.stdout).toContain('## No forced reflows in animation paths');
+    expect(run.stdout).toContain(
+      'https://github.com/vercel-labs/phase/blob/main/skills/phase/references/performance.md#no-forced-reflows-in-animation-paths',
+    );
+  });
+
+  it('rejects an unknown explain signal or option', () => {
+    const unknownSignal = runCli(['explain', 'no-such-signal']);
+    expect(unknownSignal.status).toBe(2);
+    expect(unknownSignal.stderr).toContain('known signal id');
+
+    const unknownOption = runCli(['explain', '--json']);
+    expect(unknownOption.status).toBe(2);
+    expect(unknownOption.stderr).toContain('unknown option: --json');
   });
 
   it('--noise drops the tiers a triage pass does not want', () => {

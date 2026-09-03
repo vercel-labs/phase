@@ -1,3 +1,5 @@
+import { formatSignalExplanation } from '../explain.ts';
+import { FIX_SECTIONS } from '../fix-sections.gen.ts';
 import {
   NOISE_TIERS,
   SEVERITY_ORDER,
@@ -33,7 +35,9 @@ describe('scan signal catalog', () => {
         expect(signal.detects.length).toBeGreaterThan(0);
         expect(signal.why.length).toBeGreaterThan(0);
         expect(signal.replacement.length).toBeGreaterThan(0);
-        expect(signal.fix.startsWith('references/')).toBe(true);
+        expect(signal.fix).toMatch(/^references\/.+\.md#[\w-]+$/);
+        expect(FIX_SECTIONS[signal.fix]?.length).toBeGreaterThan(0);
+        expect(formatSignalExplanation(signal).length).toBeGreaterThan(0);
         if (signal.supersedes) {
           expect(
             SIGNALS.some((candidate) => candidate.id === signal.supersedes),

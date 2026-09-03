@@ -1,6 +1,6 @@
 import { readMarkerBlock } from './marker-block.mjs';
 
-const HEADERS = ['Signal', 'Severity', 'Noise', 'Detects', 'Fix reference'];
+const HEADERS = ['Signal', 'Severity', 'Noise', 'Detects', 'Fix pointer'];
 
 /** Returns whether audit.md's generated signal table exactly matches the catalog. */
 export function isSignalTableFresh(source, signals, severityOrder) {

@@ -63,7 +63,7 @@ jobs:
       - name: Skill artifact freshness
         run: |
           pnpm skill:package
-          git diff --exit-code skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip \
+          git diff --exit-code packages/skill/scanner/fix-sections.gen.ts skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip \
             || (echo "Skill artifacts are stale. Run 'pnpm skill:package' and commit the result." && exit 1)
 
   action:
