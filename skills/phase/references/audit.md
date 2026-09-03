@@ -82,7 +82,7 @@ Scanner targets are literal and non-transitive: scanning a route does not follow
 | `--limit <n>`             | Cap the `findings` array in `--json` output (`summary.total` still reports the true count)                                                                                               |
 | `-h`, `--help`            | Usage                                                                                                                                                                                    |
 
-Exit codes: `0` scan completed (the default even when findings exist; the audit is advisory), `1` a `--fail-on` threshold was hit, `2` usage error. Requires Node 24 or newer.
+Exit codes: `0` scan completed (the default even when findings exist; the audit is advisory), `1` a `--fail-on` threshold was hit, `2` usage error.
 
 Baselines store `{ schemaVersion, cliVersion, root, fingerprints }`, where `root` binds root-relative fingerprint paths to the scan root. A baseline from another root is a usage error. Baseline reads accept regular files up to 16 MiB. When a baseline applies, the text report lists only new findings and summarizes the new and pre-existing counts. Complete directory scans also report the stale count; partial file or multi-target scans report stale as unknown (`null` in JSON). JSON retains both new and pre-existing findings for machine consumers. Version differences between the scanner and baseline produce a warning, not a failure. Rewriting a baseline atomically replaces the file and removes stale fingerprints.
 
