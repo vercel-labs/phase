@@ -4,13 +4,13 @@ import { init, parse } from 'es-module-lexer';
 
 await init;
 
-export function scannerImportErrors(source) {
+export function consumerArtifactImportErrors(source, filename) {
   const errors = [];
   const [imports] = parse(source);
 
   for (const entry of imports) {
     if (entry.d >= 0) {
-      errors.push('scan.mjs contains a dynamic import() call');
+      errors.push(`${filename} contains a dynamic import() call`);
       continue;
     }
     if (entry.d === -2) continue;
@@ -21,12 +21,12 @@ export function scannerImportErrors(source) {
       !specifier.startsWith('node:') ||
       !isBuiltin(specifier)
     ) {
-      errors.push(`scan.mjs imports non-builtin module: ${specifier}`);
+      errors.push(`${filename} imports non-builtin module: ${specifier}`);
     }
   }
 
   if (/\brequire\s*\(/.test(source)) {
-    errors.push('scan.mjs contains a CommonJS require() call');
+    errors.push(`${filename} contains a CommonJS require() call`);
   }
   return errors;
 }

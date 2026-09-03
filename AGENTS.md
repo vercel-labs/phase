@@ -6,14 +6,15 @@
 
 Animation infrastructure for the web. Lifecycle-aware primitives compose visibility, timing, reduced motion, and quality signals into coherent state machines with debuggable transitions.
 
-Run commands from the repository root. The repository has four ownership boundaries:
+Run commands from the repository root. The repository has five ownership boundaries:
 
 - [`packages/phase/`](./packages/phase/AGENTS.md) owns the published library, performance contracts, and library implementation rules.
+- `packages/cli/` owns the private npm command package and its package-level tests and documentation.
 - [`packages/skill/`](./packages/skill/AGENTS.md) owns scanner source, evals, and skill-maintainer tooling.
 - [`packages/examples/`](./packages/examples/CONVENTIONS.md) owns the shared React examples and their rules.
 - `skills/phase/` contains only installable skill content and committed generated artifacts.
 
-The root `README.md` tells the package and repository story; `packages/phase/README.md` is the npm package summary.
+The root `README.md` documents the package and repository. `packages/phase/README.md` and `packages/cli/README.md` are the npm package summaries.
 
 Scanner, audit, or eval changes must use the canonical vocabulary in [`CONTEXT.md`](./CONTEXT.md). Durable architecture decisions live in [`docs/adr/`](./docs/adr/README.md).
 
@@ -61,19 +62,26 @@ Run `pnpm validate` before opening or updating a PR.
 
 ## Versioning and changelog
 
-Package and skill versions are independent release signals:
+The library package, command package, and skill are versioned independently:
 
 - Bump `packages/phase/package.json` for changes to shipped library source, build output, or consumer-facing package metadata.
+- Bump `packages/cli/package.json` for changes to the command's behavior, build output, or consumer-facing package metadata. The scanner version recorded in output and baselines follows `skills/phase/SKILL.md`, not this package version.
 - Do not bump the package for skill-only, test-only, workflow-only, or README-only changes. Root `README.md` changes are repository-only; changes to `packages/phase/README.md` reach npm with the next package release. Use an intentional patch release only when an npm-facing documentation correction must ship immediately.
 - Bump the version in `skills/phase/SKILL.md` whenever installable skill content changes.
 - The release workflow validates every merge to `main`, but publishes only package versions not already on npm. An existing version is a successful no-op.
 
-When asked to bump the package version:
+When asked to bump the library package version:
 
 1. Bump `version` in `packages/phase/package.json`.
 2. Bump `version` in `skills/phase/SKILL.md` when the package change alters the public API or skill references.
 3. Prepend a section to `CHANGELOG.md` under the new version number. Keep all older entries.
 4. Use the existing `## X.Y.Z` and `### Patch Changes` / `### Minor Changes` / `### Major Changes` format.
 5. Keep each entry to what changed and never overwrite older changelog entries.
+
+When asked to bump the command package version:
+
+1. Bump `version` in `packages/cli/package.json`.
+2. Prepend a section to `packages/cli/CHANGELOG.md` using the same heading format.
+3. Bump `skills/phase/SKILL.md` only when scanner behavior or installable skill content changes.
 
 Package and skill naming follows [`ADR 0007`](./docs/adr/0007-reserve-unscoped-names-for-published-packages.md): unscoped names are publishable, while `@usephase/*` workspace packages are internal and must set `"private": true`.

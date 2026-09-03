@@ -170,6 +170,7 @@ describe('render', () => {
         findingOf('src/a.ts', 2),
         findingOf('src/b.ts', 1),
       ]),
+      '0.0.48',
       1,
     );
 
@@ -206,7 +207,7 @@ describe('render', () => {
     const classified = classifyFindings([preExisting, added], baseline);
     const result = baselinedResultOf(classified.findings, classified.stale);
 
-    const json = formatJson(result);
+    const json = formatJson(result, '0.0.48');
     expect(json.summary).toMatchObject({
       new: 1,
       preExisting: 1,
@@ -632,7 +633,9 @@ describe('scan CLI', () => {
       writeFileSync(customPath, `${JSON.stringify(skewed, null, 2)}\n`);
       const skewRun = runCli(['--baseline', 'custom-baseline.json', '.'], root);
       expect(skewRun.status).toBe(0);
-      expect(skewRun.stderr).toContain('baseline version 0.0.1 differs');
+      expect(skewRun.stderr).toContain(
+        'baseline scanner version 0.0.1 differs',
+      );
 
       const missing = runCli(['--baseline', 'missing.json', '.'], root);
       expect(missing.status).toBe(2);

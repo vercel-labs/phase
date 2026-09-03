@@ -8,7 +8,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { scannerImportErrors } from './distribution.mjs';
+import { consumerArtifactImportErrors } from './distribution.mjs';
 
 const packageRoot = resolve(import.meta.dirname, '..', '..');
 const repoRoot = resolve(packageRoot, '..', '..');
@@ -50,7 +50,7 @@ for (const required of requiredFiles) {
 }
 
 const scanner = readFileSync(scannerPath, 'utf8');
-errors.push(...scannerImportErrors(scanner));
+errors.push(...consumerArtifactImportErrors(scanner, 'scan.mjs'));
 
 if (errors.length > 0) {
   for (const error of errors) console.error(`UNSAFE: ${error}`);

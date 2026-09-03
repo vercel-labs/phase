@@ -19,6 +19,11 @@ import { defineConfig } from 'tsdown';
 export default defineConfig({
   clean: false,
   cwd: import.meta.dirname,
+  define: {
+    __PHASE_COMMAND__: JSON.stringify('node scan.mjs'),
+    __PHASE_PACKAGE_VERSION__: 'null',
+    __PHASE_SCANNER_VERSION__: 'null',
+  },
   dts: false,
   entry: { scan: 'scanner/cli.ts' },
   fixedExtension: true,
