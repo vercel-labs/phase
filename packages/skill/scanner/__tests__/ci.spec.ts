@@ -492,7 +492,11 @@ describe('--diff', () => {
       const run = spawnSync(
         process.execPath,
         [SCRIPT, '--format', 'github', '--fail-on', 'none', '--diff', 'target'],
-        { cwd: root, encoding: 'utf8' },
+        {
+          cwd: root,
+          encoding: 'utf8',
+          env: { ...process.env, GITHUB_STEP_SUMMARY: '' },
+        },
       );
 
       expect(run.status).toBe(0);
