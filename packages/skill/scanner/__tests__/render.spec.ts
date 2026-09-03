@@ -1,18 +1,26 @@
 import { spawnSync } from 'node:child_process';
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
+  truncateSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import type { ScanFinding, ScanResult } from '../index.ts';
+import type {
+  BaselinedScanResult,
+  ClassifiedFinding,
+  ScanFinding,
+  UnbaselinedScanResult,
+} from '../index.ts';
 import {
   assignFingerprints,
   classifyFindings,
@@ -52,7 +60,7 @@ function findingOf(
   };
 }
 
-function resultOf(findings: ScanFinding[]): ScanResult {
+function resultOf(findings: ScanFinding[]): UnbaselinedScanResult {
   return {
     targets: ['src'],
     filesScanned: 1,
@@ -74,6 +82,17 @@ function resultOf(findings: ScanFinding[]): ScanResult {
       clientComponents: 0,
       evidence: [],
     },
+  };
+}
+
+function baselinedResultOf(
+  findings: ClassifiedFinding[],
+  stale: number | null,
+): BaselinedScanResult {
+  return {
+    ...resultOf([]),
+    findings,
+    baseline: { stale },
   };
 }
 
@@ -184,10 +203,7 @@ describe('render', () => {
       ),
     );
     const classified = classifyFindings([preExisting, added], baseline);
-    const result = {
-      ...resultOf(classified.findings),
-      baseline: { stale: classified.stale },
-    };
+    const result = baselinedResultOf(classified.findings, classified.stale);
 
     const json = formatJson(result);
     expect(json.summary).toMatchObject({
@@ -214,19 +230,15 @@ describe('render', () => {
 
   it('keeps suppression counts in a baseline scan with no new findings', () => {
     const text = formatText({
-      ...resultOf([]),
+      ...baselinedResultOf([], 0),
       suppressed: 1,
-      baseline: { stale: 0 },
     });
 
     expect(text).toContain('1 suppressed');
   });
 
   it('reports unknown stale state for a partial baseline scan', () => {
-    const text = formatText({
-      ...resultOf([]),
-      baseline: { stale: null },
-    });
+    const text = formatText(baselinedResultOf([], null));
 
     expect(text).toContain('stale unknown (partial scan)');
   });
@@ -632,6 +644,13 @@ describe('scan CLI', () => {
       const unsafe = runCli(['--baseline', 'custom-baseline.json', '.'], root);
       expect(unsafe.status).toBe(2);
       expect(unsafe.stderr).not.toContain('\u001b');
+
+      const unsafePath = runCli(
+        ['--baseline', 'missing\u001b[2J.json', '.'],
+        root,
+      );
+      expect(unsafePath.status).toBe(2);
+      expect(unsafePath.stderr).not.toContain('\u001b');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -705,6 +724,45 @@ describe('scan CLI', () => {
 
       expect(run.status).toBe(2);
       expect(run.stderr).toContain('does not match the current scan root');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts equivalent filesystem names for the same scan root', () => {
+    if (process.platform !== 'darwin') return;
+
+    const root = mkdtempSync(join(tmpdir(), 'phase-baseline-alias-'));
+    const workspace = join(root, 'workspace');
+    mkdirSync(workspace);
+    writeFileSync(
+      join(workspace, 'finding.ts'),
+      'const width = target.offsetWidth;\n',
+    );
+    const physicalWorkspace = realpathSync(workspace);
+    if (physicalWorkspace === workspace) {
+      rmSync(root, { recursive: true, force: true });
+      return;
+    }
+
+    try {
+      expect(
+        runCli(['--write-baseline', 'phase-baseline.json', '.'], workspace)
+          .status,
+      ).toBe(0);
+      const run = runCli(
+        [
+          '--baseline',
+          join(workspace, 'phase-baseline.json'),
+          '--fail-on',
+          'critical',
+          '.',
+        ],
+        physicalWorkspace,
+      );
+
+      expect(run.status).toBe(0);
+      expect(run.stdout).toContain('1 pre-existing');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -858,6 +916,32 @@ describe('scan CLI', () => {
     }
   });
 
+  it('preserves the previous baseline when atomic replacement cannot start', () => {
+    if (process.platform === 'win32') return;
+
+    const root = mkdtempSync(join(tmpdir(), 'phase-atomic-baseline-'));
+    writeFileSync(join(root, 'finding.ts'), 'const a = target.offsetWidth;\n');
+    const baselinePath = join(root, 'phase-baseline.json');
+    try {
+      expect(
+        runCli(['--write-baseline', 'phase-baseline.json', '.'], root).status,
+      ).toBe(0);
+      const original = readFileSync(baselinePath, 'utf8');
+      writeFileSync(join(root, 'new.ts'), 'const b = target.offsetHeight;\n');
+      chmodSync(root, 0o555);
+
+      const rewrite = runCli(
+        ['--write-baseline', 'phase-baseline.json', '.'],
+        root,
+      );
+      expect(rewrite.status).toBe(2);
+      expect(readFileSync(baselinePath, 'utf8')).toBe(original);
+    } finally {
+      chmodSync(root, 0o755);
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('replaces a corrupt auto-detected baseline', () => {
     const root = mkdtempSync(join(tmpdir(), 'phase-repair-baseline-'));
     const src = join(root, 'src');
@@ -908,6 +992,110 @@ describe('scan CLI', () => {
 
       expect(run.status).toBe(2);
       expect(run.stderr).toContain('regular file');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an explicit non-regular baseline without blocking', () => {
+    if (process.platform === 'win32') return;
+
+    const root = mkdtempSync(join(tmpdir(), 'phase-fifo-baseline-'));
+    const workspace = join(root, 'workspace');
+    mkdirSync(workspace);
+    writeFileSync(join(workspace, 'clean.ts'), 'export const clean = true;\n');
+    const fifo = join(root, 'baseline.fifo');
+    expect(spawnSync('mkfifo', [fifo]).status).toBe(0);
+
+    try {
+      const run = spawnSync(
+        process.execPath,
+        [SCRIPT, '--baseline', fifo, '.'],
+        { cwd: workspace, encoding: 'utf8', timeout: 1000 },
+      );
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('regular file');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a baseline larger than 16 MiB before parsing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-large-baseline-'));
+    writeFileSync(join(root, 'clean.ts'), 'export const clean = true;\n');
+    const baselinePath = join(root, 'phase-baseline.json');
+    writeFileSync(baselinePath, '');
+    truncateSync(baselinePath, 16 * 1024 * 1024 + 1);
+
+    try {
+      const run = runCli(['.'], root);
+
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('exceeds 16 MiB');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('escapes hostile JSON paths without changing their fingerprints', () => {
+    if (process.platform === 'win32') return;
+
+    const root = mkdtempSync(join(tmpdir(), 'phase-json-path-'));
+    writeFileSync(
+      join(root, 'evil\u202e.ts'),
+      'const width = target.offsetWidth;\n',
+    );
+    try {
+      expect(
+        runCli(['--write-baseline', 'phase-baseline.json', '.'], root).status,
+      ).toBe(0);
+      const [fingerprint] = parseBaseline(
+        readFileSync(join(root, 'phase-baseline.json'), 'utf8'),
+      ).fingerprints;
+
+      const run = runCli(['--json', '.'], root);
+      expect(run.status).toBe(0);
+      expect(run.stdout).not.toContain('\u202e');
+      expect(JSON.parse(run.stdout).findings[0].fingerprint).toBe(fingerprint);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('visibly escapes untrusted newlines in text and usage errors', () => {
+    if (process.platform === 'win32') return;
+
+    const root = mkdtempSync(join(tmpdir(), 'phase-newline-path-'));
+    writeFileSync(
+      join(root, 'file\nFORGED.ts'),
+      'const width = target.offsetWidth;\n',
+    );
+    writeFileSync(
+      join(root, 'line\u2028FORGED.ts'),
+      'const height = target.offsetHeight;\n',
+    );
+    writeFileSync(
+      join(root, 'excerpt.ts'),
+      'const top = target.offsetTop; // excerpt\u2028FORGED-TEXT\n',
+    );
+    try {
+      const text = runCli(['.'], root);
+      expect(text.stdout).not.toContain('\nFORGED.ts');
+      expect(text.stdout).toContain('file\\nFORGED.ts');
+      expect(text.stdout).not.toContain('\u2028FORGED.ts');
+      expect(text.stdout).toContain('line\\u2028FORGED.ts');
+      expect(text.stdout).not.toContain('\u2028FORGED-TEXT');
+      expect(text.stdout).toContain('excerpt\\u2028FORGED-TEXT');
+
+      const error = runCli(
+        ['--baseline', 'missing\nFORGED\u2029.json', '.'],
+        root,
+      );
+      expect(error.status).toBe(2);
+      expect(error.stderr).not.toContain('\nFORGED\u2029.json');
+      expect(error.stderr).not.toContain('\u2029.json');
+      expect(error.stderr).toContain('missing\\nFORGED\\u2029.json');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

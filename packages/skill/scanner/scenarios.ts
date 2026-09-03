@@ -3,7 +3,7 @@ import { basename, join } from 'node:path';
 
 import type { ScanContext } from './context.ts';
 import type { ScanSeverity, ScanSignalId } from './signals.ts';
-import { SIGNALS } from './signals.ts';
+import { FAIL_ON_SEVERITIES, SIGNALS } from './signals.ts';
 
 const SIGNAL_IDS = new Set<string>(SIGNALS.map((signal) => signal.id));
 
@@ -228,7 +228,7 @@ function parseBaselineWorkflow(
     'newFinding',
   ]);
   const failOn = expectString(`${path}.failOn`, baseline.failOn);
-  if (!['critical', 'high', 'medium'].includes(failOn)) {
+  if (!(FAIL_ON_SEVERITIES as readonly string[]).includes(failOn)) {
     throw new Error(`${path}.failOn must be critical, high, or medium`);
   }
 

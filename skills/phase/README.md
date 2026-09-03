@@ -58,7 +58,7 @@ node <skill-dir>/scripts/scan.mjs --diff origin/main
 | `--stdin0`                | Read NUL-delimited targets from stdin; empty input scans nothing               |
 | `--diff <ref>`            | Scan committed added, copied, modified, or renamed files since the merge base  |
 | `--fail-on <severity>`    | Exit 1 at or above `critical`/`high`/`medium`; `none` is report-only           |
-| `--baseline <path>`       | Compare with an explicit baseline instead of auto-detection                    |
+| `--baseline <path>`       | Compare with an explicit regular-file baseline up to 16 MiB                    |
 | `--no-baseline`           | Ignore an explicit or auto-detected baseline                                   |
 | `--write-baseline <path>` | Write one complete directory scan as a baseline and exit 0                     |
 | `--signal <id>`           | Report only this signal (repeatable)                                           |
@@ -68,13 +68,13 @@ node <skill-dir>/scripts/scan.mjs --diff origin/main
 | `--limit <n>`             | Cap the findings array in `--json` output                                      |
 | `-h`, `--help`            | Usage                                                                          |
 
-Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit, `2` usage error. A clean scan reports how many files it scanned; zero scannable files prints a warning instead of a green result. Requires Node 20 or newer.
+Exit codes: `0` scan completed (advisory default), `1` `--fail-on` threshold hit, `2` usage error. A clean scan reports how many files it scanned; zero scannable files prints a warning instead of a green result.
 
 The scanner auto-detects `phase-baseline.json` at the scan root. Baselines record that root relative to the baseline file, and the CLI rejects a baseline whose recorded root does not match the current scan. Fingerprints use root-relative file paths, so separate targets with the same internal path remain distinct.
 
 With a baseline, `--fail-on` evaluates only new findings, text output lists only those new findings, and JSON marks findings as `new` or `pre-existing`. Every JSON finding includes a stable `fingerprint`. A complete directory scan reports the stale count; file, multi-target, and `--diff` scans report `stale: null` (`stale unknown (partial scan)` in text) because they cannot prove a baseline entry disappeared. Baseline version differences warn without failing.
 
-`--write-baseline` requires exactly one directory target with complete scan coverage, writes sorted `{ schemaVersion, cliVersion, root, fingerprints }` JSON, and prunes stale fingerprints. It cannot be combined with `--baseline`, `--diff`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`.
+`--write-baseline` requires exactly one directory target with complete scan coverage, atomically writes sorted `{ schemaVersion, cliVersion, root, fingerprints }` JSON, and prunes stale fingerprints. It cannot be combined with `--baseline`, `--diff`, `--signal`, `--severity`, `--noise`, `--exclude`, or `--stdin0`.
 
 JSON schema version 1 is additive: new object fields may appear without a version bump, so consumers must ignore fields they do not recognize.
 

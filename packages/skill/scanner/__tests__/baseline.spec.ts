@@ -146,6 +146,24 @@ describe('baseline documents', () => {
     ).toThrow('baseline fingerprints must not contain duplicates');
   });
 
+  it.each([
+    'line\rbreak.ts',
+    'line\nbreak.ts',
+    'line\u2028break.ts',
+    'line\u2029break.ts',
+  ])('round-trips a fingerprint containing %j', (file) => {
+    const [assigned] = assignFingerprints([{ ...finding(1), file }]);
+    const serialized = serializeBaseline(
+      [assigned?.fingerprint as string],
+      '1.0.0',
+      '.',
+    );
+
+    expect(parseBaseline(serialized).fingerprints).toEqual([
+      assigned?.fingerprint,
+    ]);
+  });
+
   it.each(['', '/absolute', 'C:\\absolute'])(
     'rejects an invalid baseline root %j',
     (root) => {
