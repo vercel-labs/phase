@@ -1,5 +1,9 @@
 # Reserve unscoped names for published packages
 
+## Status
+
+Superseded by [ADR 0014](./0014-name-the-tool-phase-and-publish-libraries-under-usephase.md). The `phase` name moves from the runtime library to the scanner tool.
+
 ## Context
 
 The workspace contains one public npm package and private packages that exist only to build or test repository artifacts. An unclaimed internal package name can create dependency-confusion risk if tooling mistakes it for a registry dependency.
