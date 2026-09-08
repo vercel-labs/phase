@@ -8,7 +8,7 @@ The repository is moving from one published package to three: the tool plus two 
 
 The release workflow re-validates the merge commit, compares each declared package's manifest version against npm, and publishes only the missing versions through a per-package matrix. An already-published version is a successful no-op.
 
-Publishing authenticates with npm trusted publishing (OIDC), configured per package. Publish steps stay in the top-level release workflow file because npm validates the calling workflow's filename. Only the publish job holds `id-token: write`. A `release` GitHub environment scopes the publishing capability by label; requiring a reviewer on that environment is a settings toggle enabled for risky moments, not a default. The first publish of a new package uses a one-time granular token, because a trusted-publisher configuration requires the package to already exist on npm.
+Publishing authenticates with npm trusted publishing (OIDC), configured per package. Publish steps stay in the top-level release workflow file because npm validates the calling workflow's filename. Only the publish job holds `id-token: write`. A `release` GitHub environment scopes the publishing capability by label; its protection rules are operational settings adjusted for the moment's risk rather than steps encoded in the workflow. The first publish of a new package uses a one-time granular token, because a trusted-publisher configuration requires the package to already exist on npm.
 
 ## Reason
 
