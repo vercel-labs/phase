@@ -16,4 +16,4 @@ The version bump in a merged PR remains the entire release signal, which fits a 
 
 ## Considered options
 
-Changesets was rejected: it adds a second versioning workflow whose main benefits, coordinated bumps and changelog automation, the workspace protocol and hand-written changelogs already cover at this package count. Revisit if inter-package coordination outgrows workspace-protocol rewriting or external contributors need changelog automation.
+Changesets was not adopted: it adds a second versioning workflow whose main benefits, coordinated bumps and changelog automation, the workspace protocol and hand-written changelogs already cover at this package count. Revisit if inter-package coordination outgrows workspace-protocol rewriting or external contributors need changelog automation.
