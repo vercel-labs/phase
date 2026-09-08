@@ -50,6 +50,24 @@ _Avoid_: Execution tier, hotness tier
 A `phase-scan-ignore <signal-id> -- <reason>` comment recording a human-approved reason to hide one signal at a specific line or, for file-wide signals, throughout the file. Owners: `packages/skill/scanner/lex.ts` and `packages/skill/scanner/detect.ts`.
 _Avoid_: Ignore comment, exemption
 
+### Baseline
+
+**Fingerprint**:
+The stable identity of a finding: its signal, file, a twelve-character hash of the whitespace-normalized source line, and an occurrence index for identical lines in the same file. Edits that only move a line do not change it. Owner: `packages/skill/scanner/baseline.ts`.
+_Avoid_: Finding ID, finding hash
+
+**Baseline**:
+A committed file recording the fingerprints of findings a repository has accepted. When present, gating counts only new findings. Owner: `packages/skill/scanner/baseline.ts`.
+_Avoid_: Allowlist, ignore file
+
+**Baseline state**:
+Whether a finding's fingerprint appears in the baseline: `new` (absent, counted by `--fail-on`) or `pre-existing` (present, reported without failing the gate). Owner: `packages/skill/scanner/baseline.ts`.
+_Avoid_: Finding status
+
+**Stale entry**:
+A baseline fingerprint with no matching finding in the current scan. Staleness is passive: summaries show the count, nothing fails because of it, and only `--write-baseline` prunes stale entries. Owner: `packages/skill/scanner/baseline.ts`.
+_Avoid_: Stale finding, orphaned fingerprint
+
 ### Analysis and evidence
 
 **Performance trace**:
@@ -61,6 +79,10 @@ Facts about a scanned file that are computed once and reused by several signals.
 
 **Evidence**:
 A named yes/no check of surrounding code that a signal requires when the matching line alone is not enough. Owners: `packages/skill/scanner/analysis.ts` and `packages/skill/scanner/signals.ts`.
+
+**Verification loop**:
+The required source path of an audit: scan, inspect each finding in context, apply the cheapest safe fix, and rescan. A performance trace is optional measured evidence on top; without one, an audit is complete but makes no measured runtime claim. Owner: `skills/phase/references/audit.md`.
+_Avoid_: Audit loop, feedback loop
 
 ### Evaluation
 
@@ -107,6 +129,12 @@ _Avoid_: Built scanner, bundled scanner, CLI artifact
 **Scanner version**:
 The version recorded in scan JSON and baselines to identify scanner behavior. Every distribution uses the current skill version as its scanner version.
 _Avoid_: CLI version, engine version
+
+## Library packages
+
+**Binding**:
+A framework-specific library package that adapts core primitives to one framework, such as `@usephase/react`. Bindings reach shared core machinery through core's declared internal subpath instead of deep imports. Owner: `packages/phase/src/react/`.
+_Avoid_: Adapter package, wrapper
 
 ## Examples
 
@@ -161,3 +189,5 @@ The unit-project portion of a module's tests after its native observer or schedu
 - **Example** means React reference code from the examples package. **Fixture** means sample input used by a scenario.
 - **Unit project**, **browser project**, and future end-to-end tests name separate layers. The browser project tests library contracts in real engines; end-to-end tests drive an application page.
 - **Version** always needs a qualifier: package version identifies an npm release, skill version identifies the installable skill, and scanner version identifies the behavior recorded in scan output and baselines.
+- **New** and **pre-existing** are baseline states of a finding; **stale** describes a baseline entry whose finding no longer exists, never a finding itself.
+- **Baseline** and **suppression directive** are different mechanisms: a baseline accepts existing findings wholesale by fingerprint so gates count only regressions, while a suppression directive hides one signal at one location with a human-recorded reason.
