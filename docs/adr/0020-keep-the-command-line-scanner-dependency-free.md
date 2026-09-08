@@ -6,7 +6,9 @@ The same command-line source ships two ways: as the skill's committed consumer a
 
 ## Decision
 
-The command-line scanner imports `node:` built-ins only and declares zero runtime dependencies. Argument parsing stays on a table-driven parser in the scanner's own source. Revisit only if third parties contribute commands or an interactive mode lands.
+The command-line scanner imports `node:` built-ins only and declares zero runtime dependencies. Argument parsing stays on a table-driven parser in the scanner's own source.
+
+The contract binds the published artifact, not the source: a maintained library inlined at build time keeps the artifact dependency-free and is weighed separately on supply-chain exposure, artifact size, and determinism. Revisit the artifact contract itself if third parties contribute commands, an interactive mode lands, or a dependency audit shows a maintained library beating the custom logic on correctness or maintenance cost.
 
 ## Considered options
 
