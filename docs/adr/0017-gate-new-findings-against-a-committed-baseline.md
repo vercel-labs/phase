@@ -6,7 +6,7 @@ Turning the scanner into a PR gate on an existing codebase fails on day one: eve
 
 ## Decision
 
-Every JSON finding carries a fingerprint built from its signal, file, a twelve-character SHA-256 prefix of the whitespace-normalized source line, and an occurrence index for identical lines in the same file. A committed baseline file records the fingerprints a repository has accepted; when one is present, `--fail-on` counts only new findings, and pre-existing findings are reported without failing the gate.
+Every JSON finding carries a fingerprint built from its signal, its file, a content hash of its whitespace-normalized source line, and an occurrence index for identical lines in the same file. The versioned baseline schema owns the exact hash algorithm and width. A committed baseline file records the fingerprints a repository has accepted; when one is present, `--fail-on` counts only new findings, and pre-existing findings are reported without failing the gate.
 
 A baseline entry with no matching finding in the current scan is stale. Staleness is passive: every summary shows the stale count, nothing fails because of it, and only `--write-baseline` prunes stale entries. A version difference between the baseline and the running scanner warns and never fails.
 

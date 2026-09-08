@@ -6,7 +6,7 @@ The same command-line source ships two ways: as the skill's committed consumer a
 
 ## Decision
 
-The command-line scanner imports `node:` built-ins only and declares zero runtime dependencies. Argument parsing stays on the existing table-driven parser, which the scanner's tests cover. Revisit only if third parties contribute commands or an interactive mode lands.
+The command-line scanner imports `node:` built-ins only and declares zero runtime dependencies. Argument parsing stays on a table-driven parser in the scanner's own source. Revisit only if third parties contribute commands or an interactive mode lands.
 
 ## Considered options
 
