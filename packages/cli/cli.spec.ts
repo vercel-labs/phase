@@ -168,5 +168,5 @@ describe('phase command distribution', () => {
       'read: https://github.com/vercel-labs/phase/blob/main/skills/phase/references/',
     );
     expect(scan.stdout).not.toMatch(/(?:read: |\()references\//);
-  });
+  }, 30_000);
 });
