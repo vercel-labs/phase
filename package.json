@@ -6,7 +6,7 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "test:browser": "turbo run test:browser",
-    "test:root": "vitest run --globals scripts/check-package-version.spec.mjs",
+    "test:root": "vitest run --globals scripts/*.spec.mjs",
     "typecheck": "turbo run typecheck",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",

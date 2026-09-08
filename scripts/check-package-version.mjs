@@ -1,5 +1,11 @@
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { posix } from 'node:path';
+
+import { readPublishablePackages } from './publishable-packages.mjs';
+import {
+  compareSemanticVersions,
+  isSemanticVersion,
+} from './semantic-version.mjs';
 
 const base = process.argv[2];
 
@@ -7,24 +13,9 @@ if (!base) {
   throw new Error('Usage: node scripts/check-package-version.mjs <base-ref>');
 }
 
-const currentPackage = JSON.parse(
-  readFileSync('packages/phase/package.json', 'utf8'),
-);
-
-let basePackagePath = 'packages/phase/package.json';
-try {
-  execFileSync('git', ['cat-file', '-e', `${base}:${basePackagePath}`], {
-    stdio: 'ignore',
-  });
-} catch {
-  basePackagePath = 'package.json';
-}
-const workspaceMigration = basePackagePath === 'package.json';
-const basePackage = JSON.parse(
-  execFileSync('git', ['show', `${base}:${basePackagePath}`], {
-    encoding: 'utf8',
-  }),
-);
+execFileSync('git', ['rev-parse', '--verify', `${base}^{commit}`], {
+  stdio: 'ignore',
+});
 
 const diffTokens = execFileSync(
   'git',
@@ -42,48 +33,14 @@ for (let index = 0; index < diffTokens.length; ) {
   changedFiles.push({ status, source, file });
 }
 
-// Tests and mocks never ship: the build bundles only the three barrel entry
-// points, and the published files are dist/LICENSE/README.md. A spec-only
-// change must not demand a version bump for an identical package.
 const TEST_ONLY = /\.spec\.|\.test\.|__tests__\/|__mocks__\//;
-const isPackageBuildInput = (path) =>
-  path &&
-  (((path.startsWith('packages/phase/src/') ||
-    (workspaceMigration && path.startsWith('src/'))) &&
-    !TEST_ONLY.test(path)) ||
-    path === 'packages/phase/tsconfig.json' ||
-    path === 'packages/phase/tsdown.config.ts' ||
-    path === 'tsconfig.base.json' ||
-    (workspaceMigration && path === 'tsdown.config.ts'));
-
-const packageSourceChanged = changedFiles.some(({ status, source, file }) => {
-  if (!file) return false;
-  if (
-    workspaceMigration &&
-    status === 'R100' &&
-    ((source?.startsWith('src/') && file === `packages/phase/${source}`) ||
-      (source === 'tsdown.config.ts' &&
-        file === 'packages/phase/tsdown.config.ts'))
-  ) {
-    return false;
-  }
-  if (
-    workspaceMigration &&
-    status === 'A' &&
-    (file === 'packages/phase/tsconfig.json' || file === 'tsconfig.base.json')
-  ) {
-    return false;
-  }
-  return [source, file].some(isPackageBuildInput);
-});
-
 const publishedManifestFields = [
-  'name',
   'description',
   'author',
   'license',
   'repository',
   'publishConfig',
+  'bin',
   'type',
   'sideEffects',
   'dependencies',
@@ -95,22 +52,155 @@ const publishedManifestFields = [
   'exports',
   'engines',
 ];
+const publishedScriptFields = [
+  'prebuild',
+  'build',
+  'postbuild',
+  'prepublish',
+  'prepublishOnly',
+  'prepack',
+  'prepare',
+  'postpack',
+  'preinstall',
+  'install',
+  'postinstall',
+  'publish',
+  'postpublish',
+];
 
-const publishedManifestChanged = publishedManifestFields.some(
-  (field) =>
-    JSON.stringify(currentPackage[field]) !==
-    JSON.stringify(basePackage[field]),
-);
+function readBaseFile(path) {
+  const exists =
+    spawnSync('git', ['cat-file', '-e', `${base}:${path}`]).status === 0;
+  if (!exists) return;
+  return execFileSync('git', ['show', `${base}:${path}`], { encoding: 'utf8' });
+}
 
-if (!packageSourceChanged && !publishedManifestChanged) {
-  console.log('No package release required.');
-} else if (currentPackage.version === basePackage.version) {
-  throw new Error(
-    `Package contents changed without a version bump (still ${currentPackage.version}). ` +
-      'Bump packages/phase/package.json and update CHANGELOG.md before merging this package release.',
+function isPackageBuildInput(path, directory) {
+  return (
+    path === 'tsconfig.base.json' ||
+    path === `${directory}/tsconfig.json` ||
+    path === `${directory}/tsdown.config.ts` ||
+    (path?.startsWith(`${directory}/src/`) && !TEST_ONLY.test(path))
   );
-} else {
+}
+
+const errors = [];
+const baseDeclaration = readBaseFile('scripts/publishable-packages.json');
+const basePackages = baseDeclaration
+  ? JSON.parse(baseDeclaration).map((directory) => {
+      const manifest = readBaseFile(`${directory}/package.json`);
+      if (!manifest) {
+        throw new Error(
+          `Declared package ${directory} has no manifest at ${base}`,
+        );
+      }
+      return { directory, manifest: JSON.parse(manifest) };
+    })
+  : [];
+
+for (const {
+  directory,
+  manifest: currentPackage,
+} of readPublishablePackages()) {
+  const manifestPath = `${directory}/package.json`;
+  const directBaseManifest = readBaseFile(manifestPath);
+  let basePackageEntry;
+  if (directBaseManifest) {
+    const manifest = JSON.parse(directBaseManifest);
+    if (manifest.name === currentPackage.name) {
+      basePackageEntry = { directory, manifest };
+    }
+  }
+  basePackageEntry ??= basePackages.find(
+    ({ manifest }) => manifest.name === currentPackage.name,
+  );
+  if (!basePackageEntry) {
+    const manifestRename = changedFiles.find(
+      ({ source, file }) =>
+        file === manifestPath && source?.endsWith('/package.json'),
+    );
+    if (manifestRename?.source) {
+      const manifest = JSON.parse(
+        readBaseFile(manifestRename.source) ?? 'null',
+      );
+      if (manifest?.name === currentPackage.name) {
+        basePackageEntry = {
+          directory: posix.dirname(manifestRename.source),
+          manifest,
+        };
+      }
+    }
+  }
+  if (!basePackageEntry) {
+    console.log(
+      `Package release requested for ${currentPackage.name}: new package at ${currentPackage.version}.`,
+    );
+    continue;
+  }
+
+  const { directory: baseDirectory, manifest: basePackage } = basePackageEntry;
+  const baseManifestPath = `${baseDirectory}/package.json`;
+  const packageSourceChanged = changedFiles.some(({ status, source, file }) => {
+    const unchangedMove =
+      baseDirectory !== directory &&
+      status === 'R100' &&
+      source?.startsWith(`${baseDirectory}/`) &&
+      file?.startsWith(`${directory}/`) &&
+      source.slice(baseDirectory.length) === file.slice(directory.length);
+    if (unchangedMove) return false;
+
+    return [source, file].some(
+      (path) =>
+        isPackageBuildInput(path, directory) ||
+        isPackageBuildInput(path, baseDirectory),
+    );
+  });
+  const publishedManifestChanged = publishedManifestFields.some(
+    (field) =>
+      JSON.stringify(currentPackage[field]) !==
+      JSON.stringify(basePackage[field]),
+  );
+  const publishedScriptChanged = publishedScriptFields.some(
+    (field) => currentPackage.scripts?.[field] !== basePackage.scripts?.[field],
+  );
+  const versionChanged = currentPackage.version !== basePackage.version;
+
+  if (
+    !packageSourceChanged &&
+    !publishedManifestChanged &&
+    !publishedScriptChanged &&
+    !versionChanged
+  ) {
+    console.log(`No package release required for ${currentPackage.name}.`);
+    continue;
+  }
+  if (!versionChanged) {
+    errors.push(
+      `Package contents changed without a version bump for ${currentPackage.name} ` +
+        `(still ${currentPackage.version}). Bump ${manifestPath} and update the package changelog specified in AGENTS.md before merging.`,
+    );
+    continue;
+  }
+  if (!isSemanticVersion(basePackage.version)) {
+    errors.push(
+      `Package version for ${currentPackage.name} at ${base}:${baseManifestPath} is not a valid semantic version: ${String(basePackage.version)}.`,
+    );
+    continue;
+  }
+  if (
+    compareSemanticVersions(currentPackage.version, basePackage.version) <= 0
+  ) {
+    errors.push(
+      `Package version must increase for ${currentPackage.name}: ${basePackage.version} -> ${currentPackage.version}.`,
+    );
+    continue;
+  }
+
   console.log(
-    `Package release requested: ${basePackage.version} -> ${currentPackage.version}.`,
+    `Package release requested for ${currentPackage.name}: ${basePackage.version} -> ${currentPackage.version}.`,
   );
+}
+
+if (errors.length > 0) {
+  throw new Error(errors.join('\n'));
 }
