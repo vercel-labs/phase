@@ -24,7 +24,7 @@ function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function createRepository() {
+function createRepository(version = '1.0.0') {
   const root = mkdtempSync(join(tmpdir(), 'phase-version-check-'));
   fixtures.push(root);
 
@@ -35,7 +35,7 @@ function createRepository() {
 
   writeJson(join(root, 'package.json'), {
     name: 'phase',
-    version: '1.0.0',
+    version,
     type: 'module',
     scripts: { build: 'tsdown', prepare: 'lefthook install || true' },
     files: ['dist', 'LICENSE', 'README.md'],
@@ -77,10 +77,41 @@ function movePackage(root) {
   runGit(root, 'add', '.');
 }
 
-function createMovedRepository() {
-  const { root } = createRepository();
+function createMovedRepository(version) {
+  const { root } = createRepository(version);
   movePackage(root);
+  writeJson(join(root, 'scripts/publishable-packages.json'), [
+    'packages/phase',
+  ]);
+  runGit(root, 'add', '.');
   runGit(root, 'commit', '--quiet', '-m', 'move package');
+  return { root, base: runGit(root, 'rev-parse', 'HEAD') };
+}
+
+function createTwoPackageRepository() {
+  const { root } = createMovedRepository();
+  const packageRoot = join(root, 'packages/react');
+  writeJson(join(packageRoot, 'package.json'), {
+    name: '@usephase/react',
+    version: '1.0.0',
+    type: 'module',
+    scripts: { build: 'tsdown' },
+    files: ['dist'],
+    exports: { '.': './dist/index.js' },
+  });
+  mkdirSync(join(packageRoot, 'src'));
+  writeFileSync(
+    join(packageRoot, 'src/index.ts'),
+    'export const usePhase = 1;\n',
+  );
+  writeFileSync(join(packageRoot, 'tsconfig.json'), '{}\n');
+  writeFileSync(join(packageRoot, 'tsdown.config.ts'), 'export default {};\n');
+  writeJson(join(root, 'scripts/publishable-packages.json'), [
+    'packages/phase',
+    'packages/react',
+  ]);
+  runGit(root, 'add', '.');
+  runGit(root, 'commit', '--quiet', '-m', 'add react package');
   return { root, base: runGit(root, 'rev-parse', 'HEAD') };
 }
 
@@ -98,33 +129,6 @@ afterEach(() => {
 });
 
 describe('package release intent', () => {
-  it('accepts an unchanged package moved into the workspace', () => {
-    const { root, base } = createRepository();
-    movePackage(root);
-
-    const run = runCheck(root, base);
-
-    expect(run.status).toBe(0);
-    expect(run.stdout).toContain('No package release required.');
-    expect(run.stderr).toBe('');
-  });
-
-  it('rejects production source moved outside the package during migration', () => {
-    const { root, base } = createRepository();
-    movePackage(root);
-    const destination = join(root, 'apps/example/index.ts');
-    mkdirSync(dirname(destination), { recursive: true });
-    renameSync(join(root, 'packages/phase/src/index.ts'), destination);
-    runGit(root, 'add', '.');
-
-    const run = runCheck(root, base);
-
-    expect(run.status).toBe(1);
-    expect(run.stderr).toContain(
-      'Package contents changed without a version bump',
-    );
-  });
-
   it('accepts repository-only changes after the workspace move', () => {
     const { root, base } = createMovedRepository();
     writeFileSync(join(root, 'CONTRIBUTING.md'), '# Contributing\n');
@@ -132,7 +136,7 @@ describe('package release intent', () => {
     const run = runCheck(root, base);
 
     expect(run.status).toBe(0);
-    expect(run.stdout).toContain('No package release required.');
+    expect(run.stdout).toContain('No package release required for phase.');
   });
 
   it('rejects package source changes without a version bump', () => {
@@ -207,6 +211,201 @@ describe('package release intent', () => {
     expect(run.status).toBe(1);
     expect(run.stderr).toContain(
       'Package contents changed without a version bump',
+    );
+  });
+
+  it('checks release intent for every declared package', () => {
+    const { root, base } = createTwoPackageRepository();
+    writeFileSync(
+      join(root, 'packages/react/src/index.ts'),
+      'export const usePhase = 2;\n',
+    );
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump for @usephase/react',
+    );
+  });
+
+  it('accepts an independent version bump for a changed package', () => {
+    const { root, base } = createTwoPackageRepository();
+    writeFileSync(
+      join(root, 'packages/react/src/index.ts'),
+      'export const usePhase = 2;\n',
+    );
+    const manifestPath = join(root, 'packages/react/package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.version = '1.0.1';
+    writeJson(manifestPath, manifest);
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain(
+      'Package release requested for @usephase/react: 1.0.0 -> 1.0.1.',
+    );
+    expect(run.stdout).toContain('No package release required for phase.');
+  });
+
+  it('does not require a release for package test changes', () => {
+    const { root, base } = createTwoPackageRepository();
+    writeFileSync(
+      join(root, 'packages/react/src/index.spec.ts'),
+      'export const testOnly = true;\n',
+    );
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain(
+      'No package release required for @usephase/react.',
+    );
+  });
+
+  it('rejects published bin changes without a version bump', () => {
+    const { root, base } = createTwoPackageRepository();
+    const manifestPath = join(root, 'packages/react/package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.bin = { phase: './dist/index.js' };
+    writeJson(manifestPath, manifest);
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump for @usephase/react',
+    );
+  });
+
+  it('rejects a package version that moves backward', () => {
+    const { root, base } = createMovedRepository();
+    const manifestPath = join(root, 'packages/phase/package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.version = '0.9.0';
+    writeJson(manifestPath, manifest);
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package version must increase for phase: 1.0.0 -> 0.9.0.',
+    );
+  });
+
+  it('accepts an increasing prerelease package version', () => {
+    const { root, base } = createMovedRepository('1.0.0-beta.2');
+    const manifestPath = join(root, 'packages/phase/package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.version = '1.0.0-beta.10';
+    writeJson(manifestPath, manifest);
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain(
+      'Package release requested for phase: 1.0.0-beta.2 -> 1.0.0-beta.10.',
+    );
+  });
+
+  it('rejects source changes made while moving a declared package', () => {
+    const { root, base } = createMovedRepository();
+    renameSync(join(root, 'packages/phase'), join(root, 'packages/core'));
+    writeJson(join(root, 'scripts/publishable-packages.json'), [
+      'packages/core',
+    ]);
+    writeFileSync(
+      join(root, 'packages/core/src/index.ts'),
+      'export const phase = 2;\n',
+    );
+    runGit(root, 'add', '-A');
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump for phase',
+    );
+  });
+
+  it('accepts moving an unchanged declared package', () => {
+    const { root, base } = createMovedRepository();
+    renameSync(join(root, 'packages/phase'), join(root, 'packages/core'));
+    writeJson(join(root, 'scripts/publishable-packages.json'), [
+      'packages/core',
+    ]);
+    runGit(root, 'add', '-A');
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain('No package release required for phase.');
+  });
+
+  it('matches a moved package by npm name when Git misses the rename', () => {
+    const { root, base } = createMovedRepository();
+    renameSync(join(root, 'packages/phase'), join(root, 'packages/core'));
+    writeJson(join(root, 'packages/core/package.json'), {
+      name: 'phase',
+      version: '1.0.0',
+    });
+    writeJson(join(root, 'scripts/publishable-packages.json'), [
+      'packages/core',
+    ]);
+    runGit(root, 'add', '-A');
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump for phase',
+    );
+  });
+
+  it('treats a changed npm name as a new package', () => {
+    const { root, base } = createMovedRepository();
+    const manifestPath = join(root, 'packages/phase/package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.name = '@usephase/core';
+    manifest.version = '0.1.0';
+    writeJson(manifestPath, manifest);
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain(
+      'Package release requested for @usephase/core: new package at 0.1.0.',
+    );
+  });
+
+  it('rejects build script changes without a version bump', () => {
+    const { root, base } = createTwoPackageRepository();
+    const manifestPath = join(root, 'packages/react/package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.scripts.build = 'tsdown --minify';
+    writeJson(manifestPath, manifest);
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump for @usephase/react',
+    );
+  });
+
+  it('rejects prebuild changes without a version bump', () => {
+    const { root, base } = createTwoPackageRepository();
+    const manifestPath = join(root, 'packages/react/package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.scripts.prebuild = 'node prepare-build.mjs';
+    writeJson(manifestPath, manifest);
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump for @usephase/react',
     );
   });
 });

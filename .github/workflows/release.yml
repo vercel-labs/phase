@@ -2,8 +2,9 @@ name: Release
 
 # Validates every push to main and publishes versions not yet present on npm.
 # Uses npm Trusted Publishing (OIDC) -- no NPM_TOKEN secret needed.
-# Requires the package to be configured as a Trusted Publisher on npmjs.com
-# linked to this repo and workflow.
+# Requires every declared package to be configured as a Trusted Publisher on
+# npmjs.com linked to this repo and workflow, with Environment left blank and
+# direct `npm publish` allowed.
 # Existing versions are successful no-ops; PR CI requires package-affecting
 # changes to include a version bump.
 
@@ -20,8 +21,29 @@ permissions:
   contents: read
 
 jobs:
-  # Re-run the full validation gate on the merge commit before doing anything
-  # release-related. Branch protection covers the PR's HEAD, but flaky tests,
+  detect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      packages: ${{ steps.releases.outputs.packages }}
+      has_packages: ${{ steps.releases.outputs.has_packages }}
+
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Detect unpublished package versions
+        id: releases
+        run: node scripts/detect-package-releases.mjs >> "$GITHUB_OUTPUT"
+
+  # Re-run the full validation gate on the merge commit before publishing.
+  # Branch protection covers the PR's HEAD, but flaky tests,
   # dep drift, or admin merges can let a broken commit land on main. Anything
   # publish-worthy must pass these checks first. This job has no id-token.
   validate:
@@ -97,52 +119,83 @@ jobs:
       - name: Run browser tests
         run: pnpm test:browser
 
-  # Minimal publish job. Only this job holds id-token: write, and it runs only
-  # after validation succeeds. npm publish triggers `prepublishOnly` (pnpm
-  # build), so the package is rebuilt here from a clean checkout before
-  # publishing.
+  # Minimal publish job. Each package is rebuilt and packed from a clean
+  # checkout. Only these serialized matrix legs hold id-token: write.
   publish:
-    needs: [validate, browser]
+    needs: [validate, browser, detect]
+    if: needs.detect.outputs.has_packages == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       id-token: write
+    strategy:
+      max-parallel: 1
+      matrix:
+        package: ${{ fromJSON(needs.detect.outputs.packages) }}
 
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
-        with:
-          fetch-depth: 0
-          lfs: true
-
-      - uses: pnpm/action-setup@fdbc4fdcf7d143a5d0a39e9a02e103b13e309024 # v6.0.4
 
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: "24"
-          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
-      - name: Check npm version
-        id: release
-        run: |
-          NAME=$(node -p "require('./packages/phase/package.json').name")
-          VERSION=$(node -p "require('./packages/phase/package.json').version")
-          PUBLISHED_VERSIONS=$(npm view "$NAME" versions --json)
+      - name: Recheck unpublished package version
+        id: recheck
+        env:
+          PACKAGE_DIR: ${{ matrix.package }}
+        run: node scripts/detect-package-releases.mjs "$PACKAGE_DIR" >> "$GITHUB_OUTPUT"
 
-          if VERSION="$VERSION" node -e \
-            "const v = JSON.parse(require('node:fs').readFileSync(0, 'utf8')); process.exit((Array.isArray(v) ? v : [v]).includes(process.env.VERSION) ? 0 : 1)" \
-            <<< "$PUBLISHED_VERSIONS"; then
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping npm publish: $NAME@$VERSION already exists."
-          else
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-            echo "Publishing $NAME@$VERSION."
-          fi
+      - if: steps.recheck.outputs.has_packages == 'true'
+        uses: pnpm/action-setup@fdbc4fdcf7d143a5d0a39e9a02e103b13e309024 # v6.0.4
 
       - name: Install dependencies
-        if: steps.release.outputs.should_publish == 'true'
+        if: steps.recheck.outputs.has_packages == 'true'
         run: pnpm install --frozen-lockfile
 
+      # npm@11 can leave sigstore missing when it replaces the bundled npm in
+      # place. Verify libnpmpublish can resolve it, retry once, then fail before
+      # a publish starts.
+      - name: Install a provenance-capable npm
+        if: steps.recheck.outputs.has_packages == 'true'
+        run: |
+          set -eo pipefail
+          verify_sigstore() {
+            node -e "require.resolve('sigstore', { paths: ['$(npm root -g)/npm/node_modules/libnpmpublish/lib'] })"
+          }
+          npm install -g npm@11 --force --registry=https://registry.npmjs.org
+          npm --version
+          if ! verify_sigstore; then
+            echo "::warning::sigstore unresolved after npm upgrade; reinstalling"
+            npm install -g npm@11 --force --registry=https://registry.npmjs.org
+            verify_sigstore
+          fi
+          echo "::notice::npm $(npm --version) ready with provenance support (sigstore resolves)"
+
+      - name: Build package
+        if: steps.recheck.outputs.has_packages == 'true'
+        env:
+          PACKAGE_DIR: ${{ matrix.package }}
+        run: pnpm exec turbo run build --filter="./$PACKAGE_DIR"
+
+      # pnpm rewrites workspace dependency ranges while packing. npm performs
+      # the OIDC exchange and provenance generation when publishing the tarball.
+      - name: Pack package
+        if: steps.recheck.outputs.has_packages == 'true'
+        env:
+          PACKAGE_DIR: ${{ matrix.package }}
+        run: pnpm --dir "$PACKAGE_DIR" pack --out "$RUNNER_TEMP/package.tgz"
+
+      - name: Verify packed package name and version
+        if: steps.recheck.outputs.has_packages == 'true'
+        env:
+          EXPECTED_PACKAGE_NAME: ${{ steps.recheck.outputs.package_name }}
+          EXPECTED_PACKAGE_VERSION: ${{ steps.recheck.outputs.package_version }}
+        run: tar -xOf "$RUNNER_TEMP/package.tgz" package/package.json | node scripts/verify-packed-package.mjs
+
       - name: Publish to npm
-        if: steps.release.outputs.should_publish == 'true'
-        working-directory: packages/phase
-        run: npm publish
+        if: steps.recheck.outputs.has_packages == 'true'
+        run: npm publish "$RUNNER_TEMP/package.tgz" --access public --provenance --registry=https://registry.npmjs.org --@usephase:registry=https://registry.npmjs.org
