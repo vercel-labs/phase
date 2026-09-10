@@ -55,6 +55,16 @@ jobs:
           path: packages/cli/dist/phase.mjs
           if-no-files-found: error
 
+      - name: Pack usephase codemod
+        run: pnpm --dir packages/codemod pack --out "$RUNNER_TEMP/usephase-codemod.tgz"
+
+      - name: Upload usephase codemod
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: usephase-codemod
+          path: ${{ runner.temp }}/usephase-codemod.tgz
+          if-no-files-found: error
+
       - name: Check examples manifest
         run: |
           pnpm --filter @usephase/examples generate-manifest
@@ -100,6 +110,33 @@ jobs:
           node packages/cli/dist/phase.mjs --help >/dev/null
           node packages/cli/dist/phase.mjs explain setstate-in-raf >/dev/null
           node packages/cli/dist/phase.mjs scan --json packages/skill/evals/scenarios/audit-planted-defects/workspace/src/hero-animation.tsx >/dev/null
+
+  codemod:
+    needs: ci
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20.0.0", "22", "24"]
+    steps:
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Download usephase codemod
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: usephase-codemod
+          path: ${{ runner.temp }}
+
+      - name: Smoke test usephase codemod
+        run: |
+          consumer="$RUNNER_TEMP/usephase-codemod-consumer"
+          mkdir "$consumer"
+          npm install --prefix "$consumer" --ignore-scripts --no-audit --no-fund --no-package-lock --no-save "$RUNNER_TEMP/usephase-codemod.tgz"
+          printf "import 'phase';\n" > "$consumer/consumer.ts"
+          "$consumer/node_modules/.bin/usephase-codemod" rename-imports "$consumer/consumer.ts"
+          grep -F "import '@usephase/core';" "$consumer/consumer.ts"
 
   action:
     runs-on: ubuntu-latest

@@ -1,0 +1,25 @@
+{
+  "name": "consumer",
+  "dependencies": {
+    "other": "1.0.0",
+    "phase": "^0.5.4"
+  },
+  "devDependencies": {
+    "phase": "~0.5.4",
+    "@usephase/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "phase": ">=0.5"
+  },
+  "peerDependenciesMeta": {
+    "phase": {
+      "optional": true
+    },
+    "@usephase/core": {
+      "optional": false
+    }
+  },
+  "optionalDependencies": {
+    "phase": "0.5.4"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "@usephase/codemod",
+  "version": "0.1.0",
+  "description": "Codemods for migrating applications from the legacy phase runtime package",
+  "author": "Vercel",
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/vercel-labs/phase.git",
+    "directory": "packages/codemod"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "bin": {
+    "usephase-codemod": "./dist/usephase-codemod.mjs"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "jscodeshift": "17.4.0"
+  },
+  "devDependencies": {
+    "@types/jscodeshift": "17.3.0",
+    "@types/node": "25.6.0",
+    "tsdown": "0.21.7",
+    "typescript": "6.0.2",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

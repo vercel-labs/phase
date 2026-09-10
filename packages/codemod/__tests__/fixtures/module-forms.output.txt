@@ -1,0 +1,16 @@
+import '@usephase/core';
+import { createLoop } from '@usephase/core';
+import type { Phase } from '@usephase/core';
+export { createLoop as loop } from '@usephase/core';
+export * from '@usephase/react';
+export type { Ease } from '@usephase/core/ease';
+
+const core = require('@usephase/core');
+const react = import('@usephase/react');
+const resolved = require.resolve('@usephase/core/ease');
+import legacy = require('@usephase/core');
+
+vi.mock('@usephase/core/ease');
+jest.mock('@usephase/react');
+
+const untouched = require('phase/other');
