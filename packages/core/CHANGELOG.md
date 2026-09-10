@@ -5,4 +5,4 @@
 ### Minor Changes
 
 - Moved the framework-agnostic library from `phase` to `@usephase/core`.
-- Added `@usephase/core/ease` and the binding-only `@usephase/core/internal` port.
+- Exposed easing and math only through `@usephase/core/ease`, plus the binding-only `@usephase/core/internal` port.

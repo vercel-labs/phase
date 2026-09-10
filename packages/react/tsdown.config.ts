@@ -9,7 +9,12 @@ export default defineConfig({
     index: 'src/index.ts',
   },
   deps: {
-    neverBundle: ['@usephase/core', '@usephase/core/internal', 'react'],
+    neverBundle: [
+      '@usephase/core',
+      '@usephase/core/ease',
+      '@usephase/core/internal',
+      'react',
+    ],
   },
   fixedExtension: false,
   format: ['esm'],

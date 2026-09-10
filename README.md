@@ -159,11 +159,11 @@ If a gap fails any criterion, phase closes it in the [skill](#agent-skill) (audi
 
 ## Entry points
 
-| Import                | Contents                                                                        |
-| --------------------- | ------------------------------------------------------------------------------- |
-| `@usephase/core`      | Framework-agnostic timing, observation, lifecycle, scheduling, math, and errors |
-| `@usephase/core/ease` | Easing functions and math utilities only                                        |
-| `@usephase/react`     | React hooks and components                                                      |
+| Import                | Contents                                                                  |
+| --------------------- | ------------------------------------------------------------------------- |
+| `@usephase/core`      | Framework-agnostic timing, observation, lifecycle, scheduling, and errors |
+| `@usephase/core/ease` | Easing functions and math utilities only                                  |
+| `@usephase/react`     | React hooks and components                                                |
 
 Each entry point is independently tree-shakeable. Importing `@usephase/core/ease` in a server component pulls zero browser APIs.
 
@@ -1248,12 +1248,12 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `createLoop`              |           3.12 kB |
 | `createScrollProgress`    |             934 B |
 | `createRenderState`       |             490 B |
-| `createDevicePixelRatio`  |             545 B |
+| `createDevicePixelRatio`  |             544 B |
 | `createMutation`          |           1.54 kB |
 | `createPointer`           |           1.64 kB |
 | `createScroll`            |           2.07 kB |
 | `createThrottle`          |             983 B |
-| `createDebounce`          |             559 B |
+| `createDebounce`          |             558 B |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
 | `PhaseError`              |              98 B |
@@ -1270,7 +1270,7 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `useScroll`               |             440 B |
 | `useThrottledCallback`    |             205 B |
 | `useDebouncedCallback`    |             202 B |
-| `useTween`                |             459 B |
+| `useTween`                |             452 B |
 | `usePresence`             |             534 B |
 | `useScrollProgress`       |             216 B |
 | `useSize`                 |             365 B |

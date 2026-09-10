@@ -38,6 +38,8 @@ loop.start();
 - **Input before frame loops.** Within one clock protocol, pointer, scroll, mutation, and throttle work queued before a frame flushes before its animation callbacks.
 - **Coordinates deferred work.** Observe when `content-visibility` skips rendering, and schedule callbacks when the browser is idle.
 
+Easing and math functions are available only from `@usephase/core/ease`.
+
 `@usephase/core/internal` is reserved for `@usephase/*` binding packages. Applications must not import it. It has no deprecation cycle or compatibility guarantee.
 
 React applications can add [`@usephase/react`](https://www.npmjs.com/package/@usephase/react). Read the [full documentation](https://github.com/vercel-labs/phase#readme), install the [phase agent skill](https://github.com/vercel-labs/phase/tree/main/skills/phase), review the [changelog](https://github.com/vercel-labs/phase/blob/main/packages/core/CHANGELOG.md), or see the [MIT license](https://github.com/vercel-labs/phase/blob/main/packages/core/LICENSE).

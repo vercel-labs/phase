@@ -1,5 +1,5 @@
 import { prefersReducedMotion } from '@usephase/core';
-import { clamp01, easeOutCubic } from '@usephase/core';
+import { clamp01, easeOutCubic } from '@usephase/core/ease';
 import { invalidDurationError } from '@usephase/core/internal';
 import { useState, useEffect, useRef } from 'react';
 

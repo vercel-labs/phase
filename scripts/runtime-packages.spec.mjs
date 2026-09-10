@@ -62,7 +62,11 @@ describe('packed runtime packages', () => {
           '--input-type=module',
           '--eval',
           `const core = await import('@usephase/core');
-await import('@usephase/core/ease');
+const ease = await import('@usephase/core/ease');
+if (typeof ease.easeOutCubic !== 'function') throw new Error('Missing ease entry');
+for (const name of Object.keys(ease)) {
+  if (name in core) throw new Error('Ease leaked into the core root entry: ' + name);
+}
 await import('@usephase/core/internal');
 const binding = await import('@usephase/react');
 const React = await import('react');
@@ -83,13 +87,24 @@ if (!thrown) throw new Error('Expected the React binding to throw PhaseError');`
       writeFileSync(
         join(consumer, 'consumer.mts'),
         `import { createLoop, type Loop } from '@usephase/core';
+// @ts-expect-error Easing is available only from @usephase/core/ease.
+import { easeOutCubic as leakedEase } from '@usephase/core';
+// @ts-expect-error Ease types are available only from @usephase/core/ease.
+import type { RemapOptions as LeakedRemapOptions } from '@usephase/core';
+import { clamp, type RemapOptions } from '@usephase/core/ease';
 import { REDUCED_MOTION_QUERY } from '@usephase/core/internal';
 import { useLoop, type UseLoopOptions } from '@usephase/react';
 void createLoop;
 void useLoop;
+void leakedEase;
+void clamp;
 const loop = null as unknown as Loop;
+const leakedRemap = null as unknown as LeakedRemapOptions;
+const remap = null as unknown as RemapOptions;
 const options = null as unknown as UseLoopOptions;
 void loop;
+void leakedRemap;
+void remap;
 void options;
 void REDUCED_MOTION_QUERY;
 `,

@@ -1,18 +1,6 @@
-// Core barrel — re-exports ease, tick, sight, loop
+// Core primitives barrel
 
 // API
-export {
-  easeOutCubic,
-  easeOutQuart,
-  easeOutBack,
-  easeInOutCubic,
-  linear,
-  clamp,
-  clamp01,
-  lerp,
-  inverseLerp,
-  remap,
-} from './ease';
 export { createTicker } from './tick';
 export { createSight } from './sight';
 export { createLifecycle } from './lifecycle';
@@ -30,7 +18,6 @@ export { createDebounce } from './debounce';
 export { PhaseError, isPhaseError } from './error';
 
 // Types
-export type { RemapOptions } from './ease';
 export type {
   FrameState,
   Ticker,
