@@ -5,7 +5,7 @@ Reports what fraction of an element is currently visible in the viewport (0–1)
 ## Signature
 
 ```ts
-import { createScrollProgress } from 'phase';
+import { createScrollProgress } from '@usephase/core';
 
 const progress = createScrollProgress(options: ScrollProgressOptions): ScrollProgress;
 ```

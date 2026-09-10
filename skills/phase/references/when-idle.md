@@ -5,7 +5,7 @@ Mounts children once the browser is idle after first paint. One-shot (once mount
 ## Signature
 
 ```tsx
-import { WhenIdle } from 'phase/react';
+import { WhenIdle } from '@usephase/react';
 
 <WhenIdle fallback={<Skeleton />} timeout={2000} className="...">
   <SecondaryPanel />
@@ -14,7 +14,7 @@ import { WhenIdle } from 'phase/react';
 
 ```ts
 // Core utility
-import { whenIdle } from 'phase';
+import { whenIdle } from '@usephase/core';
 
 const cancel = whenIdle(() => warmCache(), { timeout: 2000 });
 cancel(); // optional: prevent the callback before it runs

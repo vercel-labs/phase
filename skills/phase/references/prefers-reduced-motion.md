@@ -5,7 +5,7 @@ Returns `true` when the user has enabled reduced motion at the OS level. Use to 
 ## Signature
 
 ```ts
-import { prefersReducedMotion } from 'phase';
+import { prefersReducedMotion } from '@usephase/core';
 
 const reduced: boolean = prefersReducedMotion();
 ```

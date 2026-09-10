@@ -5,8 +5,8 @@ Every error includes a machine-readable `code` and an actionable message with `r
 ## Signature
 
 ```ts
-import { PhaseError, isPhaseError } from 'phase';
-import type { PhaseErrorCode } from 'phase';
+import { PhaseError, isPhaseError } from '@usephase/core';
+import type { PhaseErrorCode } from '@usephase/core';
 
 // Check if an error is a PhaseError
 if (isPhaseError(err)) {

@@ -1,4 +1,4 @@
-import { Defer, WhenVisible } from 'phase/react';
+import { Defer, WhenVisible } from '@usephase/react';
 
 import { SharedChart } from '../../packages/charts/src/shared-chart';
 import { LazyOverlay } from '../components/lazy-overlay';

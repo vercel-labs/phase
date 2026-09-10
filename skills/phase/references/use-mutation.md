@@ -7,7 +7,7 @@ React hook wrapping `createMutation`. Lifecycle-aware MutationObserver with rAF-
 Records are always delivered imperatively via `onMutations`; phase is reactive state (transitions are infrequent). This mirrors `useLoop` / `useCanvas`.
 
 ```ts
-import { useMutation } from 'phase/react';
+import { useMutation } from '@usephase/react';
 
 const { ref, phase, phaseReason, phaseRef, phaseReasonRef } =
   useMutation<T>(options);

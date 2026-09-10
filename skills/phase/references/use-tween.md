@@ -5,7 +5,7 @@ Animates a number from its current position to `to` over a duration. Calls `setS
 ## Signature
 
 ```ts
-import { useTween } from 'phase/react';
+import { useTween } from '@usephase/react';
 
 const value: number = useTween(options);
 ```

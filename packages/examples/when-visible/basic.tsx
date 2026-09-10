@@ -1,6 +1,6 @@
 'use client';
 
-import { WhenVisible } from 'phase/react';
+import { WhenVisible } from '@usephase/react';
 import type { JSX } from 'react';
 
 const styles = `

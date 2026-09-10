@@ -7,7 +7,7 @@ Within one clock protocol, event-derived callbacks queued before frame dispatch 
 ## Signature
 
 ```ts
-import { createPointer } from 'phase';
+import { createPointer } from '@usephase/core';
 
 const pointer = createPointer(options: PointerOptions): Pointer;
 ```

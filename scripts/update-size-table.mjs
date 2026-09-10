@@ -3,19 +3,24 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const PACKAGE_ROOT = resolve(ROOT, 'packages', 'phase');
 const README = resolve(ROOT, 'README.md');
-
-const SIZE_LIMIT_CONFIG = resolve(PACKAGE_ROOT, '.size-limit.json');
+const PACKAGES = [
+  {
+    root: resolve(ROOT, 'packages', 'core'),
+    group(path) {
+      return path === 'src/ease/index.ts' ? 'Ease' : 'Core';
+    },
+  },
+  {
+    root: resolve(ROOT, 'packages', 'react'),
+    group() {
+      return 'React';
+    },
+  },
+];
 
 const START = '<!-- SIZE-TABLE:START -->';
 const END = '<!-- SIZE-TABLE:END -->';
-
-const PATH_TO_GROUP = {
-  'src/index.ts': 'Core',
-  'src/ease/index.ts': 'Ease',
-  'src/react/index.ts': 'React',
-};
 
 function formatBytes(bytes) {
   if (bytes < 1000) return `${bytes} B`;
@@ -25,13 +30,10 @@ function formatBytes(bytes) {
   return `${formatted} kB`;
 }
 
-function buildTable(entries, config) {
-  const configByName = new Map(config.map((c) => [c.name, c]));
-
+function buildTable(entries) {
   const groups = new Map();
   for (const entry of entries) {
-    const cfg = configByName.get(entry.name);
-    const group = cfg ? (PATH_TO_GROUP[cfg.path] ?? 'Other') : 'Other';
+    const group = entry.group;
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group).push(entry);
   }
@@ -48,13 +50,21 @@ function buildTable(entries, config) {
   return rows.join('\n');
 }
 
-const config = JSON.parse(readFileSync(SIZE_LIMIT_CONFIG, 'utf8'));
-const json = execSync('pnpm exec size-limit --json', {
-  cwd: PACKAGE_ROOT,
-  encoding: 'utf8',
+const entries = PACKAGES.flatMap(({ root, group }) => {
+  const config = JSON.parse(
+    readFileSync(resolve(root, '.size-limit.json'), 'utf8'),
+  );
+  const configByName = new Map(config.map((entry) => [entry.name, entry]));
+  const json = execSync('pnpm exec size-limit --json', {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  return JSON.parse(json).map((entry) => {
+    entry.group = group(configByName.get(entry.name)?.path);
+    return entry;
+  });
 });
-const entries = JSON.parse(json);
-const table = buildTable(entries, config);
+const table = buildTable(entries);
 
 const readme = readFileSync(README, 'utf8');
 const startIdx = readme.indexOf(START);

@@ -5,7 +5,7 @@ Returns a function with stable identity that always calls the latest version of 
 ## Signature
 
 ```ts
-import { useStableCallback } from 'phase/react';
+import { useStableCallback } from '@usephase/react';
 
 const stable = useStableCallback(callback);
 ```

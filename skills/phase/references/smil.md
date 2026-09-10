@@ -18,7 +18,7 @@ Render meaningful static SVG attributes outside `<animate*>`. Use `begin="indefi
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useLifecycle, usePrefersReducedMotion } from 'phase/react';
+import { useLifecycle, usePrefersReducedMotion } from '@usephase/react';
 
 export function StatusPulse() {
   const svgRef = useRef<SVGSVGElement>(null);

@@ -1,5 +1,7 @@
 # phase
 
+This file records releases of the legacy `phase` runtime library through 0.5.4. Runtime development continues in [`packages/core/CHANGELOG.md`](packages/core/CHANGELOG.md) and [`packages/react/CHANGELOG.md`](packages/react/CHANGELOG.md).
+
 ## 0.5.4
 
 ### Patch Changes

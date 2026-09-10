@@ -5,7 +5,7 @@ Tracks `devicePixelRatio` changes (e.g. dragging the window between monitors wit
 ## Signature
 
 ```ts
-import { createDevicePixelRatio } from 'phase';
+import { createDevicePixelRatio } from '@usephase/core';
 
 const watcher = createDevicePixelRatio(options: DevicePixelRatioOptions): DevicePixelRatio;
 ```

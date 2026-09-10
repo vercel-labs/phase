@@ -5,7 +5,7 @@ Everything `useLoop` provides, plus DPR-aware buffer sizing, ResizeObserver coal
 ## Signature
 
 ```ts
-import { useCanvas } from 'phase/react';
+import { useCanvas } from '@usephase/react';
 
 const { restart, phase, phaseReason, quality, qualityReason } =
   useCanvas(options);

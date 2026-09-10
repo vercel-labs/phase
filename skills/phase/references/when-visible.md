@@ -5,7 +5,7 @@ Mounts children when the element enters the viewport. One-shot (once triggered, 
 ## Signature
 
 ```tsx
-import { WhenVisible } from 'phase/react';
+import { WhenVisible } from '@usephase/react';
 
 <WhenVisible rootMargin="200px" className="...">
   <HeavyContent />

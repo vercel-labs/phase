@@ -5,7 +5,7 @@ Renders a `div` that manages its own mount/unmount lifecycle, stamping `data-pha
 ## Signature
 
 ```tsx
-import { Presence } from 'phase/react';
+import { Presence } from '@usephase/react';
 
 <Presence show={isOpen} className="...">
   content

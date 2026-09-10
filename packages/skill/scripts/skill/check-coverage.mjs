@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * Verifies that every public export from phase's three barrel files has a
- * corresponding reference in skills/phase/references/, and that no orphan
- * reference files exist.
+ * Verifies that each application-facing core and React export maps to a
+ * reference in skills/phase/references/, that easing maps to ease.md, and that
+ * no orphan reference files exist.
  *
  * Skill metadata (name/version/author/license/abstract) is NOT checked here —
  * metadata.json is generated from SKILL.md frontmatter by build-metadata.mjs, so
@@ -18,7 +18,8 @@ import { join, resolve } from 'node:path';
 
 const packageRoot = resolve(import.meta.dirname, '..', '..');
 const repoRoot = resolve(packageRoot, '..', '..');
-const phaseRoot = resolve(packageRoot, '..', 'phase');
+const coreRoot = resolve(packageRoot, '..', 'core');
+const reactRoot = resolve(packageRoot, '..', 'react');
 const refsDir = join(repoRoot, 'skills', 'phase', 'references');
 
 // --- Parse exports from barrel files ---
@@ -46,13 +47,13 @@ function extractExportNames(filePath) {
   return names;
 }
 
-const coreExports = extractExportNames(join(phaseRoot, 'src/index.ts'));
-const reactExports = extractExportNames(join(phaseRoot, 'src/react/index.ts'));
+const coreExports = extractExportNames(join(coreRoot, 'src/index.ts'));
+const reactExports = extractExportNames(join(reactRoot, 'src/index.ts'));
 
 // Ease exports are covered by a single ease.md (one tree-shaken entry point).
 // Identify them by reading the ease barrel source for `export function` declarations.
 const easeExports = new Set(['ease']);
-const easeSource = readFileSync(join(phaseRoot, 'src/ease/index.ts'), 'utf8');
+const easeSource = readFileSync(join(coreRoot, 'src/ease/index.ts'), 'utf8');
 const easeFnRe = /export\s+function\s+(\w+)/g;
 let easeFnMatch;
 while ((easeFnMatch = easeFnRe.exec(easeSource)) !== null) {

@@ -246,7 +246,7 @@ The logos pass through as `children`, server-rendered HTML that React never hydr
 - CSS transitions that already work well. Leave them alone.
 - Spring animations with interruption. Keep your spring library.
 - Gesture-driven animations. Keep your gesture library.
-- Server-side code that imports easing math. Use `phase/ease` (no browser APIs).
+- Server-side code that imports easing math. Use `@usephase/core/ease` (no browser APIs).
 
 ## Migrating from animation libraries
 

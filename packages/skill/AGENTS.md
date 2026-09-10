@@ -60,13 +60,13 @@ Calibration is bounded judgment work. Stop after the fixed repository set and sa
 
 ## Skill synchronization
 
-`../../skills/phase/SKILL.md` frontmatter is the source of truth for skill name, description, license, version, author, and abstract. The skill version is independent of the `phase` package version.
+`../../skills/phase/SKILL.md` frontmatter is the source of truth for skill name, description, license, version, author, and abstract. The skill version is independent of runtime package versions.
 
 Update installable skill references after these changes:
 
 - Update the matching reference after public option, type, default, phase, or reason changes.
 - Update every occurrence of the canonical CSS pattern together.
-- Keep the choosing-a-primitive tables in `packages/phase/README.md` and `../../skills/phase/SKILL.md` synchronized.
+- Keep the choosing-a-primitive guidance in the root `README.md` and `../../skills/phase/SKILL.md` synchronized.
 - Add or remove references with public exports. `pnpm skill:check` rejects uncovered exports and orphan references.
 
 After changing skill source:

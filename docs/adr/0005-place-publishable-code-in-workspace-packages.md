@@ -1,5 +1,7 @@
 # Place publishable code in workspace packages
 
+References to `packages/phase` below are superseded by [ADR 0014](./0014-name-the-tool-phase-and-publish-libraries-under-usephase.md) and [ADR 0018](./0018-expose-core-internals-to-bindings-through-one-subpath.md). The workspace boundary decision remains active.
+
 ## Context
 
 The repository root combined the published library, repository orchestration, and the installable agent skill's source and artifacts. Adding examples and applications there would blur package ownership and let nested evaluation fixtures be discovered as workspaces.

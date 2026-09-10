@@ -1,5 +1,5 @@
-import { clamp01, easeOutCubic } from 'phase/ease';
-import { useLoop } from 'phase/react';
+import { clamp01, easeOutCubic } from '@usephase/core/ease';
+import { useLoop } from '@usephase/react';
 import { useRef } from 'react';
 
 const DURATION = 1200;

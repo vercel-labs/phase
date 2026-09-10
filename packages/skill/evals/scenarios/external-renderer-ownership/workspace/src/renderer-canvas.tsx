@@ -3,7 +3,7 @@
 import { Renderer } from '@acme/globe-renderer';
 import { useEffect, useRef } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { useLifecycle } from 'phase/react';
+import { useLifecycle } from '@usephase/react';
 
 export function RendererCanvas() {
   const rendererRef = useRef<Renderer | null>(null);

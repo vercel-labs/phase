@@ -5,7 +5,7 @@ React hook wrapping `createDebounce`. Returns a stable-identity debounced functi
 ## Signature
 
 ```ts
-import { useDebouncedCallback } from 'phase/react';
+import { useDebouncedCallback } from '@usephase/react';
 
 const debounced = useDebouncedCallback<T>(callback, options);
 debounced(value);

@@ -5,7 +5,7 @@ Skips the browser's rendering work (style, layout, paint) for off-screen content
 ## Signature
 
 ```tsx
-import { Defer } from 'phase/react';
+import { Defer } from '@usephase/react';
 
 <Defer estimatedHeight="600px" className="...">
   <ArticleSection />
@@ -64,7 +64,7 @@ The right default: include `Defer` where the rendering cost is real (large lists
     <Comments />
   </Defer>
   ```
-- **Keep content that must be in the DOM** (SEO, in-page search, anchor links). `Defer` SSRs its children. The whole `phase/react` entry is a client boundary (`'use client'`), but server-component children passed into `Defer` still render on the server and stream through.
+- **Keep content that must be in the DOM** (SEO, in-page search, anchor links). `Defer` SSRs its children. The `@usephase/react` entry point is a client boundary (`'use client'`), but server-component children passed into `Defer` still render on the server and stream through.
 - **Use the `as` prop for semantic elements** when a wrapper `div` would break document structure:
   ```tsx
   <ul>

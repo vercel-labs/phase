@@ -7,7 +7,7 @@ Within one clock protocol, event-derived callbacks queued before frame dispatch 
 ## Signature
 
 ```ts
-import { createTicker } from 'phase';
+import { createTicker } from '@usephase/core';
 
 const ticker = createTicker(options: TickerOptions): Ticker;
 ```

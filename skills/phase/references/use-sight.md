@@ -7,7 +7,7 @@ Element visibility as a phase (`visible` / `hidden`). Wraps `createSight` with R
 Two overloads. When `onVisibilityChange` is provided, `phase` and `phaseReason` are omitted from the return type (compile-time error to access them).
 
 ```ts
-import { useSight } from 'phase/react';
+import { useSight } from '@usephase/react';
 
 // Reactive (re-renders on visibility transitions)
 const { ref, phase, phaseReason, phaseRef, phaseReasonRef } = useSight<T>(options?);

@@ -88,6 +88,16 @@ describe('analysis evidence registry', () => {
       true,
     );
 
+    for (const [specifier, api] of [
+      ['@usephase/react', 'useLoop'],
+      ['@usephase/core', 'createLoop'],
+    ]) {
+      const scoped = `import { ${api} } from '${specifier}'; ${api}({ onTick: () => source.map(project) });`;
+      expect(
+        evidenceMatches('per-frame-allocation', scoped, 0, /\.map\(/),
+      ).toBe(true);
+    }
+
     expect(
       evidenceMatches(
         'per-frame-allocation',

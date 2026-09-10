@@ -7,7 +7,7 @@ Within one clock protocol, event-derived callbacks queued before frame dispatch 
 ## Signature
 
 ```ts
-import { createScroll } from 'phase';
+import { createScroll } from '@usephase/core';
 
 const scroll = createScroll(options: CreateScrollOptions): Scroll;
 ```

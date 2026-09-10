@@ -7,7 +7,7 @@ Scroll position is delivered imperatively via `onScroll` (never state) and mirro
 ## Signature
 
 ```ts
-import { useScroll } from 'phase/react';
+import { useScroll } from '@usephase/react';
 
 const { ref, phase, phaseReason, phaseRef, phaseReasonRef, stateRef, measure } =
   useScroll<T>(options);

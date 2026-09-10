@@ -1,0 +1,64 @@
+{
+  "name": "@usephase/react",
+  "version": "0.6.0",
+  "description": "React bindings for Phase animation and rendering primitives",
+  "author": "Vercel",
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/vercel-labs/phase.git",
+    "directory": "packages/react"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run --project=unit",
+    "test:browser": "vitest run --project=browser",
+    "typecheck": "tsc --noEmit",
+    "size": "size-limit",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@usephase/core": "workspace:^"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@size-limit/preset-small-lib": "12.1.0",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.0",
+    "@usephase/testing": "workspace:*",
+    "@types/node": "25.6.0",
+    "@types/react": "19.2.10",
+    "@types/react-dom": "19.2.3",
+    "@vitest/browser-playwright": "4.1.11",
+    "jsdom": "23.2.0",
+    "playwright": "1.59.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "size-limit": "12.1.0",
+    "tsdown": "0.21.7",
+    "typescript": "6.0.2",
+    "vitest": "4.1.11"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "packageManager": "pnpm@10.32.1"
+}

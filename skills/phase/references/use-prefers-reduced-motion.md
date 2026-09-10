@@ -5,7 +5,7 @@ Reactive boolean that tracks the user's `prefers-reduced-motion` OS setting. Re-
 ## Signature
 
 ```ts
-import { usePrefersReducedMotion } from 'phase/react';
+import { usePrefersReducedMotion } from '@usephase/react';
 
 const reduced: boolean = usePrefersReducedMotion();
 ```

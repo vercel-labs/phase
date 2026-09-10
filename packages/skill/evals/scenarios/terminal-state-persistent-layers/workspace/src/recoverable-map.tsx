@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useLoop } from 'phase/react';
+import { useLoop } from '@usephase/react';
 
 export function RecoverableMap() {
   const liveLayerRef = useRef<HTMLDivElement>(null);
