@@ -61,7 +61,7 @@
       "dependsOn": ["build", "^test", "//#test:root"]
     },
     "@usephase/codemod#test": {
-      "dependsOn": ["build", "^test", "//#test:root"]
+      "dependsOn": ["build", "^test"]
     },
     "@usephase/skill#test": {
       "cache": false

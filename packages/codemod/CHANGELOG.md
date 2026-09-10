@@ -4,4 +4,4 @@
 
 ### Minor Changes
 
-- Added `rename-imports` to migrate runtime imports and dependency entries from `phase` to the scoped runtime packages.
+- Added `rename-imports` to map legacy `phase` module specifiers and package metadata to `@usephase/core` and `@usephase/react`, with dry runs, source-aware dependency selection, deterministic summaries, and idempotent recovery.

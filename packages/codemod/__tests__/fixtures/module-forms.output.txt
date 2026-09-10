@@ -1,16 +1,28 @@
 import '@usephase/core';
 import { createLoop } from '@usephase/core';
 import type { Phase } from '@usephase/core';
+import { vi } from 'vitest';
+import { jest } from '@jest/globals';
 export { createLoop as loop } from '@usephase/core';
 export * from '@usephase/react';
 export type { Ease } from '@usephase/core/ease';
+type ImportedPhase = import('@usephase/core').Phase;
 
 const core = require('@usephase/core');
 const react = import('@usephase/react');
 const resolved = require.resolve('@usephase/core/ease');
+const template = require(`@usephase/core`);
 import legacy = require('@usephase/core');
 
 vi.mock('@usephase/core/ease');
 jest.mock('@usephase/react');
 
-const untouched = require('phase/other');
+function localCalls(
+  require: (value: string) => string,
+  vi: { mock(value: string): void },
+  jest: { mock(value: string): void },
+) {
+  require('phase');
+  vi.mock('phase/react');
+  jest.mock('phase/ease');
+}

@@ -82,7 +82,7 @@ When asked to bump a library package version:
 4. Use the existing `## X.Y.Z` and `### Patch Changes` / `### Minor Changes` / `### Major Changes` format.
 5. Keep each entry to what changed and never overwrite older changelog entries.
 
-When asked to bump the command package version:
+When asked to bump the scanner command package version:
 
 1. Bump `version` in `packages/cli/package.json`.
 2. Prepend a section to `packages/cli/CHANGELOG.md` using the same heading format.

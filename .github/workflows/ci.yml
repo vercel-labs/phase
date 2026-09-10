@@ -86,7 +86,7 @@ jobs:
           git diff --exit-code packages/skill/scanner/fix-sections.gen.ts skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip \
             || (echo "Skill artifacts are stale. Run 'pnpm skill:package' and commit the result." && exit 1)
 
-  cli:
+  scanner:
     needs: ci
     runs-on: ubuntu-latest
     strategy:
@@ -113,11 +113,15 @@ jobs:
 
   codemod:
     needs: ci
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         node: ["20.0.0", "22", "24"]
+        include:
+          - os: windows-latest
+            node: "24"
     steps:
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
@@ -129,14 +133,28 @@ jobs:
           name: usephase-codemod
           path: ${{ runner.temp }}
 
-      - name: Smoke test usephase codemod
+      - name: Smoke test usephase codemod on Unix
+        if: runner.os != 'Windows'
         run: |
           consumer="$RUNNER_TEMP/usephase-codemod-consumer"
           mkdir "$consumer"
-          npm install --prefix "$consumer" --ignore-scripts --no-audit --no-fund --no-package-lock --no-save "$RUNNER_TEMP/usephase-codemod.tgz"
           printf "import 'phase';\n" > "$consumer/consumer.ts"
-          "$consumer/node_modules/.bin/usephase-codemod" rename-imports "$consumer/consumer.ts"
+          npx --yes "file:$RUNNER_TEMP/usephase-codemod.tgz" rename-imports "$consumer/consumer.ts"
           grep -F "import '@usephase/core';" "$consumer/consumer.ts"
+
+      - name: Smoke test usephase codemod on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $consumer = Join-Path $env:RUNNER_TEMP "usephase-codemod-consumer"
+          New-Item -ItemType Directory -Path $consumer | Out-Null
+          $source = Join-Path $consumer "consumer.ts"
+          Set-Content -Path $source -Value "import 'phase';"
+          Push-Location $consumer
+          npx --yes "file:$env:RUNNER_TEMP/usephase-codemod.tgz" rename-imports $source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+          if (-not (Select-String -Path $source -SimpleMatch "import '@usephase/core';" -Quiet)) { exit 1 }
 
   action:
     runs-on: ubuntu-latest

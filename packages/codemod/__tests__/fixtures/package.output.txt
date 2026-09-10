@@ -24,5 +24,14 @@
   "optionalDependencies": {
     "@usephase/core": "^0.6.0",
     "@usephase/react": "^0.6.0"
-  }
+  },
+  "bundleDependencies": [
+    "@usephase/core",
+    "@usephase/react",
+    "other"
+  ],
+  "bundledDependencies": [
+    "@usephase/core",
+    "@usephase/react"
+  ]
 }

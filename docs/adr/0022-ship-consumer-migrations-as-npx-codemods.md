@@ -2,7 +2,7 @@
 
 ## Context
 
-Changing the `phase` npm identity requires application repositories to rename runtime imports and dependencies before `phase` can become the scanner tool. The migration must be repeatable across repositories without coupling consumer work to this repository's internal source transform.
+Changing the `phase` npm identity requires application repositories to rename runtime imports and dependencies before `phase` can become the scanner tool. The consumer migration must be repeatable across application repositories. It remains separate from `scripts/migrate-runtime-specifiers.mjs`, which rewrites repository-owned Markdown, examples, and scanner fixtures rather than parsed application modules.
 
 ## Decision
 
