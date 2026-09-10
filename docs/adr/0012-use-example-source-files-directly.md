@@ -1,6 +1,6 @@
 # Use example source files directly
 
-The `phase` package identity below is superseded by [ADR 0014](./0014-name-the-tool-phase-and-publish-libraries-under-usephase.md). The source-file decision remains active for examples that now import `@usephase/core` and `@usephase/react`.
+References to the `phase` package below are superseded by [ADR 0014](./0014-name-the-tool-phase-and-publish-libraries-under-usephase.md). The source-file decision remains active for examples that now import `@usephase/core` and `@usephase/react`.
 
 ## Context
 

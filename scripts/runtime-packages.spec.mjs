@@ -27,7 +27,7 @@ function run(command, args, cwd = ROOT) {
 }
 
 describe('packed runtime packages', () => {
-  it('installs every public entry and preserves the shared error identity', () => {
+  it('installs packed packages, imports and type-checks every public entry, and preserves PhaseError identity', () => {
     const consumer = mkdtempSync(join(tmpdir(), 'phase-runtime-consumer-'));
     try {
       const coreTarball = join(consumer, 'core.tgz');
@@ -63,9 +63,13 @@ describe('packed runtime packages', () => {
           '--eval',
           `const core = await import('@usephase/core');
 const ease = await import('@usephase/core/ease');
-if (typeof ease.easeOutCubic !== 'function') throw new Error('Missing ease entry');
+if (typeof ease.easeOutCubic !== 'function') {
+  throw new Error('@usephase/core/ease does not export easeOutCubic as a function');
+}
 for (const name of Object.keys(ease)) {
-  if (name in core) throw new Error('Ease leaked into the core root entry: ' + name);
+  if (name in core) {
+    throw new Error('@usephase/core root unexpectedly exports an @usephase/core/ease member: ' + name);
+  }
 }
 await import('@usephase/core/internal');
 const binding = await import('@usephase/react');
@@ -78,7 +82,9 @@ try {
   thrown = true;
   if (!(error instanceof core.PhaseError)) throw error;
 }
-if (!thrown) throw new Error('Expected the React binding to throw PhaseError');`,
+if (!thrown) {
+  throw new Error('@usephase/react Swap.State with an unknown ID did not throw PhaseError');
+}`,
         ],
         consumer,
       );
@@ -87,9 +93,9 @@ if (!thrown) throw new Error('Expected the React binding to throw PhaseError');`
       writeFileSync(
         join(consumer, 'consumer.mts'),
         `import { createLoop, type Loop } from '@usephase/core';
-// @ts-expect-error Easing is available only from @usephase/core/ease.
+// @ts-expect-error easeOutCubic is exported only from @usephase/core/ease.
 import { easeOutCubic as leakedEase } from '@usephase/core';
-// @ts-expect-error Ease types are available only from @usephase/core/ease.
+// @ts-expect-error RemapOptions is exported only from @usephase/core/ease.
 import type { RemapOptions as LeakedRemapOptions } from '@usephase/core';
 import { clamp, type RemapOptions } from '@usephase/core/ease';
 import { REDUCED_MOTION_QUERY } from '@usephase/core/internal';

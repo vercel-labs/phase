@@ -5,7 +5,7 @@ This package publishes `@usephase/react`. Run commands from the repository root.
 ## Boundaries
 
 - Import application-facing primitives and types from `@usephase/core`.
-- Import binding-only pools and error constructors from `@usephase/core/internal`. Applications must not use that port.
+- Import binding-only pools and error constructors from `@usephase/core/internal`. Applications must not import that entry point.
 - Keep React as a required peer and `@usephase/core` as a regular `workspace:^` dependency.
 - Keep `'use client'` as the first statement in `src/index.ts`.
 
@@ -18,7 +18,7 @@ This package publishes `@usephase/react`. Run commands from the repository root.
 
 ## Tests and size
 
-- Co-locate unit and browser specs with their modules. Native browser specs may import only `@usephase/testing/browser`; they must exercise native browser APIs instead of simulated ones.
+- Co-locate unit and browser specs with their modules. Native browser specs may import shared test helpers only from `@usephase/testing/browser`; they must exercise native browser APIs instead of simulated ones.
 - `src/perf.spec.ts` gates the zero-rerender frame-loop contract.
 - Every public export has a `.size-limit.json` entry. React bundle checks externalize React and `@usephase/core`.
 - Run `pnpm --filter @usephase/react typecheck`, targeted unit specs, and `pnpm --filter @usephase/react size` during development.

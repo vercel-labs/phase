@@ -73,7 +73,7 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Runtime specifier migration
+      - name: Check runtime specifiers
         run: pnpm runtime-specifiers:check
 
       - name: Build, typecheck, test, and size

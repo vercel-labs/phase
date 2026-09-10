@@ -25,7 +25,7 @@ function run(root, mode) {
 }
 
 describe('runtime specifier migration', () => {
-  it('rewrites exact runtime specifiers without changing tool identities', () => {
+  it('rewrites exact legacy imports without changing non-import uses of phase', () => {
     const root = mkdtempSync(join(tmpdir(), 'phase-runtime-migration-'));
     const source = [
       "import 'phase';",
@@ -99,7 +99,7 @@ describe('runtime specifier migration', () => {
     const configurationCheck = run(root, '--check');
     expect(configurationCheck.status).toBe(1);
     expect(configurationCheck.stderr).toContain(
-      'Legacy package configuration in .github/workflows/ci.yml',
+      'Legacy phase package configuration remains in .github/workflows/ci.yml',
     );
     unlinkSync(join(root, '.github/workflows/ci.yml'));
 

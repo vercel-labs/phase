@@ -8,9 +8,9 @@ metadata:
   abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library.'
 ---
 
-## Prerequisite: ensure the runtime package is installed
+## Prerequisite: add the required runtime dependencies
 
-Before adding runtime imports, inspect the **consumer project's** `package.json`. Core APIs require `@usephase/core`; React APIs require `@usephase/react`. Install the missing package as a production dependency in that project. Do not install runtime packages in the phase repository itself. Skip this check when auditing or advising without code changes.
+Before adding runtime imports, inspect the **consumer project's** `package.json`. Add each package the code will import (`@usephase/core`, `@usephase/react`, or both) as a production dependency when it is missing. Do not add runtime dependencies to the phase repository itself. Skip this check for audit or advice tasks that make no code changes.
 
 # phase
 

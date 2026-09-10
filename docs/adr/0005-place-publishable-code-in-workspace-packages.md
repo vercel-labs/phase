@@ -1,6 +1,6 @@
 # Place publishable code in workspace packages
 
-The `packages/phase` location below is superseded by [ADR 0014](./0014-name-the-tool-phase-and-publish-libraries-under-usephase.md) and [ADR 0018](./0018-expose-core-internals-to-bindings-through-one-subpath.md). The workspace boundary decision remains active.
+References to `packages/phase` below are superseded by [ADR 0014](./0014-name-the-tool-phase-and-publish-libraries-under-usephase.md) and [ADR 0018](./0018-expose-core-internals-to-bindings-through-one-subpath.md). The workspace boundary decision remains active.
 
 ## Context
 

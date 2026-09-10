@@ -1,6 +1,6 @@
 # phase skill
 
-Agent skill for the [phase](https://github.com/vercel-labs/phase) browser runtime performance toolkit. Teaches agents to audit animation and rendering code, and to apply `@usephase/core` or `@usephase/react` when those packages are the cheapest correct fix.
+Agent skill for the [phase](https://github.com/vercel-labs/phase) browser runtime performance toolkit. It teaches agents to audit animation and rendering code and use `@usephase/core` or `@usephase/react` only when one of those packages is the cheapest correct fix.
 
 ## Install
 

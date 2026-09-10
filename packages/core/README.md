@@ -36,7 +36,7 @@ loop.start();
 - **Batches layout reads.** Element-relative pointer tracking reads one rect per dirty frame; scroll geometry is read on attachment or explicit measurement and coalesced after resize signals; other dimensions and visibility come from observers.
 - **Frame-locked shared clock.** Tickers using the same clock protocol read one timestamp, so they do not drift out of sync.
 - **Input before frame loops.** Within one clock protocol, pointer, scroll, mutation, and throttle work queued before a frame flushes before its animation callbacks.
-- **Coordinates deferred work.** Observe when `content-visibility` skips rendering, and schedule callbacks when the browser is idle.
+- **Tracks skipped rendering and schedules idle work.** Receive updates when `content-visibility` skips an element, and run callbacks during browser idle periods.
 
 Easing and math functions are available only from `@usephase/core/ease`.
 

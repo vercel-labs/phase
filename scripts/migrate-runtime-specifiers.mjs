@@ -102,7 +102,7 @@ function main() {
         continue;
       }
       clean = false;
-      console.error(`Legacy package configuration in ${path}`);
+      console.error(`Legacy phase package configuration remains in ${path}`);
     }
     return clean;
   }

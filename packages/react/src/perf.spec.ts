@@ -13,8 +13,8 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('react zero rerender', () => {
-  it('does not rerender useLoop during the frame loop', () => {
+describe('useLoop frame-loop rendering', () => {
+  it('does not trigger React renders during frame ticks', () => {
     const mockIO = createMockIntersectionObserver();
     const mockMM = createMockMatchMedia();
     vi.stubGlobal('IntersectionObserver', mockIO.MockClass);

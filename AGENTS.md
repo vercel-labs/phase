@@ -86,4 +86,4 @@ When asked to bump the command package version:
 2. Prepend a section to `packages/cli/CHANGELOG.md` using the same heading format.
 3. Bump `skills/phase/SKILL.md` only when scanner behavior or installable skill content changes.
 
-Package and skill naming follows [`ADR 0014`](./docs/adr/0014-name-the-tool-phase-and-publish-libraries-under-usephase.md): `phase` names the tool; published and private library packages use the `@usephase` scope, with `"private"` stating publication intent.
+Package and skill naming follows [`ADR 0014`](./docs/adr/0014-name-the-tool-phase-and-publish-libraries-under-usephase.md): `phase` names the tool; library packages use the `@usephase` scope, and the `"private"` flag states publication intent.

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * Verifies that every public runtime export has a
- * corresponding reference in skills/phase/references/, and that no orphan
- * reference files exist.
+ * Verifies that each application-facing core and React export maps to a
+ * reference in skills/phase/references/, that easing maps to ease.md, and that
+ * no orphan reference files exist.
  *
  * Skill metadata (name/version/author/license/abstract) is NOT checked here —
  * metadata.json is generated from SKILL.md frontmatter by build-metadata.mjs, so

@@ -1,5 +1,3 @@
-// Core primitives barrel
-
 // API
 export { createTicker } from './tick';
 export { createSight } from './sight';
