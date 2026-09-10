@@ -9,7 +9,7 @@ Codemods for migrating applications from the legacy `phase` runtime package.
 Run the import rename from the consumer repository root:
 
 ```bash
-npx @usephase/codemod@latest rename-imports .
+npx @usephase/codemod@latest migrate-phase-runtime .
 ```
 
 `<path>` must be a supported source file, a `package.json`, or a directory. Directory scans consider `.cjs`, `.cts`, `.js`, `.jsx`, `.mjs`, `.mts`, `.ts`, `.tsx`, and `package.json` files recursively. They skip symlink entries and child directories named `.cache`, `.git`, `.next`, `.turbo`, `build`, `coverage`, `dist`, `node_modules`, `out`, or `storybook-static`. A symlink or excluded directory passed as `<path>` is rejected. Pass a supported generated file directly when it must be migrated.
@@ -31,7 +31,7 @@ When a `package.json` changes, the command serializes the entire manifest with i
 Preview the sorted changed-file summary without writing files:
 
 ```bash
-npx @usephase/codemod@latest rename-imports --dry .
+npx @usephase/codemod@latest migrate-phase-runtime --dry .
 ```
 
 The dry run performs the same discovery and parsing as a write run. Read and parse failures happen before any writes. Each changed file is replaced atomically, but a later filesystem failure can leave an already reported prefix migrated; rerun the command to finish. Successful reruns are idempotent.

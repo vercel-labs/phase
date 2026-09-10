@@ -11,14 +11,14 @@ const RUNTIME_DEPENDENCIES = ['@usephase/core', '@usephase/react'] as const;
 
 export type RuntimeDependency = (typeof RUNTIME_DEPENDENCIES)[number];
 
-type RenameImportsInput = {
+type MigratePhaseRuntimeInput = {
   path: string;
   source: string;
   preserveLegacyDependency?: boolean;
   requiredDependencies?: readonly RuntimeDependency[];
 };
 
-type RenameImportsResult = {
+type MigratePhaseRuntimeResult = {
   content: string;
   requiredDependencies: RuntimeDependency[];
   unresolvedSpecifiers: string[];
@@ -388,7 +388,10 @@ function parserFor(path: string) {
   return TYPESCRIPT_EXTENSIONS.has(extension) ? 'ts' : 'babel';
 }
 
-function transformSource(path: string, source: string): RenameImportsResult {
+function transformSource(
+  path: string,
+  source: string,
+): MigratePhaseRuntimeResult {
   const j = jscodeshift.withParser(parserFor(path));
   const root = j(source);
   const requiredDependencies = new Set<RuntimeDependency>();
@@ -467,12 +470,12 @@ function transformSource(path: string, source: string): RenameImportsResult {
   };
 }
 
-export default function renameImports({
+export default function migratePhaseRuntime({
   path,
   source,
   preserveLegacyDependency = false,
   requiredDependencies,
-}: RenameImportsInput): RenameImportsResult {
+}: MigratePhaseRuntimeInput): MigratePhaseRuntimeResult {
   if (basename(path) === 'package.json') {
     return {
       content: transformPackageJson(

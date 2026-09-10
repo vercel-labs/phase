@@ -4,4 +4,4 @@
 
 ### Minor Changes
 
-- Added `rename-imports` to map legacy `phase` module specifiers and package metadata to `@usephase/core` and `@usephase/react`, with dry runs, source-aware dependency selection, deterministic summaries, and idempotent recovery.
+- Added `migrate-phase-runtime` to map legacy `phase` module specifiers and package metadata to `@usephase/core` and `@usephase/react`, with dry runs, source-aware dependency selection, deterministic summaries, and idempotent recovery.

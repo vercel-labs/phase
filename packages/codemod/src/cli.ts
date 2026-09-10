@@ -21,7 +21,9 @@ import {
   sep,
 } from 'node:path';
 
-import renameImports, { type RuntimeDependency } from './rename-imports.js';
+import migratePhaseRuntime, {
+  type RuntimeDependency,
+} from './migrate-phase-runtime.js';
 
 const SOURCE_EXTENSIONS = new Set([
   '.cjs',
@@ -46,7 +48,7 @@ const IGNORED_DIRECTORIES = new Set([
   'out',
   'storybook-static',
 ]);
-const HELP = `Usage: usephase-codemod rename-imports [--dry] <path>
+const HELP = `Usage: usephase-codemod migrate-phase-runtime [--dry] <path>
 
 Rename legacy phase module specifiers, dependencies, and package metadata.
 
@@ -235,7 +237,7 @@ function migrateFile(
     const source = readFileSync(file, 'utf8');
     return {
       source,
-      ...renameImports({
+      ...migratePhaseRuntime({
         path: file,
         source,
         preserveLegacyDependency,
@@ -420,7 +422,7 @@ function main(args: string[]): number {
   }
 
   const [command, ...commandArgs] = args;
-  if (command !== 'rename-imports') {
+  if (command !== 'migrate-phase-runtime') {
     console.error(`Unknown command: ${command ?? ''}\n\n${HELP}`);
     return 2;
   }
