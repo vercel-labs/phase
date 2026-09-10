@@ -42,11 +42,56 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@25.6.0)(@vitest/browser-playwright@4.1.11)(jsdom@23.2.0)(vite@8.0.16(@types/node@25.6.0)(esbuild@0.28.1))
 
+  packages/core:
+    devDependencies:
+      '@size-limit/preset-small-lib':
+        specifier: 12.1.0
+        version: 12.1.0(size-limit@12.1.0)
+      '@types/node':
+        specifier: 25.6.0
+        version: 25.6.0
+      '@usephase/testing':
+        specifier: workspace:*
+        version: link:../testing
+      '@vitest/browser-playwright':
+        specifier: 4.1.11
+        version: 4.1.11(playwright@1.59.0)(vite@8.0.16(@types/node@25.6.0)(esbuild@0.28.1))(vitest@4.1.11)
+      jsdom:
+        specifier: 23.2.0
+        version: 23.2.0
+      lefthook:
+        specifier: 2.1.5
+        version: 2.1.5
+      oxfmt:
+        specifier: 0.44.0
+        version: 0.44.0
+      oxlint:
+        specifier: 1.59.0
+        version: 1.59.0
+      playwright:
+        specifier: 1.59.0
+        version: 1.59.0
+      size-limit:
+        specifier: 12.1.0
+        version: 12.1.0
+      tsdown:
+        specifier: 0.21.7
+        version: 0.21.7(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(typescript@6.0.2)
+      typescript:
+        specifier: 6.0.2
+        version: 6.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@25.6.0)(@vitest/browser-playwright@4.1.11)(jsdom@23.2.0)(vite@8.0.16(@types/node@25.6.0)(esbuild@0.28.1))
+
   packages/examples:
     dependencies:
-      phase:
+      '@usephase/core':
         specifier: workspace:*
-        version: link:../phase
+        version: link:../core
+      '@usephase/react':
+        specifier: workspace:*
+        version: link:../react
     devDependencies:
       '@types/react':
         specifier: 19.2.10
@@ -58,7 +103,11 @@ importers:
         specifier: 6.0.2
         version: 6.0.2
 
-  packages/phase:
+  packages/react:
+    dependencies:
+      '@usephase/core':
+        specifier: workspace:^
+        version: link:../core
     devDependencies:
       '@size-limit/preset-small-lib':
         specifier: 12.1.0
@@ -78,21 +127,15 @@ importers:
       '@types/react-dom':
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.10)
+      '@usephase/testing':
+        specifier: workspace:*
+        version: link:../testing
       '@vitest/browser-playwright':
         specifier: 4.1.11
         version: 4.1.11(playwright@1.59.0)(vite@8.0.16(@types/node@25.6.0)(esbuild@0.28.1))(vitest@4.1.11)
       jsdom:
         specifier: 23.2.0
         version: 23.2.0
-      lefthook:
-        specifier: 2.1.5
-        version: 2.1.5
-      oxfmt:
-        specifier: 0.44.0
-        version: 0.44.0
-      oxlint:
-        specifier: 1.59.0
-        version: 1.59.0
       playwright:
         specifier: 1.59.0
         version: 1.59.0
@@ -132,6 +175,15 @@ importers:
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@types/node@25.6.0)(@vitest/browser-playwright@4.1.11)(jsdom@23.2.0)(vite@8.0.16(@types/node@25.6.0)(esbuild@0.28.1))
+
+  packages/testing:
+    devDependencies:
+      '@types/node':
+        specifier: 25.6.0
+        version: 25.6.0
+      typescript:
+        specifier: 6.0.2
+        version: 6.0.2
 
 packages:
 

@@ -6,7 +6,7 @@ Tracks whether the browser is rendering an element or skipping it under `content
 
 ```tsx
 import { useRef } from 'react';
-import { useRenderState } from 'phase/react';
+import { useRenderState } from '@usephase/react';
 
 const ref = useRef<HTMLDivElement>(null);
 const phase = useRenderState(ref); // 'rendered' | 'skipped'

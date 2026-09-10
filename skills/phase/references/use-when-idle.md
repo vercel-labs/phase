@@ -5,7 +5,7 @@ Runs a callback once, when the browser is idle after mount. The effect-shaped co
 ## Signature
 
 ```ts
-import { useWhenIdle } from 'phase/react';
+import { useWhenIdle } from '@usephase/react';
 
 useWhenIdle(() => void import('./heavy-panel'), { timeout: 2000 });
 ```

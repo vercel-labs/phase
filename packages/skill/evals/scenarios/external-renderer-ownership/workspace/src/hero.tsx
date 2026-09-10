@@ -1,6 +1,6 @@
 'use client';
 
-import { usePrefersReducedMotion } from 'phase/react';
+import { usePrefersReducedMotion } from '@usephase/react';
 
 import { RendererCanvas } from './renderer-canvas';
 

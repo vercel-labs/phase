@@ -5,7 +5,7 @@ CSS media query subscription via the shared MQL pool. Returns `false` during SSR
 ## Signature
 
 ```ts
-import { useMediaQuery } from 'phase/react';
+import { useMediaQuery } from '@usephase/react';
 
 const matches: boolean = useMediaQuery(query);
 ```

@@ -5,7 +5,7 @@ Ref whose `.current` is always the latest value, updated synchronously on every 
 ## Signature
 
 ```ts
-import { useSyncedRef } from 'phase/react';
+import { useSyncedRef } from '@usephase/react';
 
 const ref: RefObject<T> = useSyncedRef(value);
 ```

@@ -1,11 +1,11 @@
-# Easing and math (`phase/ease`)
+# Easing and math (`@usephase/core/ease`)
 
 Pure functions. No browser APIs, no side effects, no React. Safe in server components, build scripts, Web Workers, and tests.
 
 ## Import
 
 ```ts
-import { lerp, clamp01, easeOutCubic, remap } from 'phase/ease';
+import { lerp, clamp01, easeOutCubic, remap } from '@usephase/core/ease';
 ```
 
 Tree-shakeable. Unused functions are dead-code-eliminated.

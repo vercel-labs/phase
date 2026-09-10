@@ -5,7 +5,7 @@ Reports whether the browser is rendering an element or skipping it under `conten
 ## Signature
 
 ```ts
-import { createRenderState } from 'phase';
+import { createRenderState } from '@usephase/core';
 
 const render = createRenderState({
   target: el,

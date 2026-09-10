@@ -5,7 +5,7 @@ Reports whether an element is visible right now. Combines `document.visibilitych
 ## Signature
 
 ```ts
-import { createSight } from 'phase';
+import { createSight } from '@usephase/core';
 
 const sight = createSight(options: SightOptions): Sight;
 ```

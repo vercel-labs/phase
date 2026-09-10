@@ -1,5 +1,7 @@
 # Use example source files directly
 
+The `phase` package identity below is superseded by [ADR 0014](./0014-name-the-tool-phase-and-publish-libraries-under-usephase.md). The source-file decision remains active for examples that now import `@usephase/core` and `@usephase/react`.
+
 ## Context
 
 Documentation and generated snippets must show the exact example source code. The browser test page must render those same files without changes. Building the examples first would create a second copy and force each tool to wait for that build.

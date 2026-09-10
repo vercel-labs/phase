@@ -10,7 +10,7 @@ For plain "which hook does X" usage, read that export's own reference (e.g. [use
 
 ```tsx
 import { useState, useRef } from 'react';
-import { useMutation } from 'phase/react';
+import { useMutation } from '@usephase/react';
 
 function useThemeClass() {
   const [theme, setTheme] = useState('light');
@@ -39,7 +39,7 @@ function useThemeClass() {
 **Scenario:** several components each attach a `window` `resize` listener whose handler reads layout (`getBoundingClientRect`, `offsetWidth`) to react to their own size. Flagged by the scanner's `bare-window-listener` signal.
 
 ```tsx
-import { useSize } from 'phase/react';
+import { useSize } from '@usephase/react';
 
 function Sidebar() {
   const { ref, size } = useSize<HTMLElement>();

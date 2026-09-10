@@ -1,0 +1,63 @@
+{
+  "name": "@usephase/core",
+  "version": "0.6.0",
+  "description": "Lifecycle-aware animation and rendering primitives for the web",
+  "author": "Vercel",
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/vercel-labs/phase.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run --project=unit",
+    "test:browser": "vitest run --project=browser",
+    "typecheck": "tsc --noEmit",
+    "size": "size-limit",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@size-limit/preset-small-lib": "12.1.0",
+    "@usephase/testing": "workspace:*",
+    "@types/node": "25.6.0",
+    "@vitest/browser-playwright": "4.1.11",
+    "jsdom": "23.2.0",
+    "lefthook": "2.1.5",
+    "oxfmt": "0.44.0",
+    "oxlint": "1.59.0",
+    "playwright": "1.59.0",
+    "size-limit": "12.1.0",
+    "tsdown": "0.21.7",
+    "typescript": "6.0.2",
+    "vitest": "4.1.11"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./ease": {
+      "types": "./dist/ease.d.ts",
+      "default": "./dist/ease.js"
+    },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "default": "./dist/internal.js"
+    }
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "packageManager": "pnpm@10.32.1"
+}

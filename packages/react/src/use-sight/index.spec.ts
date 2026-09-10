@@ -1,0 +1,298 @@
+// Native observer coverage lives in index.browser.spec.ts. Keep only
+// deterministic React wiring and headless-unreachable scenarios here.
+import { renderHook, act } from '@testing-library/react';
+import { createMockIntersectionObserver } from '@usephase/testing/intersection-observer';
+
+let mockIO: ReturnType<typeof createMockIntersectionObserver>;
+
+beforeEach(() => {
+  mockIO = createMockIntersectionObserver();
+  vi.stubGlobal('IntersectionObserver', mockIO.MockClass);
+  Object.defineProperty(document, 'hidden', {
+    value: false,
+    writable: true,
+    configurable: true,
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.resetModules();
+});
+
+async function getHook() {
+  const mod = await import('.');
+  return mod.useSight;
+}
+
+function createRefWithElement() {
+  const el = document.createElement('div');
+  return { ref: { current: el }, el };
+}
+
+describe('useSight', () => {
+  it('returns unknown/initial initially', async () => {
+    const useSight = await getHook();
+    const { ref } = createRefWithElement();
+    const { result } = renderHook(() => useSight({ ref }));
+    expect(result.current.phase).toBe('unknown');
+    expect(result.current.phaseReason).toBe('initial');
+  });
+
+  it('returns a ref when none is provided', async () => {
+    const useSight = await getHook();
+    const { result } = renderHook(() => useSight());
+    expect(result.current.ref).toBeDefined();
+    expect(result.current.ref.current).toBeNull();
+  });
+
+  it('observe: once freezes at visible after first intersection', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useSight({ ref, observe: 'once' }));
+
+    act(() => mockIO.trigger(el, true));
+    expect(result.current.phase).toBe('visible');
+
+    // Should stay visible even if IO fires false
+    act(() => mockIO.trigger(el, false));
+    expect(result.current.phase).toBe('visible');
+  });
+
+  it('returns unknown when ref is null', async () => {
+    const useSight = await getHook();
+    const nullRef = { current: null };
+    const { result } = renderHook(() => useSight({ ref: nullRef }));
+    expect(result.current.phase).toBe('unknown');
+  });
+
+  it('cleans up sight on unmount', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { unmount } = renderHook(() => useSight({ ref }));
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      true,
+    );
+
+    unmount();
+    expect(mockIO.instances.some((instance) => instance.observed.has(el))).toBe(
+      false,
+    );
+  });
+
+  it('changing observe mode disposes old sight and creates new', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result, rerender } = renderHook(
+      ({ observe }: { observe: 'continuous' | 'once' }) =>
+        useSight({ ref, observe }),
+      { initialProps: { observe: 'continuous' as 'continuous' | 'once' } },
+    );
+
+    act(() => mockIO.trigger(el, true));
+    expect(result.current.phase).toBe('visible');
+
+    // Switch to 'once' — should create a new sight
+    rerender({ observe: 'once' });
+
+    // New sight starts at unknown until IO fires again
+    // (the old one was disposed, new one hasn't received IO yet)
+    act(() => mockIO.trigger(el, true));
+    expect(result.current.phase).toBe('visible');
+  });
+
+  it('always returns phaseRef and phaseReasonRef', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() => useSight({ ref }));
+
+    expect(result.current.phaseRef.current).toBe('unknown');
+    expect(result.current.phaseReasonRef.current).toBe('initial');
+
+    act(() => mockIO.trigger(el, true));
+    expect(result.current.phaseRef.current).toBe('visible');
+  });
+});
+
+describe('useSight with onVisibilityChange (transient mode)', () => {
+  it('calls onVisibilityChange instead of triggering re-render', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+    const onVisibilityChange = vi.fn();
+
+    let renderCount = 0;
+    renderHook(() => {
+      renderCount++;
+      return useSight({ ref, onVisibilityChange });
+    });
+
+    const countAfterMount = renderCount;
+
+    act(() => mockIO.trigger(el, true));
+
+    expect(onVisibilityChange).toHaveBeenCalledWith('visible', 'viewport');
+    expect(renderCount).toBe(countAfterMount);
+  });
+
+  it('updates phaseRef and phaseReasonRef in transient mode', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+    const { result } = renderHook(() =>
+      useSight({ ref, onVisibilityChange: vi.fn() }),
+    );
+
+    act(() => mockIO.trigger(el, true));
+    expect(result.current.phaseRef.current).toBe('visible');
+    expect(result.current.phaseReasonRef.current).toBe('viewport');
+  });
+
+  it('omits phase/phaseReason from return type when onVisibilityChange is provided', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+    const result = renderHook(() =>
+      useSight({ ref, onVisibilityChange: vi.fn() }),
+    ).result;
+
+    act(() => mockIO.trigger(el, true));
+
+    expect(result.current.phaseRef.current).toBe('visible');
+    // @ts-expect-error — phase is not in the transient return type
+    expect(result.current.phase).toBe('unknown');
+    // @ts-expect-error — phaseReason is not in the transient return type
+    expect(result.current.phaseReason).toBe('initial');
+  });
+
+  it('calls the latest onVisibilityChange when callback changes', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+    const first = vi.fn();
+    const second = vi.fn();
+
+    const { rerender } = renderHook(
+      ({ cb }) => useSight({ ref, onVisibilityChange: cb }),
+      { initialProps: { cb: first } },
+    );
+
+    rerender({ cb: second });
+
+    act(() => mockIO.trigger(el, true));
+
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith('visible', 'viewport');
+  });
+
+  it('observe: once still works in transient mode', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+    const onVisibilityChange = vi.fn();
+
+    renderHook(() => useSight({ ref, observe: 'once', onVisibilityChange }));
+
+    act(() => mockIO.trigger(el, true));
+    expect(onVisibilityChange).toHaveBeenCalledWith('visible', 'viewport');
+
+    act(() => mockIO.trigger(el, false));
+    expect(onVisibilityChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('page target', () => {
+  it('reports visible for the page with no observer', async () => {
+    const useSight = await getHook();
+
+    const { result } = renderHook(() => useSight({ target: 'page' }));
+
+    expect(result.current.phase).toBe('visible');
+    expect(mockIO.instances).toHaveLength(0);
+  });
+
+  it('throws when both ref and target are given', async () => {
+    const useSight = await getHook();
+    const { ref } = createRefWithElement();
+
+    expect(() =>
+      renderHook(() => useSight({ ref, target: 'page' })),
+    ).toThrowError(/both ref and target/);
+  });
+});
+
+describe('page target + observe: once (regression)', () => {
+  it('does not throw when the page reports visible during construction', async () => {
+    const useSight = await getHook();
+
+    const { result } = renderHook(() =>
+      useSight({ target: 'page', observe: 'once' }),
+    );
+
+    expect(result.current.phase).toBe('visible');
+  });
+
+  it('stays frozen at visible after the tab hides', async () => {
+    const useSight = await getHook();
+
+    const { result } = renderHook(() =>
+      useSight({ target: 'page', observe: 'once' }),
+    );
+
+    act(() => {
+      Object.defineProperty(document, 'hidden', {
+        value: true,
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(result.current.phase).toBe('visible');
+  });
+});
+
+describe('page target is SSR-safe', () => {
+  it('rejects a Document at the type level and does not track', async () => {
+    const useSight = await getHook();
+
+    const { result } = renderHook(() =>
+      // @ts-expect-error - Document is not assignable to target: 'page'
+      useSight({ target: document }),
+    );
+
+    // A literal `document` in hook options throws during server render, so the
+    // option is a string. Passing one anyway must not quietly start tracking.
+    expect(result.current.phaseRef.current).toBe('unknown');
+  });
+});
+
+describe('shared element', () => {
+  it('two hooks watching one element both see it enter view', async () => {
+    // A reveal animation and a lazy-load trigger on the same node is ordinary
+    // composition; the pool must not let the later one silence the earlier.
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+
+    const first = renderHook(() => useSight({ ref }));
+    const second = renderHook(() => useSight({ ref }));
+
+    act(() => {
+      mockIO.trigger(el, true);
+    });
+
+    expect(first.result.current.phase).toBe('visible');
+    expect(second.result.current.phase).toBe('visible');
+  });
+
+  it('unmounting one hook leaves the other watching', async () => {
+    const useSight = await getHook();
+    const { ref, el } = createRefWithElement();
+
+    const first = renderHook(() => useSight({ ref }));
+    const second = renderHook(() => useSight({ ref }));
+
+    second.unmount();
+
+    act(() => {
+      mockIO.trigger(el, true);
+    });
+
+    expect(first.result.current.phase).toBe('visible');
+  });
+});

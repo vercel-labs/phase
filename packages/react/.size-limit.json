@@ -1,0 +1,191 @@
+[
+  {
+    "name": "useLoop",
+    "path": "src/index.ts",
+    "import": "{ useLoop }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "510 B"
+  },
+  {
+    "name": "useLifecycle",
+    "path": "src/index.ts",
+    "import": "{ useLifecycle }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "445 B"
+  },
+  {
+    "name": "useSight",
+    "path": "src/index.ts",
+    "import": "{ useSight }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "455 B"
+  },
+  {
+    "name": "useCanvas",
+    "path": "src/index.ts",
+    "import": "{ useCanvas }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "865 B"
+  },
+  {
+    "name": "useMutation",
+    "path": "src/index.ts",
+    "import": "{ useMutation }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "365 B"
+  },
+  {
+    "name": "usePointer",
+    "path": "src/index.ts",
+    "import": "{ usePointer }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "405 B"
+  },
+  {
+    "name": "useScroll",
+    "path": "src/index.ts",
+    "import": "{ useScroll }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "530 B"
+  },
+  {
+    "name": "useThrottledCallback",
+    "path": "src/index.ts",
+    "import": "{ useThrottledCallback }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "250 B"
+  },
+  {
+    "name": "useDebouncedCallback",
+    "path": "src/index.ts",
+    "import": "{ useDebouncedCallback }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "245 B"
+  },
+  {
+    "name": "useTween",
+    "path": "src/index.ts",
+    "import": "{ useTween }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "545 B"
+  },
+  {
+    "name": "usePresence",
+    "path": "src/index.ts",
+    "import": "{ usePresence }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "590 B"
+  },
+  {
+    "name": "useScrollProgress",
+    "path": "src/index.ts",
+    "import": "{ useScrollProgress }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "265 B"
+  },
+  {
+    "name": "useSize",
+    "path": "src/index.ts",
+    "import": "{ useSize }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "435 B"
+  },
+  {
+    "name": "useContainerQuery",
+    "path": "src/index.ts",
+    "import": "{ useContainerQuery }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "290 B"
+  },
+  {
+    "name": "useMediaQuery",
+    "path": "src/index.ts",
+    "import": "{ useMediaQuery }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "75 B"
+  },
+  {
+    "name": "usePrefersReducedMotion",
+    "path": "src/index.ts",
+    "import": "{ usePrefersReducedMotion }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "115 B"
+  },
+  {
+    "name": "useDevicePixelRatio",
+    "path": "src/index.ts",
+    "import": "{ useDevicePixelRatio }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "70 B"
+  },
+  {
+    "name": "useSyncedRef",
+    "path": "src/index.ts",
+    "import": "{ useSyncedRef }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "30 B"
+  },
+  {
+    "name": "useStableCallback",
+    "path": "src/index.ts",
+    "import": "{ useStableCallback }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "50 B"
+  },
+  {
+    "name": "Presence",
+    "path": "src/index.ts",
+    "import": "{ Presence }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "750 B"
+  },
+  {
+    "name": "WhenVisible",
+    "path": "src/index.ts",
+    "import": "{ WhenVisible }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "645 B"
+  },
+  {
+    "name": "WhenIdle",
+    "path": "src/index.ts",
+    "import": "{ WhenIdle }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "240 B"
+  },
+  {
+    "name": "Defer",
+    "path": "src/index.ts",
+    "import": "{ Defer }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "105 B"
+  },
+  {
+    "name": "useIdle",
+    "path": "src/index.ts",
+    "import": "{ useIdle }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "85 B"
+  },
+  {
+    "name": "useWhenIdle",
+    "path": "src/index.ts",
+    "import": "{ useWhenIdle }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "130 B"
+  },
+  {
+    "name": "useRenderState",
+    "path": "src/index.ts",
+    "import": "{ useRenderState }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "115 B"
+  },
+  {
+    "name": "Swap",
+    "path": "src/index.ts",
+    "import": "{ Swap }",
+    "ignore": ["@usephase/core", "react"],
+    "limit": "1.05 kB"
+  }
+]

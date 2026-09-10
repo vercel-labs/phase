@@ -1,6 +1,6 @@
 'use client';
 
-import { useCanvas, type CanvasDrawFn } from 'phase/react';
+import { useCanvas, type CanvasDrawFn } from '@usephase/react';
 import { useRef, type JSX } from 'react';
 
 const styles = `

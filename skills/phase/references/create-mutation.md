@@ -7,7 +7,7 @@ Within one clock protocol, event-derived callbacks queued before frame dispatch 
 ## Signature
 
 ```ts
-import { createMutation } from 'phase';
+import { createMutation } from '@usephase/core';
 
 const mutation = createMutation(options: MutationOptions): Mutation;
 ```

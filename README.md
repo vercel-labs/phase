@@ -79,13 +79,13 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every ex
 ## Install
 
 ```bash
-pnpm add phase
+pnpm add @usephase/core @usephase/react
 ```
 
 ## Getting started
 
 ```tsx
-import { useLoop } from 'phase/react';
+import { useLoop } from '@usephase/react';
 
 function Orbit({ radius }) {
   const speed = 1; // radians per second
@@ -159,13 +159,13 @@ If a gap fails any criterion, phase closes it in the [skill](#agent-skill) (audi
 
 ## Entry points
 
-| Import        | Contents                                                                        |
-| ------------- | ------------------------------------------------------------------------------- |
-| `phase`       | Framework-agnostic timing, observation, lifecycle, scheduling, math, and errors |
-| `phase/ease`  | Easing functions and math utilities only                                        |
-| `phase/react` | React hooks and components                                                      |
+| Import                | Contents                                                                        |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `@usephase/core`      | Framework-agnostic timing, observation, lifecycle, scheduling, math, and errors |
+| `@usephase/core/ease` | Easing functions and math utilities only                                        |
+| `@usephase/react`     | React hooks and components                                                      |
 
-Each entry point is independently tree-shakeable. Importing `phase/ease` in a server component pulls zero browser APIs.
+Each entry point is independently tree-shakeable. Importing `@usephase/core/ease` in a server component pulls zero browser APIs.
 
 ## Core API
 
@@ -174,7 +174,7 @@ Each entry point is independently tree-shakeable. Importing `phase/ease` in a se
 The main primitive. Composes a ticker, visibility observer, and reduced-motion listener into a lifecycle-aware animation loop.
 
 ```ts
-import { createLoop } from 'phase';
+import { createLoop } from '@usephase/core';
 
 const loop = createLoop({
   target: el,
@@ -254,7 +254,7 @@ createLoop({
 The low-level `requestAnimationFrame` clock underneath `createLoop`. Use it when you need a frame loop without visibility management (background processing, audio sync, non-visual timing).
 
 ```ts
-import { createTicker } from 'phase';
+import { createTicker } from '@usephase/core';
 
 const ticker = createTicker({
   onTick: (frame) => {
@@ -287,7 +287,7 @@ The first callback after `start()` or `resume()` uses 16.67ms without an FPS lim
 Answers one question: is this element visible right now? Combines `document.visibilitychange`, `pageshow` (bfcache restore), and `IntersectionObserver` into a single phase.
 
 ```ts
-import { createSight } from 'phase';
+import { createSight } from '@usephase/core';
 
 const sight = createSight({
   target: el,
@@ -307,7 +307,7 @@ The activation decision for an animation, decoupled from who drives the frames. 
 Use `createLifecycle` when you own your render loop (a three.js/WebGL renderer, a Web Worker, or any non-rAF work that should pause when off-screen or under reduced motion). When you want `phase` to drive the loop for you, use [`createLoop`](#createloop) instead.
 
 ```ts
-import { createLifecycle } from 'phase';
+import { createLifecycle } from '@usephase/core';
 
 const lifecycle = createLifecycle({
   target: canvas,
@@ -347,7 +347,7 @@ Reports what fraction of an element is currently visible in the viewport (0–1)
 > **Visibility ratio, not scroll offset.** This reports `intersectionRatio` (how much of an element is visible in the viewport), which plateaus for tall elements once they fill it. For a scroll container's _own_ offset (scrollbars, carousels, or the page via `target: 'page'` on the hook) use [`createScroll`](#createscroll); for CSS-declarative scroll-linked animation use the native `ScrollTimeline` API; for spring/gesture scroll use `motion`.
 
 ```ts
-import { createScrollProgress } from 'phase';
+import { createScrollProgress } from '@usephase/core';
 
 const progress = createScrollProgress({
   target: el,
@@ -381,7 +381,7 @@ Tracks a scroll container's offset and progress. Reads `scrollLeft`/`scrollTop` 
 > **Scroll offset, not visibility ratio.** This reports the element's own scroll position (for scrollbars, carousels, position indicators). For _how much of an element is in the viewport_, use [`createScrollProgress`](#createscrollprogress); for CSS-declarative scroll-linked animation, use the native `ScrollTimeline` API.
 
 ```ts
-import { createScroll } from 'phase';
+import { createScroll } from '@usephase/core';
 
 const scroll = createScroll({
   target: viewport,
@@ -426,7 +426,7 @@ Frame-aligned, visibility-aware throttle for event-driven work below frame rate 
 > **Event-driven, not a loop.** This fires on the trigger and idles otherwise. To cap a continuous render loop, use `fps` on [`createLoop`](#createloop). To think in rates, `interval: 1000 / 20` reads as "at most 20 per second".
 
 ```ts
-import { createThrottle } from 'phase';
+import { createThrottle } from '@usephase/core';
 
 const throttle = createThrottle({
   callback: (state) => socket.emit('cursor', state.x, state.y),
@@ -458,7 +458,7 @@ When the document hides, a pending call is flushed with the latest value (defaul
 Visibility-aware trailing debounce: fires the callback with the latest value once `wait` ms pass without a new call. No timer runs while the document is hidden; the quiet period restarts on return. Use it for work that should wait out a burst, like reallocating canvas buffers after a resize stream settles.
 
 ```ts
-import { createDebounce } from 'phase';
+import { createDebounce } from '@usephase/core';
 
 const debounce = createDebounce({
   callback: (size) => reallocateBuffers(size),
@@ -487,7 +487,7 @@ Same surface as `createThrottle`: `flush()`, `cancel()`, a synchronous `pending`
 Reports whether the browser is rendering an element or skipping it under `content-visibility: auto`. Use it to pause raw work inside deferred content; `phase` loops already pause themselves.
 
 ```ts
-import { createRenderState } from 'phase';
+import { createRenderState } from '@usephase/core';
 
 const renderState = createRenderState({
   target: el,
@@ -507,7 +507,7 @@ It listens to `contentvisibilityautostatechange`, the browser's actual paint dec
 Tracks `devicePixelRatio` changes through a shared media-query subscription. Use it for framework-free canvas, WebGL, or worker renderers that own their buffer sizing.
 
 ```ts
-import { createDevicePixelRatio } from 'phase';
+import { createDevicePixelRatio } from '@usephase/core';
 
 const dpr = createDevicePixelRatio({
   onChange: (value) => renderer.setPixelRatio(Math.min(value, 2)),
@@ -524,7 +524,7 @@ dpr.stop();
 A lifecycle-aware `MutationObserver`: records are coalesced into one callback per animation frame, observation pauses off-screen by default, and teardown is explicit.
 
 ```ts
-import { createMutation } from 'phase';
+import { createMutation } from '@usephase/core';
 
 const mutation = createMutation({
   target: list,
@@ -542,7 +542,7 @@ Reserve it for structural or narrow attribute changes. For dimensions, use Resiz
 Tracks pointer position relative to an element, batching high-frequency events into one callback and one bounds read per animation frame. It pauses when the element is off-screen.
 
 ```ts
-import { createPointer } from 'phase';
+import { createPointer } from '@usephase/core';
 
 const pointer = createPointer({
   target: surface,
@@ -562,7 +562,7 @@ Use CSS `:hover` for hover state and a gesture library for drag physics. This pr
 Runs one callback when the browser is idle, with a timeout fallback for browsers without `requestIdleCallback`. The returned function cancels pending work.
 
 ```ts
-import { whenIdle } from 'phase';
+import { whenIdle } from '@usephase/core';
 
 const cancel = whenIdle(() => warmCache(), { timeout: 2000 });
 cancel();
@@ -575,7 +575,7 @@ In React, use `useWhenIdle` for effects, `useIdle` for a boolean, or `WhenIdle` 
 Returns `true` when reduced motion is enabled at the OS level. Use it to gate expensive setup or dynamic imports.
 
 ```ts
-import { prefersReducedMotion } from 'phase';
+import { prefersReducedMotion } from '@usephase/core';
 
 if (!prefersReducedMotion()) {
   const { startParticleSystem } = await import('./particles');
@@ -590,7 +590,7 @@ All hooks and primitives consult this signal automatically. You only need it dir
 Pure functions with no browser APIs, side effects, or React. Safe in server components, build scripts, and tests.
 
 ```ts
-import { lerp, clamp01, easeOutCubic, remap } from 'phase/ease';
+import { lerp, clamp01, easeOutCubic, remap } from '@usephase/core/ease';
 ```
 
 ### Easing functions
@@ -656,7 +656,7 @@ Easing, interpolation, and your value range are three separate concerns. `phase`
 The primary React hook. Wraps `createLoop` with React lifecycle management.
 
 ```tsx
-import { useLoop } from 'phase/react';
+import { useLoop } from '@usephase/react';
 
 const { ref, phase, phaseReason } = useLoop({
   onTick: (frame) => {
@@ -677,7 +677,7 @@ Your `onTick` callback always sees the latest props, state, and refs without res
 The activation signal for a loop you own. Wraps [`createLifecycle`](#createlifecycle), returning `active` / `paused` so a consumer-owned render loop (WebGL, three.js, a Web Worker) can pause when off-screen or under reduced motion.
 
 ```tsx
-import { useLifecycle } from 'phase/react';
+import { useLifecycle } from '@usephase/react';
 
 function Hero() {
   const { ref, isActive } = useLifecycle();
@@ -711,7 +711,7 @@ Everything `useLoop` provides, plus DPR-aware buffer sizing, ResizeObserver coal
 
 ```tsx
 import { useRef } from 'react';
-import { useCanvas } from 'phase/react';
+import { useCanvas } from '@usephase/react';
 
 const containerRef = useRef(null);
 const canvasRef = useRef(null);
@@ -748,7 +748,7 @@ Both hooks accept the same quality controls as `createLoop`: `degraded` and `deg
 Animates a number from A to B over a duration. Calls `setState` per frame (appropriate when the animated value is used in render output).
 
 ```tsx
-import { useTween } from 'phase/react';
+import { useTween } from '@usephase/react';
 
 const opacity = useTween({ to: isVisible ? 1 : 0, duration: 300 });
 ```
@@ -762,7 +762,7 @@ Reduced motion default: `'complete'` checks the preference when a tween starts a
 The hook behind `<Presence>`. Use directly when you need full control over mount/unmount lifecycle.
 
 ```tsx
-import { usePresence } from 'phase/react';
+import { usePresence } from '@usephase/react';
 
 const { phase, ref, mounted, enter } = usePresence({ show: isOpen });
 if (!mounted) return null;
@@ -802,7 +802,7 @@ return (
 Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with React lifecycle management. This is a _visibility_ fraction (how much of the element is on screen); for a scroll container's own _position_ (scrollbars, carousels) use [`useScroll`](#usescroll) instead. See the [note on scope](#createscrollprogress) for the full distinction.
 
 ```tsx
-import { useScrollProgress } from 'phase/react';
+import { useScrollProgress } from '@usephase/react';
 
 function FadeIn({ children }) {
   const { ref, progress } = useScrollProgress();
@@ -822,7 +822,7 @@ Scroll offset and progress for a scroll container. Wraps `createScroll` with Rea
 
 ```tsx
 import { useRef } from 'react';
-import { useScroll } from 'phase/react';
+import { useScroll } from '@usephase/react';
 
 function Carousel({ children }) {
   // thumb uses `origin-left` so scaleX anchors to the track start
@@ -851,7 +851,7 @@ Scrolling writes to the DOM directly with zero re-renders. Read the latest posit
 Wraps `createThrottle` with React lifecycle management. Returns a stable-identity throttled function (with `flush()` and `cancel()` attached) that drops directly into any callback slot and always invokes the latest `callback`.
 
 ```tsx
-import { usePointer, useThrottledCallback } from 'phase/react';
+import { usePointer, useThrottledCallback } from '@usephase/react';
 
 function LiveCursor() {
   const emit = useThrottledCallback(
@@ -870,7 +870,7 @@ Unmount and option changes discard a pending trailing call. When the final value
 Wraps `createDebounce` with React lifecycle management. Same shape as `useThrottledCallback`, but fires once `wait` ms pass without a new call.
 
 ```tsx
-import { useSize, useDebouncedCallback } from 'phase/react';
+import { useSize, useDebouncedCallback } from '@usephase/react';
 
 function SimulationCanvas() {
   const realloc = useDebouncedCallback(
@@ -887,7 +887,7 @@ function SimulationCanvas() {
 Wraps `createMutation` with ref management and automatic teardown. Mutation records stay imperative—delivered once per animation frame—while only infrequent `observing` / `paused` phase changes re-render.
 
 ```tsx
-import { useMutation } from 'phase/react';
+import { useMutation } from '@usephase/react';
 
 const { ref, phase } = useMutation({
   mutation: { childList: true },
@@ -904,7 +904,7 @@ Observation pauses off-screen by default. Set `visibility: 'ignore'` only for do
 Element-relative pointer tracking without per-event layout reads or per-frame React state. Position is delivered through `onPointer` and mirrored in `stateRef`; only enter/leave phase changes re-render.
 
 ```tsx
-import { usePointer } from 'phase/react';
+import { usePointer } from '@usephase/react';
 
 const { ref } = usePointer({
   onPointer: ({ x, y, active }) => {
@@ -961,7 +961,7 @@ No `motion-reduce:` class needed because reduced motion is handled automatically
 Renders a `div` that manages its own mount/unmount lifecycle, stamping `data-phase` for exit and `data-enter="animate"` for enter.
 
 ```tsx
-import { Presence } from 'phase/react';
+import { Presence } from '@usephase/react';
 
 <Presence
   show={isOpen}
@@ -991,7 +991,7 @@ Two modes:
 Mounts children when the element enters the viewport. One-shot (once triggered, stays mounted). Uses the pooled IntersectionObserver via `useSight`.
 
 ```tsx
-import { WhenVisible } from 'phase/react';
+import { WhenVisible } from '@usephase/react';
 
 <WhenVisible
   rootMargin="200px"
@@ -1030,7 +1030,7 @@ Reduced motion is automatic: `data-enter="animate"` is not stamped when reduced 
 Coordinated exit-then-enter transitions. The old state fully exits before the new state enters (no overlap, no z-index issues).
 
 ```tsx
-import { Swap } from 'phase/react';
+import { Swap } from '@usephase/react';
 
 <Swap active={success ? 'success' : 'form'}>
   <Swap.State
@@ -1065,7 +1065,7 @@ Rapid changes (A → B → C during A's exit) skip intermediate states and advan
 Skips the browser's rendering work (style, layout, paint) for off-screen content via `content-visibility: auto`, using pure CSS with no JS or observers. Children stay in the DOM and are server-rendered.
 
 ```tsx
-import { Defer } from 'phase/react';
+import { Defer } from '@usephase/react';
 
 <Defer estimatedHeight="600px" className="my-section">
   <ArticleSection />
@@ -1098,7 +1098,7 @@ import { Defer } from 'phase/react';
 Mounts children once the browser is idle after first paint. One-shot. Use it for non-critical UI that should not compete with the critical path. Backed by the `whenIdle` core utility (`requestIdleCallback`).
 
 ```tsx
-import { WhenIdle } from 'phase/react';
+import { WhenIdle } from '@usephase/react';
 
 <WhenIdle
   fallback={<Skeleton />}
@@ -1120,7 +1120,7 @@ Idle never fires during SSR, so `WhenIdle` children are absent from server HTML.
 Returns `false`, then flips to `true` once the browser is idle. Use it when the idle signal belongs in render; use `WhenIdle` for a wrapper or `useWhenIdle` for an effect.
 
 ```tsx
-import { useIdle } from 'phase/react';
+import { useIdle } from '@usephase/react';
 
 const idle = useIdle({ timeout: 2000 });
 return idle ? <SecondaryPanel /> : <Skeleton />;
@@ -1134,7 +1134,7 @@ Runs a callback once when the browser is idle after mount (the effect-shaped cou
 
 ```tsx
 import { lazy, Suspense, useState } from 'react';
-import { useWhenIdle } from 'phase/react';
+import { useWhenIdle } from '@usephase/react';
 
 const openPanel = () => import('./chat-panel');
 const ChatPanel = lazy(openPanel);
@@ -1161,7 +1161,7 @@ Reads whether the browser is rendering an element or skipping it under `content-
 
 ```tsx
 import { useRef, useEffect } from 'react';
-import { Defer, useRenderState } from 'phase/react';
+import { Defer, useRenderState } from '@usephase/react';
 
 function Chart() {
   const ref = useRef<HTMLDivElement>(null);
@@ -1215,7 +1215,7 @@ See [`createTicker`](#createticker) for how `delta`, `elapsed`, and `time` behav
 Every error includes a machine-readable `code` and an actionable message.
 
 ```ts
-import { PhaseError, isPhaseError } from 'phase';
+import { PhaseError, isPhaseError } from '@usephase/core';
 ```
 
 | Code                 | Trigger                                             |
@@ -1233,7 +1233,7 @@ import { PhaseError, isPhaseError } from 'phase';
 
 ## Bundle size
 
-Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export is individually measured with [Size Limit](https://github.com/ai/size-limit) and budgeted in CI. Sizes reflect minified + brotli-compressed bytes.
+Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export is individually measured with [Size Limit](https://github.com/ai/size-limit) and budgeted in CI. Sizes are minified and brotli-compressed. Core rows include the core code pulled in by each export. React rows measure only the binding and exclude React and `@usephase/core`.
 
 > Regenerate with `pnpm size:readme`.
 
@@ -1242,13 +1242,13 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | Export                    | Size (min+brotli) |
 | ------------------------- | ----------------: |
 | **Core**                  |                   |
-| `createTicker`            |           1.23 kB |
+| `createTicker`            |           1.24 kB |
 | `createSight`             |           1.08 kB |
-| `createLifecycle`         |            1.6 kB |
+| `createLifecycle`         |           1.59 kB |
 | `createLoop`              |           3.12 kB |
 | `createScrollProgress`    |             934 B |
 | `createRenderState`       |             490 B |
-| `createDevicePixelRatio`  |             544 B |
+| `createDevicePixelRatio`  |             545 B |
 | `createMutation`          |           1.54 kB |
 | `createPointer`           |           1.64 kB |
 | `createScroll`            |           2.07 kB |
@@ -1256,36 +1256,38 @@ Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export 
 | `createDebounce`          |             559 B |
 | `whenIdle`                |             409 B |
 | `prefersReducedMotion`    |             101 B |
+| `PhaseError`              |              98 B |
+| `isPhaseError`            |             103 B |
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           3.44 kB |
-| `useLifecycle`            |           1.87 kB |
-| `useSight`                |           1.41 kB |
-| `useCanvas`               |           4.11 kB |
-| `useMutation`             |           1.72 kB |
-| `usePointer`              |           1.85 kB |
-| `useScroll`               |           2.41 kB |
-| `useThrottledCallback`    |            1.1 kB |
-| `useDebouncedCallback`    |             685 B |
-| `useTween`                |             684 B |
-| `usePresence`             |             591 B |
-| `useScrollProgress`       |           1.06 kB |
-| `useSize`                 |             599 B |
-| `useContainerQuery`       |             482 B |
-| `useMediaQuery`           |             246 B |
-| `usePrefersReducedMotion` |             274 B |
-| `useDevicePixelRatio`     |             230 B |
+| `useLoop`                 |             421 B |
+| `useLifecycle`            |             366 B |
+| `useSight`                |             377 B |
+| `useCanvas`               |             788 B |
+| `useMutation`             |             301 B |
+| `usePointer`              |             337 B |
+| `useScroll`               |             440 B |
+| `useThrottledCallback`    |             205 B |
+| `useDebouncedCallback`    |             202 B |
+| `useTween`                |             459 B |
+| `usePresence`             |             534 B |
+| `useScrollProgress`       |             216 B |
+| `useSize`                 |             365 B |
+| `useContainerQuery`       |             239 B |
+| `useMediaQuery`           |              61 B |
+| `usePrefersReducedMotion` |              92 B |
+| `useDevicePixelRatio`     |              58 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             741 B |
-| `WhenVisible`             |           1.65 kB |
-| `WhenIdle`                |             596 B |
+| `Presence`                |             698 B |
+| `WhenVisible`             |             578 B |
+| `WhenIdle`                |             197 B |
 | `Defer`                   |              85 B |
-| `useIdle`                 |             414 B |
-| `useWhenIdle`             |             444 B |
-| `useRenderState`          |             515 B |
-| `Swap`                    |           1.12 kB |
+| `useIdle`                 |              66 B |
+| `useWhenIdle`             |             121 B |
+| `useRenderState`          |              92 B |
+| `Swap`                    |             951 B |
 
 <!-- SIZE-TABLE:END -->
 
@@ -1306,11 +1308,13 @@ The audit scanner ships with the skill (no separate install needed). Ask your ag
 
 ## Repository layout
 
-| Path                | Purpose                                           |
-| ------------------- | ------------------------------------------------- |
-| `packages/phase`    | Published `phase` npm package                     |
-| `packages/examples` | Shared React examples                             |
-| `skills/phase`      | Installable agent skill and public API references |
-| `scanner/`          | Audit scanner source bundled with the agent skill |
-| `evals/`            | Agent skill and scanner evaluation scenarios      |
-| `docs/adr/`         | Architecture decision records                     |
+| Path                | Purpose                                         |
+| ------------------- | ----------------------------------------------- |
+| `packages/core`     | Published framework-agnostic runtime            |
+| `packages/react`    | Published React binding                         |
+| `packages/testing`  | Private shared test helpers                     |
+| `packages/cli`      | Command-line scanner package                    |
+| `packages/skill`    | Scanner source, evals, and maintainer tooling   |
+| `packages/examples` | Shared React examples                           |
+| `skills/phase`      | Installable agent skill and generated artifacts |
+| `docs/adr/`         | Architecture decision records                   |

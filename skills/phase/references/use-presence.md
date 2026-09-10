@@ -5,7 +5,7 @@ The hook behind `<Presence>`. Composable mount/unmount lifecycle with CSS transi
 ## Signature
 
 ```ts
-import { usePresence } from 'phase/react';
+import { usePresence } from '@usephase/react';
 
 const { phase, phaseReason, mounted, ref, enter } = usePresence(options);
 ```

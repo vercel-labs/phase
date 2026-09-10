@@ -1,6 +1,6 @@
 # phase skill
 
-Agent skill for the [phase](https://github.com/vercel-labs/phase) animation library. Teaches you to implement phase primitives correctly, follow performant-animation best practices, and audit existing animation code.
+Agent skill for the [phase](https://github.com/vercel-labs/phase) browser runtime performance toolkit. Teaches agents to audit animation and rendering code, and to apply `@usephase/core` or `@usephase/react` when those packages are the cheapest correct fix.
 
 ## Install
 

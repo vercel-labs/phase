@@ -7,7 +7,7 @@ Within one clock protocol, event-derived callbacks queued before frame dispatch 
 ## Signature
 
 ```ts
-import { createThrottle } from 'phase';
+import { createThrottle } from '@usephase/core';
 
 const throttle = createThrottle<T>(options: ThrottleOptions<T>): Throttle<T>;
 ```

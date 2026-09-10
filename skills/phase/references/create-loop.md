@@ -5,7 +5,7 @@ The main primitive. Composes a ticker, visibility observer, reduced-motion liste
 ## Signature
 
 ```ts
-import { createLoop } from 'phase';
+import { createLoop } from '@usephase/core';
 
 const loop = createLoop(options: LoopOptions): Loop;
 ```

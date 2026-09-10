@@ -7,7 +7,7 @@ Within one clock protocol, event-derived callbacks queued before frame dispatch 
 ## Signature
 
 ```ts
-import { useLoop } from 'phase/react';
+import { useLoop } from '@usephase/react';
 
 const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 ```

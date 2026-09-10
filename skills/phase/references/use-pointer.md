@@ -7,7 +7,7 @@ React hook wrapping `createPointer`. Lifecycle-aware pointer tracker with rAF-ba
 Position is always delivered imperatively via `onPointer` (never state) and mirrored in `stateRef`; phase is reactive state (transitions are infrequent). This mirrors `useLoop` / `useCanvas`.
 
 ```ts
-import { usePointer } from 'phase/react';
+import { usePointer } from '@usephase/react';
 
 const { ref, phase, phaseReason, phaseRef, phaseReasonRef, stateRef } =
   usePointer<T>(options);

@@ -1,0 +1,22 @@
+{
+  "name": "@usephase/testing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    "./browser": "./src/browser/fixtures.ts",
+    "./idle": "./src/idle.ts",
+    "./intersection-observer": "./src/intersection-observer.ts",
+    "./match-media": "./src/match-media.ts",
+    "./mutation-observer": "./src/mutation-observer.ts",
+    "./request-animation-frame": "./src/request-animation-frame.ts",
+    "./resize-observer": "./src/resize-observer.ts"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0",
+    "typescript": "6.0.2"
+  }
+}

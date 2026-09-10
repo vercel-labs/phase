@@ -5,7 +5,7 @@ Returns `false`, then `true` once the browser is idle after mount. The boolean h
 ## Signature
 
 ```ts
-import { useIdle } from 'phase/react';
+import { useIdle } from '@usephase/react';
 
 const idle = useIdle({ timeout: 2000 });
 ```

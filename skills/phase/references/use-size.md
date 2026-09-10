@@ -7,7 +7,7 @@ Element dimensions via the shared ResizeObserver singleton. Never calls `getBoun
 Two overloads. When `onResize` is provided, `size` is omitted from the return type (compile-time error to access it).
 
 ```ts
-import { useSize } from 'phase/react';
+import { useSize } from '@usephase/react';
 
 // Reactive (re-renders on resize)
 const { ref, size, sizeRef } = useSize<T>(options?);

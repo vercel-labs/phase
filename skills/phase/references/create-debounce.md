@@ -5,7 +5,7 @@ Visibility-aware trailing debounce: fires the callback with the latest value onc
 ## Signature
 
 ```ts
-import { createDebounce } from 'phase';
+import { createDebounce } from '@usephase/core';
 
 const debounce = createDebounce<T>(options: DebounceOptions<T>): Debounce<T>;
 ```

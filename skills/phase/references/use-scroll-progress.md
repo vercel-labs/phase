@@ -7,7 +7,7 @@ Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with Rea
 Two overloads. When `onProgress` is provided, `progress` is omitted from the return type (compile-time error to access it).
 
 ```ts
-import { useScrollProgress } from 'phase/react';
+import { useScrollProgress } from '@usephase/react';
 
 // Reactive (re-renders at threshold crossings)
 const { ref, progress, progressRef } = useScrollProgress<T>(options?);

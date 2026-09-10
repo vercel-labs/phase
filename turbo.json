@@ -16,6 +16,7 @@
       "dependsOn": ["^test", "//#test:root"]
     },
     "test:browser": {
+      "dependsOn": ["^build"],
       "cache": false
     },
     "size": {},
@@ -35,9 +36,17 @@
     "validate": {
       "dependsOn": ["build", "typecheck", "test", "size", "skill:check"]
     },
-    "//#test:root": {},
+    "//#test:root": {
+      "dependsOn": ["@usephase/react#build"]
+    },
     "@usephase/examples#typecheck": {
-      "dependsOn": ["phase#build", "^typecheck"]
+      "dependsOn": ["^build", "^typecheck"]
+    },
+    "@usephase/react#test": {
+      "dependsOn": ["^build", "^test", "//#test:root"]
+    },
+    "@usephase/react#typecheck": {
+      "dependsOn": ["^build", "^typecheck"]
     },
     "@usephase/cli#build": {
       "dependsOn": ["^build"],

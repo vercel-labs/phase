@@ -5,7 +5,7 @@ Returns whether an element matches a size-based container breakpoint. Re-renders
 ## Signature
 
 ```ts
-import { useContainerQuery } from 'phase/react';
+import { useContainerQuery } from '@usephase/react';
 
 const { ref, matches } = useContainerQuery<T>(breakpoint, options?);
 ```

@@ -5,7 +5,7 @@ Coordinated exit-then-enter transitions for N states. The current state fully ex
 ## Signature
 
 ```tsx
-import { Swap } from 'phase/react';
+import { Swap } from '@usephase/react';
 
 <Swap active={currentId}>
   <Swap.State id="a" className="...">

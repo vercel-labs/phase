@@ -73,6 +73,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Runtime specifier migration
+        run: pnpm runtime-specifiers:check
+
       - name: Build, typecheck, test, and size
         run: pnpm exec turbo run build typecheck test size
 
@@ -114,7 +117,7 @@ jobs:
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright browsers
-        run: pnpm --filter phase exec playwright install --with-deps chromium firefox webkit
+        run: pnpm --filter @usephase/core exec playwright install --with-deps chromium firefox webkit
 
       - name: Run browser tests
         run: pnpm test:browser

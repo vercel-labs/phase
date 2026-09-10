@@ -5,7 +5,7 @@ The activation signal for loops you own. Wraps `createLifecycle` and returns `ac
 ## Signature
 
 ```ts
-import { useLifecycle } from 'phase/react';
+import { useLifecycle } from '@usephase/react';
 
 const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 ```

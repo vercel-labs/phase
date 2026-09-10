@@ -1,6 +1,6 @@
 'use client';
 
-import { Defer } from 'phase/react';
+import { Defer } from '@usephase/react';
 import type { JSX } from 'react';
 
 const styles = `

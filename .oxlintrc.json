@@ -28,8 +28,10 @@
   "overrides": [
     {
       "files": [
-        "packages/phase/src/**/*.browser.spec.ts",
-        "packages/phase/src/**/*.browser.spec.tsx"
+        "packages/core/src/**/*.browser.spec.ts",
+        "packages/core/src/**/*.browser.spec.tsx",
+        "packages/react/src/**/*.browser.spec.ts",
+        "packages/react/src/**/*.browser.spec.tsx"
       ],
       "rules": {
         "no-restricted-imports": [
@@ -37,7 +39,7 @@
           {
             "patterns": [
               {
-                "regex": "(^|/)__mocks__/",
+                "regex": "(^|/)__mocks__/|^@usephase/testing/(?!browser$)",
                 "message": "Browser specs must exercise real browser APIs."
               }
             ]

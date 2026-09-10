@@ -121,7 +121,7 @@ interface PhaseFrameCall {
 }
 
 const PHASE_IMPORT =
-  /\bimport\s+(?!type\b)(?:\*\s+as\s+([A-Za-z_$][\w$]*)|\{([^}]*)\})\s+from\s*(['"])(phase(?:\/react)?)\3/g;
+  /\bimport\s+(?!type\b)(?:\*\s+as\s+([A-Za-z_$][\w$]*)|\{([^}]*)\})\s+from\s*(['"])(phase(?:\/react)?|@usephase\/(?:core|react))\3/g;
 
 /**
  * What a signal can require beyond its own line, analyzed once per scanned file:
@@ -319,7 +319,8 @@ function collectPhaseFrameCalls(
       continue;
     }
     if (innermostRange(sourceIndex.regexRanges, match.index)) continue;
-    const moduleKind = match[4] === 'phase' ? 'core' : 'react';
+    const moduleKind =
+      match[4] === 'phase' || match[4] === '@usephase/core' ? 'core' : 'react';
     const namespace = match[1];
     if (namespace) {
       namespaces.set(namespace, moduleKind);

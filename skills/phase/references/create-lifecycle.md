@@ -5,7 +5,7 @@ The activation decision for an animation, decoupled from who drives the frames. 
 ## Signature
 
 ```ts
-import { createLifecycle } from 'phase';
+import { createLifecycle } from '@usephase/core';
 
 const lifecycle = createLifecycle(options: LifecycleOptions): Lifecycle;
 ```

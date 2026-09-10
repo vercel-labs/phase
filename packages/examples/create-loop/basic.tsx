@@ -1,6 +1,6 @@
 'use client';
 
-import { createLoop } from 'phase';
+import { createLoop } from '@usephase/core';
 import { useEffect, useRef, type JSX } from 'react';
 
 const styles = `

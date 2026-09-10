@@ -1,4 +1,4 @@
-import { usePrefersReducedMotion } from 'phase/react';
+import { usePrefersReducedMotion } from '@usephase/react';
 import { useEffect, useRef } from 'react';
 
 export function RouteIndicator() {

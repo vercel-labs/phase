@@ -1,6 +1,6 @@
 'use client';
 
-import { Presence } from 'phase/react';
+import { Presence } from '@usephase/react';
 import { useState, type JSX } from 'react';
 
 const styles = `

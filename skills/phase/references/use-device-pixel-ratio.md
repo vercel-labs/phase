@@ -5,7 +5,7 @@ Reactive `devicePixelRatio` that updates when the window moves between monitors 
 ## Signature
 
 ```ts
-import { useDevicePixelRatio } from 'phase/react';
+import { useDevicePixelRatio } from '@usephase/react';
 
 const dpr: number = useDevicePixelRatio();
 ```

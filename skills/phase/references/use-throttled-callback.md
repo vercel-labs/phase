@@ -5,7 +5,7 @@ React hook wrapping `createThrottle`. Returns a stable-identity throttled functi
 ## Signature
 
 ```ts
-import { useThrottledCallback } from 'phase/react';
+import { useThrottledCallback } from '@usephase/react';
 
 const throttled = useThrottledCallback<T>(callback, options);
 throttled(value);

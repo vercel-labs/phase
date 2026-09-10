@@ -1,6 +1,6 @@
 'use client';
 
-import { useTween } from 'phase/react';
+import { useTween } from '@usephase/react';
 import { useState, type JSX } from 'react';
 
 const styles = `

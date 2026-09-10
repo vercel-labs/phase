@@ -7,11 +7,11 @@ This glossary defines the canonical domain language for phase. Terms are grouped
 ## Timing
 
 **Input stage**:
-The first shared-clock stage. It flushes event-derived pointer, scroll, mutation, and throttle callbacks queued before frame dispatch began. A callback first queued during either stage is eligible for the next frame; additional work may still coalesce into an eligible callback that has not run. Owner: `packages/phase/src/core/_internal/clock/`.
+The first shared-clock stage. It flushes event-derived pointer, scroll, mutation, and throttle callbacks queued before frame dispatch began. A callback first queued during either stage is eligible for the next frame; additional work may still coalesce into an eligible callback that has not run. Owner: `packages/core/src/_internal/clock/`.
 _Avoid_: Event stage, read stage
 
 **Tick stage**:
-The second shared-clock stage. It runs eligible ticker callbacks after the input stage completes. Owner: `packages/phase/src/core/_internal/clock/`.
+The second shared-clock stage. It runs eligible ticker callbacks after the input stage completes. Owner: `packages/core/src/_internal/clock/`.
 _Avoid_: Update stage, render stage
 
 ## Scanner and audit
@@ -133,7 +133,7 @@ _Avoid_: CLI version, engine version
 ## Library packages
 
 **Binding**:
-A framework-specific library package that adapts core primitives to one framework, such as `@usephase/react`. Bindings reach shared core machinery through core's declared internal subpath instead of deep imports. Owner: `packages/phase/src/react/`.
+A framework-specific library package that adapts core primitives to one framework, such as `@usephase/react`. Bindings reach shared core machinery through core's declared internal subpath instead of deep imports. Owner: `packages/react/src/`.
 _Avoid_: Adapter package, wrapper
 
 ## Examples
@@ -165,10 +165,10 @@ An example's rendered HTML, attributes, class names, and text may depend only on
 ## Testing
 
 **Unit project**:
-The Vitest project that runs deterministic logic, policy, fault-injection, and server-context specs in jsdom. It may replace browser APIs with simulated semantics. Owner: `packages/phase/vitest.config.ts`.
+The Vitest project that runs deterministic logic, policy, fault-injection, and server-context specs in jsdom. It may replace browser APIs with simulated semantics. Owners: `packages/core/vitest.config.ts` and `packages/react/vitest.config.ts`.
 
 **Browser project**:
-The Vitest project that runs native observer and scheduling behavior in headless Chromium, Firefox, and WebKit. Owner: `packages/phase/vitest.config.ts`.
+The Vitest project that runs native observer and scheduling behavior in headless Chromium, Firefox, and WebKit. Owners: `packages/core/vitest.config.ts` and `packages/react/vitest.config.ts`.
 
 **Simulated semantics**:
 A replacement for browser behavior, such as a mock observer or scheduler installed in place of IO, RO, MQL, rAF, or idle callbacks. Browser-project specs must not use simulated semantics.
