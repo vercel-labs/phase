@@ -73,4 +73,5 @@ A changed `package.json` keeps its byte-order mark, indentation, line endings, a
 
 ## Requirements
 
-`@usephase/core` and `@usephase/react` 0.6 require Node.js 24.
+The codemod requires Node.js 22.12.0 or later. `@usephase/core` and
+`@usephase/react` 0.6 require Node.js 24.

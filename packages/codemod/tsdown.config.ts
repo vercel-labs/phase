@@ -10,5 +10,5 @@ export default defineConfig({
   format: ['esm'],
   platform: 'node',
   sourcemap: false,
-  target: 'node20',
+  target: 'node22.12.0',
 });

@@ -47,4 +47,4 @@ npx @usephase/codemod@latest <codemod> [--dry] <path>
 
 ## Requirements
 
-Node.js 20 or later.
+Node.js 22.12.0 or later.

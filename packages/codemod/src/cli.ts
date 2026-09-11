@@ -1,142 +1,103 @@
 #!/usr/bin/env node
 
-import codemods from '../codemods.json';
-import {
-  type ApplyPhaseToUsephaseResult,
-  applyPhaseToUsephase,
-} from './migrations/phase-to-usephase/apply.js';
-import {
-  InvalidTargetError,
-  type PlannedFileChange,
-  planPhaseToUsephase,
-} from './migrations/phase-to-usephase/plan.js';
+import { Command, CommanderError } from 'commander';
 
-const COMMAND_NAME = codemods[0]?.name;
-if (codemods.length !== 1 || !COMMAND_NAME) {
-  throw new Error('codemods.json must declare the one implemented command');
-}
-
-const HELP = `Usage: usephase-codemod ${COMMAND_NAME} [--dry] <path>
-
-Rename legacy phase module specifiers, dependencies, and package metadata.
-
-Options:
-  --dry       Report changes without writing files
-  -h, --help  Show this help
-
-Exit codes:
-  0  Help printed or migration completed, including when no files changed
-  1  Migration failed while reading, parsing, validating, or writing files
-  2  Invocation or target is invalid
-`;
+import type { CodemodResult } from './command.js';
+import { commands } from './commands.js';
 
 type ExitCode = 0 | 1 | 2;
 
-type ParsedInvocation =
-  | { kind: 'help' }
-  | { kind: 'migration'; isDryRun: boolean; target: string };
-
-class InvalidInvocationError extends Error {}
-
-function parseInvocation(args: readonly string[]): ParsedInvocation {
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    return { kind: 'help' };
-  }
-
-  const [command, ...commandArgs] = args;
-  if (command !== COMMAND_NAME) {
-    throw new InvalidInvocationError(`Unknown command: ${command ?? ''}`);
-  }
-
-  const isDryRun = commandArgs.includes('--dry');
-  const unknownOptions = commandArgs.filter(
-    (argument) => argument.startsWith('-') && argument !== '--dry',
-  );
-  if (unknownOptions.length > 0) {
-    const label = unknownOptions.length === 1 ? 'option' : 'options';
-    throw new InvalidInvocationError(
-      `Unknown ${label}: ${unknownOptions.join(', ')}`,
-    );
-  }
-
-  const targets = commandArgs.filter((argument) => !argument.startsWith('-'));
-  const [target] = targets;
-  if (targets.length !== 1 || !target) {
-    throw new InvalidInvocationError(
-      targets.length === 0 ? 'Missing path' : 'Expected exactly one path',
-    );
-  }
-  return { kind: 'migration', isDryRun, target };
-}
-
-function printMigrationSummary(
-  changes: readonly PlannedFileChange[],
-  isDryRun: boolean,
+function printFileSummary(
+  label: 'Changed' | 'Would change',
+  files: readonly string[],
+  suffix = '',
 ): void {
-  if (changes.length === 0) {
-    console.log(`${isDryRun ? 'Would change' : 'Changed'} 0 files`);
+  if (files.length === 0) {
+    console.log(`${label} 0 files`);
     return;
   }
-  const fileLabel = changes.length === 1 ? 'file' : 'files';
   console.log(
-    `${isDryRun ? 'Would change' : 'Changed'} ${changes.length} ${fileLabel}:`,
+    `${label} ${files.length} ${files.length === 1 ? 'file' : 'files'}${suffix}:`,
   );
-  for (const change of changes) console.log(change.displayPath);
+  for (const file of files) console.log(file);
 }
 
-function reportApplyFailure(
-  result: Extract<ApplyPhaseToUsephaseResult, { kind: 'failed' }>,
-): void {
-  if (result.appliedChanges.length > 0) {
-    const fileLabel = result.appliedChanges.length === 1 ? 'file' : 'files';
-    console.log(
-      `Changed ${result.appliedChanges.length} ${fileLabel} before failure:`,
+function reportResult(
+  result: CodemodResult,
+  isDryRun: boolean,
+  command: Command,
+): ExitCode {
+  if (result.kind === 'succeeded') {
+    printFileSummary(
+      isDryRun ? 'Would change' : 'Changed',
+      result.changedFiles,
     );
-    for (const change of result.appliedChanges) console.log(change.displayPath);
+    return 0;
   }
+  if (result.kind === 'invalid-target') {
+    console.error(`${result.message}\n\n${command.helpInformation()}`);
+    return 2;
+  }
+  if (result.appliedFiles.length > 0) {
+    printFileSummary('Changed', result.appliedFiles, ' before failure');
+  }
+  console.error(result.message);
+  if (result.canRetry) {
+    console.error(
+      'Resolve the reported error, then rerun the migration; files already changed will be skipped.',
+    );
+  }
+  return 1;
+}
 
-  const message =
-    result.cause instanceof Error ? result.cause.message : String(result.cause);
-  console.error(
-    result.stage === 'cleanup'
-      ? `Changed ${result.failedChange.displayPath}, but failed to remove its temporary directory: ${message}`
-      : `Failed to apply change to ${result.failedChange.displayPath}: ${message}`,
-  );
-  console.error('Rerun the command to finish the idempotent migration.');
+function createProgram(setExitCode: (code: ExitCode) => void): Command {
+  const program = new Command()
+    .name('usephase-codemod')
+    .description('Versioned migrations for phase packages.')
+    .exitOverride()
+    .showHelpAfterError();
+
+  for (const command of commands) {
+    program
+      .command(command.name)
+      .description(command.summary)
+      .argument('<path>', 'File or directory to migrate')
+      .option('--dry', 'Report changes without writing files')
+      .action(
+        (
+          target: string,
+          options: { dry?: boolean },
+          commanderCommand: Command,
+        ) => {
+          const isDryRun = options.dry === true;
+          setExitCode(
+            reportResult(
+              command.execute({ cwd: process.cwd(), target, isDryRun }),
+              isDryRun,
+              commanderCommand,
+            ),
+          );
+        },
+      );
+  }
+  return program;
 }
 
 function main(args: readonly string[]): ExitCode {
+  let exitCode: ExitCode = 0;
+  const program = createProgram((code) => {
+    exitCode = code;
+  });
   try {
-    const invocation = parseInvocation(args);
-    if (invocation.kind === 'help') {
-      console.log(HELP);
-      return 0;
-    }
-
-    const plan = planPhaseToUsephase({
-      cwd: process.cwd(),
-      target: invocation.target,
-    });
-    if (!invocation.isDryRun) {
-      const result = applyPhaseToUsephase(plan);
-      if (result.kind === 'failed') {
-        reportApplyFailure(result);
-        return 1;
-      }
-    }
-    printMigrationSummary(plan.changes, invocation.isDryRun);
-    return 0;
+    program.parse(args.length === 0 ? ['--help'] : args, { from: 'user' });
   } catch (error) {
-    if (
-      error instanceof InvalidInvocationError ||
-      error instanceof InvalidTargetError
-    ) {
-      console.error(`${error.message}\n\n${HELP}`);
-      return 2;
+    if (error instanceof CommanderError) {
+      return error.exitCode === 0 ? 0 : 2;
     }
     console.error(error instanceof Error ? error.message : String(error));
     return 1;
   }
+  return exitCode;
 }
 
 process.exitCode = main(process.argv.slice(2));

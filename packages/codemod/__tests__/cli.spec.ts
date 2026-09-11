@@ -42,22 +42,37 @@ function run(cwd: string, args: string[]) {
 describe('usephase-codemod command', () => {
   it.each([
     { args: [], status: 0, output: 'Usage: usephase-codemod' },
-    { args: ['--help'], status: 0, output: 'Usage: usephase-codemod' },
-    { args: ['unknown'], status: 2, output: 'Unknown command: unknown' },
+    { args: ['--help'], status: 0, output: MIGRATION_COMMAND },
+    {
+      args: [MIGRATION_COMMAND, '--help'],
+      status: 0,
+      output: `Usage: usephase-codemod ${MIGRATION_COMMAND} [options] <path>`,
+    },
+    { args: ['help'], status: 0, output: 'Usage: usephase-codemod' },
+    {
+      args: ['help', MIGRATION_COMMAND],
+      status: 0,
+      output: `Usage: usephase-codemod ${MIGRATION_COMMAND} [options] <path>`,
+    },
+    {
+      args: ['unknown'],
+      status: 2,
+      output: "error: unknown command 'unknown'",
+    },
     {
       args: [MIGRATION_COMMAND, '--unknown', '.'],
       status: 2,
-      output: 'Unknown option: --unknown',
+      output: "error: unknown option '--unknown'",
     },
     {
       args: [MIGRATION_COMMAND],
       status: 2,
-      output: 'Missing path',
+      output: "error: missing required argument 'path'",
     },
     {
       args: [MIGRATION_COMMAND, '.', 'src'],
       status: 2,
-      output: 'Expected exactly one path',
+      output: `error: too many arguments for '${MIGRATION_COMMAND}'`,
     },
     {
       args: [MIGRATION_COMMAND, 'missing.ts'],
@@ -128,7 +143,9 @@ describe('usephase-codemod command', () => {
       'Changed 1 file before failure:\na/consumer.ts\n',
     );
     expect(result.stderr).toContain('Failed to apply change to b/consumer.ts:');
-    expect(result.stderr).toContain('Rerun the command');
+    expect(result.stderr).toContain(
+      'Resolve the reported error, then rerun the migration; files already changed will be skipped.',
+    );
   });
 
   it('maps a planning failure to exit code 1', () => {
