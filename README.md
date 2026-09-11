@@ -6,9 +6,43 @@
 
 > **Status: Alpha.** APIs are evolving rapidly. Expect breaking changes.
 
-Phase is a lightweight, lifecycle-aware UI performance layer for the web. It includes tools & guidance to optimize render performance, build performant animations, and manage layout and off-screen resources.
+Phase is a browser runtime performance toolkit for detecting and controlling avoidable browser work in animation, rendering, and loading.
 
-## Why phase
+Start with the scan tool:
+
+```bash
+npx phase scan --diff origin/main    # gate a PR on new findings
+npx phase scan src components        # scan files or directories
+npx phase explain setstate-in-raf    # explain a finding and its fix
+```
+
+The scanner is deterministic; its findings are candidates that need review, not confirmed defects. `--fail-on` turns severity tiers into a CI gate, and a committed [baseline](skills/phase/README.md#scanner-cli) keeps pre-existing findings from failing new PRs.
+
+## The toolkit
+
+<!-- Public framing is owned by docs/positioning.md; keep this table consistent with it. -->
+
+| Part                                            | What it does                                                                                               | Requires the libraries? |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------- |
+| [Agent skill](#agent-skill)                     | Audits browser runtime performance, checks each candidate in context, and recommends the cheapest safe fix | No                      |
+| `phase` CLI + [GitHub Action](action/README.md) | Runs the same deterministic scanner in terminals and CI                                                    | No                      |
+| Runtime libraries (`@usephase/*`)               | Lifecycle-aware primitives for when code needs to run, pause, render, or wait                              | Yes                     |
+
+One scanner powers all three distributions: the skill, the CLI, and the Action. The libraries are one possible recommendation from an audit, not a prerequisite for one: CSS, a browser API, a framework feature, or no change may be the correct result.
+
+## Migrating from phase <0.6.0
+
+`phase` versions below 0.6.0 on npm were the runtime library. Starting at 0.6.0, `phase` is the scan tool and the library ships as scoped packages. Update imports and dependencies:
+
+| Before        | After                 |
+| ------------- | --------------------- |
+| `phase`       | `@usephase/core`      |
+| `phase/react` | `@usephase/react`     |
+| `phase/ease`  | `@usephase/core/ease` |
+
+Replace the `phase` entry in `package.json` with `@usephase/core` (and `@usephase/react` if you use the hooks or components). Versions of `phase` pinned below 0.6.0 keep working; caret ranges on 0.x never auto-upgrade across the flip.
+
+## Why the runtime libraries
 
 You can't accidentally tank the main thread, leak an observer, jank on scroll, or ignore reduced motion. The hard parts are handled for you, so the slow path isn't even reachable:
 
@@ -559,7 +593,7 @@ Use CSS `:hover` for hover state and a gesture library for drag physics. This pr
 
 ### whenIdle
 
-Runs one callback when the browser is idle, with a timeout fallback for browsers without `requestIdleCallback`. The returned function cancels pending work.
+Runs one callback when the browser is idle. Where `requestIdleCallback` is unavailable (Safari), it falls back to a near-immediate task instead of waiting for an idle period. The returned function cancels pending work.
 
 ```ts
 import { whenIdle } from '@usephase/core';
@@ -1087,7 +1121,7 @@ import { Defer } from '@usephase/react';
 | `estimatedHeight` | `string`                                     | `'1000px'` | Reserved size before first paint (any CSS length)          |
 | ...rest           | `Omit<HTMLAttributes<HTMLElement>, 'style'>` | —          | Standard HTML attributes except `style` (use `className`)  |
 
-`contain-intrinsic-size: auto <estimatedHeight>` reserves space, so there is no layout shift. The browser remembers the real size after first paint. `Defer` defers rendering only, not hydration or mounting. There is no `style` prop: the render-skip styles are encapsulated so they can't be overridden. Style the wrapper with `className`.
+`contain-intrinsic-size: auto <estimatedHeight>` uses the estimate as the subtree's layout placeholder while content is skipped, and the browser remembers the real size after first paint. An inaccurate estimate can change document size and scroll position when the content first renders, so keep it close to the final height. `Defer` defers rendering only, not hydration or mounting. There is no `style` prop: the render-skip styles are encapsulated so they can't be overridden. Style the wrapper with `className`.
 
 `content-visibility: auto` applies paint containment, which clips all overflow to the element's padding edge. Box shadows, negative margins, and positioned content that bleeds outside the boundary will be cut off. If your content needs to overflow, move it outside the `Defer` or skip `Defer` for that container.
 
@@ -1180,11 +1214,11 @@ function Chart() {
 }
 ```
 
-`useRenderState` only listens and reports. It has no layout effect, so it never breaks `Defer`'s no-layout-shift guarantee. You rarely need it for `phase` loops, which already self-pause off-screen.
+`useRenderState` only listens and reports. It has no layout effect of its own. You rarely need it for `phase` loops, which already self-pause off-screen.
 
 ## Guarantees
 
-These are the performance invariants behind [Why phase](#why-phase). They are tested in CI, not aspirations.
+These are the performance invariants behind [Why the runtime libraries](#why-the-runtime-libraries). They are tested in CI, not aspirations.
 
 ### Zero per-frame allocations
 
@@ -1233,7 +1267,7 @@ import { PhaseError, isPhaseError } from '@usephase/core';
 
 ## Bundle size
 
-Minimal footprint is a core promise (see [Why phase](#why-phase)). Every export is individually measured with [Size Limit](https://github.com/ai/size-limit) and budgeted in CI. Sizes are minified and brotli-compressed. Core rows include the core code pulled in by each export. React rows measure only the binding and exclude React and `@usephase/core`.
+Minimal footprint is a core promise (see [Why the runtime libraries](#why-the-runtime-libraries)). Every export is individually measured with [Size Limit](https://github.com/ai/size-limit) and budgeted in CI. Sizes are minified and brotli-compressed. Core rows include the core code pulled in by each export. React rows measure only the binding and exclude React and `@usephase/core`.
 
 > Regenerate with `pnpm size:readme`.
 

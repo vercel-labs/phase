@@ -95,13 +95,17 @@ describe('runtime specifier migration', () => {
     );
     unlinkSync(join(root, 'packages/react/unmigrated.ts'));
 
-    write(root, '.github/workflows/ci.yml', 'run: pnpm --filter phase test\n');
+    write(
+      root,
+      'packages/examples/package.json',
+      '{ "dependencies": { "phase": "workspace:^" } }\n',
+    );
     const configurationCheck = run(root, '--check');
     expect(configurationCheck.status).toBe(1);
     expect(configurationCheck.stderr).toContain(
-      'Legacy phase package configuration remains in .github/workflows/ci.yml',
+      'Legacy phase package configuration remains in packages/examples/package.json',
     );
-    unlinkSync(join(root, '.github/workflows/ci.yml'));
+    unlinkSync(join(root, 'packages/examples/package.json'));
 
     const cleanCheck = run(root, '--check');
     expect(cleanCheck.status).toBe(0);

@@ -286,6 +286,8 @@ describe('GitHub annotations', () => {
     expect(output).toContain(
       'https://github.com/vercel-labs/phase/blob/main/skills/phase/references/performance.md#no-forced-reflows-in-animation-paths',
     );
+    expect(output).toContain('Run: npx phase explain forced-reflow');
+    expect(output).toContain('Run: npx phase explain raw-io');
     expect(output).not.toContain('src/error-10.ts');
     expect(output).not.toContain('src/warning-10.ts');
   });

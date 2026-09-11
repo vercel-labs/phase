@@ -6,7 +6,7 @@ For the single-helper decision (which one at all), see [decision-guide.md](./dec
 
 > **Reserve the final in-flow footprint (for `WhenVisible` / `WhenIdle`).** Their children are absent from the DOM until they mount, so mounting shifts later content when it adds unreserved in-flow size. Reserve that footprint through the wrapper, parent layout, `fallback`, or loading placeholder. The correct footprint can be zero when the child renders null, fixed or portaled UI, or otherwise out-of-flow output. Verify the actual before/after geometry rather than treating fallback presence as proof.
 >
-> **`Defer` is different: no hard layout shift.** Its children stay in the DOM and the browser measures and paints them at their true size when they scroll in, so a wrong `estimatedHeight` does **not** shift content. It only affects scrollbar proportion and scroll-anchoring math until first render. Give a realistic estimate to keep the scrollbar steady, but an imperfect one is cosmetic, not a CLS bug.
+> **`Defer` is different: content and DOM presence are preserved.** Its children stay in the DOM, sized by the `estimatedHeight` placeholder while skipped and by the measured size after first render. An inaccurate estimate can change document size and scroll position at that first render, so keep the estimate close to the final height; afterward the browser remembers the measured size.
 
 ## Choosing between `Defer`, `WhenVisible`, and `WhenIdle`
 
@@ -150,7 +150,7 @@ function Raw() {
 }
 ```
 
-**Why/when:** `content-visibility: auto` skips paint, not JavaScript. Raw loops keep burning CPU inside a `Defer`. `useRenderState` reports the browser's actual render-skip decision so you can pause them. You only need this for non-phase work; phase loops already self-pause. `useRenderState` only listens and never mutates layout, so the no-layout-shift guarantee holds.
+**Why/when:** `content-visibility: auto` skips paint, not JavaScript. Raw loops keep burning CPU inside a `Defer`. `useRenderState` reports the browser's actual render-skip decision so you can pause them. You only need this for non-phase work; phase loops already self-pause. `useRenderState` only listens and never mutates layout.
 
 ## What not to compose
 
