@@ -11,14 +11,14 @@ const RUNTIME_DEPENDENCIES = ['@usephase/core', '@usephase/react'] as const;
 
 export type RuntimeDependency = (typeof RUNTIME_DEPENDENCIES)[number];
 
-type MigratePhaseToUsephaseInput = {
+type TransformPhaseToUsephaseFileInput = {
   path: string;
   source: string;
   preserveLegacyDependency?: boolean;
   requiredDependencies?: readonly RuntimeDependency[];
 };
 
-type MigratePhaseToUsephaseResult = {
+type TransformPhaseToUsephaseFileResult = {
   content: string;
   requiredDependencies: RuntimeDependency[];
   unresolvedSpecifiers: string[];
@@ -390,7 +390,7 @@ function parserFor(path: string) {
 function transformSource(
   path: string,
   source: string,
-): MigratePhaseToUsephaseResult {
+): TransformPhaseToUsephaseFileResult {
   const j = jscodeshift.withParser(parserFor(path));
   const root = j(source);
   const requiredDependencies = new Set<RuntimeDependency>();
@@ -469,12 +469,18 @@ function transformSource(
   };
 }
 
-export default function migratePhaseToUsephase({
+/**
+ * Transforms one source file or package manifest without filesystem effects.
+ *
+ * Source results report observed runtime dependencies and unresolved legacy
+ * specifiers. Manifest inputs consume those observations and retention policy.
+ */
+export function transformPhaseToUsephaseFile({
   path,
   source,
   preserveLegacyDependency = false,
   requiredDependencies,
-}: MigratePhaseToUsephaseInput): MigratePhaseToUsephaseResult {
+}: TransformPhaseToUsephaseFileInput): TransformPhaseToUsephaseFileResult {
   if (basename(path) === 'package.json') {
     return {
       content: transformPackageJson(

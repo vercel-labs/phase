@@ -1,20 +1,20 @@
 import { readFileSync } from 'node:fs';
 
-import migratePhaseToUsephase from '../src/migrate-phase-to-usephase.js';
+import { transformPhaseToUsephaseFile } from '../../../src/migrations/phase-to-usephase/transform.js';
 
-const FIXTURES = new URL('fixtures/', import.meta.url);
+const FIXTURES = new URL('../../fixtures/', import.meta.url);
 
 function fixture(name: string): string {
   return readFileSync(new URL(name, FIXTURES), 'utf8');
 }
 
-describe('migrate-phase-to-usephase transform', () => {
+describe('phase-to-usephase file transformation', () => {
   it('rewrites every supported module form', () => {
     const input = fixture('module-forms.input.txt');
     const output = fixture('module-forms.output.txt');
 
     expect(
-      migratePhaseToUsephase({ path: 'consumer.tsx', source: input }),
+      transformPhaseToUsephaseFile({ path: 'consumer.tsx', source: input }),
     ).toEqual({
       content: output,
       requiredDependencies: ['@usephase/core', '@usephase/react'],
@@ -24,7 +24,7 @@ describe('migrate-phase-to-usephase transform', () => {
 
   it('rewrites only global and recognized module-loading bindings', () => {
     expect(
-      migratePhaseToUsephase({
+      transformPhaseToUsephaseFile({
         path: 'consumer.ts',
         source: fixture('bindings.input.txt'),
       }),
@@ -40,7 +40,7 @@ describe('migrate-phase-to-usephase transform', () => {
     const output = fixture('package.output.txt');
 
     expect(
-      migratePhaseToUsephase({
+      transformPhaseToUsephaseFile({
         path: 'package.json',
         source: input,
         requiredDependencies: ['@usephase/core', '@usephase/react'],
@@ -57,7 +57,7 @@ describe('migrate-phase-to-usephase transform', () => {
     const output = `\uFEFF${fixture('package.output.txt')}`;
 
     expect(
-      migratePhaseToUsephase({
+      transformPhaseToUsephaseFile({
         path: 'package.json',
         source: input,
         requiredDependencies: ['@usephase/core', '@usephase/react'],
@@ -72,7 +72,9 @@ describe('migrate-phase-to-usephase transform', () => {
   it('reports unsupported legacy subpaths without changing them', () => {
     const source = fixture('unknown-subpath.input.txt');
 
-    expect(migratePhaseToUsephase({ path: 'consumer.ts', source })).toEqual({
+    expect(
+      transformPhaseToUsephaseFile({ path: 'consumer.ts', source }),
+    ).toEqual({
       content: source,
       requiredDependencies: [],
       unresolvedSpecifiers: ['phase/other'],
@@ -81,7 +83,10 @@ describe('migrate-phase-to-usephase transform', () => {
 
   it('retains phase when package.json has no observed source usage', () => {
     const source = '{"dependencies":{"phase":"^0.5.4"}}\n';
-    const result = migratePhaseToUsephase({ path: 'package.json', source });
+    const result = transformPhaseToUsephaseFile({
+      path: 'package.json',
+      source,
+    });
 
     expect(JSON.parse(result.content)).toEqual({
       dependencies: {
@@ -107,14 +112,17 @@ describe('migrate-phase-to-usephase transform', () => {
     );
 
     expect(
-      migratePhaseToUsephase({ path: 'consumer.ts', source: sourceInput }),
+      transformPhaseToUsephaseFile({
+        path: 'consumer.ts',
+        source: sourceInput,
+      }),
     ).toEqual({
       content: sourceOutput,
       requiredDependencies: ['@usephase/core'],
       unresolvedSpecifiers: [],
     });
     expect(
-      migratePhaseToUsephase({
+      transformPhaseToUsephaseFile({
         path: 'package.json',
         source: packageInput,
         requiredDependencies: ['@usephase/core', '@usephase/react'],
