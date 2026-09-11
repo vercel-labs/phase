@@ -250,7 +250,9 @@ export function formatGithubAnnotations(
       `line=${finding.line}`,
       `title=${escapeGithubProperty(`phase: ${finding.signal}`)}`,
     ].join(',');
-    const message = `${label}: ${finding.text} Fix: ${fixUrl(finding.fix)}`;
+    // The hint is the reader-facing remediation command, intentionally
+    // independent of __PHASE_COMMAND__ (which names this bundle's invoker).
+    const message = `${label}: ${finding.text} Fix: ${fixUrl(finding.fix)} Run: npx phase explain ${finding.signal}`;
     out.push(`::${type} ${properties}::${escapeGithubData(message)}`);
   }
 

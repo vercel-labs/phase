@@ -4,14 +4,14 @@
 
 ## Repository overview
 
-Animation infrastructure for the web. Lifecycle-aware primitives compose visibility, timing, reduced motion, and quality signals into coherent state machines with debuggable transitions.
+A browser runtime performance toolkit: the `phase` scan tool, an agent skill, and runtime libraries whose lifecycle-aware primitives compose visibility, timing, reduced motion, and quality signals into coherent state machines with debuggable transitions. [`docs/positioning.md`](./docs/positioning.md) owns the public framing.
 
 Run commands from the repository root. The repository has eight ownership boundaries:
 
 - [`packages/core/`](./packages/core/AGENTS.md) owns the framework-agnostic runtime and shared performance contracts.
 - [`packages/react/`](./packages/react/AGENTS.md) owns the React binding and its package contract.
 - [`packages/testing/`](./packages/testing/AGENTS.md) owns private shared test helpers.
-- `packages/cli/` owns the private npm command package and its package-level tests and documentation.
+- `packages/cli/` owns the `phase` npm command package and its package-level tests and documentation.
 - `packages/codemod/` owns consumer migration commands and their fixtures, package-level tests, and documentation.
 - [`packages/skill/`](./packages/skill/AGENTS.md) owns scanner source, evals, and skill-maintainer tooling.
 - [`packages/examples/`](./packages/examples/CONVENTIONS.md) owns the shared React examples and their rules.

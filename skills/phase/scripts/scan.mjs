@@ -2282,7 +2282,7 @@ function formatGithubAnnotations(scan, failOn) {
 			`line=${finding.line}`,
 			`title=${escapeGithubProperty(`phase: ${finding.signal}`)}`
 		].join(",");
-		const message = `${label}: ${finding.text} Fix: ${fixUrl(finding.fix)}`;
+		const message = `${label}: ${finding.text} Fix: ${fixUrl(finding.fix)} Run: npx phase explain ${finding.signal}`;
 		out.push(`::${type} ${properties}::${escapeGithubData(message)}`);
 	}
 	return out.length > 0 ? `${out.join("\n")}\n` : "";

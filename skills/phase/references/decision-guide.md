@@ -103,7 +103,7 @@ phase's rendering helpers apply the same lifecycle signals to _rendering_ work. 
 | `WhenIdle`    | React mount until idle              | no      | no           | non-critical UI that shouldn't block first paint   |
 | `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading / reveals              |
 
-- **`Defer` is the safest default.** Children stay server-rendered and keep their reserved box (`contain-intrinsic-size: auto <est>`), so no layout shift. It defers rendering only, never hydration or mounting.
+- **`Defer` is the safest default.** Children stay server-rendered and keep a reserved box (`contain-intrinsic-size: auto <est>`); keep the estimate close to the final height, because an inaccurate one can change document size and scroll position at first render. It defers rendering only, never hydration or mounting.
 - **`WhenIdle` / `WhenVisible` save more** but their children are absent from SSR HTML. Reserve them for non-critical content.
 
 For multi-signal rendering patterns (two-tier `Defer` + `WhenVisible`, idle-gated `lazy()`, gating raw loops with `useRenderState`, and what _not_ to compose), see [rendering-recipes.md](./rendering-recipes.md).

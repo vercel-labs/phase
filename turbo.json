@@ -48,7 +48,7 @@
     "@usephase/react#typecheck": {
       "dependsOn": ["^build", "^typecheck"]
     },
-    "@usephase/cli#build": {
+    "phase#build": {
       "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -57,7 +57,7 @@
       ],
       "outputs": ["dist/**"]
     },
-    "@usephase/cli#test": {
+    "phase#test": {
       "dependsOn": ["build", "^test", "//#test:root"]
     },
     "@usephase/codemod#test": {

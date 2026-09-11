@@ -4,8 +4,8 @@ description: 'Use when optimizing, auditing, or preparing to ship web animations
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.50'
-  abstract: 'Lifecycle-aware animation and rendering skill. Implement phase primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, phase, or an external library.'
+  version: '0.0.51'
+  abstract: 'Browser runtime performance skill. Implement @usephase/core and @usephase/react primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, the phase runtime libraries, or an external library.'
 ---
 
 ## Prerequisite: add the required runtime dependencies
@@ -14,7 +14,7 @@ Before adding runtime imports, inspect the **consumer project's** `package.json`
 
 # phase
 
-This skill teaches you to implement phase primitives correctly, preserve performance guarantees, and audit animation code. Phase is the lifecycle-aware performance layer for the web: it composes visibility, reduced motion, and frame budget signals so animations pause when unseen, respect user preferences, and never force a reflow.
+This skill teaches you to implement phase primitives correctly, preserve performance guarantees, and audit animation code. Phase is a browser runtime performance toolkit: the `phase` scan tool and this skill detect avoidable browser work, and the `@usephase/core` and `@usephase/react` runtime libraries compose visibility, reduced motion, and frame budget signals so animations pause when unseen, respect user preferences, and never force a reflow. Auditing an application requires neither library.
 
 ## Stay passive during exploration
 
@@ -47,7 +47,7 @@ phase is the _when_ layer (when to animate, render, and pause) from one set of s
 | `WhenIdle`    | React mount until idle              | no      | no           | non-critical UI that shouldn't block first paint   |
 | `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading / reveals              |
 
-`Defer` is the cheapest and safest (keeps content, skips paint) and never causes a hard layout shift; its children stay in the DOM at true size. `When*` save the most (no DOM until triggered) but can shift layout when mounted content adds in-flow size. Reserve the child's final in-flow footprint through the wrapper, parent layout, or `fallback`. That footprint may be zero for null, fixed, portaled, or otherwise out-of-flow output, so verify the actual geometry rather than requiring a fallback categorically (see [references/rendering-recipes.md](references/rendering-recipes.md)).
+`Defer` is the cheapest and safest (keeps content, skips paint); its children stay in the DOM, sized by the `estimatedHeight` placeholder until first render and by the measured size afterward, so keep the estimate close to the final height. `When*` save the most (no DOM until triggered) but can shift layout when mounted content adds in-flow size. Reserve the child's final in-flow footprint through the wrapper, parent layout, or `fallback`. That footprint may be zero for null, fixed, portaled, or otherwise out-of-flow output, so verify the actual geometry rather than requiring a fallback categorically (see [references/rendering-recipes.md](references/rendering-recipes.md)).
 
 Route-specific render gating belongs to the route consumer. Keep reusable package components renderable by default when they serve both critical and below-the-fold positions; wrap only the non-critical usage in `Defer`, `WhenVisible`, or `WhenIdle`, and label the SSR and mount-timing consequences.
 

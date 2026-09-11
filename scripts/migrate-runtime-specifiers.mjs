@@ -36,12 +36,11 @@ function main() {
     ['packages/skill/scanner/examples.ts', 66],
     ['scripts/migrate-runtime-specifiers.spec.mjs', 5],
   ]);
+  // `phase` now names the command package (ADR 0014), so its turbo task keys
+  // and workspace filters are legitimate. Only the examples package's workspace
+  // dependency on the old library name remains checked as a migration error.
   const legacyConfiguration = new Map([
-    ['.github/workflows/ci.yml', /--filter\s+phase\b/],
-    ['.github/workflows/release.yml', /--filter\s+phase\b/],
-    ['.github/workflows/size.yml', /--filter\s+phase\b/],
     ['packages/examples/package.json', /"phase"\s*:\s*"workspace:/],
-    ['turbo.json', /phase#build/],
   ]);
 
   function collect(directory, files) {

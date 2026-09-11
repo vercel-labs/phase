@@ -1,6 +1,6 @@
 # `WhenIdle`
 
-Mounts children once the browser is idle after first paint. One-shot (once mounted, stays mounted). Backed by the `whenIdle` core utility (`requestIdleCallback`). Use it to defer non-critical UI off the critical path.
+Mounts children once the browser is idle after first paint. One-shot (once mounted, stays mounted). Backed by the `whenIdle` core utility: `requestIdleCallback` where available, with a near-immediate task fallback (Safari) instead of waiting for an idle period. Use it to defer non-critical UI off the critical path.
 
 ## Signature
 

@@ -63,7 +63,7 @@ render.stop();
 
 ## Does this affect layout or CLS?
 
-No. It only listens and reports. Reacting by pausing CPU work has zero layout effect. The no-layout-shift guarantee of `content-visibility` stays intact.
+No. It only listens and reports. Reacting by pausing CPU work has zero layout effect. Layout behavior belongs to the `content-visibility` boundary itself (see [defer](./defer.md)).
 
 ## Reduced motion
 
