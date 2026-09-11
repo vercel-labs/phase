@@ -1,0 +1,4 @@
+// @flow
+import { createLoop } from 'phase';
+
+const count: number = 1;

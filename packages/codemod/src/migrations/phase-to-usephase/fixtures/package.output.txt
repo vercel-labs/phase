@@ -1,0 +1,37 @@
+{
+  "name": "consumer",
+  "dependencies": {
+    "other": "1.0.0",
+    "@usephase/core": "^0.6.0",
+    "@usephase/react": "^0.6.0"
+  },
+  "devDependencies": {
+    "@usephase/core": "workspace:*",
+    "@usephase/react": "^0.6.0"
+  },
+  "peerDependencies": {
+    "@usephase/core": "^0.6.0",
+    "@usephase/react": "^0.6.0"
+  },
+  "peerDependenciesMeta": {
+    "@usephase/core": {
+      "optional": false
+    },
+    "@usephase/react": {
+      "optional": true
+    }
+  },
+  "optionalDependencies": {
+    "@usephase/core": "^0.6.0",
+    "@usephase/react": "^0.6.0"
+  },
+  "bundleDependencies": [
+    "@usephase/core",
+    "@usephase/react",
+    "other"
+  ],
+  "bundledDependencies": [
+    "@usephase/core",
+    "@usephase/react"
+  ]
+}

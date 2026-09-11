@@ -6,12 +6,13 @@
 
 Animation infrastructure for the web. Lifecycle-aware primitives compose visibility, timing, reduced motion, and quality signals into coherent state machines with debuggable transitions.
 
-Run commands from the repository root. The repository has seven ownership boundaries:
+Run commands from the repository root. The repository has eight ownership boundaries:
 
 - [`packages/core/`](./packages/core/AGENTS.md) owns the framework-agnostic runtime and shared performance contracts.
 - [`packages/react/`](./packages/react/AGENTS.md) owns the React binding and its package contract.
 - [`packages/testing/`](./packages/testing/AGENTS.md) owns private shared test helpers.
 - `packages/cli/` owns the private npm command package and its package-level tests and documentation.
+- `packages/codemod/` owns consumer migration commands and their fixtures, package-level tests, and documentation.
 - [`packages/skill/`](./packages/skill/AGENTS.md) owns scanner source, evals, and skill-maintainer tooling.
 - [`packages/examples/`](./packages/examples/CONVENTIONS.md) owns the shared React examples and their rules.
 - `skills/phase/` contains only installable skill content and committed generated artifacts.
@@ -64,10 +65,11 @@ Run `pnpm validate` before opening or updating a PR.
 
 ## Versioning and changelog
 
-The core library, each binding, the command package, and the skill are versioned independently:
+The core library, each binding, the scanner command package, the codemod package, and the skill are versioned independently:
 
 - Bump the changed package manifest in `packages/core/` or `packages/react/` for shipped source, build output, or consumer-facing package metadata. A change to `@usephase/core/internal` requires a core minor bump under ADR 0018.
 - Bump `packages/cli/package.json` for changes to the command's behavior, build output, or consumer-facing package metadata. The scanner version recorded in output and baselines follows `skills/phase/SKILL.md`, not this package version.
+- Bump `packages/codemod/package.json` for changes to codemod behavior, build output, or consumer-facing package metadata.
 - Do not bump a package for skill-only, test-only, workflow-only, or root README changes. Package README changes reach npm with that package's next release; use an intentional patch only when an npm-facing correction must ship immediately.
 - Bump the version in `skills/phase/SKILL.md` whenever installable skill content changes.
 - The release workflow validates every merge to `main`, but publishes only package versions not already on npm. An existing version is a successful no-op.
@@ -80,10 +82,15 @@ When asked to bump a library package version:
 4. Use the existing `## X.Y.Z` and `### Patch Changes` / `### Minor Changes` / `### Major Changes` format.
 5. Keep each entry to what changed and never overwrite older changelog entries.
 
-When asked to bump the command package version:
+When asked to bump the scanner command package version:
 
 1. Bump `version` in `packages/cli/package.json`.
 2. Prepend a section to `packages/cli/CHANGELOG.md` using the same heading format.
 3. Bump `skills/phase/SKILL.md` only when scanner behavior or installable skill content changes.
+
+When asked to bump the codemod package version:
+
+1. Bump `version` in `packages/codemod/package.json`.
+2. Prepend a section to `packages/codemod/CHANGELOG.md` using the same heading format.
 
 Package and skill naming follows [`ADR 0014`](./docs/adr/0014-name-the-tool-phase-and-publish-libraries-under-usephase.md): `phase` names the tool; library packages use the `@usephase` scope, and the `"private"` flag states publication intent.

@@ -1,0 +1,29 @@
+import { createRequire } from 'node:module';
+import { vi as importedVi } from 'vitest';
+import { jest as importedJest } from '@jest/globals';
+
+require('phase');
+vi.mock('phase/react');
+jest.mock('phase/ease');
+importedVi.mock('phase');
+importedJest.mock('phase/react');
+
+function loadWithCreateRequire() {
+  const require = createRequire(import.meta.url);
+  return require('phase/react');
+}
+
+function loadCoreWithCreateRequire() {
+  const require = createRequire(import.meta.url);
+  return require('phase');
+}
+
+function localCalls(
+  require: (value: string) => string,
+  vi: { mock(value: string): void },
+  jest: { mock(value: string): void },
+) {
+  require('phase');
+  vi.mock('phase/react');
+  jest.mock('phase/ease');
+}

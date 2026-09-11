@@ -1314,6 +1314,7 @@ The audit scanner ships with the skill (no separate install needed). Ask your ag
 | `packages/react`    | Published React binding                         |
 | `packages/testing`  | Private shared test helpers                     |
 | `packages/cli`      | Command-line scanner package                    |
+| `packages/codemod`  | Application migration codemod package           |
 | `packages/skill`    | Scanner source, evals, and maintainer tooling   |
 | `packages/examples` | Shared React examples                           |
 | `skills/phase`      | Installable agent skill and generated artifacts |

@@ -55,6 +55,16 @@ jobs:
           path: packages/cli/dist/phase.mjs
           if-no-files-found: error
 
+      - name: Pack usephase codemod
+        run: pnpm --dir packages/codemod pack --out "$RUNNER_TEMP/usephase-codemod.tgz"
+
+      - name: Upload usephase codemod
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: usephase-codemod
+          path: ${{ runner.temp }}/usephase-codemod.tgz
+          if-no-files-found: error
+
       - name: Check examples manifest
         run: |
           pnpm --filter @usephase/examples generate-manifest
@@ -76,7 +86,7 @@ jobs:
           git diff --exit-code packages/skill/scanner/fix-sections.gen.ts skills/phase/metadata.json skills/phase/scripts/scan.mjs skills/phase/references/audit.md skills/phase/dist/phase-skill.zip \
             || (echo "Skill artifacts are stale. Run 'pnpm skill:package' and commit the result." && exit 1)
 
-  cli:
+  scanner:
     needs: ci
     runs-on: ubuntu-latest
     strategy:
@@ -100,6 +110,51 @@ jobs:
           node packages/cli/dist/phase.mjs --help >/dev/null
           node packages/cli/dist/phase.mjs explain setstate-in-raf >/dev/null
           node packages/cli/dist/phase.mjs scan --json packages/skill/evals/scenarios/audit-planted-defects/workspace/src/hero-animation.tsx >/dev/null
+
+  codemod:
+    needs: ci
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        node: ["22.12.0", "24"]
+        include:
+          - os: windows-latest
+            node: "24"
+    steps:
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Download usephase codemod
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: usephase-codemod
+          path: ${{ runner.temp }}
+
+      - name: Smoke test usephase codemod on Unix
+        if: runner.os != 'Windows'
+        run: |
+          consumer="$RUNNER_TEMP/usephase-codemod-consumer"
+          mkdir "$consumer"
+          printf "import 'phase';\n" > "$consumer/consumer.ts"
+          npx --yes "file:$RUNNER_TEMP/usephase-codemod.tgz" migrate-phase-to-usephase "$consumer/consumer.ts"
+          grep -F "import '@usephase/core';" "$consumer/consumer.ts"
+
+      - name: Smoke test usephase codemod on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $consumer = Join-Path $env:RUNNER_TEMP "usephase-codemod-consumer"
+          New-Item -ItemType Directory -Path $consumer | Out-Null
+          $source = Join-Path $consumer "consumer.ts"
+          Set-Content -Path $source -Value "import 'phase';"
+          Push-Location $consumer
+          npx --yes "file:$env:RUNNER_TEMP/usephase-codemod.tgz" migrate-phase-to-usephase $source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+          if (-not (Select-String -Path $source -SimpleMatch "import '@usephase/core';" -Quiet)) { exit 1 }
 
   action:
     runs-on: ubuntu-latest
