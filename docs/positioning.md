@@ -77,6 +77,7 @@ Phase combines an agent skill, a deterministic source scanner shipped as the `ph
 ## Language rules
 
 - Use **browser runtime performance toolkit** for the repository and the complete project.
+- Reserve code-formatted `phase` for the npm package and its command. Write the project name as plain phase, and name `@usephase/core` / `@usephase/react` or "the runtime libraries" when the claim is about library behavior.
 - Use **the tool** or **the scan tool** for the `phase` npm package, and **lifecycle-aware browser runtime layer** for the `@usephase/*` libraries.
 - Describe the three areas as **animation, rendering, and loading**. Name only the areas relevant to the specific claim.
 - Describe the scanner as deterministic, but describe its output as candidates that require review.
