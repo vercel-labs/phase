@@ -143,7 +143,7 @@ Four lines of animation code. Behind them, performance-critical plumbing:
 
 ## Philosophy
 
-Every primitive in `phase` exposes its state as a **phase** (a single string: `idle`, `running`, `paused`, `active`, `exiting`...) paired with a **reason** explaining _why_ that transition happened.
+Every phase primitive exposes its state as a **phase** (a single string: `idle`, `running`, `paused`, `active`, `exiting`...) paired with a **reason** explaining _why_ that transition happened.
 
 ```ts
 const { phase, phaseReason } = useLoop({ onTick: draw });
@@ -155,13 +155,13 @@ const { phase, phaseReason } = useLoop({ onTick: draw });
 
 One string replaces `if (running && visible && !paused && !prefersReducedMotion && mounted)`.
 
-Each of those signals is also a CPU and battery decision. Animating while off-screen, ignoring reduced motion, or running after unmount is what burns cycles and causes jank. `phase` composes them once, correctly, instead of leaving each call site to get the conjunction right.
+Each of those signals is also a CPU and battery decision. Animating while off-screen, ignoring reduced motion, or running after unmount is what burns cycles and causes jank. The runtime libraries compose them once, correctly, instead of leaving each call site to get the conjunction right.
 
 Safe behavior is automatic. Visibility awareness, reduced motion, observer cleanup, and limits on animation-time jumps after delayed frames are defaults, not opt-ins. Bypassing reduced motion requires an explicit `reducedMotion: 'ignore'` in the diff.
 
 ## Scope
 
-`phase` composes signals (visibility, focus, reduced motion, frame budget) into a coherent lifecycle with a reason for every state transition.
+The runtime libraries compose signals (visibility, focus, reduced motion, frame budget) into a coherent lifecycle with a reason for every state transition.
 
 **Handles:** lifecycle state, timing, visibility, scroll visibility-ratio, reduced motion, observer pooling, quality signals, frame loops.
 
@@ -338,7 +338,7 @@ const sight = createSight({
 
 The activation decision for an animation, decoupled from who drives the frames. Composes visibility (`createSight`), reduced motion, and a manual pause into a single `active` / `paused` phase.
 
-Use `createLifecycle` when you own your render loop (a three.js/WebGL renderer, a Web Worker, or any non-rAF work that should pause when off-screen or under reduced motion). When you want `phase` to drive the loop for you, use [`createLoop`](#createloop) instead.
+Use `createLifecycle` when you own your render loop (a three.js/WebGL renderer, a Web Worker, or any non-rAF work that should pause when off-screen or under reduced motion). When you want phase to drive the loop for you, use [`createLoop`](#createloop) instead.
 
 ```ts
 import { createLifecycle } from '@usephase/core';
@@ -518,7 +518,7 @@ Same surface as `createThrottle`: `flush()`, `cancel()`, a synchronous `pending`
 
 ### createRenderState
 
-Reports whether the browser is rendering an element or skipping it under `content-visibility: auto`. Use it to pause raw work inside deferred content; `phase` loops already pause themselves.
+Reports whether the browser is rendering an element or skipping it under `content-visibility: auto`. Use it to pause raw work inside deferred content; phase loops already pause themselves.
 
 ```ts
 import { createRenderState } from '@usephase/core';
@@ -657,25 +657,25 @@ const eased = easeOutCubic(progress); // reshape the curve
 const value = lerp(startPos, endPos, eased); // map to your range
 ```
 
-Easing, interpolation, and your value range are three separate concerns. `phase` keeps them separate so you can mix and match.
+Easing, interpolation, and your value range are three separate concerns. phase keeps them separate so you can mix and match.
 
 ## Choosing a primitive
 
 | Need                                                                   | Use                                                                                         |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Check on-screen visibility                                             | `useSight` (visibility only)                                                                |
-| Run a frame loop via `phase`                                           | `useLoop` (DOM) / `useCanvas` (canvas)                                                      |
+| Run a frame loop via phase                                             | `useLoop` (DOM) / `useCanvas` (canvas)                                                      |
 | Pause/resume your own loop (WebGL, three.js, Web Worker)               | `useLifecycle` (active/paused signal)                                                       |
 | Animate a single value in render output                                | `useTween`                                                                                  |
 | Animate mount/unmount transitions                                      | `Presence` / `Swap` / `WhenVisible`                                                         |
 | Skip painting off-screen content (keep in DOM)                         | `Defer`                                                                                     |
 | Defer non-critical UI until the browser is idle                        | `WhenIdle` / `useIdle`                                                                      |
 | Run a side effect or prefetch when idle                                | `useWhenIdle`                                                                               |
-| Pause non-`phase` work inside a `Defer` subtree                        | `useRenderState`                                                                            |
+| Pause non-phase work inside a `Defer` subtree                          | `useRenderState`                                                                            |
 | React to DOM mutations without synchronous callback storms             | `useMutation`                                                                               |
 | Track element-relative pointer position without per-event layout reads | `usePointer`                                                                                |
 | Track DPR for a renderer you own                                       | `useDevicePixelRatio`                                                                       |
-| Check reduced motion for non-`phase` work                              | `usePrefersReducedMotion`                                                                   |
+| Check reduced motion for non-phase work                                | `usePrefersReducedMotion`                                                                   |
 | Subscribe to scroll, size, or media values reactively                  | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
 | Scroll/size/visibility without re-renders?                             | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
 | Rate-limit event-driven work (sockets, workers)                        | `useThrottledCallback`                                                                      |
@@ -964,7 +964,7 @@ Use it for custom cursors, canvas interaction, and tooltips—not simple hover o
 | `useContainerQuery`       | Breakpoint matching against element width                                             |
 | `useScrollProgress`       | Element visibility ratio (0–1). Pass `onProgress` for zero-re-render mode             |
 | `useMediaQuery`           | CSS media query subscription (shared MQL pool)                                        |
-| `usePrefersReducedMotion` | Reactive reduced-motion preference for non-`phase` animation                          |
+| `usePrefersReducedMotion` | Reactive reduced-motion preference for non-phase animation                            |
 | `useDevicePixelRatio`     | Reactive DPR for renderers outside `useCanvas`                                        |
 | `useSyncedRef`            | Ref always in sync with latest value                                                  |
 | `useStableCallback`       | Stable-identity function that calls latest closure                                    |
@@ -986,9 +986,9 @@ No `motion-reduce:` class needed because reduced motion is handled automatically
 
 **Enter:** CSS `@starting-style` animates the element natively when `data-enter="animate"` is present. Zero JS during the animation.
 
-**Exit:** `phase` stamps `data-phase="exiting"`, waits for `transitionend`/`animationend` (or a safety timeout), then unmounts. JS coordination is required because CSS has no "animate then remove from DOM" primitive.
+**Exit:** phase stamps `data-phase="exiting"`, waits for `transitionend`/`animationend` (or a safety timeout), then unmounts. JS coordination is required because CSS has no "animate then remove from DOM" primitive.
 
-**Reduced motion:** `phase` suppresses `data-enter="animate"` and skips the exit animation (instant unmount). No consumer effort.
+**Reduced motion:** phase suppresses `data-enter="animate"` and skips the exit animation (instant unmount). No consumer effort.
 
 ### Presence
 
@@ -1086,7 +1086,7 @@ Rapid changes (A → B → C during A's exit) skip intermediate states and advan
 
 ## Rendering
 
-`phase` is the _when_ layer (when to animate, when to render, when to pause), built from one set of signals. Alongside `WhenVisible`, two helpers skip rendering work for off-screen content. They differ in how aggressively they skip and whether the content survives server rendering:
+The runtime libraries are the _when_ layer (when to animate, when to render, when to pause), built from one set of signals. Alongside `WhenVisible`, two helpers skip rendering work for off-screen content. They differ in how aggressively they skip and whether the content survives server rendering:
 
 | Helper        | Defers                              | In DOM? | In SSR HTML? | Reach for it when                                  |
 | ------------- | ----------------------------------- | ------- | ------------ | -------------------------------------------------- |
@@ -1125,7 +1125,7 @@ import { Defer } from '@usephase/react';
 
 `content-visibility: auto` applies paint containment, which clips all overflow to the element's padding edge. Box shadows, negative margins, and positioned content that bleeds outside the boundary will be cut off. If your content needs to overflow, move it outside the `Defer` or skip `Defer` for that container.
 
-**Animations inside a `Defer` keep running.** `content-visibility` skips paint, not JavaScript. `phase`'s own loops (`useLoop`, `useCanvas`, `useLifecycle`) already self-pause off-screen via their own visibility observer. For raw work (a hand-written `requestAnimationFrame` loop, `setInterval`), gate it with `useRenderState`.
+**Animations inside a `Defer` keep running.** `content-visibility` skips paint, not JavaScript. phase's own loops (`useLoop`, `useCanvas`, `useLifecycle`) already self-pause off-screen via their own visibility observer. For raw work (a hand-written `requestAnimationFrame` loop, `setInterval`), gate it with `useRenderState`.
 
 ### WhenIdle
 
@@ -1214,7 +1214,7 @@ function Chart() {
 }
 ```
 
-`useRenderState` only listens and reports. It has no layout effect of its own. You rarely need it for `phase` loops, which already self-pause off-screen.
+`useRenderState` only listens and reports. It has no layout effect of its own. You rarely need it for phase loops, which already self-pause off-screen.
 
 ## Guarantees
 
@@ -1263,7 +1263,7 @@ import { PhaseError, isPhaseError } from '@usephase/core';
 
 ## Relationship to View Transitions
 
-`phase` doesn't wrap React's View Transition API, and it doesn't need to. The two compose cleanly. Reach for `<ViewTransition>` when you animate between committed UI states like route changes and shared-element morphs, and reach for `Presence`, `Swap`, and the frame loops for component-local lifecycle on stable React. A `phase` loop keeps ticking inside a view-transitioned subtree without conflict.
+phase doesn't wrap React's View Transition API, and it doesn't need to. The two compose cleanly. Reach for `<ViewTransition>` when you animate between committed UI states like route changes and shared-element morphs, and reach for `Presence`, `Swap`, and the frame loops for component-local lifecycle on stable React. A phase loop keeps ticking inside a view-transitioned subtree without conflict.
 
 ## Bundle size
 
@@ -1327,7 +1327,7 @@ Minimal footprint is a core promise (see [Why the runtime libraries](#why-the-ru
 
 ## Agent skill
 
-`phase` ships with an [agent skill](skills/phase) that teaches AI coding agents to implement the API correctly, follow performant-animation best practices, and audit existing code to recommend the cheapest sufficient approach (CSS-only, minimal JS, `phase`, or a heavier library).
+phase ships with an [agent skill](skills/phase) that teaches AI coding agents to implement the library API correctly, follow performant-animation best practices, and audit existing code to recommend the cheapest sufficient approach (CSS-only, minimal JS, the runtime libraries, or a heavier library).
 
 Install it three ways:
 
