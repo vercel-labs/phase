@@ -6,10 +6,10 @@ An animation callback reads two numbers each frame: how far to advance right now
 
 ## Decision
 
-`frame.elapsed` advances by exactly the `frame.delta` delivered to each callback, so elapsed is always the sum of delivered deltas. The delta bound is FPS-aware: at most 40ms without a cap, or one FPS interval plus 40ms with a cap, because a capped ticker legitimately waits one interval between deliveries. The first delivery after `start()` or `resume()` reports 16.67ms without a cap or one interval with a cap, since no previous frame exists to measure from. `frame.time` stays the browser's unmodified `requestAnimationFrame` timestamp for code that needs source time.
+`frame.elapsed` advances by exactly the `frame.delta` delivered to each callback, so elapsed is always the sum of delivered deltas. The delta bound is FPS-aware: at most 40ms without a cap, or one FPS interval plus 40ms with a cap, because a capped ticker legitimately waits one interval between deliveries. The first delivery after `start()` or `resume()` reports 16.67ms without a cap or one interval with a cap, since no previous frame exists to measure from. `frame.time` stays the browser's unmodified `requestAnimationFrame` timestamp.
 
 ## Reason
 
-One coherent timeline means the numbers a callback reads never disagree, and a stall steps animations forward by a bounded amount instead of teleporting them. The cost is that elapsed is animation time, not wall-clock time: after a stall, elapsed reads less than a wall clock would. That is the intended trade, and `frame.time` keeps wall-alignment available.
+One coherent timeline means the numbers a callback reads never disagree, and a stall steps animations forward by a bounded amount instead of teleporting them. The cost is that elapsed is animation time, not wall-clock time. After a stall, elapsed reads less than a wall clock would; that is the intended trade, and code that needs wall-clock time reads `frame.time`.
 
 Implemented by [#61](https://github.com/vercel-labs/phase/pull/61).

@@ -23,7 +23,7 @@ The second shared-clock stage. It runs eligible ticker callbacks after the input
 _Avoid_: Update stage, render stage
 
 **Frame timeline**:
-The time story a ticker tells its callbacks: elapsed time always equals the sum of delivered deltas, so the numbers a callback reads never disagree. The frame's raw browser timestamp stays available separately for wall-alignment. Owner: `packages/core/src/tick/`.
+The sequence of frame times a ticker delivers to its callbacks. Elapsed always equals the sum of delivered deltas, so the numbers a callback reads never disagree; the raw browser timestamp is delivered alongside for code that needs wall-clock time. Owner: `packages/core/src/tick/`.
 _Avoid_: Wall-clock timeline, animation clock
 
 **Delta**:
@@ -39,7 +39,7 @@ The milliseconds between eligible deliveries under an FPS cap: one second divide
 _Avoid_: Throttle window
 
 **Stall**:
-A gap between animation frames longer than the expected interval, such as a busy main thread or a delayed tab. The frame timeline absorbs a stall through the delta bound.
+A gap between animation frames longer than the expected interval, from a busy main thread or a browser throttling animation frames. The frame timeline absorbs a stall through the delta bound.
 _Avoid_: Lag, hitch
 
 ## Scanner and audit
