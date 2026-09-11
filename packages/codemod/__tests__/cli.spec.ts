@@ -59,7 +59,7 @@ describe('usephase-codemod command', () => {
       writeFileSync(join(consumer, path), content);
     }
 
-    const dryRun = run(consumer, ['migrate-phase-runtime', '--dry', '.']);
+    const dryRun = run(consumer, ['migrate-phase-to-usephase', '--dry', '.']);
     expect(dryRun.status, dryRun.stderr).toBe(0);
     expect(dryRun.stdout).toBe(
       'Would change 2 files:\npackage.json\nsrc/consumer.tsx\n',
@@ -74,7 +74,7 @@ describe('usephase-codemod command', () => {
     const previousUmask = process.umask(0o077);
     let writeRun;
     try {
-      writeRun = run(consumer, ['migrate-phase-runtime', '.']);
+      writeRun = run(consumer, ['migrate-phase-to-usephase', '.']);
     } finally {
       process.umask(previousUmask);
     }
@@ -92,7 +92,7 @@ describe('usephase-codemod command', () => {
       0o664,
     );
 
-    const secondRun = run(consumer, ['migrate-phase-runtime', '.']);
+    const secondRun = run(consumer, ['migrate-phase-to-usephase', '.']);
     expect(secondRun.status, secondRun.stderr).toBe(0);
     expect(secondRun.stdout).toBe('Changed 0 files\n');
     for (const [path, content] of lockfiles) {
@@ -108,7 +108,7 @@ describe('usephase-codemod command', () => {
       fixture('typescript-assertion.input.txt'),
     );
 
-    const migration = run(consumer, ['migrate-phase-runtime', '.']);
+    const migration = run(consumer, ['migrate-phase-to-usephase', '.']);
     expect(migration.status, migration.stderr).toBe(0);
     expect(migration.stdout).toBe('Changed 1 file:\nassertion.ts\n');
     expect(readFileSync(join(consumer, 'assertion.ts'), 'utf8')).toBe(
@@ -145,7 +145,7 @@ describe('usephase-codemod command', () => {
       );
     }
 
-    const migration = run(consumer, ['migrate-phase-runtime', '.']);
+    const migration = run(consumer, ['migrate-phase-to-usephase', '.']);
     expect(migration.status, migration.stderr).toBe(0);
     expect(migration.stdout).toBe(
       [
@@ -188,7 +188,7 @@ describe('usephase-codemod command', () => {
         fixture('core-only.input.txt'),
       );
 
-      const migration = run(consumer, ['migrate-phase-runtime', target]);
+      const migration = run(consumer, ['migrate-phase-to-usephase', target]);
       expect(migration.status, migration.stderr).toBe(0);
       expect(migration.stdout).toBe(
         'Changed 2 files:\npackage.json\nsrc/consumer.ts\n',
@@ -220,7 +220,7 @@ describe('usephase-codemod command', () => {
     const containerSource = fixture('react-only.input.txt');
     writeFileSync(join(consumer, 'src/component.vue'), containerSource);
 
-    const migration = run(consumer, ['migrate-phase-runtime', '.']);
+    const migration = run(consumer, ['migrate-phase-to-usephase', '.']);
     expect(migration.status, migration.stderr).toBe(0);
     expect(
       JSON.parse(readFileSync(join(consumer, 'package.json'), 'utf8')),
@@ -243,12 +243,12 @@ describe('usephase-codemod command', () => {
     writeFileSync(join(consumer, 'z.ts'), input);
     writeFileSync(join(consumer, '\u00e4.ts'), input);
 
-    const english = run(consumer, ['migrate-phase-runtime', '--dry', '.'], {
+    const english = run(consumer, ['migrate-phase-to-usephase', '--dry', '.'], {
       ...process.env,
       LANG: 'en_US.UTF-8',
       LC_ALL: 'en_US.UTF-8',
     });
-    const swedish = run(consumer, ['migrate-phase-runtime', '--dry', '.'], {
+    const swedish = run(consumer, ['migrate-phase-to-usephase', '--dry', '.'], {
       ...process.env,
       LANG: 'sv_SE.UTF-8',
       LC_ALL: 'sv_SE.UTF-8',
@@ -276,7 +276,7 @@ describe('usephase-codemod command', () => {
     writeFileSync(join(external, 'consumer.ts'), input);
     symlinkSync(external, join(consumer, 'linked-directory'));
 
-    const rootMigration = run(consumer, ['migrate-phase-runtime', '.']);
+    const rootMigration = run(consumer, ['migrate-phase-to-usephase', '.']);
     expect(rootMigration.status, rootMigration.stderr).toBe(0);
     expect(rootMigration.stdout).toBe(
       'Changed 2 files:\n..cache/consumer.ts\nsrc/consumer.ts\n',
@@ -294,18 +294,21 @@ describe('usephase-codemod command', () => {
       input,
     );
 
-    const unsupported = run(consumer, ['migrate-phase-runtime', 'README.md']);
+    const unsupported = run(consumer, [
+      'migrate-phase-to-usephase',
+      'README.md',
+    ]);
     expect(unsupported.status).toBe(2);
     expect(unsupported.stderr).toContain('Unsupported target file: README.md');
 
-    const symlink = run(consumer, ['migrate-phase-runtime', 'linked.ts']);
+    const symlink = run(consumer, ['migrate-phase-to-usephase', 'linked.ts']);
     expect(symlink.status).toBe(2);
     expect(symlink.stderr).toContain(
       'Symlink targets are not supported: linked.ts',
     );
 
     const symlinkedParent = run(consumer, [
-      'migrate-phase-runtime',
+      'migrate-phase-to-usephase',
       'linked-directory/consumer.ts',
     ]);
     expect(symlinkedParent.status).toBe(2);
@@ -314,14 +317,17 @@ describe('usephase-codemod command', () => {
     );
     expect(readFileSync(join(external, 'consumer.ts'), 'utf8')).toBe(input);
 
-    const generatedDirectory = run(consumer, ['migrate-phase-runtime', 'dist']);
+    const generatedDirectory = run(consumer, [
+      'migrate-phase-to-usephase',
+      'dist',
+    ]);
     expect(generatedDirectory.status).toBe(2);
     expect(generatedDirectory.stderr).toContain(
       'Generated directory targets are not supported: dist',
     );
 
     const explicitGeneratedFile = run(consumer, [
-      'migrate-phase-runtime',
+      'migrate-phase-to-usephase',
       'dist/consumer.ts',
     ]);
     expect(explicitGeneratedFile.status, explicitGeneratedFile.stderr).toBe(0);
@@ -332,7 +338,7 @@ describe('usephase-codemod command', () => {
       output,
     );
 
-    const missing = run(consumer, ['migrate-phase-runtime', 'missing.ts']);
+    const missing = run(consumer, ['migrate-phase-to-usephase', 'missing.ts']);
     expect(missing.status).toBe(2);
     expect(missing.stderr).toContain('Target does not exist: missing.ts');
 
@@ -340,7 +346,10 @@ describe('usephase-codemod command', () => {
       const fifo = join(consumer, 'input.ts');
       const created = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
       expect(created.status, created.stderr).toBe(0);
-      const specialFile = run(consumer, ['migrate-phase-runtime', 'input.ts']);
+      const specialFile = run(consumer, [
+        'migrate-phase-to-usephase',
+        'input.ts',
+      ]);
       expect(specialFile.status).toBe(2);
       expect(specialFile.stderr).toContain('Unsupported target type: input.ts');
     }
@@ -359,7 +368,7 @@ describe('usephase-codemod command', () => {
 
     let migration;
     try {
-      migration = run(consumer, ['migrate-phase-runtime', '.']);
+      migration = run(consumer, ['migrate-phase-to-usephase', '.']);
     } finally {
       chmodSync(join(consumer, 'b'), 0o755);
     }
@@ -383,11 +392,27 @@ describe('usephase-codemod command', () => {
     writeFileSync(join(consumer, 'a.ts'), input);
     writeFileSync(join(consumer, 'z.ts'), fixture('parse-error.input.txt'));
 
-    const migration = run(consumer, ['migrate-phase-runtime', '.']);
+    const migration = run(consumer, ['migrate-phase-to-usephase', '.']);
     expect(migration.status).toBe(1);
     expect(migration.stdout).toBe('');
     expect(migration.stderr).toContain('z.ts:');
     expect(readFileSync(join(consumer, 'a.ts'), 'utf8')).toBe(input);
+  });
+
+  it('rejects Flow syntax before writing any planned changes', () => {
+    const consumer = mkdtempSync(join(tmpdir(), 'usephase-codemod-flow-'));
+    temporaryDirectories.push(consumer);
+    const validSource = fixture('core-only.input.txt');
+    const flowSource = fixture('flow-unsupported.input.txt');
+    writeFileSync(join(consumer, 'a.ts'), validSource);
+    writeFileSync(join(consumer, 'z.js'), flowSource);
+
+    const migration = run(consumer, ['migrate-phase-to-usephase', '.']);
+    expect(migration.status).toBe(1);
+    expect(migration.stdout).toBe('');
+    expect(migration.stderr).toContain('z.js:');
+    expect(readFileSync(join(consumer, 'a.ts'), 'utf8')).toBe(validSource);
+    expect(readFileSync(join(consumer, 'z.js'), 'utf8')).toBe(flowSource);
   });
 
   it('rejects unresolved legacy subpaths before changing package metadata', () => {
@@ -399,7 +424,7 @@ describe('usephase-codemod command', () => {
     writeFileSync(join(consumer, 'package.json'), manifest);
     writeFileSync(join(consumer, 'src/consumer.ts'), source);
 
-    const migration = run(consumer, ['migrate-phase-runtime', '.']);
+    const migration = run(consumer, ['migrate-phase-to-usephase', '.']);
     expect(migration.status).toBe(1);
     expect(migration.stdout).toBe('');
     expect(migration.stderr).toContain(
@@ -433,7 +458,7 @@ describe('usephase-codemod command', () => {
     );
     const migration = spawnSync(
       'npx',
-      ['--yes', `file:${archive}`, 'migrate-phase-runtime', '.'],
+      ['--yes', `file:${archive}`, 'migrate-phase-to-usephase', '.'],
       { cwd: consumer, encoding: 'utf8' },
     );
     expect(migration.status, migration.stderr).toBe(0);

@@ -1,7 +1,7 @@
 {
   "name": "@usephase/codemod",
   "version": "0.1.0",
-  "description": "Codemods for migrating applications from the legacy phase runtime package",
+  "description": "Versioned migrations for phase packages",
   "author": "Vercel",
   "license": "MIT",
   "repository": {
@@ -16,6 +16,7 @@
     "usephase-codemod": "./dist/usephase-codemod.mjs"
   },
   "files": [
+    "codemods",
     "dist",
     "CHANGELOG.md",
     "LICENSE",
@@ -23,7 +24,9 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "test": "vitest run",
+    "readme:check": "node scripts/generate-readme.mjs --check",
+    "readme:fix": "node scripts/generate-readme.mjs --write",
+    "test": "pnpm readme:check && vitest run",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm build"
   },

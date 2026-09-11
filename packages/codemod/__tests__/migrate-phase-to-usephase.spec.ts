@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import migratePhaseRuntime from '../src/migrate-phase-runtime.js';
+import migratePhaseToUsephase from '../src/migrate-phase-to-usephase.js';
 
 const FIXTURES = new URL('fixtures/', import.meta.url);
 
@@ -8,13 +8,13 @@ function fixture(name: string): string {
   return readFileSync(new URL(name, FIXTURES), 'utf8');
 }
 
-describe('migrate-phase-runtime transform', () => {
+describe('migrate-phase-to-usephase transform', () => {
   it('rewrites every supported module form', () => {
     const input = fixture('module-forms.input.txt');
     const output = fixture('module-forms.output.txt');
 
     expect(
-      migratePhaseRuntime({ path: 'consumer.tsx', source: input }),
+      migratePhaseToUsephase({ path: 'consumer.tsx', source: input }),
     ).toEqual({
       content: output,
       requiredDependencies: ['@usephase/core', '@usephase/react'],
@@ -22,22 +22,9 @@ describe('migrate-phase-runtime transform', () => {
     });
   });
 
-  it('rewrites Flow source with the Flow parser', () => {
-    expect(
-      migratePhaseRuntime({
-        path: 'consumer.js',
-        source: fixture('flow.input.txt'),
-      }),
-    ).toEqual({
-      content: fixture('flow.output.txt'),
-      requiredDependencies: ['@usephase/core'],
-      unresolvedSpecifiers: [],
-    });
-  });
-
   it('rewrites only global and recognized module-loading bindings', () => {
     expect(
-      migratePhaseRuntime({
+      migratePhaseToUsephase({
         path: 'consumer.ts',
         source: fixture('bindings.input.txt'),
       }),
@@ -53,7 +40,7 @@ describe('migrate-phase-runtime transform', () => {
     const output = fixture('package.output.txt');
 
     expect(
-      migratePhaseRuntime({
+      migratePhaseToUsephase({
         path: 'package.json',
         source: input,
         requiredDependencies: ['@usephase/core', '@usephase/react'],
@@ -70,7 +57,7 @@ describe('migrate-phase-runtime transform', () => {
     const output = `\uFEFF${fixture('package.output.txt')}`;
 
     expect(
-      migratePhaseRuntime({
+      migratePhaseToUsephase({
         path: 'package.json',
         source: input,
         requiredDependencies: ['@usephase/core', '@usephase/react'],
@@ -85,7 +72,7 @@ describe('migrate-phase-runtime transform', () => {
   it('reports unsupported legacy subpaths without changing them', () => {
     const source = fixture('unknown-subpath.input.txt');
 
-    expect(migratePhaseRuntime({ path: 'consumer.ts', source })).toEqual({
+    expect(migratePhaseToUsephase({ path: 'consumer.ts', source })).toEqual({
       content: source,
       requiredDependencies: [],
       unresolvedSpecifiers: ['phase/other'],
@@ -94,7 +81,7 @@ describe('migrate-phase-runtime transform', () => {
 
   it('retains phase when package.json has no observed source usage', () => {
     const source = '{"dependencies":{"phase":"^0.5.4"}}\n';
-    const result = migratePhaseRuntime({ path: 'package.json', source });
+    const result = migratePhaseToUsephase({ path: 'package.json', source });
 
     expect(JSON.parse(result.content)).toEqual({
       dependencies: {
@@ -120,14 +107,14 @@ describe('migrate-phase-runtime transform', () => {
     );
 
     expect(
-      migratePhaseRuntime({ path: 'consumer.ts', source: sourceInput }),
+      migratePhaseToUsephase({ path: 'consumer.ts', source: sourceInput }),
     ).toEqual({
       content: sourceOutput,
       requiredDependencies: ['@usephase/core'],
       unresolvedSpecifiers: [],
     });
     expect(
-      migratePhaseRuntime({
+      migratePhaseToUsephase({
         path: 'package.json',
         source: packageInput,
         requiredDependencies: ['@usephase/core', '@usephase/react'],

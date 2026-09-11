@@ -139,7 +139,7 @@ jobs:
           consumer="$RUNNER_TEMP/usephase-codemod-consumer"
           mkdir "$consumer"
           printf "import 'phase';\n" > "$consumer/consumer.ts"
-          npx --yes "file:$RUNNER_TEMP/usephase-codemod.tgz" migrate-phase-runtime "$consumer/consumer.ts"
+          npx --yes "file:$RUNNER_TEMP/usephase-codemod.tgz" migrate-phase-to-usephase "$consumer/consumer.ts"
           grep -F "import '@usephase/core';" "$consumer/consumer.ts"
 
       - name: Smoke test usephase codemod on Windows
@@ -151,7 +151,7 @@ jobs:
           $source = Join-Path $consumer "consumer.ts"
           Set-Content -Path $source -Value "import 'phase';"
           Push-Location $consumer
-          npx --yes "file:$env:RUNNER_TEMP/usephase-codemod.tgz" migrate-phase-runtime $source
+          npx --yes "file:$env:RUNNER_TEMP/usephase-codemod.tgz" migrate-phase-to-usephase $source
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Pop-Location
           if (-not (Select-String -Path $source -SimpleMatch "import '@usephase/core';" -Quiet)) { exit 1 }

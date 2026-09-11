@@ -21,9 +21,17 @@ import {
   sep,
 } from 'node:path';
 
-import migratePhaseRuntime, {
+import codemods from '../codemods.json';
+import migratePhaseToUsephase, {
   type RuntimeDependency,
-} from './migrate-phase-runtime.js';
+} from './migrate-phase-to-usephase.js';
+
+const MIGRATION_COMMAND = codemods[0]?.name;
+if (codemods.length !== 1 || !MIGRATION_COMMAND) {
+  throw new Error(
+    'CLI dispatch and codemods.json must declare the same command',
+  );
+}
 
 const SOURCE_EXTENSIONS = new Set([
   '.cjs',
@@ -48,7 +56,7 @@ const IGNORED_DIRECTORIES = new Set([
   'out',
   'storybook-static',
 ]);
-const HELP = `Usage: usephase-codemod migrate-phase-runtime [--dry] <path>
+const HELP = `Usage: usephase-codemod ${MIGRATION_COMMAND} [--dry] <path>
 
 Rename legacy phase module specifiers, dependencies, and package metadata.
 
@@ -237,7 +245,7 @@ function migrateFile(
     const source = readFileSync(file, 'utf8');
     return {
       source,
-      ...migratePhaseRuntime({
+      ...migratePhaseToUsephase({
         path: file,
         source,
         preserveLegacyDependency,
@@ -422,7 +430,7 @@ function main(args: string[]): number {
   }
 
   const [command, ...commandArgs] = args;
-  if (command !== 'migrate-phase-runtime') {
+  if (command !== MIGRATION_COMMAND) {
     console.error(`Unknown command: ${command ?? ''}\n\n${HELP}`);
     return 2;
   }

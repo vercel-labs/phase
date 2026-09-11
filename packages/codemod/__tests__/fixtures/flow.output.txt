@@ -1,4 +1,0 @@
-// @flow
-import { createLoop } from '@usephase/core';
-
-const count: number = 1;

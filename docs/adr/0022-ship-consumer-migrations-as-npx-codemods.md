@@ -6,7 +6,7 @@ Changing the `phase` npm identity requires application repositories to rename ru
 
 ## Decision
 
-Consumer migrations ship in the public `@usephase/codemod` package and run through `npx`. Each migration is an additive subcommand; the first is `migrate-phase-runtime`. Published migration subcommands retain their original behavior so late consumers can run the same transition. Do not build a shared codemod framework until a second transform demonstrates what must be shared.
+Consumer migrations ship in the public `@usephase/codemod` package and run through `npx`. Each migration is an additive subcommand named for its source and destination; the first is `migrate-phase-to-usephase`. Published migration subcommands retain their original behavior so late consumers can run the same transition. Do not build a shared codemod framework until a second transform demonstrates what must be shared.
 
 ## Reason
 
