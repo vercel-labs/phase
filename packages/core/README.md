@@ -29,7 +29,7 @@ const loop = createLoop({
 loop.start();
 ```
 
-## Why phase
+## Why @usephase/core
 
 - **Pauses when unseen.** Off-screen or in a background tab, work stops and CPU drops to zero.
 - **Respects reduced motion by default.** Accessibility is built in, not an opt-in.
