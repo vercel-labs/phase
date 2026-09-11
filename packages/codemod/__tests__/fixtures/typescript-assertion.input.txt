@@ -1,2 +1,0 @@
-const value = <number>1;
-import 'phase';

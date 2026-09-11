@@ -11,10 +11,10 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { applyPhaseToUsephase } from '../../../src/migrations/phase-to-usephase/apply.js';
-import { planPhaseToUsephase } from '../../../src/migrations/phase-to-usephase/plan.js';
+import { applyPhaseToUsephase } from './apply.js';
+import { planPhaseToUsephase } from './plan.js';
 
-const FIXTURES = new URL('../../fixtures/', import.meta.url);
+const FIXTURES = new URL('fixtures/', import.meta.url);
 const temporaryDirectories: string[] = [];
 
 afterEach(() => {

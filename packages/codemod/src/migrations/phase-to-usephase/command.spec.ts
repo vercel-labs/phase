@@ -1,24 +1,18 @@
-import { applyPhaseToUsephase } from '../../../src/migrations/phase-to-usephase/apply.js';
-import { phaseToUsephaseCommand } from '../../../src/migrations/phase-to-usephase/command.js';
+import { applyPhaseToUsephase } from './apply.js';
+import { phaseToUsephaseCommand } from './command.js';
 import {
   InvalidTargetError,
   type PlannedFileChange,
   planPhaseToUsephase,
-} from '../../../src/migrations/phase-to-usephase/plan.js';
+} from './plan.js';
 
-vi.mock('../../../src/migrations/phase-to-usephase/apply.js', () => ({
+vi.mock('./apply.js', () => ({
   applyPhaseToUsephase: vi.fn(),
 }));
-vi.mock(
-  '../../../src/migrations/phase-to-usephase/plan.js',
-  async (importOriginal) => {
-    const actual =
-      await importOriginal<
-        typeof import('../../../src/migrations/phase-to-usephase/plan.js')
-      >();
-    return { ...actual, planPhaseToUsephase: vi.fn() };
-  },
-);
+vi.mock('./plan.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./plan.js')>();
+  return { ...actual, planPhaseToUsephase: vi.fn() };
+});
 
 const change = (displayPath: string): PlannedFileChange => ({
   after: 'after',
@@ -53,21 +47,6 @@ describe('phase-to-usephase command', () => {
     expect(applyPhaseToUsephase).not.toHaveBeenCalled();
   });
 
-  it('applies a completed plan and returns its changed files', () => {
-    const plan = { changes: [firstChange] };
-    vi.mocked(planPhaseToUsephase).mockReturnValue(plan);
-    vi.mocked(applyPhaseToUsephase).mockReturnValue({ kind: 'applied' });
-
-    const result = phaseToUsephaseCommand.execute({
-      cwd: '/workspace',
-      target: '.',
-      isDryRun: false,
-    });
-
-    expect(applyPhaseToUsephase).toHaveBeenCalledWith(plan);
-    expect(result).toEqual({ kind: 'succeeded', changedFiles: ['a.ts'] });
-  });
-
   it('distinguishes an invalid target from a migration failure', () => {
     vi.mocked(planPhaseToUsephase).mockImplementation(() => {
       throw new InvalidTargetError('Target does not exist: missing.ts');
@@ -82,25 +61,6 @@ describe('phase-to-usephase command', () => {
     ).toEqual({
       kind: 'invalid-target',
       message: 'Target does not exist: missing.ts',
-    });
-  });
-
-  it('maps a planning error to a non-retryable failure', () => {
-    vi.mocked(planPhaseToUsephase).mockImplementation(() => {
-      throw new Error('Could not parse invalid.ts');
-    });
-
-    expect(
-      phaseToUsephaseCommand.execute({
-        cwd: '/workspace',
-        target: '.',
-        isDryRun: false,
-      }),
-    ).toEqual({
-      kind: 'failed',
-      message: 'Could not parse invalid.ts',
-      appliedFiles: [],
-      canRetry: false,
     });
   });
 

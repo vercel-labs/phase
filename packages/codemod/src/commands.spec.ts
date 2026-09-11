@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import codemods from '../codemods.json';
-import { commands } from '../src/commands.js';
+import { commands } from './commands.js';
 
 describe('codemod command registry', () => {
   it('pairs every catalog entry with exactly one executable command', () => {
@@ -22,10 +22,7 @@ describe('codemod command registry', () => {
   });
 
   it('keeps migration implementations outside the generic CLI', () => {
-    const cliSource = readFileSync(
-      new URL('../src/cli.ts', import.meta.url),
-      'utf8',
-    );
+    const cliSource = readFileSync(new URL('cli.ts', import.meta.url), 'utf8');
 
     expect(cliSource).not.toContain('/migrations/');
   });

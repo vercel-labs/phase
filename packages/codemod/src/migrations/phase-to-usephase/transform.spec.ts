@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 
-import { transformPhaseToUsephaseFile } from '../../../src/migrations/phase-to-usephase/transform.js';
+import { transformPhaseToUsephaseFile } from './transform.js';
 
-const FIXTURES = new URL('../../fixtures/', import.meta.url);
+const FIXTURES = new URL('fixtures/', import.meta.url);
 
 function fixture(name: string): string {
   return readFileSync(new URL(name, FIXTURES), 'utf8');
