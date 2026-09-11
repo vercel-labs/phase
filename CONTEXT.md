@@ -6,6 +6,14 @@ This glossary defines the canonical domain language for phase. Terms are grouped
 
 ## Timing
 
+**Shared clock**:
+The single scheduler that runs every eligible timing callback in one JavaScript global on one animation frame with one timestamp. Copies of phase that speak the same clock protocol join it instead of starting their own. Owner: `packages/core/src/_internal/clock/`.
+_Avoid_: Global ticker, master clock
+
+**Clock protocol**:
+The versioned compatibility contract for joining the shared clock. Incompatible changes get a new protocol version, and different versions run separate clocks instead of misreading shared state. Owner: `packages/core/src/_internal/clock/`.
+_Avoid_: Clock key, clock format
+
 **Input stage**:
 The first shared-clock stage. It flushes event-derived pointer, scroll, mutation, and throttle callbacks queued before frame dispatch began. A callback first queued during either stage is eligible for the next frame; additional work may still coalesce into an eligible callback that has not run. Owner: `packages/core/src/_internal/clock/`.
 _Avoid_: Event stage, read stage
@@ -13,6 +21,26 @@ _Avoid_: Event stage, read stage
 **Tick stage**:
 The second shared-clock stage. It runs eligible ticker callbacks after the input stage completes. Owner: `packages/core/src/_internal/clock/`.
 _Avoid_: Update stage, render stage
+
+**Frame timeline**:
+The time story a ticker tells its callbacks: elapsed time always equals the sum of delivered deltas, so the numbers a callback reads never disagree. The frame's raw browser timestamp stays available separately for wall-alignment. Owner: `packages/core/src/tick/`.
+_Avoid_: Wall-clock timeline, animation clock
+
+**Delta**:
+How many milliseconds an animation should advance on one callback. Owner: `packages/core/src/tick/`.
+_Avoid_: dt, frame gap
+
+**Delta bound**:
+The most one delta may report: 40ms without an FPS cap, or one FPS interval plus 40ms with a cap. It turns a stall into one bounded step instead of a teleport. Owner: `packages/core/src/tick/`.
+_Avoid_: Lag smoothing, delta clamp, maxElapsed
+
+**FPS interval**:
+The milliseconds between eligible deliveries under an FPS cap: one second divided by the cap. Owner: `packages/core/src/tick/`.
+_Avoid_: Throttle window
+
+**Stall**:
+A gap between animation frames longer than the expected interval, such as a busy main thread or a delayed tab. The frame timeline absorbs a stall through the delta bound.
+_Avoid_: Lag, hitch
 
 ## Scanner and audit
 
@@ -191,3 +219,4 @@ The unit-project portion of a module's tests after its native observer or schedu
 - **Version** always needs a qualifier: package version identifies an npm release, skill version identifies the installable skill, and scanner version identifies the behavior recorded in scan output and baselines.
 - **New** and **pre-existing** are baseline states of a finding; **stale** describes a baseline entry whose finding no longer exists, never a finding itself.
 - **Baseline** and **suppression directive** are different mechanisms: a baseline accepts existing findings wholesale by fingerprint so gates count only regressions, while a suppression directive hides one signal at one location with a human-recorded reason.
+- **FPS interval** and **frame budget** are different numbers: the interval is the wait between capped deliveries, while the frame budget is the per-frame cost threshold the quality system watches before degrading.
