@@ -1,1 +1,1 @@
-["packages/core", "packages/react", "packages/cli"]
+["packages/core", "packages/react", "packages/cli", "packages/codemod"]

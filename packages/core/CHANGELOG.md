@@ -1,5 +1,11 @@
 # @usephase/core
 
+## 0.6.1
+
+### Patch Changes
+
+- Clarified in the exported `createLifecycle` documentation that it provides an activation signal for consumer-owned loops, while `createLoop` creates and manages the frame loop.
+
 ## 0.6.0
 
 ### Minor Changes

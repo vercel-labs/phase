@@ -64,7 +64,7 @@ const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
  * Composes visibility (`createSight`), reduced motion, and a manual pause into a
  * single `active` / `paused` phase. Use when you own your render loop (WebGL,
  * three.js, a Web Worker, or non-rAF work that should still pause off-screen or
- * under reduced motion). For loops `phase` should drive, use `createLoop` instead.
+ * under reduced motion). For a library-managed loop, use `createLoop` instead.
  *
  * @example
  * const lifecycle = createLifecycle({

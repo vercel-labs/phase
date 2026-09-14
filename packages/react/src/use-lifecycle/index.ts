@@ -60,8 +60,8 @@ const INITIAL_STATE: LifecycleState = {
  * React binding for `createLifecycle`. The activation signal for loops you own.
  *
  * Returns `active` / `paused` so a consumer-owned render loop (WebGL, three.js, a
- * Web Worker) can pause when off-screen or under reduced motion. When `phase`
- * should drive the loop for you, use `useLoop` or `useCanvas` instead.
+ * Web Worker) can pause when off-screen or under reduced motion. For a
+ * library-managed loop, use `useLoop` or `useCanvas` instead.
  *
  * @example
  * const { ref, isActive } = useLifecycle();
