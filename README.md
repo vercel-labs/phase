@@ -30,25 +30,6 @@ The scanner is deterministic; its findings are candidates that need review, not 
 
 One scanner powers all three distributions: the skill, the CLI, and the Action. The libraries are one possible recommendation from an audit, not a prerequisite for one: CSS, a browser API, a framework feature, or no change may be the correct result.
 
-## Migrating from `phase` <0.6.0
-
-`phase` releases below 0.6.0 were the legacy runtime library. Starting with 0.6.0, the unscoped package is the scan tool and the runtime libraries publish under `@usephase/*`. From a clean Git worktree, run the migration at your repository root:
-
-```bash
-npx @usephase/codemod@latest migrate-phase-to-usephase --dry .
-npx @usephase/codemod@latest migrate-phase-to-usephase .
-```
-
-Review the diff, then run your package manager's install command because the codemod does not edit lockfiles. It applies these module-specifier mappings:
-
-| Before        | After                 |
-| ------------- | --------------------- |
-| `phase`       | `@usephase/core`      |
-| `phase/react` | `@usephase/react`     |
-| `phase/ease`  | `@usephase/core/ease` |
-
-If you migrate by hand, update each affected `package.json`: add `@usephase/core` for imports from `phase` or `phase/ease`, add `@usephase/react` for imports from `phase/react`, and remove `phase` after all legacy imports are gone. Exact versions and minor-specific caret ranges such as `^0.5.0` stay on the legacy runtime; abbreviated ranges such as `^0` can resolve the 0.6.0 scan tool.
-
 ## Why the runtime libraries
 
 You can't accidentally tank the main thread, leak an observer, jank on scroll, or ignore reduced motion. The hard parts are handled for you, so the slow path isn't even reachable:

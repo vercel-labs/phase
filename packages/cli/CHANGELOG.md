@@ -1,5 +1,11 @@
 # phase
 
+## 0.6.1
+
+### Patch Changes
+
+- Removed legacy runtime migration guidance from the scan tool's npm README.
+
 ## 0.6.0
 
 ### Minor Changes
