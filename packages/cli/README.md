@@ -2,8 +2,6 @@
 
 `phase` scans JavaScript, TypeScript, and CSS for animation and rendering performance findings. Findings identify source locations that need review; they are not confirmed defects.
 
-> **Looking for the runtime library?** `phase` versions below 0.6.0 were a runtime library. That library now ships as [`@usephase/core`](https://www.npmjs.com/package/@usephase/core) and [`@usephase/react`](https://www.npmjs.com/package/@usephase/react). See the [migration guide](https://github.com/vercel-labs/phase#migrating-from-phase-060).
-
 Scan committed files changed since the merge base with `origin/main`:
 
 ```bash

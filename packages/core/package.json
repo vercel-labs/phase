@@ -1,6 +1,6 @@
 {
   "name": "@usephase/core",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Lifecycle-aware animation and rendering primitives for the web",
   "author": "Vercel",
   "license": "MIT",

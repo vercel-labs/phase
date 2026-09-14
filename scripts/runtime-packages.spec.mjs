@@ -136,7 +136,7 @@ void REDUCED_MOTION_QUERY;
           'utf8',
         ),
       );
-      expect(manifest.dependencies['@usephase/core']).toBe('^0.6.0');
+      expect(manifest.dependencies['@usephase/core']).toBe('^0.6.1');
     } finally {
       rmSync(consumer, { recursive: true, force: true });
     }

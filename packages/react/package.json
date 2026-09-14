@@ -1,6 +1,6 @@
 {
   "name": "@usephase/react",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "React bindings for Phase animation and rendering primitives",
   "author": "Vercel",
   "license": "MIT",

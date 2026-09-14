@@ -143,6 +143,36 @@ describe('package release detection', () => {
     expect(run.stderr).not.toContain('@usephase/private');
   });
 
+  it('rejects public packages that are not declared', () => {
+    const { root, bin } = createWorkspace();
+    writeJson(join(root, 'packages/undeclared/package.json'), {
+      name: '@usephase/undeclared',
+      version: '2.0.0',
+    });
+
+    const run = runDetect(root, bin, '["1.0.0"]\n');
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Public package packages/undeclared must be declared in scripts/publishable-packages.json',
+    );
+  });
+
+  it('rejects public applications', () => {
+    const { root, bin } = createWorkspace();
+    writeJson(join(root, 'apps/public/package.json'), {
+      name: '@usephase/public-app',
+      version: '2.0.0',
+    });
+
+    const run = runDetect(root, bin, '["1.0.0"]\n');
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Public package apps/public must be declared in scripts/publishable-packages.json',
+    );
+  });
+
   it('preserves declared package order in the matrix', () => {
     const { root, bin } = createWorkspace();
     writeJson(join(root, 'packages/react/package.json'), {
