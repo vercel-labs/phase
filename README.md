@@ -8,27 +8,42 @@
 
 Phase is a browser runtime performance toolkit for detecting and controlling avoidable browser work in animation, rendering, and loading.
 
-Start with the scan tool:
+## Use the scan tool
 
 ```bash
-npx phase scan --diff origin/main    # gate a PR on new findings
-npx phase scan src components        # scan files or directories
-npx phase explain setstate-in-raf    # explain a finding and its fix
+npx phase scan --diff origin/main --fail-on critical  # gate a PR on new findings
+npx phase scan src components                          # scan files or directories
+npx phase explain setstate-in-raf                      # explain a finding and its fix
 ```
 
 The scanner is deterministic; its findings are candidates that need review, not confirmed defects. `--fail-on` turns severity tiers into a CI gate, and a committed [baseline](skills/phase/README.md#scanner-cli) keeps pre-existing findings from failing new PRs.
 
-## The toolkit
+## What ships
 
-<!-- Public framing is owned by docs/positioning.md; keep this table consistent with it. -->
+<!-- docs/positioning.md owns public framing; this table expands its toolkit parts into shipped artifacts. -->
 
-| Part                                            | What it does                                                                                               | Requires the libraries? |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------- |
-| [Agent skill](#agent-skill)                     | Audits browser runtime performance, checks each candidate in context, and recommends the cheapest safe fix | No                      |
-| `phase` CLI + [GitHub Action](action/README.md) | Runs the same deterministic scanner in terminals and CI                                                    | No                      |
-| Runtime libraries (`@usephase/*`)               | Lifecycle-aware primitives for when code needs to run, pause, render, or wait                              | Yes                     |
+| Part                        | Shipped as                                                                     | What it does                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Scan CLI                    | npm [`phase`](https://www.npmjs.com/package/phase)                             | Runs the deterministic scanner in terminals                                                                |
+| Core runtime                | npm [`@usephase/core`](https://www.npmjs.com/package/@usephase/core)           | Framework-agnostic timing, observation, lifecycle, and scheduling                                          |
+| React bindings              | npm [`@usephase/react`](https://www.npmjs.com/package/@usephase/react)         | React hooks and components built on the core runtime                                                       |
+| Migration codemods          | npm [`@usephase/codemod`](https://www.npmjs.com/package/@usephase/codemod)     | Applies versioned package transforms                                                                       |
+| [Agent skill](#agent-skill) | skills.sh [vercel-labs/phase/phase](https://skills.sh/vercel-labs/phase/phase) | Audits browser runtime performance, checks each candidate in context, and recommends the cheapest safe fix |
+| GitHub Action               | repository [`action/`](action/README.md)                                       | Runs the same deterministic scanner in CI                                                                  |
 
 One scanner powers all three distributions: the skill, the CLI, and the Action. The libraries are one possible recommendation from an audit, not a prerequisite for one: CSS, a browser API, a framework feature, or no change may be the correct result.
+
+## Agent skill
+
+Install the phase skill when working with an agent. It teaches agents to use the runtime library APIs correctly, follow performance-conscious animation practices, and audit existing code to recommend the cheapest sufficient approach: CSS, minimal JavaScript, the runtime libraries, an external library, or no change.
+
+```bash
+npx skills add vercel-labs/phase --skill phase
+```
+
+Alternatively, copy `skills/phase/` to your project's `.agents/skills/phase/` and reference its `SKILL.md` from your project's `AGENTS.md`. You can also download [`skills/phase/dist/phase-skill.zip`](skills/phase/dist/phase-skill.zip), create `<skills-dir>/phase/`, and unzip the archive there.
+
+The audit scanner ships with the skill, so agents need no separate npm install. Ask your agent to audit animation or rendering code, and the skill will direct it to run `scripts/scan.mjs`. You can also run the scanner directly with `node <skill-dir>/scripts/scan.mjs <target-dir>`. See the [skill README](skills/phase/README.md#running-an-audit) for details.
 
 ## Why the runtime libraries
 
@@ -45,7 +60,11 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every ex
 
 ## Table of contents
 
-- [Install](#install)
+- [Use the scan tool](#use-the-scan-tool)
+- [What ships](#what-ships)
+- [Agent skill](#agent-skill)
+- [Why the runtime libraries](#why-the-runtime-libraries)
+- [Install the runtime libraries](#install-the-runtime-libraries)
 - [Getting started](#getting-started)
 - [Philosophy](#philosophy)
 - [Scope](#scope)
@@ -95,10 +114,9 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every ex
 - [Errors](#errors)
 - [Relationship to View Transitions](#relationship-to-view-transitions)
 - [Bundle size](#bundle-size)
-- [Agent skill](#agent-skill)
 - [Repository layout](#repository-layout)
 
-## Install
+## Install the runtime libraries
 
 ```bash
 pnpm add @usephase/core @usephase/react
@@ -1312,21 +1330,6 @@ Minimal footprint is a core promise (see [Why the runtime libraries](#why-the-ru
 | `Swap`                    |             951 B |
 
 <!-- SIZE-TABLE:END -->
-
-## Agent skill
-
-phase ships with an [agent skill](skills/phase) that teaches AI coding agents to implement the library API correctly, follow performant-animation best practices, and audit existing code to recommend the cheapest sufficient approach (CSS-only, minimal JS, the runtime libraries, or a heavier library).
-
-Install it three ways:
-
-```bash
-# skills.sh
-npx skills add vercel-labs/phase --skill phase
-```
-
-Or copy `skills/phase/` into your project's `.agents/skills/phase/` and reference its `SKILL.md` from your `AGENTS.md`, or download [`skills/phase/dist/phase-skill.zip`](skills/phase/dist/phase-skill.zip) and unzip it into your skills directory.
-
-The audit scanner ships with the skill (no separate install needed). Ask your agent to audit your animation code and it runs `scripts/scan.mjs` for you, or run it standalone with `node <skill-dir>/scripts/scan.mjs <target-dir>`. See the [skill README](skills/phase/README.md#running-an-audit) for details.
 
 ## Repository layout
 
