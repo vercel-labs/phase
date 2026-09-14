@@ -4,7 +4,7 @@ description: 'Use when optimizing, auditing, or preparing to ship web animations
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.51'
+  version: '0.0.52'
   abstract: 'Browser runtime performance skill. Implement @usephase/core and @usephase/react primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, the phase runtime libraries, or an external library.'
 ---
 
@@ -73,7 +73,7 @@ The ladder picks a _tier_; this table picks the _primitive_ once phase is the ri
 | Track scroll offset/progress without reflow?         | `useScroll` (element, or the page with `target: 'page'`)                                    |
 | Reactive scroll/size/media values?                   | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
 | Scroll/size/visibility without re-renders?           | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
-| Reactive reduced-motion check for non-phase code?    | `usePrefersReducedMotion`                                                                   |
+| Gate custom motion or choose a static fallback?      | `usePrefersReducedMotion`                                                                   |
 | Need reactive `devicePixelRatio` for buffer sizing?  | `useDevicePixelRatio`                                                                       |
 | Visibility-aware timed sequences (do X, wait, do Y)? | CSS/WAAPI + `useLifecycle` when keyframe-friendly; `useLoop` when the steps need live JS    |
 | Rate-limit event-driven work (sockets, workers)?     | `useThrottledCallback`                                                                      |
@@ -93,7 +93,7 @@ Tests enforce these guarantees for animation hot paths. Violating them in consum
 2. **Never write state that changes on every frame inside `onTick`.** Write repeated values to refs or the DOM. A one-time state update is allowed only if the callback first blocks repeats and then disables the loop.
 3. **No layout thrash.** Never read layout synchronously or repeatedly write SVG geometry, SVG transform lists, or CSS layout properties in animation paths. Use `useSize` for reads and animate `transform`/`opacity` on a wrapper when possible.
 4. **Strong pause.** `cancelAnimationFrame()` stops scheduling entirely. Zero callbacks, zero CPU when paused.
-5. **Reduced motion by default.** All primitives respect `prefers-reduced-motion: reduce` automatically. Use `reducedMotion: 'ignore'` only when motion is essential or a parent does not render the animated child while reduced motion is on and shows the same information without motion.
+5. **Reduced motion by default.** APIs that own animation or lifecycle behavior handle `prefers-reduced-motion: reduce` automatically: `createLoop`, `useLoop`, `useCanvas`, `createLifecycle`, `useLifecycle`, `useTween`, `usePresence`, `Presence`, `Swap`, `WhenVisible`, and `WhenIdle`. Observation and input APIs such as `useSight` and `useScrollProgress` keep reporting their values under reduced motion. Use `usePrefersReducedMotion` for custom CSS, WAAPI, raw rAF, static fallbacks, or to choose the target passed to an animation. Use `reducedMotion: 'ignore'` only when motion is essential or a parent does not render the animated child while reduced motion is on and shows the same information without motion.
 6. **Frame-locked shared clock.** Every animation receives the same browser rAF timestamp. No per-frame `performance.now()` read.
 
 For the full performance ruleset, read [references/performance.md](references/performance.md).
@@ -190,7 +190,7 @@ Each export has its own reference file. Read the relevant file when implementing
 | `useSize`                 | Reading element dimensions without reflows               | [use-size.md](references/use-size.md)                                     |
 | `useContainerQuery`       | Breakpoint matching against element width/height         | [use-container-query.md](references/use-container-query.md)               |
 | `useMediaQuery`           | Reactive CSS media query subscription                    | [use-media-query.md](references/use-media-query.md)                       |
-| `usePrefersReducedMotion` | Reactive reduced-motion boolean for non-phase animations | [use-prefers-reduced-motion.md](references/use-prefers-reduced-motion.md) |
+| `usePrefersReducedMotion` | Signal for custom animation or target/fallback selection | [use-prefers-reduced-motion.md](references/use-prefers-reduced-motion.md) |
 | `useDevicePixelRatio`     | Reactive DPR for buffer sizing outside `useCanvas`       | [use-device-pixel-ratio.md](references/use-device-pixel-ratio.md)         |
 | `useSyncedRef`            | Keeping a ref always in sync with latest value           | [use-synced-ref.md](references/use-synced-ref.md)                         |
 | `useStableCallback`       | Stable-identity function for memo'd children             | [use-stable-callback.md](references/use-stable-callback.md)               |

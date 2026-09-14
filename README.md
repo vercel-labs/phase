@@ -623,7 +623,7 @@ if (!prefersReducedMotion()) {
 }
 ```
 
-All hooks and primitives consult this signal automatically. You only need it directly for conditional imports or setup logic.
+Animation and lifecycle APIs handle this preference themselves. Call this function when reduced motion changes which code runs, such as skipping an import, starting an application-managed animation, or choosing a static fallback.
 
 ## Easing and math
 
@@ -681,7 +681,7 @@ Easing, interpolation, and your value range are three separate concerns. The `@u
 | React to DOM mutations without synchronous callback storms             | `useMutation`                                                                               |
 | Track element-relative pointer position without per-event layout reads | `usePointer`                                                                                |
 | Track DPR for a renderer you own                                       | `useDevicePixelRatio`                                                                       |
-| Check reduced motion for application-managed work                      | `usePrefersReducedMotion`                                                                   |
+| Gate application-managed motion or choose a target/fallback            | `usePrefersReducedMotion`                                                                   |
 | Subscribe to scroll, size, or media values reactively                  | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
 | Scroll/size/visibility without re-renders?                             | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
 | Rate-limit event-driven work (sockets, workers)                        | `useThrottledCallback`                                                                      |
@@ -795,7 +795,9 @@ const opacity = useTween({ to: isVisible ? 1 : 0, duration: 300 });
 
 Use `useTween` for single values where the render is cheap (counters, progress bars, opacity). Use `useLoop` when animating many elements or doing canvas work, since per-frame `setState` doesn't scale.
 
-Reduced motion default: `'complete'` checks the preference when a tween starts and jumps to the destination when needed. Set `reducedMotion: 'ignore'` to skip the preference read. The exported `TweenReducedMotion` type is `'complete' | 'ignore'`; finite tweens do not support `'pause'` because freezing between endpoints leaves the value incomplete.
+Reduced motion default: `'complete'` checks the preference when a tween starts and jumps to the current `to`. You do not need `usePrefersReducedMotion` merely to make that transition finish immediately. Set `reducedMotion: 'ignore'` to skip the preference read. The exported `TweenReducedMotion` type is `'complete' | 'ignore'`; finite tweens do not support `'pause'` because freezing between endpoints leaves the value incomplete.
+
+`useTween` only completes to the value passed as `to`; it does not choose the component's final value. With `to: hasEnteredView ? finalValue : startValue`, reduced motion completes to `startValue` until `useSight` reports visibility. Add `usePrefersReducedMotion` only when reduced motion should skip that visibility check and show `finalValue` immediately.
 
 ### usePresence
 
@@ -970,7 +972,7 @@ Use it for custom cursors, canvas interaction, and tooltips—not simple hover o
 | `useContainerQuery`       | Breakpoint matching against element width                                             |
 | `useScrollProgress`       | Element visibility ratio (0–1). Pass `onProgress` for zero-re-render mode             |
 | `useMediaQuery`           | CSS media query subscription (shared MQL pool)                                        |
-| `usePrefersReducedMotion` | Reactive reduced-motion preference for application-managed animations                 |
+| `usePrefersReducedMotion` | Reactive preference for application-managed motion or target/fallback selection       |
 | `useDevicePixelRatio`     | Reactive DPR for renderers outside `useCanvas`                                        |
 | `useSyncedRef`            | Ref always in sync with latest value                                                  |
 | `useStableCallback`       | Stable-identity function that calls latest closure                                    |

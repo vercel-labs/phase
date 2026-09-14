@@ -142,7 +142,7 @@ if (getComputedStyle(el).display === 'none') loop.pause(); // redundant + forced
 
 ### Reduced motion by default
 
-All phase primitives respect `prefers-reduced-motion: reduce` automatically. Bypassing requires explicit `reducedMotion: 'ignore'`.
+Animation and lifecycle APIs respect `prefers-reduced-motion: reduce` automatically. Observation and input APIs keep reporting their values because they do not know whether a caller will animate with them. Bypassing automatic handling requires explicit `reducedMotion: 'ignore'`.
 
 **Don't:**
 

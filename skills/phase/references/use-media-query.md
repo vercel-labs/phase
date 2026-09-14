@@ -52,7 +52,7 @@ const matches: boolean = useMediaQuery(query);
 
 ## Reduced motion
 
-`useMediaQuery('(prefers-reduced-motion: reduce)')` is the reactive way to check reduced motion. But for animation primitives, you don't need this. All hooks handle it automatically.
+`useMediaQuery('(prefers-reduced-motion: reduce)')` is the reactive way to check reduced motion. Prefer `usePrefersReducedMotion()` when custom animation or target selection needs the preference. Animation and lifecycle APIs handle it themselves.
 
 ## See also
 

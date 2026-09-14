@@ -57,10 +57,13 @@ Returns the current animated `number`.
 - **Don't animate many values with separate `useTween` calls.** Each triggers a re-render per frame. Use `useLoop` for batch DOM animation.
 - **Don't pass `duration: 0` or negative.** Throws `PhaseError` with code `invalid_duration`.
 - **Don't use for canvas or WebGL.** `useTween` drives React state. Use `useCanvas`.
+- **Don't call `usePrefersReducedMotion` just to make the tween finish.** The default already jumps to the current `to` under reduced motion.
 
 ## Reduced motion
 
-Default `'complete'` checks the preference when a tween starts and jumps to `to` when reduced motion is already preferred. `'ignore'` skips the preference read. `useTween` does not subscribe to preference changes while running because a tween is finite, bounded work. The exported `TweenReducedMotion` type is `'complete' | 'ignore'`; finite tweens do not support `'pause'` because freezing between endpoints leaves the value incomplete.
+Default `'complete'` checks the preference when a tween starts and jumps to the current `to` when reduced motion is already preferred. Consumers do not need `usePrefersReducedMotion` to complete that transition. `'ignore'` skips the preference read. `useTween` does not subscribe to preference changes while running because a tween is finite, bounded work. The exported `TweenReducedMotion` type is `'complete' | 'ignore'`; finite tweens do not support `'pause'` because freezing between endpoints leaves the value incomplete.
+
+This only applies to the value passed as `to`. With `to: hasEnteredView ? finalValue : startValue`, reduced motion completes to `startValue` until `useSight` reports visibility. Add `usePrefersReducedMotion` only when reduced motion should skip that visibility check and show `finalValue` immediately.
 
 ## See also
 
