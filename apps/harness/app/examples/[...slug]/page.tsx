@@ -2,6 +2,8 @@ import { manifest, type ExampleSlug } from '@usephase/examples/manifest';
 import { notFound } from 'next/navigation';
 import type { JSX } from 'react';
 
+import { ExampleHost } from './example-host';
+
 type PageProps = {
   params: Promise<{ slug: string[] }>;
 };
@@ -20,11 +22,9 @@ export default async function ExamplePage({
   const { default: Example } = await manifest[slug]();
 
   return (
-    <main data-example-slug={slug}>
-      <div aria-hidden="true" style={{ height: '150vh' }} />
+    <ExampleHost slug={slug}>
       <Example />
-      <div aria-hidden="true" style={{ height: '150vh' }} />
-    </main>
+    </ExampleHost>
   );
 }
 

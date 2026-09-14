@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import {
   access,
   cp,
@@ -106,7 +106,7 @@ async function copyGitVisiblePackage(packagePath) {
     { cwd: repositoryRoot, encoding: 'utf8' },
   )
     .split('\0')
-    .filter(Boolean);
+    .filter((file) => file !== '' && existsSync(join(repositoryRoot, file)));
   if (files.length === 0) {
     throw new Error(`${packagePath} has no Git-visible files to copy`);
   }

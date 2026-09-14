@@ -42,5 +42,6 @@ for (const slug of exampleSlugs) {
       'data-example-slug',
       slug,
     );
+    await expect(page.locator('main')).toHaveAttribute('data-hydrated', 'true');
   });
 }
