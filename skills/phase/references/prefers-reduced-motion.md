@@ -26,17 +26,17 @@ No options. Returns `false` on the server (no `matchMedia`).
 
 ## When not to use
 
-| Instead of this                            | Use                                                             |
-| ------------------------------------------ | --------------------------------------------------------------- |
-| Reactive subscription to motion preference | `usePrefersReducedMotion()` (re-renders on change)              |
-| Gating an animation loop                   | `createLoop` / `useLoop` — handles reduced motion automatically |
-| Checking inside a React component          | The hooks handle it for you (no manual check needed)            |
+| Instead of this                            | Use                                                           |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| Reactive subscription to motion preference | `usePrefersReducedMotion()` (re-renders on change)            |
+| Gating an animation loop                   | `createLoop` / `useLoop` handles reduced motion automatically |
+| Completing a React numeric tween           | `useTween` jumps to its current `to` automatically            |
 
 ## Do
 
 - Use for conditional `import()` of heavy animation code.
 - Use at module/app init level, outside React's render cycle.
-- Trust that all phase hooks/primitives consult this signal automatically. You rarely need this directly.
+- Let animation and lifecycle APIs handle the preference themselves. You rarely need this function with those APIs.
 
 ## Don't
 
@@ -46,7 +46,7 @@ No options. Returns `false` on the server (no `matchMedia`).
 
 ## Reduced motion
 
-This IS the reduced motion primitive. All other phase exports delegate to it internally.
+This function reads the current preference once. It does not subscribe to changes. Observation and input APIs keep reporting their values under reduced motion; callers decide whether those values drive animation.
 
 ## See also
 

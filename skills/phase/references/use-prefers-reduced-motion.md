@@ -30,6 +30,7 @@ No parameters. Returns `false` during SSR and initial hydration, then the live v
   const reduced = usePrefersReducedMotion();
   return reduced ? <StaticHero /> : <AnimatedHero />;
   ```
+- Changing the value passed to another hook. For example, use it to skip a `useSight` gate and pass the final value to `useTween` immediately. `useTween` completes to its current `to`, but it does not choose that value.
 - Skipping a dynamic `import()` of a heavy animation module:
   ```tsx
   const reduced = usePrefersReducedMotion();
@@ -41,11 +42,23 @@ No parameters. Returns `false` during SSR and initial hydration, then the live v
 
 ## When not to use
 
-| Instead of this                             | Use                                                              |
-| ------------------------------------------- | ---------------------------------------------------------------- |
-| Gating `useLoop` / `useCanvas` / `Presence` | They handle reduced motion automatically via `reducedMotion` opt |
-| One-shot check outside React (module init)  | `prefersReducedMotion()` (synchronous, non-reactive)             |
-| Subscribing to an arbitrary CSS media query | `useMediaQuery(query)`                                           |
+| Instead of this                                     | Use                                                  |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| Completing `useTween` to its current `to`           | Keep the default `reducedMotion: 'complete'`         |
+| Gating a phase-owned loop, lifecycle, or transition | Use its automatic reduced-motion behavior            |
+| One-shot check outside React (module init)          | `prefersReducedMotion()` (synchronous, non-reactive) |
+| Subscribing to an arbitrary CSS media query         | `useMediaQuery(query)`                               |
+
+### APIs that already handle reduced motion
+
+| Behavior                  | APIs                                                                    | Default under reduced motion                       |
+| ------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------- |
+| Loops and lifecycle       | `createLoop`, `useLoop`, `useCanvas`, `createLifecycle`, `useLifecycle` | Pause, or complete when the API supports that mode |
+| Finite numeric tween      | `useTween`                                                              | Jump to the current `to`                           |
+| Mount/unmount transitions | `usePresence`, `Presence`, `Swap`                                       | Skip decorative enter and exit motion              |
+| Built-in one-shot enter   | `WhenVisible`, `WhenIdle`                                               | Mount content without the built-in enter marker    |
+
+Observation and input APIs such as `useSight`, `useScrollProgress`, `useScroll`, `usePointer`, and `useMutation` keep reporting their values under reduced motion. They cannot know whether a caller will animate with those values. `createTicker` is a raw clock and also has no reduced-motion behavior. Use this hook before custom CSS, WAAPI, raw rAF, or an external animation library, and when reduced motion changes a target or fallback.
 
 ## Do
 
@@ -55,7 +68,7 @@ No parameters. Returns `false` during SSR and initial hydration, then the live v
 
 ## Don't
 
-- **Don't check this inside `onTick` / `draw`.** Phase hooks already pause under reduced motion. Hooks can't be called outside React components, and checking it per-frame is redundant anyway.
+- **Don't check this inside `onTick` / `draw`.** Lifecycle-aware phase loops already pause under reduced motion. Hooks can't be called outside React components, and checking it per-frame is redundant anyway.
 - **Don't duplicate the query string.** This hook exists so you never type `'(prefers-reduced-motion: reduce)'` manually.
 
 ## Reduced motion
