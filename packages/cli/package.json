@@ -1,6 +1,6 @@
 {
   "name": "phase",
-  "version": "0.6.1",
+  "version": "0.6.0",
   "description": "Command-line scanner for animation and rendering performance",
   "author": "Vercel",
   "license": "MIT",
