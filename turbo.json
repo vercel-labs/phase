@@ -42,6 +42,13 @@
     "@usephase/examples#typecheck": {
       "dependsOn": ["^build", "^typecheck"]
     },
+    "@usephase/harness#build": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "@usephase/harness#typecheck": {
+      "dependsOn": ["build", "^typecheck"]
+    },
     "@usephase/react#test": {
       "dependsOn": ["^build", "^test", "//#test:root"]
     },

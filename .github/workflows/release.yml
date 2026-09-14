@@ -122,6 +122,9 @@ jobs:
       - name: Run browser tests
         run: pnpm test:browser
 
+      - name: Run packed end-to-end tests
+        run: pnpm test:e2e
+
   # Minimal publish job. Each package is rebuilt and packed from a clean
   # checkout. Only these serialized matrix legs hold id-token: write.
   publish:

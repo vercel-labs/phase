@@ -16,6 +16,7 @@
     "**/.vercel/**",
     "**/.changeset/**/*.md",
     "**/dist/**",
+    "**/next-env.d.ts",
     "**/node_modules/**"
   ],
   "printWidth": 80,

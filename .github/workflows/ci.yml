@@ -219,3 +219,6 @@ jobs:
 
       - name: Run browser tests
         run: pnpm test:browser
+
+      - name: Run packed end-to-end tests
+        run: pnpm test:e2e

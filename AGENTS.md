@@ -6,7 +6,7 @@
 
 A browser runtime performance toolkit: the `phase` scan tool, an agent skill, and runtime libraries whose lifecycle-aware primitives compose visibility, timing, reduced motion, and quality signals into coherent state machines with debuggable transitions. [`docs/positioning.md`](./docs/positioning.md) owns the public framing.
 
-Run commands from the repository root. The repository has eight ownership boundaries:
+Run commands from the repository root. The repository has ten ownership boundaries:
 
 - [`packages/core/`](./packages/core/AGENTS.md) owns the framework-agnostic runtime and shared performance contracts.
 - [`packages/react/`](./packages/react/AGENTS.md) owns the React binding and its package contract.
@@ -15,6 +15,8 @@ Run commands from the repository root. The repository has eight ownership bounda
 - `packages/codemod/` owns consumer migration commands and their fixtures, package-level tests, and documentation.
 - [`packages/skill/`](./packages/skill/AGENTS.md) owns scanner source, evals, and skill-maintainer tooling.
 - [`packages/examples/`](./packages/examples/CONVENTIONS.md) owns the shared React examples and their rules.
+- `apps/harness/` owns the private production host and frozen example URL contract used by end-to-end tests.
+- `e2e/` owns packed-consumer setup, Playwright instrumentation, contract cases, and application-level assertions.
 - `skills/phase/` contains only installable skill content and committed generated artifacts.
 
 The root `README.md` documents the toolkit and repository. Each publishable package owns its npm summary in its package directory.
@@ -27,6 +29,7 @@ Scanner, audit, or eval changes must use the canonical vocabulary in [`CONTEXT.m
 pnpm build             # Build workspace packages
 pnpm test              # Run all unit tests
 pnpm test:browser      # Run phase browser tests in Chromium, Firefox, and WebKit
+pnpm test:e2e          # Run packed runtime end-to-end tests in all three engines
 pnpm typecheck         # Type check workspace packages
 pnpm lint              # Lint the repository
 pnpm lint:fix          # Lint and auto-fix
@@ -46,6 +49,7 @@ pnpm skill:package     # Rebuild the deterministic skill zip
 - `skill:check` runs as part of `pnpm validate` and in CI on every PR.
 - `skill:build` and `skill:package` run on pre-commit whenever `skills/phase/` or `packages/skill/` changes. Lefthook re-stages `packages/skill/scanner/fix-sections.gen.ts`, `metadata.json`, `scripts/scan.mjs`, the generated audit regions, and the zip.
 - The examples manifest is regenerated and staged on pre-commit whenever `packages/examples/` changes.
+- CI and the release workflow run `test:browser` and packed `test:e2e` in the same browser gate.
 - CI and the release workflow rebuild committed artifacts and fail on a diff.
 - Tree-writing tasks (`goldens`, `skill:build`, and `skill:package`) stay uncached. A cache hit would skip regeneration and make a freshness check inspect the wrong tree.
 
