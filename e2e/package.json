@@ -11,6 +11,7 @@
     "@playwright/test": "1.59.0",
     "@types/node": "25.6.0",
     "@usephase/examples": "workspace:*",
+    "@usephase/harness": "workspace:*",
     "typescript": "6.0.2"
   },
   "engines": {

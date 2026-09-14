@@ -26,5 +26,6 @@ pnpm test:e2e
 Build the runtime packages before starting the development server because the
 examples resolve their public `dist` exports. `test:workspace` builds the
 harness and runs Playwright against workspace packages for focused development.
-`pnpm test:e2e` builds the app from isolated packed copies of `@usephase/core`
-and `@usephase/react`; this is the release gate.
+`pnpm test:e2e` uses Turbo to build the runtime packages, then builds the app
+from isolated packed copies of `@usephase/core` and `@usephase/react`; this is
+the release gate.

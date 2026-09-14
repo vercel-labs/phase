@@ -49,7 +49,11 @@ pnpm skill:package     # Rebuild the deterministic skill zip
 - `skill:check` runs as part of `pnpm validate` and in CI on every PR.
 - `skill:build` and `skill:package` run on pre-commit whenever `skills/phase/` or `packages/skill/` changes. Lefthook re-stages `packages/skill/scanner/fix-sections.gen.ts`, `metadata.json`, `scripts/scan.mjs`, the generated audit regions, and the zip.
 - The examples manifest is regenerated and staged on pre-commit whenever `packages/examples/` changes.
-- CI and the release workflow run `test:browser` and packed `test:e2e` in the same browser gate.
+- PR CI always reports the browser check. It uses Turbo's affected graph to
+  skip browser provisioning when neither `test:browser` nor `test:e2e` has a
+  runnable affected task; relevant tasks stay uncached.
+- The release workflow runs `test:browser` and packed `test:e2e`
+  unconditionally in the same browser gate.
 - CI and the release workflow rebuild committed artifacts and fail on a diff.
 - Tree-writing tasks (`goldens`, `skill:build`, and `skill:package`) stay uncached. A cache hit would skip regeneration and make a freshness check inspect the wrong tree.
 

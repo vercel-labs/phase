@@ -66,6 +66,9 @@ importers:
       '@usephase/examples':
         specifier: workspace:*
         version: link:../packages/examples
+      '@usephase/harness':
+        specifier: workspace:*
+        version: link:../apps/harness
       typescript:
         specifier: 6.0.2
         version: 6.0.2
