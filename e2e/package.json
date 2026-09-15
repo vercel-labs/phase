@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --test scripts/*.spec.mjs",
     "test:e2e": "node scripts/run-packed-e2e.mjs",
     "test:workspace": "turbo run build --filter=@usephase/harness && playwright test",
     "typecheck": "tsc --noEmit"

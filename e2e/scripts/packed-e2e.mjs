@@ -15,6 +15,8 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { createTemporaryRootLifecycle } from './temporary-root-cleanup.mjs';
+
 const e2eRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = resolve(e2eRoot, '..');
 const runtimePackages = [
@@ -56,17 +58,21 @@ export async function runPackedE2E({
     await mkdtemp(join(tmpdir(), 'phase-packed-harness-')),
   );
   const consumer = createPackedConsumer(temporaryRoot);
+  const lifecycle = keepTemporaryRoot
+    ? undefined
+    : createTemporaryRootLifecycle(temporaryRoot);
 
   try {
-    await preparePackedConsumer(consumer);
+    await preparePackedConsumer(consumer, lifecycle);
     await runCommand(
       'pnpm',
       ['install', '--prefer-offline', '--frozen-lockfile=false'],
-      { cwd: temporaryRoot },
+      { cwd: temporaryRoot, lifecycle },
     );
     await verifyPackedConsumer(consumer);
     await runCommand('pnpm', ['--dir', consumer.harnessRoot, 'build'], {
       cwd: temporaryRoot,
+      lifecycle,
     });
     await runCommand(
       'pnpm',
@@ -74,6 +80,7 @@ export async function runPackedE2E({
       {
         cwd: repositoryRoot,
         environment: { PHASE_HARNESS_ROOT: consumer.harnessRoot },
+        lifecycle,
       },
     );
   } finally {
@@ -81,6 +88,7 @@ export async function runPackedE2E({
       process.stderr.write(`Kept packed harness at ${temporaryRoot}\n`);
     } else {
       await rm(temporaryRoot, { recursive: true, force: true });
+      lifecycle.finish();
     }
   }
 }
@@ -94,9 +102,9 @@ function createPackedConsumer(temporaryRoot) {
   };
 }
 
-async function preparePackedConsumer(consumer) {
+async function preparePackedConsumer(consumer, lifecycle) {
   await mkdir(consumer.artifactsRoot, { recursive: true });
-  await packRuntimePackages(consumer);
+  await packRuntimePackages(consumer, lifecycle);
   await copyGitVisibleWorkspace('apps/harness', consumer.temporaryRoot);
   await copyGitVisibleWorkspace('packages/examples', consumer.temporaryRoot);
   await cp(
@@ -107,17 +115,21 @@ async function preparePackedConsumer(consumer) {
   await pointExamplesAtTarballs(consumer);
 }
 
-async function packRuntimePackages(consumer) {
+async function packRuntimePackages(consumer, lifecycle) {
   for (const runtimePackage of runtimePackages) {
     // Finish each child before starting another so cleanup cannot race a pack.
     // eslint-disable-next-line no-await-in-loop
-    await runCommand('pnpm', [
-      '--dir',
-      join(repositoryRoot, runtimePackage.workspacePath),
-      'pack',
-      '--out',
-      join(consumer.artifactsRoot, runtimePackage.tarballName),
-    ]);
+    await runCommand(
+      'pnpm',
+      [
+        '--dir',
+        join(repositoryRoot, runtimePackage.workspacePath),
+        'pack',
+        '--out',
+        join(consumer.artifactsRoot, runtimePackage.tarballName),
+      ],
+      { lifecycle },
+    );
   }
 }
 
@@ -289,7 +301,7 @@ function assertInsideTemporaryRoot(label, path, temporaryRoot) {
 async function runCommand(
   command,
   arguments_,
-  { cwd = repositoryRoot, environment } = {},
+  { cwd = repositoryRoot, environment, lifecycle } = {},
 ) {
   await new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(command, arguments_, {
@@ -297,8 +309,14 @@ async function runCommand(
       env: { ...process.env, ...environment },
       stdio: 'inherit',
     });
-    child.on('error', rejectPromise);
+    const stopTracking = lifecycle?.trackChild(child) ?? (() => undefined);
+
+    child.on('error', (error) => {
+      stopTracking();
+      rejectPromise(error);
+    });
     child.on('close', (code, signal) => {
+      stopTracking();
       if (code === 0) {
         resolvePromise();
         return;
