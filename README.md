@@ -114,12 +114,12 @@ import { useLoop, usePointer } from '@usephase/react';
 
 function PointerFollower() {
   const dotRef = useRef<HTMLDivElement>(null);
-  const targetRef = useRef({ x: 0, y: 0 });
+  const pointerTargetRef = useRef({ x: 0, y: 0 });
   const positionRef = useRef({ x: 0, y: 0 });
   const { ref: surfaceRef, phase } = usePointer<HTMLDivElement>({
     onPointer: ({ x, y }) => {
-      targetRef.current.x = x;
-      targetRef.current.y = y;
+      pointerTargetRef.current.x = x;
+      pointerTargetRef.current.y = y;
     },
   });
 
@@ -130,7 +130,7 @@ function PointerFollower() {
       const dot = dotRef.current;
       if (!dot) return;
 
-      const target = targetRef.current;
+      const target = pointerTargetRef.current;
       const position = positionRef.current;
       const amount = 1 - Math.exp(-frame.delta / 80);
 
