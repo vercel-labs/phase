@@ -1,0 +1,47 @@
+{
+  "description": "Regression guard for shared-shell findings that need runtime evidence before a safe shared fix can be recommended.",
+  "scan": {
+    "target": "workspace",
+    "runs": [
+      {
+        "name": "primary article route",
+        "target": "workspace/app/blog/[slug]",
+        "assertions": {
+          "requiredAbsent": [
+            {
+              "signal": "non-compositor-animation",
+              "reason": "the route is clean and the shared shell requires its own focused scan"
+            }
+          ],
+          "context": { "framework": "next", "appRouter": true }
+        }
+      },
+      {
+        "name": "shared chat shell",
+        "target": "workspace/app/components",
+        "assertions": {
+          "required": [
+            {
+              "signal": "non-compositor-animation",
+              "file": "chat-panel.module.css",
+              "count": 1
+            }
+          ],
+          "context": { "framework": "next", "appRouter": true }
+        }
+      }
+    ]
+  },
+  "expectedBehavior": [
+    "Runs the clean route scan first, then follows the root layout into the shared chat panel without expanding into unrelated code",
+    "States that the article route is clean while the shared panel affects both the blog and pricing routes",
+    "Treats the blog article as a long-page stress case rather than the fix location",
+    "Labels the width transition Needs investigation because source proves layout animation but not its runtime cost, and replacing the content-squeeze behavior is a product decision",
+    "Requests a representative performance trace across the long article and a shorter sibling route before recommending a shared implementation",
+    "Does not recommend a blog-only wrapper or other route-local workaround for the shared panel",
+    "Includes a standalone suggested agent prompt that starts with Investigate or Measure, names the ChatPanel component or file, preserves current behavior during investigation, withholds implementation authority, states one observable done condition, and reports exact checks without relying on the surrounding report",
+    "Transfers the audited revision and a minimal Start here list containing the ChatPanel owner, its root-layout consumer, and a representative sibling route without dumping every source anchor or relying on unpinned line numbers",
+    "Keeps detailed tests with each action and limits report-level verification to cross-cutting checks",
+    "Makes no measured runtime claim before the performance trace exists"
+  ]
+}
