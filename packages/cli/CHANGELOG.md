@@ -1,5 +1,11 @@
 # phase
 
+## 0.6.1
+
+### Patch Changes
+
+- Lowered missing reduced-motion findings from critical to medium so they remain visible without dominating critical scanner reports.
+
 ## 0.6.0
 
 ### Minor Changes

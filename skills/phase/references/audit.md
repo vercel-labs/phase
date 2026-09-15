@@ -135,17 +135,6 @@ forced-reflow — Forced reflow (getBoundingClientRect, offsetWidth, etc.) (2) �
   · elsewhere:
   src/suppressed-banner.ts:5  const width = el.offsetWidth;
 
-missing-reduced-motion — Animation without reduced-motion check (4) · noise: noisy
-  why: The animation ignores the reduced-motion preference.
-  use: a prefers-reduced-motion media query, or a phase hook (handles it automatically)
-  read: https://github.com/vercel-labs/phase/blob/main/skills/phase/references/performance.md#reduced-motion-by-default
-  ↑ in a per-frame path:
-  src/ticker.ts:5  requestAnimationFrame(tick);
-  src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
-  src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
-  · in a stylesheet:
-  styles/globals.css:16  @keyframes float {
-
 svg-smil-animation — SVG SMIL animation needs lifecycle and reduced-motion review (1) · noise: normal
   why: SMIL does not respect the reduced-motion preference or pause with the owning UI lifecycle automatically.
   use: render a static reduced-motion state and useLifecycle to pause/resume the owning SVG root
@@ -195,6 +184,17 @@ js-opacity-transform — JS-driven opacity/transform (may be browser-driven) (1,
   read: https://github.com/vercel-labs/phase/blob/main/skills/phase/references/decision-guide.md#tier-1-browser-driven-css-or-waapi
   src/ticker.ts:4  el.style.transform = `translateX(${width / 10}px)`;
 
+missing-reduced-motion — Animation without reduced-motion check (4) · noise: noisy
+  why: The animation ignores the reduced-motion preference.
+  use: a prefers-reduced-motion media query, or a phase hook (handles it automatically)
+  read: https://github.com/vercel-labs/phase/blob/main/skills/phase/references/performance.md#reduced-motion-by-default
+  ↑ in a per-frame path:
+  src/ticker.ts:5  requestAnimationFrame(tick);
+  src/hero-animation.tsx:11  frame = requestAnimationFrame(loop);
+  src/phases/progress-meter.ts:7  requestAnimationFrame(frame);
+  · in a stylesheet:
+  styles/globals.css:16  @keyframes float {
+
 permanent-will-change — Permanent will-change (wastes GPU memory when idle) (1) · noise: normal
   why: A GPU layer is held even while nothing animates.
   use: toggle will-change with animation state, or drop it
@@ -217,7 +217,7 @@ manual-synced-ref — Manual synced ref (dedup: useSyncedRef offers a shorthand)
 
 ─────────────────────────────────────────
 Scanned 10 files.
-Total: 20 actionable (9 critical, 7 high, 4 medium), 1 dedup.
+Total: 20 actionable (5 critical, 7 high, 8 medium), 1 dedup.
 21 findings on 18 distinct lines; 13 sit in a per-frame path (a frame loop, observer, or move handler runs them) and cost the most.
 Baseline: not applied; 0 stale.
 Next: start with the hotspots above, then classify each candidate against the decision ladder (Step 2: https://github.com/vercel-labs/phase/blob/main/skills/phase/references/audit.md#step-2-classify-each-candidate). Findings are candidates, not verdicts.
@@ -270,9 +270,7 @@ Severity and noise mirror the scanner's catalog; a repo check fails CI when this
 | `per-frame-allocation`           | critical | noisy   | An object or array literal (including a spread copy), `.map()`, or `.filter()` inside a proven recurring frame callback | [performance.md](./performance.md#zero-per-frame-allocations)                                                              |
 | `forced-reflow`                  | critical | noisy   | Layout-reading member access or call (`getBoundingClientRect`, `.offset*`, `.scroll*`, `.client*`)                      | [performance.md](./performance.md#no-forced-reflows-in-animation-paths)                                                    |
 | `mutationobserver-layout`        | critical | normal  | MutationObserver watching inline styles or reading layout in its callback                                               | [performance.md](./performance.md#never-drive-layout-from-a-mutationobserver)                                              |
-| `missing-reduced-motion`         | critical | noisy   | Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling                                   | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
 | `svg-smil-animation`             | critical | normal  | Intrinsic SVG SMIL animation elements or imperative `beginElement()`/`beginElementAt()` playback                        | [smil.md](./smil.md#svg-smil-lifecycle-and-reduced-motion)                                                                 |
-| `timer-missing-reduced-motion`   | critical | noisy   | `setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity with no reduced-motion handling     | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
 | `bare-window-listener`           | critical | normal  | resize/scroll listener with a layout read in the handler                                                                | [performance-recipes.md](./performance-recipes.md#recipe-collapse-n-bare-window-resize-listeners-into-one-pooled-observer) |
 | `pointer-listener-layout-read`   | critical | normal  | pointermove/mousemove/touchmove listener, or intrinsic JSX move prop, with a layout read per event                      | [use-pointer.md](./use-pointer.md#when-to-use)                                                                             |
 | `manual-raf`                     | high     | noisy   | Proven raw rAF callback cycle: no visibility pause, shared clock, or cleanup                                            | [audit.md](#common-replacements)                                                                                           |
@@ -287,6 +285,8 @@ Severity and noise mirror the scanner's catalog; a repo check fails CI when this
 | `raw-ro`                         | medium   | normal  | `new ResizeObserver` outside the pool                                                                                   | [performance.md](./performance.md#observer-pooling)                                                                        |
 | `raw-matchmedia`                 | medium   | normal  | `matchMedia(` with a listener on the result, outside the pool                                                           | [use-media-query.md](./use-media-query.md#when-to-use)                                                                     |
 | `js-opacity-transform`           | medium   | noisy   | `style.opacity`/`style.transform` writes (browser-driven candidate)                                                     | [decision-guide.md](./decision-guide.md#tier-1-browser-driven-css-or-waapi)                                                |
+| `missing-reduced-motion`         | medium   | noisy   | Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling                                   | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
+| `timer-missing-reduced-motion`   | medium   | noisy   | `setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity with no reduced-motion handling     | [performance.md](./performance.md#reduced-motion-by-default)                                                               |
 | `permanent-will-change`          | medium   | normal  | `will-change` never toggled with animation state **(CSS)**                                                              | [performance.md](./performance.md#will-change-only-while-animating)                                                        |
 | `redundant-mutation-observers`   | medium   | normal  | MutationObserver on `<html>`/`documentElement`                                                                          | [performance-recipes.md](./performance-recipes.md#recipe-collapse-an-observer-storm-on-html)                               |
 | `tailwind-permanent-will-change` | medium   | noisy   | `will-change-transform` class not toggled with state                                                                    | [performance.md](./performance.md#will-change-only-while-animating)                                                        |
