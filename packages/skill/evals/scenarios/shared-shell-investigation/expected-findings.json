@@ -39,8 +39,9 @@
     "Labels the width transition Needs investigation because source proves layout animation but not its runtime cost, and replacing the content-squeeze behavior is a product decision",
     "Requests a representative performance trace across the long article and a shorter sibling route before recommending a shared implementation",
     "Does not recommend a blog-only wrapper or other route-local workaround for the shared panel",
-    "Includes a standalone suggested agent prompt that starts with Investigate or Measure, names the ChatPanel component or file, preserves current behavior during investigation, withholds implementation authority, states one observable done condition, and reports exact checks without relying on the surrounding report",
-    "Transfers the audited revision and a minimal Start here list containing the ChatPanel owner, its root-layout consumer, and a representative sibling route without dumping every source anchor or relying on unpinned line numbers",
+    "Includes a compact prompt that starts with Investigate or Measure and contains Audited at, Base path, a two-to-four-entry Start here list, the behavior to preserve, withheld implementation authority, one done condition, an exact-check request, and conditional source-map expansion",
+    "Keeps Start here limited to the ChatPanel owner, its root-layout consumer, and a representative sibling route, using symbols instead of unpinned line numbers",
+    "Leaves repository workflow, detailed tests, and generic runbook sections out of the prompt",
     "Keeps detailed tests with each action and limits report-level verification to cross-cutting checks",
     "Makes no measured runtime claim before the performance trace exists"
   ]
