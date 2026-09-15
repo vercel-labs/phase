@@ -1,0 +1,14 @@
+.panel {
+  flex: 0 0 auto;
+  width: 0;
+  overflow: hidden;
+  transition: width 250ms ease;
+}
+
+.open {
+  width: 400px;
+}
+
+.content {
+  width: 400px;
+}

@@ -58,6 +58,7 @@
     "Starts the report by saying the route file itself is clean while the parent header always runs and the video scrubber appears only for the video article",
     "Groups the header's layout read and window listener into one fix instead of presenting two independent problems",
     "Eliminates the header's per-event layout read and bare listener, preferring CSS scroll-driven behavior when it preserves the design and otherwise using page scroll tracking plus observed header height, such as useScroll with target page and useSize",
+    "Keeps the header fix in the shared parent layout and uses the article as a regression case instead of applying a blog-only workaround",
     "Notices that intentPosition is never rendered and removes that hover path instead of replacing dead code with phase",
     "Prefers a native range input for the video scrubber when its design can be preserved; otherwise recommends pointer capture, one cached layout read at drag start, and at most one update per frame",
     "Explains that usePointer fits element-relative hover tracking if that behavior is retained, but does not own drag gestures, and that useScroll is unrelated to pointer movement",
