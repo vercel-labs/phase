@@ -97,181 +97,134 @@ pnpm add @usephase/core @usephase/react
 
 ## Table of contents
 
-<details>
-<summary>Show contents</summary>
-
-- [Use the scan tool](#use-the-scan-tool)
-- [Agent skill](#agent-skill)
-  - [Copy-paste prompts](#copy-paste-prompts)
-- [What ships](#what-ships)
-- [Runtime library principles](#runtime-library-principles)
-- [Install the runtime libraries](#install-the-runtime-libraries)
 - [Getting started](#getting-started)
-- [Philosophy](#philosophy)
-- [Scope](#scope)
+- [Choosing an API](#choosing-an-api)
 - [Guarantees](#guarantees)
-- [Entry points](#entry-points)
 - [Core API](#core-api)
-  - [createLoop](#createloop)
-  - [createTicker](#createticker)
-  - [createSight](#createsight)
-  - [createLifecycle](#createlifecycle)
-  - [createScrollProgress](#createscrollprogress)
-  - [createScroll](#createscroll)
-  - [createThrottle](#createthrottle)
-  - [createDebounce](#createdebounce)
-  - [createRenderState](#createrenderstate)
-  - [createDevicePixelRatio](#createdevicepixelratio)
-  - [createMutation](#createmutation)
-  - [createPointer](#createpointer)
-  - [whenIdle](#whenidle)
-  - [prefersReducedMotion](#prefersreducedmotion)
-- [Easing and math](#easing-and-math)
-- [Choosing a primitive](#choosing-a-primitive)
-- [React hooks](#react-hooks)
-  - [useLoop](#useloop)
-  - [useLifecycle](#uselifecycle)
-  - [useCanvas](#usecanvas)
-  - [useTween](#usetween)
-  - [usePresence](#usepresence)
-  - [useScrollProgress](#usescrollprogress)
-  - [useScroll](#usescroll)
-  - [useThrottledCallback](#usethrottledcallback)
-  - [useDebouncedCallback](#usedebouncedcallback)
-  - [useMutation](#usemutation)
-  - [usePointer](#usepointer)
-  - [Observation and utility hooks](#observation-and-utility-hooks)
-- [React components](#react-components)
-  - [How animations work](#how-animations-work)
-  - [Presence](#presence)
-  - [WhenVisible](#whenvisible)
-  - [Swap](#swap)
-- [Rendering](#rendering)
-  - [Defer](#defer)
-  - [WhenIdle](#whenidle-1)
-  - [useIdle](#useidle)
-  - [useWhenIdle](#usewhenidle)
-  - [useRenderState](#userenderstate)
+- [React API](#react-api)
 - [Errors](#errors)
-- [Relationship to View Transitions](#relationship-to-view-transitions)
+- [Compatibility and SSR](#compatibility-and-ssr)
 - [Bundle size](#bundle-size)
-- [Repository layout](#repository-layout)
-
-</details>
 
 ## Getting started
 
 ```tsx
-import { useLoop } from '@usephase/react';
+import { useRef } from 'react';
+import { useLoop, usePointer } from '@usephase/react';
 
-function Orbit({ radius }) {
-  const speed = 1; // radians per second
-  const { ref } = useLoop({
-    onTick: (frame) => {
-      const angle = (frame.elapsed / 1000) * speed;
-      ref.current.style.transform = `translate(${Math.cos(angle) * radius}px, ${Math.sin(angle) * radius}px)`;
+function PointerFollower() {
+  const dotRef = useRef<HTMLDivElement>(null);
+  const pointerTargetRef = useRef({ x: 0, y: 0 });
+  const positionRef = useRef({ x: 0, y: 0 });
+  const { ref: surfaceRef, phase } = usePointer<HTMLDivElement>({
+    onPointer: ({ x, y }) => {
+      pointerTargetRef.current.x = x;
+      pointerTargetRef.current.y = y;
     },
   });
 
-  return <div ref={ref} className="dot" />;
+  useLoop({
+    ref: surfaceRef,
+    enabled: phase === 'tracking',
+    onTick: (frame) => {
+      const dot = dotRef.current;
+      if (!dot) return;
+
+      const target = pointerTargetRef.current;
+      const position = positionRef.current;
+      const amount = 1 - Math.exp(-frame.delta / 80);
+
+      position.x += (target.x - position.x) * amount;
+      position.y += (target.y - position.y) * amount;
+      dot.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+    },
+  });
+
+  return (
+    <div ref={surfaceRef} className="pointer-surface">
+      <div ref={dotRef} className="pointer-dot" aria-hidden />
+    </div>
+  );
 }
 ```
 
-`useLoop` manages the loop's lifecycle. With its default options, the loop pauses when the element leaves the viewport, the page enters a background tab, or the user prefers reduced motion. Paused time does not advance `frame.elapsed`, and unmounting stops the loop. See [Guarantees](#guarantees) for its scheduling and timing contracts.
+`usePointer` batches coordinates into a ref, so pointer moves do not trigger React renders. Phase delivers queued pointer input before loop callbacks in the same frame. `useLoop` reads the latest target, advances the interpolation with `frame.delta`, and writes the transform directly to the DOM.
 
-## Philosophy
+Both hooks share the surface ref. The `enabled` option tears down the loop when the pointer leaves.
 
-The runtime state machines expose their current state as a **phase** (a string such as `idle`, `running`, `paused`, `active`, or `exiting`). State machines with distinct transition causes also expose a **reason**.
+This behavior needs a JavaScript frame loop because its target changes with live input. A fixed CSS or WAAPI timeline cannot know future pointer positions. The loop still pauses when the surface leaves the viewport, the document enters a background tab, or the user prefers reduced motion.
 
-```ts
-const { phase, phaseReason } = useLoop({ onTick: draw });
+## Choosing an API
 
-// phase: 'paused'  phaseReason: 'sight'           → off-screen
-// phase: 'paused'  phaseReason: 'reduced-motion'  → user disabled motion
-// phase: 'running' phaseReason: 'resumed'         → came back into view
-```
+Prefer CSS or a browser API when it can express the behavior without a JavaScript frame loop. Use a dedicated animation library for spring physics, gestures, or declarative timeline orchestration.
 
-One string replaces `if (running && visible && !paused && !prefersReducedMotion && mounted)`.
+| Need                                                | React                                                                                         | Core                                                                                                           |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Managed DOM frame loop                              | [`useLoop`](#useloop)                                                                         | [`createLoop`](#createloop)                                                                                    |
+| Activation signal for a renderer or loop you own    | [`useLifecycle`](#uselifecycle)                                                               | [`createLifecycle`](#createlifecycle)                                                                          |
+| Device-pixel-ratio-aware 2D canvas loop             | [`useCanvas`](#usecanvas)                                                                     | Compose [`createLoop`](#createloop) and [`createDevicePixelRatio`](#createdevicepixelratio) with your renderer |
+| Finite value in React render output                 | [`useTween`](#usetween)                                                                       | No direct equivalent                                                                                           |
+| Element or page visibility                          | [`useSight`](#observation-and-input-hooks)                                                    | [`createSight`](#createsight)                                                                                  |
+| Visible fraction of an element                      | [`useScrollProgress`](#observation-and-input-hooks)                                           | [`createScrollProgress`](#createscrollprogress)                                                                |
+| Scroll-container offset and progress                | [`useScroll`](#observation-and-input-hooks)                                                   | [`createScroll`](#createscroll)                                                                                |
+| Element dimensions                                  | [`useSize`](#observation-and-input-hooks)                                                     | No public core equivalent                                                                                      |
+| Size breakpoint                                     | [`useContainerQuery`](#observation-and-input-hooks)                                           | No public core equivalent                                                                                      |
+| Media-query match                                   | [`useMediaQuery`](#observation-and-input-hooks)                                               | No public core equivalent                                                                                      |
+| Element-relative pointer coordinates                | [`usePointer`](#observation-and-input-hooks)                                                  | [`createPointer`](#createpointer)                                                                              |
+| Batched DOM mutation records                        | [`useMutation`](#observation-and-input-hooks)                                                 | [`createMutation`](#createmutation)                                                                            |
+| Event throttle or debounce                          | [`useThrottledCallback`](#scheduling-hooks), [`useDebouncedCallback`](#scheduling-hooks)      | [`createThrottle`](#createthrottle), [`createDebounce`](#createdebounce)                                       |
+| Device-pixel ratio                                  | [`useDevicePixelRatio`](#observation-and-input-hooks)                                         | [`createDevicePixelRatio`](#createdevicepixelratio)                                                            |
+| `content-visibility` render state                   | [`useRenderState`](#observation-and-input-hooks)                                              | [`createRenderState`](#createrenderstate)                                                                      |
+| Mount and unmount transitions                       | [`Presence`](#presence), [`Swap`](#swap), [`usePresence`](#usepresence)                       | No public core equivalent                                                                                      |
+| Mount near the viewport                             | [`WhenVisible`](#whenvisible)                                                                 | [`createSight`](#createsight) plus application mounting                                                        |
+| Skip off-screen rendering while keeping server HTML | [`Defer`](#defer)                                                                             | Use `content-visibility` directly                                                                              |
+| Mount or run work when idle                         | [`WhenIdle`](#whenidle-1), [`useIdle`](#scheduling-hooks), [`useWhenIdle`](#scheduling-hooks) | [`whenIdle`](#whenidle)                                                                                        |
+| Reduced-motion preference                           | [`usePrefersReducedMotion`](#observation-and-input-hooks)                                     | [`prefersReducedMotion`](#prefersreducedmotion)                                                                |
 
-Each of those signals is also a CPU and battery decision. Animating while off-screen, ignoring reduced motion, or running after unmount is what burns cycles and causes jank. The runtime libraries compose them once, correctly, instead of leaving each call site to get the conjunction right.
-
-Safe behavior is automatic. Visibility awareness, reduced motion, observer cleanup, and limits on animation-time jumps after delayed frames are defaults, not opt-ins. Bypassing reduced motion requires an explicit `reducedMotion: 'ignore'` in the diff.
-
-## Scope
-
-The runtime libraries compose signals (visibility, focus, reduced motion, frame budget) into coherent lifecycle state machines.
-
-**Handles:** lifecycle state, timing, visibility, scroll visibility-ratio, reduced motion, observer pooling, quality signals, frame loops.
-
-**Does not handle:** spring physics, gesture systems, declarative keyframe orchestration. Reach for a dedicated library (e.g. `motion`) when you need those.
-
-This narrow scope is deliberate. Shipping only the performance-critical plumbing (and nothing else) is what keeps every export [sub-kilobyte to a few kilobytes](#bundle-size).
-
-### Admission criteria
-
-Every export must pass all four:
-
-1. **Wraps a browser API that is easy to misuse** and causes measurable perf regressions without careful handling.
-2. **Manages a lifecycle** (browser: visibility-pausing, reduced-motion, observer pooling; render: preventing re-renders, stable identities; CSS: containment state).
-3. **Makes the safe path shorter than the raw path.** The primitive is less code and less error-prone than the browser API directly.
-4. **Stays individually lean.** Every export is measured and budgeted in `.size-limit.json`. CI rejects regressions. Every byte must justify itself.
-
-If a gap fails any criterion, phase closes it in the [skill](#agent-skill) (audit rules, recipes, scanner signals) rather than shipping code.
-
-### Export taxonomy
-
-| Category    | What it covers                               | Examples                                            |
-| ----------- | -------------------------------------------- | --------------------------------------------------- |
-| Timing      | Frame clocks and animation loops             | createLoop, useLoop, useCanvas, useTween            |
-| Observation | Reactive wrappers around browser observers   | useSight, useSize, useScrollProgress, useMediaQuery |
-| Lifecycle   | Activation signals composed from IO+MQL+rIC  | useLifecycle, useIdle, useWhenIdle                  |
-| Composition | Mount/unmount orchestration with transitions | Presence, Swap, WhenVisible, WhenIdle, Defer        |
-| Math        | Pure easing and interpolation functions      | lerp, clamp, easeOutCubic                           |
-| Utility     | React ref/callback patterns for phase users  | useSyncedRef, useStableCallback                     |
+`useSight` reports visibility. `useLifecycle` combines visibility, reduced motion, and manual pause into an activation decision. Use `useLifecycle` to gate motion and `useSight` to gate content or observation.
 
 ## Guarantees
 
-These contracts cover phase's scheduler, observer-backed primitives, and React frame-loop binding. Code inside application callbacks can still allocate, read layout, or update React state.
+### Lifecycle state
 
-### Reused frame state
+Lifecycle APIs expose a `phase` and, when the cause matters, a `phaseReason`. For example, a loop may be `paused` because of `sight`, `reduced-motion`, or degraded quality. These values describe library state; application callbacks remain responsible for their own work.
 
-`createTicker` creates one `FrameState` object and mutates it before each callback instead of allocating a replacement for every frame. Read its fields inside `onTick`; a stored reference will contain the next frame's values.
+### Frame timing
 
-### Strong pause
+`FrameState` contains:
 
-Pausing a ticker removes it from the shared clock, so that ticker receives no frame callbacks. When no ticker or queued input callback remains, the clock cancels the pending browser frame and schedules no replacement.
+| Field     | Meaning                                   |
+| --------- | ----------------------------------------- |
+| `time`    | Browser `requestAnimationFrame` timestamp |
+| `delta`   | Milliseconds to advance this callback     |
+| `elapsed` | Sum of delivered deltas since start       |
+| `frame`   | Delivered frame count                     |
 
-### Controlled layout reads
+The same `FrameState` object is mutated and reused. Read its fields inside `onTick`; do not retain the object. Paused time does not advance `elapsed`. Delayed `delta` values are capped at 40ms without an FPS limit, or one configured interval plus 40ms with a limit.
 
-Phase uses shared `ResizeObserver` and `IntersectionObserver` pools for size and visibility. `createPointer` refreshes its target's bounding box at most once during a dirty frame. `createScroll` measures geometry on attachment, during an explicit `measure()`, or after coalesced resize signals; scroll events read offsets against the cached geometry. The ticker and loop scheduler do not read layout. Application callbacks remain responsible for their own DOM reads.
+Tickers using the same phase clock protocol in one JavaScript global share one browser frame and timestamp. Pausing removes a ticker from that clock. If no ticker or queued input callback remains, phase cancels the pending browser frame.
 
-### Frame delivery does not update React
+### React rendering
 
-`useLoop` updates React state for lifecycle transitions, not for each delivered frame. Its internal tick handler forwards `FrameState` to `onTick` without calling `setState`. An application callback can still trigger a render by updating state.
+`useLoop` and `useCanvas` do not update React state for each frame. Write repeated values to refs, the DOM, or canvas inside frame callbacks. Calling `setState` from an application callback can still render on every frame.
 
-### Shared frame clock
+### Observation and layout
 
-Ticker instances using the same phase clock protocol in one JavaScript global share one browser `requestAnimationFrame` loop and timestamp. Compatible instances from separately bundled copies use the same clock.
+Visibility, size, media-query, and device-pixel-ratio subscriptions share browser objects when their options match. Pointer movement and scroll events deliver at most once per animation frame.
 
-### Bounded frame timing
+`createPointer` reads one bounding box per dirty frame. `createScroll` reads offsets during scroll delivery and refreshes heavier geometry on attachment, resize, or `measure()`.
 
-`frame.time` is the browser's `requestAnimationFrame` timestamp. On the first callback after `start()` or `resume()`, `frame.delta` is 16.67ms without an FPS limit or one configured interval with a limit. After a delayed callback, `frame.delta` is capped at 40ms without an FPS limit or one interval plus 40ms with a limit. `frame.elapsed` is the sum of delivered deltas, so paused time does not advance it. See [`createTicker`](#createticker) for the full timing contract.
-
-## Entry points
-
-| Import                | Contents                                                                  |
-| --------------------- | ------------------------------------------------------------------------- |
-| `@usephase/core`      | Framework-agnostic timing, observation, lifecycle, scheduling, and errors |
-| `@usephase/core/ease` | Easing functions and math utilities only                                  |
-| `@usephase/react`     | React hooks and components                                                |
-
-Each entry point is independently tree-shakeable. Importing `@usephase/core/ease` in a server component pulls zero browser APIs.
+Pooling depends on compatible observer options. It does not mean an observer already exists for every call.
 
 ## Core API
 
-### createLoop
+Import browser primitives from `@usephase/core`. Import pure easing and math functions from `@usephase/core/ease`. `@usephase/core/internal` is reserved for `@usephase/*` bindings and is not an application API.
 
-The main primitive. Composes a ticker, visibility observer, and reduced-motion listener into a lifecycle-aware animation loop.
+### Lifecycle and frame loops
+
+#### createLoop
+
+Creates a managed frame loop that responds to element visibility, document visibility, reduced motion, focus, and sustained frame pressure.
 
 ```ts
 import { createLoop } from '@usephase/core';
@@ -279,132 +232,57 @@ import { createLoop } from '@usephase/core';
 const loop = createLoop({
   target: el,
   onTick: (frame) => {
-    // frame.time    — browser requestAnimationFrame timestamp
-    // frame.delta   — milliseconds to advance this frame
-    // frame.elapsed — sum of all delivered deltas
-    // frame.frame   — delivered frame count
+    el.style.transform = `translateX(${frame.elapsed * 0.1}px)`;
   },
 });
 
-loop.start();
-// loop.phase       === 'running'
-// loop.phaseReason === 'started'
+// Starts automatically. Call stop() for terminal cleanup.
+loop.stop();
 ```
 
-#### Loop phases
+| Option                | Type                                | Default         | Description                                                    |
+| --------------------- | ----------------------------------- | --------------- | -------------------------------------------------------------- |
+| `target`              | `Element \| Document`               | Required        | Element visibility, or document visibility for page-level work |
+| `onTick`              | `(frame: FrameState) => void`       | Required        | Called for each delivered frame                                |
+| `fps`                 | `number`                            | Display cadence | Positive finite FPS cap                                        |
+| `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`       | Reduced-motion behavior                                        |
+| `degraded`            | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'`    | Response to degraded quality                                   |
+| `degradedFps`         | `number`                            | `30`            | Cap used by degraded throttle mode                             |
+| `intersectionOptions` | `IntersectionObserverInit`          | None            | Visibility observer options; ignored for `document`            |
+| `start`               | `'auto' \| 'manual'`                | `'auto'`        | Start during construction or wait for `start()`                |
+| `onPhaseChange`       | `(phase, reason) => void`           | None            | Called after a phase transition                                |
+| `signal`              | `AbortSignal`                       | None            | Stops the loop when aborted                                    |
 
-| Phase     | Meaning                          | Possible reasons                      |
-| --------- | -------------------------------- | ------------------------------------- |
-| `idle`    | Created but not started          | `initial`                             |
-| `running` | Actively ticking                 | `started`, `resumed`                  |
-| `paused`  | Temporarily stopped, will resume | `sight`, `reduced-motion`, `degraded` |
-| `stopped` | Permanently disposed             | `manual`, `disposed`                  |
+The current type accepts `reducedMotion: 'complete'`, but it follows the non-pausing path because an open-ended loop has no end state to synthesize. Use `'pause'` or `'ignore'` for loops and `useTween` for a finite value with a destination.
 
-#### Quality signals
+`loop.phase` is `idle`, `running`, `paused`, or `stopped`. `stop()` is terminal.
 
-`phase` and `quality` are orthogonal. A loop can be `running` + `degraded` (still animating, but at reduced fidelity to preserve resources).
+Quality is independent from phase. `loop.quality` reports `full` or `degraded`, and `qualityReason` is `unfocused` or `frame-budget`. The configured response can throttle, pause, or report the signal without changing execution. `degradedFps` never raises a lower base `fps`.
 
-| Quality    | Meaning               | What changes                      |
-| ---------- | --------------------- | --------------------------------- |
-| `full`     | Normal operation      | Configured FPS, full DPR          |
-| `degraded` | Resources constrained | FPS capped to 30, DPR drops to 1x |
+#### createTicker
 
-Two signals trigger degradation:
-
-| Trigger      | `qualityReason`  | When                                           | Recovery                 |
-| ------------ | ---------------- | ---------------------------------------------- | ------------------------ |
-| Window blur  | `'unfocused'`    | User switches to another window                | Recovers on window focus |
-| Frame budget | `'frame-budget'` | 3+ consecutive frames exceed the 16.6ms budget | Does not auto-recover    |
-
-Read `loop.quality` and `loop.qualityReason` to adapt rendering (fewer particles, lower-fidelity shaders, skip non-essential visual passes).
-
-#### The `degraded` option
-
-Controls the loop's response when quality degrades. Same three-value pattern as `reducedMotion`.
-
-| Value        | Behavior                                             | Use case                                            |
-| ------------ | ---------------------------------------------------- | --------------------------------------------------- |
-| `'throttle'` | Cap FPS (default 30, configurable via `degradedFps`) | Most animations. Still runs, only slower            |
-| `'pause'`    | Pause the loop entirely                              | Heavy canvas/WebGL. If it can't run well, don't run |
-| `'ignore'`   | Keep running at full quality                         | Critical UI that must never degrade                 |
-
-```ts
-createLoop({
-  target: el,
-  onTick: draw,
-  degraded: 'throttle', // default
-  degradedFps: 20, // only accepted when degraded is 'throttle'
-});
-```
-
-#### Loop options
-
-| Option          | Type                                | Default      | Description                                                   |
-| --------------- | ----------------------------------- | ------------ | ------------------------------------------------------------- |
-| `target`        | `Element \| Document`               | required     | Element to observe for visibility, or `document` for the page |
-| `onTick`        | `(frame: FrameState) => void`       | required     | Called each frame while running                               |
-| `fps`           | `number`                            | —            | Cap frames per second                                         |
-| `reducedMotion` | `'pause' \| 'complete' \| 'ignore'` | `'pause'`    | Behavior when user prefers reduced motion                     |
-| `degraded`      | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'` | Behavior when quality degrades                                |
-| `degradedFps`   | `number`                            | `30`         | FPS cap in degraded throttle mode                             |
-| `onPhaseChange` | `(phase, reason) => void`           | —            | Called on every phase transition                              |
-
-### createTicker
-
-The low-level `requestAnimationFrame` clock underneath `createLoop`. Use it when you need a frame loop without visibility management (background processing, audio sync, non-visual timing).
+Creates a low-level `requestAnimationFrame` loop without visibility or reduced-motion management.
 
 ```ts
 import { createTicker } from '@usephase/core';
 
 const ticker = createTicker({
-  onTick: (frame) => {
-    /* runs every frame */
-  },
+  onTick: draw,
   fps: 30,
 });
+
 ticker.start();
+ticker.pause();
+ticker.resume();
+ticker.setFps(60);
+ticker.stop();
 ```
 
-Ticker instances within one JavaScript global, such as a page or worker, share one browser `requestAnimationFrame` loop and timestamp when they use the same clock protocol. This includes separately bundled copies of the same compatible phase release.
+`fps` is optional and must be positive and finite. `setFps(undefined)` removes the cap without resetting frame count or elapsed time. Calling `start()`, `resume()`, or `setFps()` after `stop()` throws `ticker_stopped`.
 
-Within one clock protocol, pointer, scroll, mutation, and throttle callbacks queued before frame dispatch begins flush before every ticker callback in that frame. A callback first queued during input or tick dispatch runs in the next frame. Additional work coalesces into an eligible callback that has not run yet; once it has run, new work waits for the next frame. An input callback error does not prevent other input or ticker callbacks from running; the first error is rethrown after both stages complete. A ticker callback error retains precedence and aborts the remaining ticker callbacks.
+#### createLifecycle
 
-`frame.delta` is how many milliseconds an animation should advance on each callback. After a delayed callback, it is at most 40ms without an FPS limit, or one configured FPS interval plus 40ms with a limit. `frame.elapsed` increases by exactly the same `delta`.
-
-The first callback after `start()` or `resume()` uses 16.67ms without an FPS limit, or one configured interval with a limit. `frame.time` always reports the browser's unmodified `requestAnimationFrame` timestamp so application-managed animation code can use the same source time.
-
-#### Ticker phases
-
-| Phase     | Meaning                  | Transitions                 |
-| --------- | ------------------------ | --------------------------- |
-| `idle`    | Created, not started     | → `running` via `start()`   |
-| `running` | Actively ticking         | → `paused` via `pause()`    |
-| `paused`  | Suspended, resumable     | → `running` via `resume()`  |
-| `stopped` | Terminal, cannot restart | via `stop()` from any state |
-
-### createSight
-
-Answers one question: is this element visible right now? Combines `document.visibilitychange`, `pageshow` (bfcache restore), and `IntersectionObserver` into a single phase.
-
-```ts
-import { createSight } from '@usephase/core';
-
-const sight = createSight({
-  target: el,
-  onPhaseChange: (phase, reason) => {
-    // phase:  'visible' | 'hidden' | 'unknown'
-    // reason: 'initial' | 'viewport' | 'document' | 'bfcache' | 'all-hidden'
-  },
-});
-```
-
-`phase` is `'visible'` only when the document is visible AND the element is in the viewport. Uses a pooled `IntersectionObserver` (20 elements with the same options share one observer instance).
-
-### createLifecycle
-
-The activation decision for an animation, decoupled from who drives the frames. Composes visibility (`createSight`), reduced motion, and a manual pause into a single `active` / `paused` phase.
-
-Use `createLifecycle` when you own your render loop (a three.js/WebGL renderer, a Web Worker, or any non-rAF work that should pause when off-screen or under reduced motion). For a library-managed loop, use [`createLoop`](#createloop) instead.
+Combines visibility, reduced motion, and manual pause into an activation signal for a loop or renderer you own.
 
 ```ts
 import { createLifecycle } from '@usephase/core';
@@ -412,185 +290,145 @@ import { createLifecycle } from '@usephase/core';
 const lifecycle = createLifecycle({
   target: canvas,
   onPhaseChange: (phase, reason) => {
-    // phase:  'idle' | 'active' | 'paused' | 'stopped'
-    // reason: 'started' | 'resumed' | 'sight' | 'reduced-motion' | 'manual' | 'disposed' | 'initial'
     if (phase === 'active') renderer.start();
-    else renderer.stop(); // your loop, your teardown
+    else renderer.stop();
   },
 });
 
-// Manual pause (e.g. a panel opened over the hero):
 lifecycle.pause();
 lifecycle.resume();
-
-// cleanup:
 lifecycle.stop();
 ```
 
-`createLoop` adds timing and quality controls to `createLifecycle`. Frame scheduling, `FrameState` reuse, FPS limits, and bounded time advances apply only when `createLoop` manages the loop. Observer pooling, visibility handling, and reduced-motion handling also apply to consumer-owned loops.
+| Option                | Type                       | Default   | Description                                                    |
+| --------------------- | -------------------------- | --------- | -------------------------------------------------------------- |
+| `target`              | `Element \| Document`      | Required  | Element visibility, or document visibility for page-level work |
+| `reducedMotion`       | `'pause' \| 'ignore'`      | `'pause'` | Whether reduced motion pauses activation                       |
+| `intersectionOptions` | `IntersectionObserverInit` | None      | Visibility observer options                                    |
+| `start`               | `'auto' \| 'manual'`       | `'auto'`  | Start honoring signals during construction                     |
+| `onPhaseChange`       | `(phase, reason) => void`  | None      | Called after a transition                                      |
+| `signal`              | `AbortSignal`              | None      | Stops the lifecycle when aborted                               |
 
-#### Lifecycle phases
+The phases are `idle`, `active`, `paused`, and `stopped`. Pause priority is reduced motion, visibility, then manual pause. `createLifecycle` does not schedule frames.
 
-| Phase     | Meaning                          | Possible reasons                    |
-| --------- | -------------------------------- | ----------------------------------- |
-| `idle`    | Created but not started          | `initial`                           |
-| `active`  | Should be animating              | `started`, `resumed`                |
-| `paused`  | Off-screen, reduced motion, etc. | `sight`, `reduced-motion`, `manual` |
-| `stopped` | Permanently disposed             | `disposed`                          |
+### Observation and input
 
-Pause priority is `reduced-motion` > `sight` > `manual`.
+#### createSight
 
-### createScrollProgress
-
-Reports what fraction of an element is currently visible in the viewport (0–1), via the shared IntersectionObserver pool. Zero forced reflows, zero extra observers. Ideal for reveal/opacity effects.
-
-> **Visibility ratio, not scroll offset.** This reports `intersectionRatio` (how much of an element is visible in the viewport), which plateaus for tall elements once they fill it. For a scroll container's _own_ offset (scrollbars, carousels, or the page via `target: 'page'` on the hook) use [`createScroll`](#createscroll); for CSS-declarative scroll-linked animation use the native `ScrollTimeline` API; for spring/gesture scroll use `motion`.
+Reports `visible`, `hidden`, or `unknown` from document visibility and element intersection.
 
 ```ts
-import { createScrollProgress } from '@usephase/core';
-
-const progress = createScrollProgress({
-  target: el,
-  onProgress: (ratio) => {
-    el.style.opacity = String(ratio);
+const sight = createSight({
+  target: element,
+  intersectionOptions: { rootMargin: '200px' },
+  onPhaseChange: (phase, reason) => {
+    // React to visibility without polling.
   },
 });
 
-// progress.ratio === 0.65 (synchronous read)
+sight.stop();
+```
 
-// cleanup:
+`target` accepts an `Element` or `Document`. A document target follows document visibility and does not create an `IntersectionObserver`. Element calls with compatible observer options share an observer. `signal` can provide abort-based cleanup.
+
+#### createScrollProgress
+
+Reports an element's current `intersectionRatio`, from 0 to 1. This is visible fraction, not scroll offset.
+
+```ts
+const progress = createScrollProgress({
+  target: element,
+  onProgress: (ratio) => {
+    element.style.opacity = String(ratio);
+  },
+});
+
+console.log(progress.ratio);
 progress.stop();
 ```
 
-The `steps` option controls threshold granularity. Default `20` generates 21 evenly-spaced thresholds (0%, 5%, 10%, …, 100%). Multiple instances with the same `steps` share a single IO, adding zero extra observers.
-
-#### ScrollProgress options
-
 | Option       | Type                          | Default  | Description                                    |
 | ------------ | ----------------------------- | -------- | ---------------------------------------------- |
-| `target`     | `Element \| Document`         | required | Element to observe, or `document` for the page |
-| `onProgress` | `(ratio: number) => void`     | required | Called at each threshold crossing              |
-| `steps`      | `number`                      | `20`     | Number of evenly-spaced thresholds             |
-| `root`       | `Element \| Document \| null` | —        | IO root element                                |
-| `rootMargin` | `string`                      | —        | IO root margin                                 |
+| `target`     | `Element`                     | Required | Element whose visible fraction is observed     |
+| `onProgress` | `(ratio: number) => void`     | Required | Called at threshold crossings                  |
+| `steps`      | `number`                      | `20`     | Generates `steps + 1` evenly spaced thresholds |
+| `root`       | `Element \| Document \| null` | Viewport | Intersection root                              |
+| `rootMargin` | `string`                      | `'0px'`  | Intersection root margin                       |
+| `signal`     | `AbortSignal`                 | None     | Stops observation when aborted                 |
 
-### createScroll
+Calls share an observer when `steps`, `root`, and `rootMargin` match.
 
-Tracks a scroll container's offset and progress. Reads `scrollLeft`/`scrollTop` once per rAF frame and reads the reflow-heavy geometry (`scrollWidth`/`clientWidth`) only on a coalesced resize or an explicit `measure()`, never on the scroll path. Auto-pauses off-screen via the shared IntersectionObserver pool. This is to `scroll` + `scrollWidth` what `createPointer` is to `pointermove` + `getBoundingClientRect`.
+#### createScroll
 
-> **Scroll offset, not visibility ratio.** This reports the element's own scroll position (for scrollbars, carousels, position indicators). For _how much of an element is in the viewport_, use [`createScrollProgress`](#createscrollprogress); for CSS-declarative scroll-linked animation, use the native `ScrollTimeline` API.
+Tracks a scroll container's offsets, limits, progress, and visible fraction. Use `document` as the target for the page scroller.
 
 ```ts
-import { createScroll } from '@usephase/core';
-
 const scroll = createScroll({
   target: viewport,
-  onScroll: (s) => {
-    // thumb CSS needs `transform-origin: left` so scaleX anchors to the track start
-    thumb.style.transform = `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`;
-    prevButton.disabled = s.x <= 1;
-    nextButton.disabled = s.x >= s.maxX - 1;
+  onScroll: (state) => {
+    progress.style.transform = `scaleX(${state.progressX})`;
   },
 });
 
-// scroll.state.progressX === 0.5 (synchronous read)
-
-// after mutating scrollable content:
+console.log(scroll.state.x, scroll.state.progressX);
 scroll.measure();
-
-// cleanup:
 scroll.stop();
 ```
 
-`onScroll` receives the same `ScrollState` object every frame (mutated in place, zero per-frame allocations): `x`, `y`, `maxX`, `maxY`, `progressX`, `progressY`, and the visible fractions `visibleX`/`visibleY` (`clientWidth / scrollWidth`, i.e. a scrollbar thumb's `scaleX`). The `ResizeObserver` recomputes geometry on container resize; call `measure()` after content changes that alter `scrollWidth`.
+`ScrollState` is reused and contains `x`, `y`, `maxX`, `maxY`, `progressX`, `progressY`, `visibleX`, and `visibleY`. Copy fields if they must outlive the callback.
 
-#### Scroll options
+| Option                | Type                           | Default   | Description                                |
+| --------------------- | ------------------------------ | --------- | ------------------------------------------ |
+| `target`              | `Element \| Document`          | Required  | Scroll container or page                   |
+| `onScroll`            | `(state: ScrollState) => void` | Required  | Called once per eligible browser frame     |
+| `onPhaseChange`       | `(phase, reason) => void`      | None      | Reports `tracking`, `paused`, or `stopped` |
+| `visibility`          | `'pause' \| 'ignore'`          | `'pause'` | Disconnect while off-screen or continue    |
+| `intersectionOptions` | `IntersectionObserverInit`     | None      | Visibility observer options                |
+| `signal`              | `AbortSignal`                  | None      | Stops tracking when aborted                |
 
-| Option                | Type                           | Default   | Description                                        |
-| --------------------- | ------------------------------ | --------- | -------------------------------------------------- |
-| `target`              | `Element \| Document`          | required  | Scroll container, or `document` for the page       |
-| `onScroll`            | `(state: ScrollState) => void` | required  | Called once per rAF frame with position + progress |
-| `onPhaseChange`       | `(phase, reason) => void`      | —         | Called on phase transitions                        |
-| `visibility`          | `'pause' \| 'ignore'`          | `'pause'` | Pause tracking when off-screen, or ignore          |
-| `intersectionOptions` | `IntersectionObserverInit`     | —         | Forwarded to the visibility observer               |
-| `signal`              | `AbortSignal`                  | —         | Stops the tracker when aborted                     |
+Geometry refreshes on attachment and resize. Call `measure()` after content changes that alter scrollable size.
 
-The options type is `CreateScrollOptions` (`ScrollOptions` is a `lib.dom` global and must not be shadowed).
+#### createMutation
 
-Pass `document` to track the page scroller. Offsets and geometry then come from `document.scrollingElement`, and since the page is never off-screen, `visibility: 'pause'` reacts to tab visibility alone and creates no `IntersectionObserver`. Use it for scroll progress bars, condensing headers, and scroll-to-top affordances instead of a bare `window` scroll listener.
-
-### createThrottle
-
-Frame-aligned, visibility-aware throttle for event-driven work below frame rate (socket emits, worker messaging, expensive recompute). Leading calls fire synchronously; a pending trailing call fires with the latest value on the first animation frame at or past `interval`. Nothing is scheduled while the trigger is idle or the document is hidden.
-
-> **Event-driven, not a loop.** This fires on the trigger and idles otherwise. To cap a continuous render loop, use `fps` on [`createLoop`](#createloop). To think in rates, `interval: 1000 / 20` reads as "at most 20 per second".
+Wraps `MutationObserver`, coalesces records into one callback per browser frame, and pauses off-screen by default.
 
 ```ts
-import { createThrottle } from '@usephase/core';
-
-const throttle = createThrottle({
-  callback: (state) => socket.emit('cursor', state.x, state.y),
-  interval: 50,
+const mutation = createMutation({
+  target: list,
+  mutation: { childList: true },
+  onMutations: syncItems,
 });
 
-const pointer = createPointer({ element, onPointer: throttle.call });
-
-// throttle.flush()  fires a pending trailing call now
-// throttle.cancel() discards it and resets the window
-// cleanup:
-throttle.stop();
+mutation.stop();
 ```
 
-When the document hides, a pending call is flushed with the latest value (default) or dropped per `hidden`. Calls made while hidden are recorded but fire nothing until the document is visible again.
+Options are `target`, standard `mutation` settings, `onMutations`, optional `onPhaseChange`, `visibility`, `intersectionOptions`, and `signal`. Pausing disconnects the observer, so mutations that occur while paused are not replayed.
 
-#### Throttle options
+#### createPointer
 
-| Option     | Type                                | Default   | Description                                   |
-| ---------- | ----------------------------------- | --------- | --------------------------------------------- |
-| `callback` | `(value: T) => void`                | required  | Called with the latest value passed to `call` |
-| `interval` | `number`                            | required  | Minimum ms between invocations                |
-| `edge`     | `'leading' \| 'trailing' \| 'both'` | `'both'`  | Which edges fire                              |
-| `hidden`   | `'flush' \| 'drop'`                 | `'flush'` | Pending-call policy when the document hides   |
-| `signal`   | `AbortSignal`                       | —         | Stops the throttle when aborted               |
-
-### createDebounce
-
-Visibility-aware trailing debounce: fires the callback with the latest value once `wait` ms pass without a new call. No timer runs while the document is hidden; the quiet period restarts on return. Use it for work that should wait out a burst, like reallocating canvas buffers after a resize stream settles.
+Reports pointer coordinates relative to an element. Move events are batched into one callback and one bounding-box read per dirty frame.
 
 ```ts
-import { createDebounce } from '@usephase/core';
-
-const debounce = createDebounce({
-  callback: (size) => reallocateBuffers(size),
-  wait: 250,
+const pointer = createPointer({
+  target: surface,
+  onPointer: ({ x, y, active }) => {
+    cursor.style.transform = `translate(${x}px, ${y}px)`;
+    cursor.hidden = !active;
+  },
 });
 
-debounce.call({ width, height });
-
-// cleanup:
-debounce.stop();
+pointer.stop();
 ```
 
-Same surface as `createThrottle`: `flush()`, `cancel()`, a synchronous `pending` read, and terminal `stop()`.
+Options are `target`, `onPointer`, optional `onPhaseChange`, `visibility`, `intersectionOptions`, and `signal`. Use CSS `:hover` for hover styling and a gesture library for drag behavior.
 
-#### Debounce options
+#### createRenderState
 
-| Option     | Type                 | Default   | Description                                   |
-| ---------- | -------------------- | --------- | --------------------------------------------- |
-| `callback` | `(value: T) => void` | required  | Called with the latest value passed to `call` |
-| `wait`     | `number`             | required  | Quiet period in ms; each call restarts it     |
-| `hidden`   | `'flush' \| 'drop'`  | `'flush'` | Pending-call policy when the document hides   |
-| `signal`   | `AbortSignal`        | —         | Stops the debounce when aborted               |
-
-### createRenderState
-
-Reports whether the browser is rendering an element or skipping it under `content-visibility: auto`. Use it to pause application-managed work inside deferred content; loops created by `createLoop` already pause when off-screen.
+Reports `rendered` or `skipped` from `contentvisibilityautostatechange` without reading layout.
 
 ```ts
-import { createRenderState } from '@usephase/core';
-
 const renderState = createRenderState({
-  target: el,
+  target: element,
   onPhaseChange: (phase) => {
     if (phase === 'skipped') clock.pause();
     else clock.resume();
@@ -600,268 +438,321 @@ const renderState = createRenderState({
 renderState.stop();
 ```
 
-It listens to `contentvisibilityautostatechange`, the browser's actual paint decision, without changing layout.
+Options are `target`, optional `onPhaseChange`, and `signal`. Where the event is unsupported, the phase remains `rendered`.
 
-### createDevicePixelRatio
+#### createDevicePixelRatio
 
-Tracks `devicePixelRatio` changes through a shared media-query subscription. Use it for framework-free canvas, WebGL, or worker renderers that own their buffer sizing.
+Tracks `devicePixelRatio` changes through a shared media-query subscription.
 
 ```ts
-import { createDevicePixelRatio } from '@usephase/core';
-
 const dpr = createDevicePixelRatio({
   onChange: (value) => renderer.setPixelRatio(Math.min(value, 2)),
 });
 
-// dpr.dpr is always current
+renderer.setPixelRatio(Math.min(dpr.dpr, 2));
 dpr.stop();
 ```
 
-`useCanvas` handles DPR automatically; use this primitive only when you own the renderer.
+The options are `onChange` and optional `signal`. Read `dpr.dpr` for the current value.
 
-### createMutation
+### Scheduling
 
-A lifecycle-aware `MutationObserver`: records are coalesced into one callback per animation frame, observation pauses off-screen by default, and teardown is explicit.
+#### createThrottle
+
+Creates an event-driven, frame-aligned throttle. It schedules work only after `call()` receives a value.
 
 ```ts
-import { createMutation } from '@usephase/core';
-
-const mutation = createMutation({
-  target: list,
-  mutation: { childList: true },
-  onMutations: (records) => syncItems(records),
+const throttle = createThrottle({
+  callback: (state) => socket.emit('cursor', state),
+  interval: 50,
 });
 
-mutation.stop();
+throttle.call(state);
+throttle.flush();
+throttle.cancel();
+throttle.stop();
 ```
 
-Reserve it for structural or narrow attribute changes. For dimensions, use ResizeObserver-backed `useSize`; reading layout inside `onMutations` still forces a reflow.
+| Option     | Type                                | Default   | Description                                 |
+| ---------- | ----------------------------------- | --------- | ------------------------------------------- |
+| `callback` | `(value: T) => void`                | Required  | Receives the latest value                   |
+| `interval` | `number`                            | Required  | Minimum milliseconds between calls          |
+| `edge`     | `'leading' \| 'trailing' \| 'both'` | `'both'`  | Invocation edges                            |
+| `hidden`   | `'flush' \| 'drop'`                 | `'flush'` | Pending-call policy when the document hides |
+| `signal`   | `AbortSignal`                       | None      | Stops the throttle when aborted             |
 
-### createPointer
+A pending trailing call fires on the first browser frame at or after `interval`. When the document becomes hidden, the existing pending call is flushed or dropped according to `hidden`. Calls made while already hidden are retained until visibility returns.
 
-Tracks pointer position relative to an element, batching high-frequency events into one callback and one bounds read per animation frame. It pauses when the element is off-screen.
+#### createDebounce
+
+Creates a trailing debounce that restarts its quiet period after each `call()`.
 
 ```ts
-import { createPointer } from '@usephase/core';
-
-const pointer = createPointer({
-  target: surface,
-  onPointer: (state) => {
-    cursor.style.transform = `translate(${state.x}px, ${state.y}px)`;
-  },
+const debounce = createDebounce({
+  callback: reallocateBuffers,
+  wait: 250,
 });
 
-// pointer.state is always current
-pointer.stop();
+debounce.call(size);
+debounce.stop();
 ```
 
-Use CSS `:hover` for hover state and a gesture library for drag physics. This primitive is for continuous element-relative coordinates.
+Options are `callback`, `wait`, optional `hidden` (`flush` by default), and optional `signal`. The returned object also exposes `flush()`, `cancel()`, `pending`, and terminal `stop()`.
 
-### whenIdle
+#### whenIdle
 
-Runs one callback when the browser is idle. Where `requestIdleCallback` is unavailable (Safari), it falls back to a near-immediate task instead of waiting for an idle period. The returned function cancels pending work.
+Runs one callback through `requestIdleCallback`. If that API is unavailable, it uses a near-immediate task. The returned function cancels pending work.
 
 ```ts
-import { whenIdle } from '@usephase/core';
-
 const cancel = whenIdle(() => warmCache(), { timeout: 2000 });
 cancel();
 ```
 
-In React, use `useWhenIdle` for effects, `useIdle` for a boolean, or `WhenIdle` to mount a subtree.
+Options are optional `timeout` and `signal`. `whenIdle` is browser-only and throws `server_context` during SSR.
 
-### prefersReducedMotion
+#### prefersReducedMotion
 
-Returns `true` when reduced motion is enabled at the OS level. Use it to gate expensive setup or dynamic imports.
+Returns the current `prefers-reduced-motion: reduce` match. It returns `false` when `matchMedia` is unavailable.
 
 ```ts
-import { prefersReducedMotion } from '@usephase/core';
-
 if (!prefersReducedMotion()) {
   const { startParticleSystem } = await import('./particles');
   startParticleSystem(canvas);
 }
 ```
 
-Animation and lifecycle APIs handle this preference themselves. Call this function when reduced motion changes which code runs, such as skipping an import, starting an application-managed animation, or choosing a static fallback.
+Use this snapshot when the preference changes which code should load or initialize. Managed animation and lifecycle APIs already apply their own reduced-motion behavior.
 
-## Easing and math
+### Easing and math
 
-Pure functions with no browser APIs, side effects, or React. Safe in server components, build scripts, and tests.
-
-```ts
-import { lerp, clamp01, easeOutCubic, remap } from '@usephase/core/ease';
-```
-
-### Easing functions
-
-| Function         | Character                       |
-| ---------------- | ------------------------------- |
-| `easeOutCubic`   | Fast start, smooth deceleration |
-| `easeOutQuart`   | Sharper deceleration            |
-| `easeOutBack`    | Overshoots target, snaps back   |
-| `easeInOutCubic` | Symmetric S-curve               |
-| `linear`         | No easing (identity)            |
-
-All easing functions take a progress value (0–1) and return a curved progress value (0–1). They don't know about time, pixels, or anything else. They reshape a number.
-
-### Math utilities
-
-| Function                         | Description                    | Example                            |
-| -------------------------------- | ------------------------------ | ---------------------------------- |
-| `clamp(value, min, max)`         | Constrain to range             | `clamp(150, 0, 100)` → `100`       |
-| `clamp01(value)`                 | Constrain to 0–1               | `clamp01(-0.5)` → `0`              |
-| `lerp(start, end, t)`            | Linear interpolation           | `lerp(0, 100, 0.5)` → `50`         |
-| `inverseLerp(start, end, value)` | Where is value in range? (0–1) | `inverseLerp(0, 100, 75)` → `0.75` |
-| `remap(options)`                 | Map from one range to another  | Input range → output range         |
-
-### The pattern
+These functions have no browser dependencies and are safe in server components, build scripts, and tests.
 
 ```ts
-const progress = clamp01(elapsed / duration); // normalize time to 0–1
-const eased = easeOutCubic(progress); // reshape the curve
-const value = lerp(startPos, endPos, eased); // map to your range
+import {
+  clamp,
+  clamp01,
+  easeInOutCubic,
+  easeOutBack,
+  easeOutCubic,
+  easeOutQuart,
+  inverseLerp,
+  lerp,
+  linear,
+  remap,
+} from '@usephase/core/ease';
 ```
 
-Easing, interpolation, and your value range are three separate concerns. The `@usephase/core/ease` APIs keep them separate so you can mix and match.
+| Function                         | Purpose                                                    |
+| -------------------------------- | ---------------------------------------------------------- |
+| `easeOutCubic`                   | Fast start with smooth deceleration                        |
+| `easeOutQuart`                   | Sharper deceleration                                       |
+| `easeOutBack`                    | Overshoot and return; accepts an optional overshoot amount |
+| `easeInOutCubic`                 | Symmetric acceleration and deceleration                    |
+| `linear`                         | Identity function                                          |
+| `clamp(value, min, max)`         | Constrain a value to a range                               |
+| `clamp01(value)`                 | Constrain a value to 0 through 1                           |
+| `lerp(start, end, progress)`     | Interpolate between two values                             |
+| `inverseLerp(start, end, value)` | Calculate progress within a range                          |
+| `remap(options)`                 | Map a value from one range to another                      |
 
-## Choosing a primitive
+Easing functions accept progress as a number. Most return values between 0 and 1 for inputs in that range; `easeOutBack` intentionally exceeds 1 during its overshoot.
 
-| Need                                                                   | Use                                                                                         |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Check on-screen visibility                                             | `useSight` (visibility only)                                                                |
-| Run a frame loop managed by the runtime libraries                      | `useLoop` (DOM) / `useCanvas` (canvas)                                                      |
-| Pause/resume your own loop (WebGL, three.js, Web Worker)               | `useLifecycle` (active/paused signal)                                                       |
-| Animate a single value in render output                                | `useTween`                                                                                  |
-| Animate mount/unmount transitions                                      | `Presence` / `Swap` / `WhenVisible`                                                         |
-| Skip painting off-screen content (keep in DOM)                         | `Defer`                                                                                     |
-| Defer non-critical UI until the browser is idle                        | `WhenIdle` / `useIdle`                                                                      |
-| Run a side effect or prefetch when idle                                | `useWhenIdle`                                                                               |
-| Pause application-managed work inside a `Defer` subtree                | `useRenderState`                                                                            |
-| React to DOM mutations without synchronous callback storms             | `useMutation`                                                                               |
-| Track element-relative pointer position without per-event layout reads | `usePointer`                                                                                |
-| Track DPR for a renderer you own                                       | `useDevicePixelRatio`                                                                       |
-| Gate application-managed motion or choose a target/fallback            | `usePrefersReducedMotion`                                                                   |
-| Subscribe to scroll, size, or media values reactively                  | `useScrollProgress` / `useSize` / `useContainerQuery` / `useMediaQuery`                     |
-| Scroll/size/visibility without re-renders?                             | Same hooks with a callback (`onProgress` / `onResize` / `onVisibilityChange`), read via ref |
-| Rate-limit event-driven work (sockets, workers)                        | `useThrottledCallback`                                                                      |
-| Run once after a burst settles (resize, typing)                        | `useDebouncedCallback`                                                                      |
+```ts
+const progress = clamp01(elapsed / duration);
+const value = lerp(start, end, easeOutCubic(progress));
+```
 
-**`useSight` vs `useLifecycle`:** `useSight` reports pure visibility (for lazy-mounting, analytics, `WhenVisible`). `useLifecycle` folds in reduced motion and a manual pause, so you can't accidentally animate for users who asked not to. If you're gating an animation, use `useLifecycle`. If you're gating content, use `useSight`.
+## React API
 
-## React hooks
+Import hooks and components from `@usephase/react`. The entry point is a client boundary. Observer and media-query hooks use documented initial values during server rendering and establish browser subscriptions in effects.
 
-### useLoop
+### Animation and lifecycle
 
-The primary React hook. Wraps `createLoop` with React lifecycle management.
+`useLoop` and `useCanvas` expose quality through React state. In the current binding, a quality-only transition does not trigger a render. Use core `createLoop` when synchronous quality reads are required.
+
+#### useLoop
+
+Wraps `createLoop` with ref management, the latest React callback, and teardown on unmount.
 
 ```tsx
+import { useRef } from 'react';
 import { useLoop } from '@usephase/react';
 
-const { ref, phase, phaseReason } = useLoop({
-  onTick: (frame) => {
-    ref.current.style.transform = `translateX(${frame.elapsed * 0.1}px)`;
-  },
-});
-return <div ref={ref} />;
+function MovingBox() {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLoop({
+    ref,
+    onTick: (frame) => {
+      ref.current?.style.setProperty(
+        'transform',
+        `translateX(${frame.elapsed * 0.1}px)`,
+      );
+    },
+  });
+
+  return <div ref={ref} />;
+}
 ```
 
-Attach the returned `ref` to the element you want to animate. To bring your own, pass `ref` in the options.
+| Option                | Type                                | Default         | Description                                                                  |
+| --------------------- | ----------------------------------- | --------------- | ---------------------------------------------------------------------------- |
+| `ref`                 | `RefObject<T \| null>`              | Returned ref    | Element to observe                                                           |
+| `target`              | `'page'`                            | None            | Use document visibility instead of an element; cannot be combined with `ref` |
+| `onTick`              | `(frame: FrameState) => void`       | Required        | Current callback for each delivered frame                                    |
+| `fps`                 | `number`                            | Display cadence | Positive finite FPS cap                                                      |
+| `enabled`             | `boolean`                           | `true`          | Tear down and report `idle` when false                                       |
+| `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`       | Matches `createLoop`, including the current `complete` caveat                |
+| `degraded`            | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'`    | Quality response                                                             |
+| `degradedFps`         | `number`                            | `30`            | Degraded throttle cap                                                        |
+| `intersectionOptions` | `IntersectionObserverInit`          | None            | Visibility options                                                           |
 
-Your `onTick` callback always sees the latest props, state, and refs without restarting the loop (stored internally via `useSyncedRef`).
+Returns `ref`, `phase`, `phaseReason`, `quality`, and `qualityReason`. The frame callback sees current props and state without rebuilding the loop.
 
-**Never write state that changes on every frame inside `onTick`.** React may re-render on every tick. Write repeated values to refs or the DOM. A one-time state update is allowed only if the callback first blocks repeats and then sets `enabled` to `false`.
+#### useLifecycle
 
-### useLifecycle
-
-The activation signal for a loop you own. Wraps [`createLifecycle`](#createlifecycle), returning `active` / `paused` so a consumer-owned render loop (WebGL, three.js, a Web Worker) can pause when off-screen or under reduced motion.
+Returns the activation decision for a renderer or loop managed by application code.
 
 ```tsx
+import { useEffect } from 'react';
 import { useLifecycle } from '@usephase/react';
 
 function Hero() {
   const { ref, isActive } = useLifecycle();
 
   useEffect(() => {
-    if (!isActive) return; // off-screen / reduced motion / paused
-    let raf = requestAnimationFrame(function render() {
-      renderer.render();
-      raf = requestAnimationFrame(render);
-    });
-    return () => cancelAnimationFrame(raf);
+    if (isActive) renderer.start();
+    else renderer.stop();
+    return () => renderer.stop();
   }, [isActive]);
 
   return <canvas ref={ref} />;
 }
 ```
 
-| Option                | Type                       | Default   | Description                                           |
-| --------------------- | -------------------------- | --------- | ----------------------------------------------------- |
-| `ref`                 | `RefObject`                | returned  | Bring your own, or attach the returned `ref`          |
-| `reducedMotion`       | `'pause' \| 'ignore'`      | `'pause'` | Whether reduced motion pauses the lifecycle           |
-| `paused`              | `boolean`                  | `false`   | Manual pause (e.g. a panel opened over the animation) |
-| `enabled`             | `boolean`                  | `true`    | When `false`, tears down and reports `idle`           |
-| `intersectionOptions` | `IntersectionObserverInit` | —         | Forwarded to the underlying observer                  |
+Options include `ref` or `target: 'page'`, `reducedMotion` (`'pause'` by default), `paused` (`false`), `enabled` (`true`), `intersectionOptions`, and `onPhaseChange`. Returns `ref`, `phase`, `phaseReason`, and `isActive`.
 
-Returns `{ ref, phase, phaseReason, isActive }`. See [Choosing a primitive](#choosing-a-primitive) for `useSight` vs `useLifecycle`.
+#### useCanvas
 
-### useCanvas
-
-Everything `useLoop` provides, plus DPR-aware buffer sizing, ResizeObserver coalescing, and GPU context loss recovery.
+Creates a managed 2D canvas loop with container sizing and device-pixel-ratio updates.
 
 ```tsx
 import { useRef } from 'react';
 import { useCanvas } from '@usephase/react';
 
-const containerRef = useRef(null);
-const canvasRef = useRef(null);
+function CanvasScene() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-const { phase } = useCanvas({
-  containerRef,
-  canvasRef,
-  draw: (ctx, frame, size) => {
-    ctx.clearRect(0, 0, size.width, size.height);
-    // ctx is already scaled for devicePixelRatio — draw in CSS pixels
-  },
-});
+  useCanvas({
+    containerRef,
+    canvasRef,
+    draw: (ctx, frame, size) => {
+      ctx.clearRect(0, 0, size.width, size.height);
+      // ctx is already scaled for devicePixelRatio; draw in CSS pixels
+    },
+  });
 
-return (
-  <div ref={containerRef}>
-    <canvas ref={canvasRef} />
-  </div>
-);
+  return (
+    <div ref={containerRef}>
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
 ```
 
-`useCanvas` coordinates two elements (a sizing container and the canvas), so you pass both refs in.
+Required options are `containerRef`, `canvasRef`, and `draw`. Optional controls are `fps`, `enabled` (`true`), `reducedMotion` (`'pause'`), `degraded` (`'throttle'`), and `degradedFps` (`30`). Returns `restart`, `phase`, `phaseReason`, `quality`, and `qualityReason`.
 
-| Concern      | How useCanvas handles it                                                                                                         |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| DPR (retina) | Uses `devicePixelContentBoxSize` for exact physical pixels when available, falls back to `width * dpr`. Listens for DPR changes. |
-| Resize       | Shared ResizeObserver. Canvas resized on container change. No `getBoundingClientRect`.                                           |
-| Context loss | Listens for `contextlost`/`contextrestored`. Pauses on loss, recovers on restore.                                                |
-| Quality      | When degraded, DPR drops to 1x automatically (halves GPU pixel count).                                                           |
+The hook uses `devicePixelContentBoxSize` when available and otherwise sizes the buffer from CSS dimensions and current device-pixel ratio. It skips `draw` while the 2D context is lost and resumes after restoration.
 
-Both hooks accept the same quality controls as `createLoop`: `degraded` and `degradedFps`. For heavy GPU work, consider `degraded: 'pause'`.
+`restart()` tears down and rebuilds the loop, size observer, device-pixel-ratio subscription, and context listeners.
 
-### useTween
+#### useTween
 
-Animates a number from A to B over a duration. Calls `setState` per frame (appropriate when the animated value is used in render output).
+Animates a finite number in React state. The first render returns `to`; subsequent `to` changes animate from the current value.
 
 ```tsx
-import { useTween } from '@usephase/react';
-
 const opacity = useTween({ to: isVisible ? 1 : 0, duration: 300 });
 ```
 
-Use `useTween` for single values where the render is cheap (counters, progress bars, opacity). Use `useLoop` when animating many elements or doing canvas work, since per-frame `setState` doesn't scale.
+| Option          | Type                     | Default        | Description                                |
+| --------------- | ------------------------ | -------------- | ------------------------------------------ |
+| `to`            | `number`                 | Required       | Destination                                |
+| `duration`      | `number`                 | `300`          | Positive finite duration in milliseconds   |
+| `delay`         | `number`                 | `0`            | Delay before interpolation begins          |
+| `easing`        | `(progress) => number`   | `easeOutCubic` | Easing function                            |
+| `enabled`       | `boolean`                | `true`         | Jump to `to` when false                    |
+| `reducedMotion` | `'complete' \| 'ignore'` | `'complete'`   | Jump to `to` or animate despite preference |
 
-Reduced motion default: `'complete'` checks the preference when a tween starts and jumps to the current `to`. You do not need `usePrefersReducedMotion` merely to make that transition finish immediately. Set `reducedMotion: 'ignore'` to skip the preference read. The exported `TweenReducedMotion` type is `'complete' | 'ignore'`; finite tweens do not support `'pause'` because freezing between endpoints leaves the value incomplete.
+`useTween` updates React state on each animation frame. Use it for isolated values with inexpensive renders. It does not add visibility lifecycle behavior; use `useLoop` for imperative DOM or canvas work.
 
-`useTween` only completes to the value passed as `to`; it does not choose the component's final value. With `to: hasEnteredView ? finalValue : startValue`, reduced motion completes to `startValue` until `useSight` reports visibility. Add `usePrefersReducedMotion` only when reduced motion should skip that visibility check and show `finalValue` immediately.
+### Observation and input hooks
 
-### usePresence
+The observation hooks return a ref when one is not supplied. `useSight`, `useSize`, and `useScrollProgress` also support callback mode. Supplying their callback omits the reactive value from the return type and avoids renders for observer deliveries. Their current value remains available through a ref.
 
-The hook behind `<Presence>`. Use directly when you need full control over mount/unmount lifecycle.
+| Hook                      | Purpose                               | Important options                                                                          | Return                                                |
+| ------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `useSight`                | Element or page visibility            | `ref`, `target: 'page'`, `observe` (`'continuous'`), IO options, `onVisibilityChange`      | `ref`, reactive phase or `phaseRef`, `phaseReasonRef` |
+| `useSize`                 | Content-box or border-box dimensions  | `ref`, `box` (`'content-box'`), `onResize`                                                 | `ref`, reactive size or `sizeRef`                     |
+| `useContainerQuery`       | Match element width and height limits | Breakpoint object plus optional `ref`                                                      | `ref`, `matches`                                      |
+| `useScrollProgress`       | Element intersection ratio            | `ref`, `steps` (`20`), `root`, `rootMargin`, `onProgress`                                  | `ref`, reactive progress or `progressRef`             |
+| `useScroll`               | Scroll offset and progress            | `ref` or page target, `onScroll`, `visibility` (`'pause'`), `enabled` (`true`), IO options | `ref`, phase, `stateRef`, `measure`                   |
+| `useMutation`             | Frame-coalesced mutation records      | `ref`, `mutation`, `onMutations`, `visibility` (`'pause'`), `enabled` (`true`), IO options | `ref`, phase and phase refs                           |
+| `usePointer`              | Element-relative pointer coordinates  | `ref`, `onPointer`, `visibility` (`'pause'`), `enabled` (`true`), IO options               | `ref`, phase, `stateRef`                              |
+| `useMediaQuery`           | Media-query match                     | Query string                                                                               | Boolean; initially `false` during SSR and hydration   |
+| `usePrefersReducedMotion` | Reactive reduced-motion preference    | None                                                                                       | Boolean; initially `false` during SSR and hydration   |
+| `useDevicePixelRatio`     | Reactive device-pixel ratio           | None                                                                                       | Number; initially `1` during SSR and hydration        |
+| `useRenderState`          | `content-visibility` render state     | Element ref                                                                                | `rendered` or `skipped`                               |
+
+`useScroll` and `usePointer` deliver high-frequency values through callbacks and refs, not React state. Their phase changes are reactive. Call `measure()` after changing scrollable content.
+
+`useMutation` reads its `mutation` configuration when it subscribes. Toggle `enabled` to rebuild the observer after changing that configuration. Mutations that occur while visibility-paused are not replayed.
+
+### Scheduling hooks
+
+| Hook                                      | Behavior                                                                                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `useThrottledCallback(callback, options)` | Stable function with `flush()` and `cancel()`; requires `interval`, with `edge: 'both'` and `hidden: 'flush'` by default |
+| `useDebouncedCallback(callback, options)` | Stable function with `flush()` and `cancel()`; requires `wait`, with `hidden: 'flush'` by default                        |
+| `useIdle(options)`                        | Returns `false`, then `true` after idle scheduling; accepts `timeout`                                                    |
+| `useWhenIdle(callback, options)`          | Runs the current callback once after mount; accepts `timeout` and cancels on unmount                                     |
+
+Changing throttle or debounce options discards pending work. Call `flush()` from application cleanup when the final pending value must be delivered.
+
+The current `useIdle` and `useWhenIdle` bindings forward `timeout` but not the `signal` field from their shared `IdleOptions` type. Use core `whenIdle` when external abort control is required.
+
+### Presence and transitions
+
+`Presence`, `Swap`, `WhenVisible`, and `WhenIdle` use `data-phase` for state and `data-enter="animate"` to opt into a CSS `@starting-style` enter transition. Reduced motion suppresses the enter attribute; `Presence` and `Swap` complete exits immediately by default.
+
+```tsx
+const transition =
+  'transition-opacity data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0';
+```
+
+#### Presence
+
+Renders a `div` and coordinates enter and exit around its mounted state.
+
+```tsx
+<Presence show={isOpen} className={transition}>
+  Modal content
+</Presence>
+```
+
+| Prop            | Type                     | Default     | Description                             |
+| --------------- | ------------------------ | ----------- | --------------------------------------- |
+| `show`          | `boolean`                | Required    | Desired visibility                      |
+| `mode`          | `'mount' \| 'reveal'`    | `'mount'`   | Unmount after exit or remain in the DOM |
+| `enter`         | `'animate' \| 'instant'` | `'animate'` | First-mount enter behavior              |
+| `exitDuration`  | `number`                 | `5000`      | Safety timeout if no end event arrives  |
+| `reducedMotion` | `'respect' \| 'ignore'`  | `'respect'` | Reduced-motion behavior                 |
+
+In `mount` mode, content is removed after `transitionend`, `animationend`, or the safety timeout. In `reveal` mode, the element remains in the DOM and the application must style non-visible phases, such as `data-[phase=idle]:opacity-0`.
+
+#### usePresence
+
+Provides the same lifecycle without rendering a wrapper.
 
 ```tsx
 import { usePresence } from '@usephase/react';
@@ -878,302 +769,68 @@ return (
 );
 ```
 
-#### Presence phases
+Returns `phase`, `phaseReason`, `mounted`, `ref`, and `enter`. Options match `Presence` behavior.
 
-`idle` → `entered` → `exiting` → `exited`
+#### WhenVisible
 
-| Phase     | Meaning                                  | `mounted` |
-| --------- | ---------------------------------------- | --------- |
-| `idle`    | Not shown (initial or after reveal exit) | `false`   |
-| `entered` | Visible and active                       | `true`    |
-| `exiting` | Exit animation in progress               | `true`    |
-| `exited`  | Exit complete, ready for unmount         | `false`   |
-
-#### Options
-
-| Option          | Type                     | Default     | Description                        |
-| --------------- | ------------------------ | ----------- | ---------------------------------- |
-| `show`          | `boolean`                | required    | Visibility toggle                  |
-| `mode`          | `'mount' \| 'reveal'`    | `'mount'`   | Unmount after exit or stay in DOM  |
-| `enter`         | `'animate' \| 'instant'` | `'animate'` | First-mount behavior               |
-| `exitDuration`  | `number`                 | `5000`      | Safety timeout for exit (ms)       |
-| `reducedMotion` | `'respect' \| 'ignore'`  | `'respect'` | Reduced motion preference handling |
-
-### useScrollProgress
-
-Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with React lifecycle management. This is a _visibility_ fraction (how much of the element is on screen); for a scroll container's own _position_ (scrollbars, carousels) use [`useScroll`](#usescroll) instead. See the [note on scope](#createscrollprogress) for the full distinction.
+Renders a sentinel and mounts children once it enters the configured intersection area. With the default `rootMargin`, mounting begins up to 200px before the viewport.
 
 ```tsx
-import { useScrollProgress } from '@usephase/react';
-
-function FadeIn({ children }) {
-  const { ref, progress } = useScrollProgress();
-  return (
-    <div ref={ref} style={{ opacity: progress }}>
-      {children}
-    </div>
-  );
-}
-```
-
-Re-renders only at threshold crossings (~20 per full viewport traversal at default steps). `progress` is `0` before first observation.
-
-### useScroll
-
-Scroll offset and progress for a scroll container. Wraps `createScroll` with React lifecycle management. Position is delivered imperatively via `onScroll` (never per-frame state); only the phase (`tracking`/`paused`) is reactive. Mirrors `usePointer`.
-
-```tsx
-import { useRef } from 'react';
-import { useScroll } from '@usephase/react';
-
-function Carousel({ children }) {
-  // thumb uses `origin-left` so scaleX anchors to the track start
-  const thumbRef = useRef<HTMLDivElement>(null);
-  const { ref, measure } = useScroll<HTMLDivElement>({
-    onScroll: (s) => {
-      thumbRef.current?.style.setProperty(
-        'transform',
-        `translateX(${s.progressX * (1 - s.visibleX) * 100}%) scaleX(${s.visibleX})`,
-      );
-    },
-  });
-
-  return (
-    <div ref={ref} className="overflow-x-auto">
-      {children}
-    </div>
-  );
-}
-```
-
-Scrolling writes to the DOM directly with zero re-renders. Read the latest position on demand from `stateRef.current` (e.g. inside a `useLoop` tick), and call `measure()` after changing scrollable content.
-
-### useThrottledCallback
-
-Wraps `createThrottle` with React lifecycle management. Returns a stable-identity throttled function (with `flush()` and `cancel()` attached) that drops directly into any callback slot and always invokes the latest `callback`.
-
-```tsx
-import { usePointer, useThrottledCallback } from '@usephase/react';
-
-function LiveCursor() {
-  const emit = useThrottledCallback(
-    (s: PointerState) => socket.emit('cursor', { x: s.x, y: s.y }),
-    { interval: 50 },
-  );
-  const { ref } = usePointer({ onPointer: emit });
-  return <div ref={ref} />;
-}
-```
-
-Unmount and option changes discard a pending trailing call. When the final value must land, flush in your own cleanup: `useEffect(() => () => emit.flush(), [emit])`.
-
-### useDebouncedCallback
-
-Wraps `createDebounce` with React lifecycle management. Same shape as `useThrottledCallback`, but fires once `wait` ms pass without a new call.
-
-```tsx
-import { useSize, useDebouncedCallback } from '@usephase/react';
-
-function SimulationCanvas() {
-  const realloc = useDebouncedCallback(
-    (size: Size) => reallocateBuffers(size),
-    { wait: 250 },
-  );
-  const { ref } = useSize({ onResize: realloc });
-  return <canvas ref={ref} />;
-}
-```
-
-### useMutation
-
-Wraps `createMutation` with ref management and automatic teardown. Mutation records stay imperative—delivered once per animation frame—while only infrequent `observing` / `paused` phase changes re-render.
-
-```tsx
-import { useMutation } from '@usephase/react';
-
-const { ref, phase } = useMutation({
-  mutation: { childList: true },
-  onMutations: (records) => syncItems(records),
-});
-
-return <ul ref={ref} data-observer-phase={phase} />;
-```
-
-Observation pauses off-screen by default. Set `visibility: 'ignore'` only for document-level coordination that must continue in the background.
-
-### usePointer
-
-Element-relative pointer tracking without per-event layout reads or per-frame React state. Position is delivered through `onPointer` and mirrored in `stateRef`; only enter/leave phase changes re-render.
-
-```tsx
-import { usePointer } from '@usephase/react';
-
-const { ref } = usePointer({
-  onPointer: ({ x, y, active }) => {
-    cursorRef.current?.style.setProperty(
-      'transform',
-      `translate(${x}px, ${y}px)`,
-    );
-    cursorRef.current?.toggleAttribute('data-active', active);
-  },
-});
-
-return <div ref={ref}>{children}</div>;
-```
-
-Use it for custom cursors, canvas interaction, and tooltips—not simple hover or drag gestures.
-
-### Observation and utility hooks
-
-| Hook                      | Purpose                                                                               |
-| ------------------------- | ------------------------------------------------------------------------------------- |
-| `useSight`                | Element visibility as a phase. Pass `onVisibilityChange` for zero-re-render mode      |
-| `useSize`                 | Element dimensions via shared ResizeObserver. Pass `onResize` for render-free updates |
-| `useContainerQuery`       | Breakpoint matching against element width                                             |
-| `useScrollProgress`       | Element visibility ratio (0–1). Pass `onProgress` for zero-re-render mode             |
-| `useMediaQuery`           | CSS media query subscription (shared MQL pool)                                        |
-| `usePrefersReducedMotion` | Reactive preference for application-managed motion or target/fallback selection       |
-| `useDevicePixelRatio`     | Reactive DPR for renderers outside `useCanvas`                                        |
-| `useSyncedRef`            | Ref always in sync with latest value                                                  |
-| `useStableCallback`       | Stable-identity function that calls latest closure                                    |
-
-`useSight`, `useSize`, and `useScrollProgress` each support a transient mode: pass a callback (`onVisibilityChange`, `onResize`, `onProgress`) and observer updates do not re-render. The reactive state field is omitted from the return type so accessing it is a compile-time error. An always-current ref (`phaseRef`, `sizeRef`, `progressRef`) is available in both modes. `useSize` may render once when its ref attaches to a different element so it can move the subscription.
-
-## React components
-
-### How animations work
-
-One CSS pattern covers enter and exit across `Presence`, `WhenVisible`, and `Swap`:
-
-```tsx
-className =
-  'transition-opacity data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0';
-```
-
-No `motion-reduce:` class needed because reduced motion is handled automatically.
-
-**Enter:** CSS `@starting-style` animates the element natively when `data-enter="animate"` is present. Zero JS during the animation.
-
-**Exit:** `Presence` and `Swap` stamp `data-phase="exiting"` and wait for `transitionend`/`animationend` (or the safety timeout) before completing the exit. `Presence` in its default `mount` mode and `Swap` then unmount the exiting content. JavaScript coordination is required because CSS cannot remove an element after its exit animation.
-
-**Reduced motion:** By default, these components suppress `data-enter="animate"`; `Presence` and `Swap` also complete exits immediately. `Presence` can opt out with `reducedMotion="ignore"`.
-
-### Presence
-
-Renders a `div` that manages its own mount/unmount lifecycle, stamping `data-phase` for exit and `data-enter="animate"` for enter.
-
-```tsx
-import { Presence } from '@usephase/react';
-
-<Presence
-  show={isOpen}
-  className="transition-opacity data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0"
->
-  Modal content
-</Presence>;
-```
-
-| Prop            | Type                     | Default     | Description                       |
-| --------------- | ------------------------ | ----------- | --------------------------------- |
-| `show`          | `boolean`                | required    | Visibility toggle                 |
-| `mode`          | `'mount' \| 'reveal'`    | `'mount'`   | Unmount after exit or stay in DOM |
-| `enter`         | `'animate' \| 'instant'` | `'animate'` | First-mount animation behavior    |
-| `exitDuration`  | `number`                 | `5000`      | Safety timeout for exit (ms)      |
-| `reducedMotion` | `'respect' \| 'ignore'`  | `'respect'` | Reduced motion handling           |
-
-Two modes:
-
-| Mode       | Behavior                                            | Use case                                 |
-| ---------- | --------------------------------------------------- | ---------------------------------------- |
-| `'mount'`  | Added to DOM on show, removed after exit completes  | Modals, toasts, menus                    |
-| `'reveal'` | Always in DOM, visibility toggled via `phase` state | Scroll reveals, SEO content, IO re-entry |
-
-### WhenVisible
-
-Mounts children when the element enters the viewport. One-shot (once triggered, stays mounted). Uses the pooled IntersectionObserver via `useSight`.
-
-```tsx
-import { WhenVisible } from '@usephase/react';
-
 <WhenVisible
   rootMargin="200px"
   className="transition-opacity data-[enter=animate]:starting:opacity-0"
 >
   <HeavyInteractiveChart />
-</WhenVisible>;
+</WhenVisible>
 ```
 
-Common pattern for viewport-gated lazy loading:
+Props are `rootMargin` (`'200px'` by default), `threshold`, `root`, `fallback`, and standard `div` props. Children stay mounted after the first intersection.
+
+The wrapper is present in server HTML, but the children are not. Use a fallback or parent sizing when the final content occupies layout space.
+
+#### Swap
+
+Coordinates an exit before mounting the latest active state.
 
 ```tsx
-const HeavyChart = lazy(() => import('./heavy-chart'));
-
-<WhenVisible
-  rootMargin="200px"
-  className="transition-opacity data-[enter=animate]:starting:opacity-0"
->
-  <Suspense fallback={<Skeleton />}>
-    <HeavyChart />
-  </Suspense>
-</WhenVisible>;
-```
-
-| Prop         | Type                 | Default   | Description                       |
-| ------------ | -------------------- | --------- | --------------------------------- |
-| `rootMargin` | `string`             | `'200px'` | IO rootMargin (preload headroom)  |
-| `threshold`  | `number \| number[]` | —         | IO threshold                      |
-| `root`       | `Element \| null`    | —         | IO root element                   |
-| `fallback`   | `ReactNode`          | —         | Shown while awaiting intersection |
-
-Reduced motion is automatic: `data-enter="animate"` is not stamped when reduced motion is preferred.
-
-### Swap
-
-Coordinated exit-then-enter transitions. The old state fully exits before the new state enters (no overlap, no z-index issues).
-
-```tsx
-import { Swap } from '@usephase/react';
-
 <Swap active={success ? 'success' : 'form'}>
   <Swap.State
     id="form"
-    className="transition-all data-[phase=exiting]:opacity-0"
+    className="transition-opacity data-[phase=exiting]:opacity-0"
   >
     <Form />
   </Swap.State>
   <Swap.State
     id="success"
-    className="transition-all data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0"
+    className="transition-opacity data-[enter=animate]:starting:opacity-0 data-[phase=exiting]:opacity-0"
   >
     <SuccessMessage />
   </Swap.State>
-</Swap>;
+</Swap>
 ```
 
-Rapid changes (A → B → C during A's exit) skip intermediate states and advance directly to the latest `active`. First state appears instantly (CLS prevention); subsequent states animate via `@starting-style`.
+`Swap` accepts `active`, optional `exitDuration` (`5000` by default), and standard `div` props. Each `Swap.State` requires a unique `id`.
 
-## Rendering
+Rapid active-state changes skip intermediate states and continue to the latest value. The initial state does not run an enter animation; later states can use `@starting-style`.
 
-The runtime libraries are the _when_ layer (when to animate, when to render, when to pause), built from one set of signals. Alongside `WhenVisible`, two helpers skip rendering work for off-screen content. They differ in how aggressively they skip and whether the content survives server rendering:
+### Rendering and idle work
 
-| Helper        | Defers                              | In DOM? | In SSR HTML? | Reach for it when                                  |
-| ------------- | ----------------------------------- | ------- | ------------ | -------------------------------------------------- |
-| `Defer`       | browser render (style/layout/paint) | yes     | yes          | content must stay crawlable but need not paint yet |
-| `WhenIdle`    | React mount until idle              | no      | no           | non-critical UI that shouldn't block first paint   |
-| `WhenVisible` | React mount until near viewport     | no      | no           | viewport-gated lazy loading / reveals              |
+| Helper        | Defers                                    | In the DOM before activation? | In server HTML? |
+| ------------- | ----------------------------------------- | ----------------------------- | --------------- |
+| `Defer`       | Browser rendering for off-screen contents | Yes                           | Yes             |
+| `WhenVisible` | Child mount until near the viewport       | No                            | No              |
+| `WhenIdle`    | Child mount until idle scheduling         | No                            | No              |
 
-### Defer
+#### Defer
 
-Skips the browser's rendering work (style, layout, paint) for off-screen content via `content-visibility: auto`, using pure CSS with no JS or observers. Children stay in the DOM and are server-rendered.
+Applies `content-visibility: auto` and an intrinsic-size estimate to one element. Children remain mounted and appear in server-rendered HTML.
 
 ```tsx
-import { Defer } from '@usephase/react';
-
 <Defer estimatedHeight="600px" className="my-section">
   <ArticleSection />
 </Defer>;
 
-// Use `as` for semantic elements (no wrapper div needed)
+// Choose a semantic wrapper with `as`.
 <ul>
   {items.map((item) => (
     <Defer as="li" key={item.id} estimatedHeight="80px">
@@ -1183,133 +840,75 @@ import { Defer } from '@usephase/react';
 </ul>;
 ```
 
-| Prop              | Type                                         | Default    | Description                                                |
-| ----------------- | -------------------------------------------- | ---------- | ---------------------------------------------------------- |
-| `as`              | `ElementType`                                | `'div'`    | HTML element to render (`'li'`, `'tr'`, `'section'`, etc.) |
-| `estimatedHeight` | `string`                                     | `'1000px'` | Reserved size before first paint (any CSS length)          |
-| ...rest           | `Omit<HTMLAttributes<HTMLElement>, 'style'>` | —          | Standard HTML attributes except `style` (use `className`)  |
+| Prop              | Type                           | Default    | Description                                        |
+| ----------------- | ------------------------------ | ---------- | -------------------------------------------------- |
+| `as`              | `ElementType`                  | `'div'`    | Element to render                                  |
+| `estimatedHeight` | `string`                       | `'1000px'` | Intrinsic-size fallback while contents are skipped |
+| `ref`             | `Ref<HTMLElement>`             | None       | Ref for the rendered element                       |
+| Other attributes  | HTML attributes except `style` | None       | Use `className` for additional styling             |
 
-`contain-intrinsic-size: auto <estimatedHeight>` uses the estimate as the subtree's layout placeholder while content is skipped, and the browser remembers the real size after first paint. An inaccurate estimate can change document size and scroll position when the content first renders, so keep it close to the final height. `Defer` defers rendering only, not hydration or mounting. There is no `style` prop: the render-skip styles are encapsulated so they can't be overridden. Style the wrapper with `className`.
+`Defer` does not defer mounting, hydration, timers, or effects. Paint containment clips overflow at the element's padding edge. Keep shadows, negative margins, and positioned content that must escape the boundary outside `Defer`.
 
-`content-visibility: auto` applies paint containment, which clips all overflow to the element's padding edge. Box shadows, negative margins, and positioned content that bleeds outside the boundary will be cut off. If your content needs to overflow, move it outside the `Defer` or skip `Defer` for that container.
+Use `useRenderState` to pause application-managed work inside a skipped subtree.
 
-`content-visibility` skips paint, not JavaScript, so application-managed animation continues inside a `Defer` unless you pause it. `useLoop` and `useCanvas` pause their loops when off-screen; `useLifecycle` reports when a consumer-owned loop should pause. Gate other application-managed work, such as a hand-written `requestAnimationFrame` loop or `setInterval`, with `useRenderState`.
+#### WhenIdle
 
-### WhenIdle
-
-Mounts children once the browser is idle after first paint. One-shot. Use it for non-critical UI that should not compete with the critical path. Backed by the `whenIdle` core utility (`requestIdleCallback`).
+Mounts children once idle scheduling runs after mount. It is one-shot.
 
 ```tsx
-import { WhenIdle } from '@usephase/react';
-
 <WhenIdle
   fallback={<Skeleton />}
   className="transition-opacity data-[enter=animate]:starting:opacity-0"
 >
   <SecondaryPanel />
-</WhenIdle>;
+</WhenIdle>
 ```
 
-| Prop       | Type        | Default | Description                           |
-| ---------- | ----------- | ------- | ------------------------------------- |
-| `timeout`  | `number`    | —       | Max ms to wait before mounting anyway |
-| `fallback` | `ReactNode` | —       | Shown until the browser is idle       |
+Props are `timeout`, `fallback`, and standard `div` props. Children are absent from server HTML, so reserve it for non-critical UI. Use `Defer` when content must remain mounted or present in server HTML.
 
-Idle never fires during SSR, so `WhenIdle` children are absent from server HTML. Reserve it for non-critical content. For content that must be crawlable, use `Defer`. Reduced motion is automatic: `data-enter="animate"` is not stamped when reduced motion is preferred.
+### Utility hooks
 
-### useIdle
-
-Returns `false`, then flips to `true` once the browser is idle. Use it when the idle signal belongs in render; use `WhenIdle` for a wrapper or `useWhenIdle` for an effect.
-
-```tsx
-import { useIdle } from '@usephase/react';
-
-const idle = useIdle({ timeout: 2000 });
-return idle ? <SecondaryPanel /> : <Skeleton />;
-```
-
-Like `WhenIdle`, idle-gated content is absent from server HTML and should be non-critical.
-
-### useWhenIdle
-
-Runs a callback once when the browser is idle after mount (the effect-shaped counterpart to `useIdle`). Use it for side effects (prefetching a chunk, warming a cache) rather than rendering. Cancels on unmount and always calls the latest callback.
-
-```tsx
-import { lazy, Suspense, useState } from 'react';
-import { useWhenIdle } from '@usephase/react';
-
-const openPanel = () => import('./chat-panel');
-const ChatPanel = lazy(openPanel);
-
-function Chat() {
-  const [open, setOpen] = useState(false);
-  useWhenIdle(() => void openPanel()); // prefetch the chunk during idle
-
-  return open ? (
-    <Suspense fallback={<Skeleton />}>
-      <ChatPanel />
-    </Suspense>
-  ) : (
-    <button onClick={() => setOpen(true)}>Open</button>
-  );
-}
-```
-
-It replaces the common (and leak-prone) hand-rolled `useEffect(() => { const id = requestIdleCallback(...); return () => cancelIdleCallback(id); }, [])`. `useWhenIdle` handles cancellation and the SSR guard. Reach for `useIdle` instead when you need to render from the idle signal.
-
-### useRenderState
-
-Reads whether the browser is rendering an element or skipping it under `content-visibility`. Pass it the `ref` from a `Defer` to pause application-managed work when the subtree stops painting.
-
-```tsx
-import { useRef, useEffect } from 'react';
-import { Defer, useRenderState } from '@usephase/react';
-
-function Chart() {
-  const ref = useRef<HTMLDivElement>(null);
-  const phase = useRenderState(ref); // 'rendered' | 'skipped'
-
-  useEffect(() => {
-    if (phase === 'skipped') clock.pause();
-    else clock.resume();
-  }, [phase]);
-
-  return (
-    <Defer ref={ref}>
-      <RawCanvasThing />
-    </Defer>
-  );
-}
-```
-
-`useRenderState` only listens and reports; it does not affect layout. You rarely need it with `useLoop` or `useCanvas`, because those hooks already pause their loops when off-screen.
+| Hook                          | Purpose                                                    |
+| ----------------------------- | ---------------------------------------------------------- |
+| `useSyncedRef(value)`         | Returns a ref updated to the latest value during render    |
+| `useStableCallback(callback)` | Returns a stable function that invokes the latest callback |
 
 ## Errors
 
-Every error includes a machine-readable `code` and an actionable message.
+`PhaseError` includes a machine-readable `code`, plus optional `reason`, `fix`, and `link` fields. Use `isPhaseError` to narrow unknown errors.
 
 ```ts
 import { PhaseError, isPhaseError } from '@usephase/core';
 ```
 
-| Code                 | Trigger                                             |
-| -------------------- | --------------------------------------------------- |
-| `server_context`     | Calling a browser-only primitive during SSR         |
-| `no_target`          | Passing a null or undefined `target` to a primitive |
-| `conflicting_target` | Passing both `ref` and `target` to a hook           |
-| `invalid_duration`   | `useTween` duration is zero, negative, or NaN       |
-| `ticker_stopped`     | Calling `start`/`resume` on a stopped ticker        |
-| `missing_context`    | `<Swap.State>` used outside `<Swap>`                |
+| Code                 | Trigger                                                              |
+| -------------------- | -------------------------------------------------------------------- |
+| `server_context`     | Calling a browser-only primitive without its required browser global |
+| `no_target`          | Passing a null or undefined core target                              |
+| `conflicting_target` | Passing both `ref` and `target` to a hook                            |
+| `invalid_duration`   | Passing a non-positive or non-finite `useTween` duration             |
+| `invalid_fps`        | Passing a non-positive or non-finite FPS value                       |
+| `ticker_stopped`     | Starting, resuming, or changing FPS on a stopped ticker              |
+| `missing_context`    | Rendering `Swap.State` outside `Swap`                                |
 
-## Relationship to View Transitions
+## Compatibility and SSR
 
-The runtime libraries do not wrap React's View Transition API. Use `<ViewTransition>` for transitions between committed UI states, such as route changes and shared-element morphs. Use `Presence`, `Swap`, and the frame-loop APIs for component-local lifecycle within a stable React tree.
+- `@usephase/react` declares React 18 or newer as a peer dependency.
+- The package manifests require Node.js 24.x for package tooling.
+- Phase expects the browser APIs used by each primitive, including `requestAnimationFrame`, `IntersectionObserver`, `ResizeObserver`, and `matchMedia`. It does not include legacy-browser polyfills.
+- Browser-sensitive tests run in the Chromium, Firefox, and WebKit versions pinned by Playwright. The project does not currently publish a minimum browser-version matrix.
+- `whenIdle` falls back to a near-immediate task when `requestIdleCallback` is unavailable.
+- `createRenderState` remains `rendered` when the browser does not emit `contentvisibilityautostatechange`.
+- `Defer` follows the browser's `content-visibility` behavior and support.
+- Calling a browser-only core primitive during SSR throws `server_context`. `prefersReducedMotion()` returns `false` without `matchMedia`, and `@usephase/core/ease` is browser-independent.
+- Observer and media-query hooks establish subscriptions in effects. Media-query hooks return their documented initial value during server rendering and hydration.
 
 ## Bundle size
 
-Minimal footprint is a core promise (see [runtime library principles](#runtime-library-principles)). Every export is individually measured with [Size Limit](https://github.com/ai/size-limit) and budgeted in CI. Sizes are minified and brotli-compressed. Core rows include the core code pulled in by each export. React rows measure only the binding and exclude React and `@usephase/core`.
+CI measures every export with [Size Limit](https://github.com/ai/size-limit). Values are minified and brotli-compressed. Core rows include code pulled in by that export. React rows measure the binding and exclude React and `@usephase/core`.
 
-> Regenerate with `pnpm size:readme`.
+<details>
+<summary>Current per-export sizes</summary>
 
 <!-- SIZE-TABLE:START -->
 
@@ -1365,16 +964,4 @@ Minimal footprint is a core promise (see [runtime library principles](#runtime-l
 
 <!-- SIZE-TABLE:END -->
 
-## Repository layout
-
-| Path                | Purpose                                         |
-| ------------------- | ----------------------------------------------- |
-| `packages/core`     | Published framework-agnostic runtime            |
-| `packages/react`    | Published React binding                         |
-| `packages/testing`  | Private shared test helpers                     |
-| `packages/cli`      | Command-line scanner package                    |
-| `packages/codemod`  | Application migration codemod package           |
-| `packages/skill`    | Scanner source, evals, and maintainer tooling   |
-| `packages/examples` | Shared React examples                           |
-| `skills/phase`      | Installable agent skill and generated artifacts |
-| `docs/adr/`         | Architecture decision records                   |
+</details>
