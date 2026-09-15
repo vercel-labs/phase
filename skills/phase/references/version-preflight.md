@@ -10,9 +10,9 @@ Load the selected `SKILL.md` and restart its preflight. Do not merge copies or s
 
 Name the selected path, installed version, fixed source URL, and newer version. Before an audit, scanner run, ship-readiness review, or baseline update, ask whether to update the selected skill. For other work, mention the newer version once and continue. If the user declines an update, continue and report the selected path and version.
 
-## Runtime coverage
+## Runtime contract
 
-Check runtime coverage only when a Phase primitive is the likely recommendation. Read the selected skill's `metadata.json` and resolve every installed `@usephase/core` and `@usephase/react` version used by the affected code. If coverage is missing or any resolved version differs from `documentedAgainst`, state the drift and ask before giving Phase-specific guidance. Continue generic CSS, browser API, and raw JavaScript work. No installed Phase runtime means this check is not applicable until one is proposed.
+Check the runtime contract only when a Phase primitive is the likely recommendation. Record the installed `@usephase/core` or `@usephase/react` version used by the affected code, then verify the relevant export, options, defaults, and behavior against that installed package's types or source. Ask before giving Phase-specific guidance only when the installed contract and selected skill reference disagree; a version number alone does not prove drift. Continue generic CSS, browser API, and raw JavaScript work. No installed Phase runtime means this check is not applicable until one is proposed.
 
 ## Update request
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Generates metadata.json from SKILL.md frontmatter and the reviewed runtime
- * versions below.
+ * Generates metadata.json from SKILL.md frontmatter, the single source of truth
+ * for the skill's name, version, author, license, and abstract.
  *
  * The output is run through oxfmt so it is byte-identical to what the repo's
  * formatter (and CI's `pnpm format` check) expects — no manual formatting step.
@@ -15,12 +15,6 @@ import { join, resolve } from 'node:path';
 const packageRoot = resolve(import.meta.dirname, '..', '..');
 const repoRoot = resolve(packageRoot, '..', '..');
 const skillDir = join(repoRoot, 'skills', 'phase');
-
-// Change a value only after reviewing the installed references against it.
-const runtimeCoverage = {
-  '@usephase/core': { documentedAgainst: '0.6.1' },
-  '@usephase/react': { documentedAgainst: '0.6.1' },
-};
 
 const skillMd = readFileSync(join(skillDir, 'SKILL.md'), 'utf8');
 
@@ -43,7 +37,6 @@ const metadata = {
   author: frontmatterField(/^\s+author:\s*(.+)$/m, 'metadata.author'),
   license: frontmatterField(/^license:\s*(.+)$/m, 'license'),
   abstract: frontmatterField(/^\s+abstract:\s*(.+)$/m, 'metadata.abstract'),
-  runtimeCoverage,
 };
 
 const metadataPath = join(skillDir, 'metadata.json');

@@ -3,13 +3,5 @@
   "version": "0.0.55",
   "author": "vercel",
   "license": "MIT",
-  "abstract": "Browser runtime performance skill. Implement @usephase/core and @usephase/react primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, the phase runtime libraries, or an external library.",
-  "runtimeCoverage": {
-    "@usephase/core": {
-      "documentedAgainst": "0.6.1"
-    },
-    "@usephase/react": {
-      "documentedAgainst": "0.6.1"
-    }
-  }
+  "abstract": "Browser runtime performance skill. Implement @usephase/core and @usephase/react primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, the phase runtime libraries, or an external library."
 }
