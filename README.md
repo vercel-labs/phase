@@ -116,7 +116,7 @@ function PointerFollower() {
   const dotRef = useRef<HTMLDivElement>(null);
   const targetRef = useRef({ x: 0, y: 0 });
   const positionRef = useRef({ x: 0, y: 0 });
-  const { ref, phase } = usePointer<HTMLDivElement>({
+  const { ref: surfaceRef, phase } = usePointer<HTMLDivElement>({
     onPointer: ({ x, y }) => {
       targetRef.current.x = x;
       targetRef.current.y = y;
@@ -124,7 +124,7 @@ function PointerFollower() {
   });
 
   useLoop({
-    ref,
+    ref: surfaceRef,
     enabled: phase === 'tracking',
     onTick: (frame) => {
       const dot = dotRef.current;
@@ -141,7 +141,7 @@ function PointerFollower() {
   });
 
   return (
-    <div ref={ref} className="pointer-surface">
+    <div ref={surfaceRef} className="pointer-surface">
       <div ref={dotRef} className="pointer-dot" aria-hidden />
     </div>
   );
