@@ -905,7 +905,7 @@ import { PhaseError, isPhaseError } from '@usephase/core';
 
 ## Bundle size
 
-CI measures every export with [Size Limit](https://github.com/ai/size-limit). Values are minified and brotli-compressed. Core rows include code pulled in by that export. React rows measure the binding and exclude React and `@usephase/core`.
+CI measures every export with [Size Limit](https://github.com/ai/size-limit). Values are minified and brotli-compressed. Core and React rows include the core code pulled in by that export. React rows exclude React itself.
 
 <details>
 <summary>Current per-export sizes</summary>
@@ -934,33 +934,33 @@ CI measures every export with [Size Limit](https://github.com/ai/size-limit). Va
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |             421 B |
-| `useLifecycle`            |             366 B |
-| `useSight`                |             377 B |
-| `useCanvas`               |             788 B |
-| `useMutation`             |             301 B |
-| `usePointer`              |             337 B |
-| `useScroll`               |             440 B |
-| `useThrottledCallback`    |             205 B |
-| `useDebouncedCallback`    |             202 B |
-| `useTween`                |             452 B |
-| `usePresence`             |             534 B |
-| `useScrollProgress`       |             216 B |
-| `useSize`                 |             365 B |
-| `useContainerQuery`       |             239 B |
-| `useMediaQuery`           |              61 B |
-| `usePrefersReducedMotion` |              92 B |
-| `useDevicePixelRatio`     |              58 B |
+| `useLoop`                 |           3.46 kB |
+| `useLifecycle`            |           1.89 kB |
+| `useSight`                |           1.41 kB |
+| `useCanvas`               |           4.11 kB |
+| `useMutation`             |           1.75 kB |
+| `usePointer`              |           1.86 kB |
+| `useScroll`               |           2.42 kB |
+| `useThrottledCallback`    |           1.12 kB |
+| `useDebouncedCallback`    |             690 B |
+| `useTween`                |             660 B |
+| `usePresence`             |             591 B |
+| `useScrollProgress`       |           1.07 kB |
+| `useSize`                 |             597 B |
+| `useContainerQuery`       |             481 B |
+| `useMediaQuery`           |             244 B |
+| `usePrefersReducedMotion` |             272 B |
+| `useDevicePixelRatio`     |             233 B |
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
-| `Presence`                |             698 B |
-| `WhenVisible`             |             578 B |
-| `WhenIdle`                |             197 B |
+| `Presence`                |             744 B |
+| `WhenVisible`             |           1.65 kB |
+| `WhenIdle`                |             594 B |
 | `Defer`                   |              85 B |
-| `useIdle`                 |              66 B |
-| `useWhenIdle`             |             121 B |
-| `useRenderState`          |              92 B |
-| `Swap`                    |             951 B |
+| `useIdle`                 |             419 B |
+| `useWhenIdle`             |             444 B |
+| `useRenderState`          |             521 B |
+| `Swap`                    |           1.13 kB |
 
 <!-- SIZE-TABLE:END -->
 
