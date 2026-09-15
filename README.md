@@ -59,9 +59,8 @@ my team.
 #### Assess a design system
 
 ```text
-Use the phase skill to audit [design-system package or component family]. Find
-ways to improve runtime performance and reduce bundle size, then create a polished
-HTML report that I can share with my team.
+Use the phase skill to audit [design-system package or component family]. Create
+a polished HTML report of the findings that I can share with my team.
 ```
 
 ## What ships
