@@ -32,7 +32,7 @@ The scanner ships with the skill; nothing else to install. Ask your agent, for e
 - "This page is janky and the fans spin up while it's idle. Find out why."
 - "Scan only the files I changed on this branch."
 
-The agent reads `SKILL.md` → `references/audit.md`, runs the scanner, then classifies every finding against the decision ladder (browser-driven CSS/WAAPI → `useTween` → phase → external library → no change).
+The agent reads `SKILL.md` → `references/audit.md`, runs the scanner, then classifies every finding against the decision ladder (browser-driven CSS/WAAPI → `useTween` → phase → external library → no change). It loads `references/reporting.md` only when it is ready to write, so report structure does not distract from the audit itself.
 
 ### Why you can trust the recommendations
 
