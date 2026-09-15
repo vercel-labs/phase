@@ -110,32 +110,49 @@ pnpm add @usephase/core @usephase/react
 
 ```tsx
 import { useRef } from 'react';
-import { useLoop } from '@usephase/react';
+import { useLoop, usePointer } from '@usephase/react';
 
-interface OrbitProps {
-  radius: number;
-}
-
-function Orbit({ radius }: OrbitProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const speed = 1; // radians per second
-
-  useLoop({
-    ref,
-    onTick: (frame) => {
-      const angle = (frame.elapsed / 1000) * speed;
-      ref.current?.style.setProperty(
-        'transform',
-        `translate(${Math.cos(angle) * radius}px, ${Math.sin(angle) * radius}px)`,
-      );
+function PointerFollower() {
+  const dotRef = useRef<HTMLDivElement>(null);
+  const targetRef = useRef({ x: 0, y: 0 });
+  const positionRef = useRef({ x: 0, y: 0 });
+  const { ref, phase } = usePointer<HTMLDivElement>({
+    onPointer: ({ x, y }) => {
+      targetRef.current.x = x;
+      targetRef.current.y = y;
     },
   });
 
-  return <div ref={ref} className="dot" />;
+  useLoop({
+    ref,
+    enabled: phase === 'tracking',
+    onTick: (frame) => {
+      const dot = dotRef.current;
+      if (!dot) return;
+
+      const target = targetRef.current;
+      const position = positionRef.current;
+      const amount = 1 - Math.exp(-frame.delta / 80);
+
+      position.x += (target.x - position.x) * amount;
+      position.y += (target.y - position.y) * amount;
+      dot.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+    },
+  });
+
+  return (
+    <div ref={ref} className="pointer-surface">
+      <div ref={dotRef} className="pointer-dot" aria-hidden />
+    </div>
+  );
 }
 ```
 
-`useLoop` starts automatically. By default, it pauses when the element leaves the viewport, the document enters a background tab, or the user prefers reduced motion. Paused time does not advance `frame.elapsed`, and unmounting stops the loop.
+`usePointer` batches coordinates into a ref, so pointer moves do not trigger React renders. Phase delivers queued pointer input before loop callbacks in the same frame. `useLoop` reads the latest target, advances the interpolation with `frame.delta`, and writes the transform directly to the DOM.
+
+Both hooks share the surface ref. The `enabled` option tears down the loop when the pointer leaves.
+
+This behavior needs a JavaScript frame loop because its target changes with live input. A fixed CSS or WAAPI timeline cannot know future pointer positions. The loop still pauses when the surface leaves the viewport, the document enters a background tab, or the user prefers reduced motion.
 
 ## Choosing an API
 
