@@ -109,6 +109,7 @@ const crossCutting = new Set([
   'abort-signals.md',
   'timed-sequences.md',
   'smil.md',
+  'version-preflight.md',
 ]);
 
 // --- Check actual reference files ---
