@@ -247,7 +247,7 @@ const SIGNAL_CATALOG = [
     replacement:
       'a prefers-reduced-motion media query, or a phase hook (handles it automatically)',
     label: 'Animation without reduced-motion check',
-    severity: 'critical',
+    severity: 'medium',
     noise: 'noisy',
     detects:
       'Animation (recurring rAF, `@keyframes`, `animation:`) with no reduced-motion handling',
@@ -285,7 +285,7 @@ const SIGNAL_CATALOG = [
     replacement:
       'a prefers-reduced-motion media query, or a phase hook (handles it automatically)',
     label: 'Timer animation without reduced-motion check',
-    severity: 'critical',
+    severity: 'medium',
     noise: 'noisy',
     detects:
       '`setInterval`, or a `setTimeout` that reschedules itself, driving transform/opacity with no reduced-motion handling',
