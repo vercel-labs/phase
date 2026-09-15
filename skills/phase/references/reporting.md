@@ -57,13 +57,16 @@ The severity tier describes how harmful a finding is when it is actionable. It
 does not know whether the code is reachable on this page, how often it runs, or
 how many callers share it.
 
-Keep the severity and noise tiers in the technical details. Rank fixes
-separately using:
+Keep the severity and noise tiers in the technical details. Rank fixes as one
+queue using:
 
+- the harm when a finding is actionable, with severity as one input rather
+  than the order;
 - whether the work runs on the audited path;
 - whether it runs continuously or only after an interaction;
 - how many users, routes, or component instances can hit it;
 - whether one shared change fixes several callers;
+- the size and regression risk of the change needed to realize the benefit;
 - whether the claim is measured, directly visible in source, or inferred.
 
 A parent layout or shared runtime can have wider impact than a route-local
@@ -76,9 +79,10 @@ If readers may not know the scanner terms, explain once that noise means
 detection uncertainty, not sound or runtime work. Do not relabel an unmeasured
 source finding as measured.
 
-When a performance trace was used, order findings exercised by the trace by
-measured cost or frame impact. Keep findings outside the recorded path clearly
-labeled as unmeasured and order them using the source facts above.
+When a performance trace was used, use measured cost or frame impact for the
+findings it exercised. Keep findings outside the recorded path clearly labeled
+as unmeasured. Rank all fixes with the factors above; unmeasured means not
+observed, not zero impact.
 
 ## Group by the fix a person would make
 
@@ -101,7 +105,9 @@ findings grouped into 8 fixes" is clear.
 ## Choose the report size
 
 Use the smallest report that gives the reader enough information to decide and
-act. Follow the format the user requested. HTML is optional.
+act. Default to a brief report. Use a shareable report when the user explicitly
+asks for a document, artifact, or team handoff. Follow the requested format;
+HTML is optional.
 
 ### Brief report
 
@@ -114,8 +120,8 @@ Use for a narrow audit or a direct answer in chat:
    specialist, when either affects the decision.
 5. The next useful check, if one remains.
 
-Omit empty sections. A one-component audit should not read like a site-wide
-review.
+Omit empty sections in either format. A one-component audit should not read
+like a site-wide review.
 
 ### Shareable report
 
@@ -146,7 +152,7 @@ callers and prose would make that relationship hard to follow.
 Use this information in either report size. Combine fields when that reads more
 naturally, but do not drop the facts.
 
-````markdown
+```markdown
 ### <Fix first | Fix next | Later>: <plain description>
 
 **Location:** <file:line>
@@ -159,22 +165,11 @@ naturally, but do not drop the facts.
 **What changes:** <observable behavior and whether confirmation is required>
 **Basis:** <measured details | work visible in source | inference | unknown>
 **Test:** <requested path and other callers that need coverage>
-
-Before:
-
-```tsx
-// only the relevant code
 ```
 
-After:
-
-```tsx
-// only the relevant change
-```
-````
-
-Keep before-and-after code for the main fixes. A compact table is enough for
-repeated mechanical cleanup, as long as every source location remains visible.
+Add before-and-after code when it makes a main fix easier to apply. A compact
+table is enough for repeated mechanical cleanup, as long as every source
+location remains visible.
 
 ## Write like a person explaining the work
 
@@ -210,9 +205,9 @@ shared globe is used by four visuals, so all four need regression tests."
 
 ## Coverage and measurement
 
-Separate the requested area's baseline from code that is optional or shared.
-A clean route does not make every optional component clean, and a problem in
-an optional component does not make the base route slow.
+Separate the result for the requested area from results for optional or shared
+code. A clean route does not make every optional component clean, and a problem
+in an optional component does not make the base route slow.
 
 Optional content registries, such as CMS entries or plugin slots, are coverage
 boundaries. When the user asks for all available components, report how many
@@ -224,8 +219,8 @@ When no performance trace was used, say so near the result. Give each
 unmeasured top fix a specific measurement path when measurement would change
 the order: page load, an interaction, scrolling the component off-screen, or
 backgrounding the tab. Do not add estimated milliseconds or savings without
-measurement. End with a short offer to provide capture steps for the specific
-load or interaction that would resolve the remaining uncertainty.
+measurement. When measurement would resolve the remaining uncertainty, offer
+capture steps for the specific load or interaction.
 
 If a baseline was used, report new, pre-existing, and stale findings
 separately. Include the revision, skill version, scan scope, and coverage gaps
@@ -251,6 +246,6 @@ The report is complete when:
 - the plain-language pass is complete;
 - the report size matches the task.
 
-End with exact units: "The scanner reported N findings. M remain actionable and
-are grouped into F fixes, plus P opportunities and K important no-change
-decisions."
+Include one summary sentence with exact units: "The scanner reported N
+findings. M remain actionable and are grouped into F fixes, plus P opportunities
+and K important no-change decisions."

@@ -44,13 +44,14 @@ Phase transitions (tracking ⇄ idle) fire only on pointer enter/leave, so react
 
 ## When not to use
 
-| Instead of this                   | Use                                                |
-| --------------------------------- | -------------------------------------------------- |
-| Hover state (boolean)             | CSS `:hover` or `onPointerEnter`/`onPointerLeave`  |
-| Click handling                    | Standard `onClick` handler                         |
-| Drag-and-drop or gesture physics  | External library (`@use-gesture`)                  |
-| Document- or window-level pointer | Plain listener or core `createPointer` (see below) |
-| Framework-agnostic code           | `createPointer` (core)                             |
+| Instead of this                                                 | Use                                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Hover state (boolean)                                           | CSS `:hover` or `onPointerEnter`/`onPointerLeave`                         |
+| Click handling                                                  | Standard `onClick` handler                                                |
+| Simple slider or scrubber                                       | Native `<input type="range">`; otherwise Pointer Events + pointer capture |
+| Gesture recognition, velocity, momentum, or multi-pointer input | External library (`@use-gesture`)                                         |
+| Document- or window-level pointer                               | Plain listener or core `createPointer` (see below)                        |
+| Framework-agnostic code                                         | `createPointer` (core)                                                    |
 
 ## Tracking the document or window
 
@@ -126,7 +127,7 @@ Phase transitions (tracking ⇄ idle) fire only on pointer enter/leave, so react
 - **Don't read layout inside `onPointer`.** The callback already provides element-relative coordinates computed from one `getBoundingClientRect` call per frame. Calling layout-triggering APIs again defeats the purpose.
 - **Don't use it just for hover / enter-leave.** That's a discrete event with no layout read and no frame loop — CSS `:hover` or `onPointerEnter` / `onPointerLeave` are the right tools. Reach for `usePointer` only when you also need the per-frame position.
 - **Don't force `document` through the `ref`.** For document- or window-level tracking, use a plain listener or the core `createPointer` (see above).
-- **Don't use for drag gestures.** Pointer tracking stops at `pointerleave`. Drag needs pointer capture, velocity, and momentum. Use a gesture library.
+- **Don't use it as a drag recognizer.** Pointer tracking stops at `pointerleave`. For a simple slider or scrubber, prefer a native range input. If the design requires a custom control, use Pointer Events with pointer capture, cache geometry at drag start, and coalesce updates to one per frame. The custom control also owns keyboard input and range ARIA semantics. Use a gesture library when the interaction needs gesture recognition, velocity, momentum, or multi-pointer input.
 
 ## Reduced motion
 

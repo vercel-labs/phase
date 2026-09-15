@@ -19,7 +19,6 @@ A repeatable procedure for auditing existing animation and rendering code. A det
 - [Severity weighting](#severity-weighting)
 - [Common replacements](#common-replacements)
 - [Reviewing phase code](#reviewing-phase-code)
-- [Output format](#output-format)
 
 ## When to run
 
@@ -401,7 +400,7 @@ A recommendation made from a matched line alone is a guess. Perf recommendations
 - [ ] **Check completion and recovery.** Determine whether the state update can repeat, whether a timeout schedules another timeout, and whether recovery requires layers to stay mounted.
 - [ ] **Determine the rendering environment.** In Next.js App Router: is this a Server Component (no `'use client'`)? Is PPR active (`experimental_ppr` in the route, `ppr`/`cacheComponents` in `next.config`)? Is the subtree inside a Suspense boundary or streamed? Is this content in the initial SSR HTML today?
 - [ ] **Record where and when it runs.** Is the code in the requested area, a parent layout or site shell, shared code, optional content, or an unavailable remote implementation? Does it run always, for certain content, after an interaction, only in draft or preview mode, or under an unknown condition?
-- [ ] **Verify reuse and instance count.** Search imports, callers, and registry mappings before claiming a shared or site-wide impact. Record the verified callers and how many instances can appear together, or say that reuse was not checked.
+- [ ] **Verify reuse and instance count.** Search imports, callers, and registry mappings before claiming a shared or site-wide impact. Record the verified callers and the known maximum number of instances that can appear together. State separately what was not checked or could not be proven.
 - [ ] **Choose the fix location.** Put behavior that every caller needs in the shared definition. Put placement-specific policy, such as below-the-fold lazy mounting, at the usage site. A shared fix can help more routes and also requires wider regression testing.
 - [ ] **Name the verification scope.** List the requested path and representative callers that must be tested after a shared or parent-layout change.
 - [ ] **Classify the recommendation's semantics:**
@@ -444,8 +443,7 @@ phase audits what its references can defend: animation lifecycle, rendering gati
 
 While reading context (Step 2.5) you will see adjacent issues. The protocol:
 
-- **Do not fix them under this skill, and do not silently drop them.**
-- Append an **Out of scope** section to the report listing each one (one line: file, issue, domain).
+- **Do not fix them under this skill.** Report an adjacent issue only when it affects the requested decision or merits a concrete handoff. Keep each handoff to one line: file, issue, and domain.
 - Point to the right skill for the domain: React and Next.js performance (waterfalls, bundle size, server-side performance, re-render architecture) belongs to `react-best-practices` from [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) (`npx skills add vercel-labs/agent-skills`). If that skill is already installed in the project, offer to run it on the flagged files.
 - The same boundary applies in reverse: when another skill's guidance conflicts with a phase micro-optimization, defer to the more framework-aware guidance and say so.
 
@@ -459,7 +457,6 @@ While reading context (Step 2.5) you will see adjacent issues. The protocol:
 - **Explain "no change" decisions.** If an Architecture item applies, include its checks.
 - **Always address reduced motion.** If reduced-motion handling is missing, include it in the recommendation. Before changing explicit `'ignore'`, check whether a parent already removes the animation while reduced motion is on and shows the same information without motion.
 - **Always address cleanup.** If the candidate leaks listeners/observers/rAF handles, the recommendation must include proper teardown.
-- **Show before/after code.** Keep snippets minimal, only the relevant change, not the entire file.
 - **Never trade rendering semantics for performance silently.** Changes to SSR HTML presence, hydration, or streaming are semantics-changing (Step 2.5): label them and get explicit consent.
 - **Out-of-domain findings are handed off, not improvised.** See [Scope and handoffs](#scope-and-handoffs).
 
@@ -469,12 +466,12 @@ Skip the audit when the codebase was audited recently and has not changed since.
 
 ## Severity weighting
 
-The scanner encodes this ranking; text output is already grouped by it. When the scan returns many candidates, work top-down:
+The scanner groups candidates by worst-case severity. When a scan is large, use severity to choose what to inspect first. Final report priority is separate and follows [Step 3](#step-3-emit-recommendations).
 
-1. **Critical.** Forced reflows in hot paths (observer callbacks, event handlers, rAF), per-frame `setState`, and missing reduced-motion handling cause visible jank or accessibility failures. Fix first.
-2. **High.** Always-on background work (rAF without visibility pausing, timers animating off-screen, global `:has()` invalidation) wastes CPU and battery. Fix second.
+1. **Critical.** Forced reflows in hot paths (observer callbacks, event handlers, rAF), per-frame `setState`, and missing reduced-motion handling cause visible jank or accessibility failures.
+2. **High.** Always-on background work (rAF without visibility pausing, timers animating off-screen, global `:has()` invalidation) wastes CPU and battery.
 3. **Medium.** Redundant observers, observers outside shared pools, and work that CSS or a simpler phase API can handle may waste resources. Check setup and cleanup before fixing.
-4. **Dedup.** Correct code with a phase shorthand (manual synced refs). Fix last or never.
+4. **Dedup.** Correct code with a phase shorthand (manual synced refs) may need no change.
 
 ## Common replacements
 
@@ -544,7 +541,3 @@ After implementing, migrating, or reviewing animation code that uses phase, ask:
 The scanner's phase-usage signals surface candidates for these questions automatically: `setstate-in-ontick` (invariant 2 after adoption), `reduced-motion-ignored` and `core-primitive-in-component` (questions 2 and 3), and `when-visible-no-fallback` (a prompt to verify the gated child's final in-flow footprint).
 
 The specific failure modes and correct patterns live in the reference files: [timed-sequences.md](./timed-sequences.md) for the timer anti-pattern and initial-state flash, [performance.md](./performance.md) for hot-path rules, [decision-guide.md](./decision-guide.md) for tier selection and migration mappings.
-
-## Output format
-
-[reporting.md](./reporting.md) is the single source of truth for audit output. Load it only in Step 3, after classification and blast-radius checks are complete. The audit is not done until its completion check passes.

@@ -55,14 +55,15 @@
   },
   "expectedBehavior": [
     "Runs the clean primary route scan first, then checks its parent layout and both entries in the article registry without expanding into unrelated code",
-    "Starts the report by saying the route file itself is clean while the parent header always runs and the video scrubber is optional content",
+    "Starts the report by saying the route file itself is clean while the parent header always runs and the video scrubber appears only for the video article",
     "Groups the header's layout read and window listener into one fix instead of presenting two independent problems",
-    "Recommends CSS scroll-driven behavior when it can express the header change; otherwise uses useScroll with target page for scroll position and useSize for header height",
+    "Eliminates the header's per-event layout read and bare listener, preferring CSS scroll-driven behavior when it preserves the design and otherwise using page scroll tracking plus observed header height, such as useScroll with target page and useSize",
     "Notices that intentPosition is never rendered and removes that hover path instead of replacing dead code with phase",
     "Prefers a native range input for the video scrubber when its design can be preserved; otherwise recommends pointer capture, one cached layout read at drag start, and at most one update per frame",
     "Explains that usePointer fits element-relative hover tracking if that behavior is retained, but does not own drag gestures, and that useScroll is unrelated to pointer movement",
-    "Keeps the scanner's severity and noise tiers in technical details while ordering the report by fix value, reach, and support",
+    "Keeps the scanner's severity and noise tiers in technical details while ordering one fix queue by harm, audited-path reach, frequency, affected callers or instances, shared leverage, evidence support, repair cost, and regression risk",
     "Labels finding, actionable-finding, fix, and affected-area counts with their units",
-    "Uses direct language, explains required browser terms, and makes no measured runtime claim without a performance trace"
+    "Uses direct language, explains required browser terms, and makes no measured runtime claim without a performance trace",
+    "Uses the brief report shape for this chat request, omits empty sections, and puts technical details after the fix-order summary"
   ]
 }
