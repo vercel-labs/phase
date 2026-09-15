@@ -34,6 +34,8 @@ The scanner ships with the skill; nothing else to install. Ask your agent, for e
 
 The agent reads `SKILL.md` → `references/audit.md`, runs the scanner, then classifies every finding against the decision ladder (browser-driven CSS/WAAPI → `useTween` → phase → external library → no change). It loads `references/reporting.md` only when it is ready to write, so report structure does not distract from the audit itself.
 
+Before the audit, the skill prefers a repository copy over the user copy and checks the fixed source for a newer version. Installed runtime contracts are checked only when a Phase primitive becomes a likely recommendation. Normal results do not load `references/version-preflight.md`.
+
 ### Why you can trust the recommendations
 
 Findings are candidates, not verdicts: each carries a severity (how bad if real) and a noise tier (how much to trust the detection), calibrated by hand-classifying findings across production open-source codebases spanning the consumer mix. False-positive classes cheap enough to detect are encoded as executable regression examples in the test suite; the ones that are not — a non-React `dispatch()` near a rAF, a third-party `onTick` API — are what the `noisy` tier is telling you about. Before recommending anything, the agent must verify the blast radius (framework, SSR, Next.js PPR; the scanner detects and stamps these) and label any recommendation that changes rendering semantics, which requires your explicit consent. Issues outside phase's domain (data fetching, bundling, server components) are reported and handed to the right skill, never improvised.
