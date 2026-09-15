@@ -1,18 +1,21 @@
 import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const README = resolve(ROOT, 'README.md');
 const PACKAGES = [
   {
     root: resolve(ROOT, 'packages', 'core'),
+    config: '.size-limit.json',
     group(path) {
       return path === 'src/ease/index.ts' ? 'Ease' : 'Core';
     },
   },
   {
     root: resolve(ROOT, 'packages', 'react'),
+    config: '.size-limit.mjs',
     group() {
       return 'React';
     },
@@ -50,10 +53,17 @@ function buildTable(entries) {
   return rows.join('\n');
 }
 
-const entries = PACKAGES.flatMap(({ root, group }) => {
-  const config = JSON.parse(
-    readFileSync(resolve(root, '.size-limit.json'), 'utf8'),
-  );
+const packageConfigs = await Promise.all(
+  PACKAGES.map(async ({ root, config: configFile, group }) => {
+    const configPath = resolve(root, configFile);
+    const config = configFile.endsWith('.json')
+      ? JSON.parse(readFileSync(configPath, 'utf8'))
+      : (await import(pathToFileURL(configPath))).default;
+    return { root, config, group };
+  }),
+);
+
+const entries = packageConfigs.flatMap(({ root, config, group }) => {
   const configByName = new Map(config.map((entry) => [entry.name, entry]));
   const json = execSync('pnpm exec size-limit --json', {
     cwd: root,

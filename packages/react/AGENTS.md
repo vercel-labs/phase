@@ -20,7 +20,7 @@ This package publishes `@usephase/react`. Run commands from the repository root.
 
 - Co-locate unit and browser specs with their modules. Native browser specs may import shared test helpers only from `@usephase/testing/browser`; they must exercise native browser APIs instead of simulated ones.
 - `src/perf.spec.ts` gates the zero-rerender frame-loop contract.
-- Every public export has a `.size-limit.json` entry. React bundle checks externalize React and `@usephase/core`.
+- Every public export has a `.size-limit.mjs` entry. React bundle checks include tree-shaken `@usephase/core` source and externalize React.
 - Run `pnpm --filter @usephase/react typecheck`, targeted unit specs, and `pnpm --filter @usephase/react size` during development.
 
 Public API changes require the matching `skills/phase/references/` update. Follow the root [`../../AGENTS.md`](../../AGENTS.md) for release and validation rules.
