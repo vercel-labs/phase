@@ -145,7 +145,7 @@ Prefer CSS or a browser API when it can express the behavior without a JavaScrip
 | --------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
 | Managed DOM frame loop                              | `useLoop`                                      | `createLoop`                                                         |
 | Activation signal for a renderer or loop you own    | `useLifecycle`                                 | `createLifecycle`                                                    |
-| DPR-aware 2D canvas loop                            | `useCanvas`                                    | Compose `createLoop` and `createDevicePixelRatio` with your renderer |
+| Device-pixel-ratio-aware 2D canvas loop             | `useCanvas`                                    | Compose `createLoop` and `createDevicePixelRatio` with your renderer |
 | Finite value in React render output                 | `useTween`                                     | No direct equivalent                                                 |
 | Element or page visibility                          | `useSight`                                     | `createSight`                                                        |
 | Visible fraction of an element                      | `useScrollProgress`                            | `createScrollProgress`                                               |
@@ -193,7 +193,9 @@ Tickers using the same phase clock protocol in one JavaScript global share one b
 
 ### Observation and layout
 
-Compatible visibility, size, media-query, and DPR subscriptions share browser observers. Pointer movement and scroll events are coalesced to frame delivery. `createPointer` reads one bounding box per dirty frame. `createScroll` reads offsets during scroll delivery and refreshes heavier geometry on attachment, resize, or `measure()`.
+Visibility, size, media-query, and device-pixel-ratio subscriptions share browser objects when their options match. Pointer movement and scroll events deliver at most once per animation frame.
+
+`createPointer` reads one bounding box per dirty frame. `createScroll` reads offsets during scroll delivery and refreshes heavier geometry on attachment, resize, or `measure()`.
 
 Pooling depends on compatible observer options. It does not mean an observer already exists for every call.
 
@@ -234,9 +236,11 @@ loop.stop();
 | `onPhaseChange`       | `(phase, reason) => void`           | None            | Called after a phase transition                                |
 | `signal`              | `AbortSignal`                       | None            | Stops the loop when aborted                                    |
 
-The current type accepts `reducedMotion: 'complete'`, but an open-ended loop has no end state to synthesize. It currently follows the non-pausing path. Use `'pause'` or `'ignore'` for loops and `useTween` for a finite value with a destination.
+The current type accepts `reducedMotion: 'complete'`, but it follows the non-pausing path because an open-ended loop has no end state to synthesize. Use `'pause'` or `'ignore'` for loops and `useTween` for a finite value with a destination.
 
-`loop.phase` is `idle`, `running`, `paused`, or `stopped`. `stop()` is terminal. `loop.quality` is independent from phase and reports `full` or `degraded`; `qualityReason` is `unfocused` or `frame-budget`. The degraded response can throttle, pause, or only report the signal. A lower base `fps` is never raised by `degradedFps`.
+`loop.phase` is `idle`, `running`, `paused`, or `stopped`. `stop()` is terminal.
+
+Quality is independent from phase. `loop.quality` reports `full` or `degraded`, and `qualityReason` is `unfocused` or `frame-budget`. The configured response can throttle, pause, or report the signal without changing execution. `degradedFps` never raises a lower base `fps`.
 
 #### createTicker
 
@@ -335,7 +339,7 @@ progress.stop();
 | `rootMargin` | `string`                      | `'0px'`  | Intersection root margin                       |
 | `signal`     | `AbortSignal`                 | None     | Stops observation when aborted                 |
 
-Calls share an observer only when `steps`, `root`, and `rootMargin` resolve to compatible options.
+Calls share an observer when `steps`, `root`, and `rootMargin` match.
 
 #### createScroll
 
@@ -581,7 +585,7 @@ function MovingBox() {
 | `onTick`              | `(frame: FrameState) => void`       | Required        | Current callback for each delivered frame                                    |
 | `fps`                 | `number`                            | Display cadence | Positive finite FPS cap                                                      |
 | `enabled`             | `boolean`                           | `true`          | Tear down and report `idle` when false                                       |
-| `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`       | Same current behavior as `createLoop`                                        |
+| `reducedMotion`       | `'pause' \| 'complete' \| 'ignore'` | `'pause'`       | Matches `createLoop`, including the current `complete` caveat                |
 | `degraded`            | `'throttle' \| 'pause' \| 'ignore'` | `'throttle'`    | Quality response                                                             |
 | `degradedFps`         | `number`                            | `30`            | Degraded throttle cap                                                        |
 | `intersectionOptions` | `IntersectionObserverInit`          | None            | Visibility options                                                           |
@@ -613,7 +617,7 @@ Options include `ref` or `target: 'page'`, `reducedMotion` (`'pause'` by default
 
 #### useCanvas
 
-Creates a managed 2D canvas loop with container sizing and DPR updates.
+Creates a managed 2D canvas loop with container sizing and device-pixel-ratio updates.
 
 ```tsx
 import { useRef } from 'react';
@@ -642,7 +646,9 @@ function CanvasScene() {
 
 Required options are `containerRef`, `canvasRef`, and `draw`. Optional controls are `fps`, `enabled` (`true`), `reducedMotion` (`'pause'`), `degraded` (`'throttle'`), and `degradedFps` (`30`). Returns `restart`, `phase`, `phaseReason`, `quality`, and `qualityReason`.
 
-The hook uses `devicePixelContentBoxSize` when available and otherwise sizes the buffer from CSS dimensions and current DPR. It skips `draw` while the 2D context is lost and resumes after restoration. Call `restart()` after an external renderer configuration change that requires teardown and setup.
+The hook uses `devicePixelContentBoxSize` when available and otherwise sizes the buffer from CSS dimensions and current device-pixel ratio. It skips `draw` while the 2D context is lost and resumes after restoration.
+
+`restart()` tears down and rebuilds the loop, size observer, device-pixel-ratio subscription, and context listeners.
 
 #### useTween
 
@@ -665,7 +671,7 @@ const opacity = useTween({ to: isVisible ? 1 : 0, duration: 300 });
 
 ### Observation and input hooks
 
-The observation hooks return a ref when one is not supplied. `useSight`, `useSize`, and `useScrollProgress` also support callback mode: supplying their callback omits the reactive value from the return type and avoids renders for observer deliveries. Their current value remains available through a ref.
+The observation hooks return a ref when one is not supplied. `useSight`, `useSize`, and `useScrollProgress` also support callback mode. Supplying their callback omits the reactive value from the return type and avoids renders for observer deliveries. Their current value remains available through a ref.
 
 | Hook                      | Purpose                               | Important options                                                                          | Return                                                |
 | ------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
@@ -678,7 +684,7 @@ The observation hooks return a ref when one is not supplied. `useSight`, `useSiz
 | `usePointer`              | Element-relative pointer coordinates  | `ref`, `onPointer`, `visibility` (`'pause'`), `enabled` (`true`), IO options               | `ref`, phase, `stateRef`                              |
 | `useMediaQuery`           | Media-query match                     | Query string                                                                               | Boolean; initially `false` during SSR and hydration   |
 | `usePrefersReducedMotion` | Reactive reduced-motion preference    | None                                                                                       | Boolean; initially `false` during SSR and hydration   |
-| `useDevicePixelRatio`     | Reactive DPR                          | None                                                                                       | Number; initially `1` during SSR and hydration        |
+| `useDevicePixelRatio`     | Reactive device-pixel ratio           | None                                                                                       | Number; initially `1` during SSR and hydration        |
 | `useRenderState`          | `content-visibility` render state     | Element ref                                                                                | `rendered` or `skipped`                               |
 
 `useScroll` and `usePointer` deliver high-frequency values through callbacks and refs, not React state. Their phase changes are reactive. Call `measure()` after changing scrollable content.
@@ -761,7 +767,9 @@ Renders a sentinel and mounts children once it enters the configured intersectio
 </WhenVisible>
 ```
 
-Props are `rootMargin` (`'200px'` by default), `threshold`, `root`, `fallback`, and standard `div` props. Children stay mounted after the first intersection. The wrapper is present in server HTML, but the children are not; use a fallback or parent sizing when the final content occupies layout space.
+Props are `rootMargin` (`'200px'` by default), `threshold`, `root`, `fallback`, and standard `div` props. Children stay mounted after the first intersection.
+
+The wrapper is present in server HTML, but the children are not. Use a fallback or parent sizing when the final content occupies layout space.
 
 #### Swap
 
@@ -784,7 +792,9 @@ Coordinates an exit before mounting the latest active state.
 </Swap>
 ```
 
-`Swap` accepts `active`, optional `exitDuration` (`5000` by default), and standard `div` props. Each `Swap.State` requires a unique `id`. Rapid active-state changes skip intermediate states and continue to the latest value. The initial state does not run an enter animation; later states can use `@starting-style`.
+`Swap` accepts `active`, optional `exitDuration` (`5000` by default), and standard `div` props. Each `Swap.State` requires a unique `id`.
+
+Rapid active-state changes skip intermediate states and continue to the latest value. The initial state does not run an enter animation; later states can use `@starting-style`.
 
 ### Rendering and idle work
 
@@ -820,7 +830,9 @@ Applies `content-visibility: auto` and an intrinsic-size estimate to one element
 | `ref`             | `Ref<HTMLElement>`             | None       | Ref for the rendered element                       |
 | Other attributes  | HTML attributes except `style` | None       | Use `className` for additional styling             |
 
-`Defer` does not defer mounting, hydration, timers, or effects. Paint containment clips overflow at the element's padding edge. Keep shadows, negative margins, and positioned content that must escape the boundary outside `Defer`. Use `useRenderState` to pause application-managed work inside a skipped subtree.
+`Defer` does not defer mounting, hydration, timers, or effects. Paint containment clips overflow at the element's padding edge. Keep shadows, negative margins, and positioned content that must escape the boundary outside `Defer`.
+
+Use `useRenderState` to pause application-managed work inside a skipped subtree.
 
 #### WhenIdle
 
@@ -866,7 +878,7 @@ import { PhaseError, isPhaseError } from '@usephase/core';
 
 - `@usephase/react` declares React 18 or newer as a peer dependency.
 - The package manifests require Node.js 24.x for package tooling.
-- Browser primitives use `requestAnimationFrame`, `IntersectionObserver`, `ResizeObserver`, and `matchMedia` where their contracts require them. Phase does not include legacy-browser polyfills.
+- Phase expects the browser APIs used by each primitive, including `requestAnimationFrame`, `IntersectionObserver`, `ResizeObserver`, and `matchMedia`. It does not include legacy-browser polyfills.
 - Browser-sensitive tests run in the Chromium, Firefox, and WebKit versions pinned by Playwright. The project does not currently publish a minimum browser-version matrix.
 - `whenIdle` falls back to a near-immediate task when `requestIdleCallback` is unavailable.
 - `createRenderState` remains `rendered` when the browser does not emit `contentvisibilityautostatechange`.
