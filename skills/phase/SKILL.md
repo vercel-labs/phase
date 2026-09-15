@@ -4,7 +4,7 @@ description: 'Use when optimizing, auditing, or preparing to ship web animations
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.55'
+  version: '0.0.56'
   abstract: 'Browser runtime performance skill. Implement @usephase/core and @usephase/react primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, the phase runtime libraries, or an external library.'
 ---
 
