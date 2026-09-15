@@ -104,6 +104,7 @@ const crossCutting = new Set([
   'performance-trace.md',
   'performance-recipes.md',
   'audit.md',
+  'reporting.md',
   'rendering-recipes.md',
   'abort-signals.md',
   'timed-sequences.md',

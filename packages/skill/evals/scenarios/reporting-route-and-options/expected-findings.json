@@ -1,0 +1,69 @@
+{
+  "description": "Regression guard for audit reports: separate the clean route from parent-layout and optional-content findings, group findings by fix, and explain why phase is or is not the cheapest complete tier.",
+  "scan": {
+    "target": "workspace",
+    "runs": [
+      {
+        "name": "primary article route",
+        "target": "workspace/app/blog/[slug]",
+        "assertions": {
+          "requiredAbsent": [
+            {
+              "signal": "forced-reflow",
+              "reason": "the primary route is clean and scanner targets are non-transitive"
+            },
+            {
+              "signal": "bare-window-listener",
+              "reason": "the parent layout requires its own focused scan"
+            }
+          ],
+          "context": { "framework": "next", "appRouter": true }
+        }
+      },
+      {
+        "name": "parent layout",
+        "target": "workspace/app/layout.tsx",
+        "assertions": {
+          "required": [
+            {
+              "signal": "forced-reflow",
+              "count": 1
+            },
+            {
+              "signal": "bare-window-listener",
+              "count": 1
+            }
+          ],
+          "context": { "framework": "next", "appRouter": true }
+        }
+      },
+      {
+        "name": "article registry",
+        "target": "workspace/app/blog/article",
+        "assertions": {
+          "required": [
+            {
+              "signal": "forced-reflow",
+              "file": "video-scrubber.tsx",
+              "count": 1
+            }
+          ],
+          "context": { "framework": "next", "appRouter": true }
+        }
+      }
+    ]
+  },
+  "expectedBehavior": [
+    "Runs the clean primary route scan first, then checks its parent layout and both entries in the article registry without expanding into unrelated code",
+    "Starts the report by saying the route file itself is clean while the parent header always runs and the video scrubber appears only for the video article",
+    "Groups the header's layout read and window listener into one fix instead of presenting two independent problems",
+    "Eliminates the header's per-event layout read and bare listener, preferring CSS scroll-driven behavior when it preserves the design and otherwise using page scroll tracking plus observed header height, such as useScroll with target page and useSize",
+    "Notices that intentPosition is never rendered and removes that hover path instead of replacing dead code with phase",
+    "Prefers a native range input for the video scrubber when its design can be preserved; otherwise recommends pointer capture, one cached layout read at drag start, and at most one update per frame",
+    "Explains that usePointer fits element-relative hover tracking if that behavior is retained, but does not own drag gestures, and that useScroll is unrelated to pointer movement",
+    "Keeps the scanner's severity and noise tiers in technical details while ordering one fix queue by harm, audited-path reach, frequency, affected callers or instances, shared leverage, evidence support, repair cost, and regression risk",
+    "Labels finding, actionable-finding, fix, and affected-area counts with their units",
+    "Uses direct language, explains required browser terms, and makes no measured runtime claim without a performance trace",
+    "Uses the brief report shape for this chat request, omits empty sections, and puts technical details after the fix-order summary"
+  ]
+}

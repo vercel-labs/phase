@@ -4,7 +4,7 @@ description: 'Use when optimizing, auditing, or preparing to ship web animations
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.53'
+  version: '0.0.54'
   abstract: 'Browser runtime performance skill. Implement @usephase/core and @usephase/react primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, the phase runtime libraries, or an external library.'
 ---
 
@@ -230,6 +230,7 @@ grep -ri "starting:opacity\|data-\[phase=exiting\]" references/  # the canonical
 | [performance-recipes.md](references/performance-recipes.md) | Fixing audit-surfaced anti-patterns (observer/listener storms, global `:has()`) |
 | [performance.md](references/performance.md)                 | Writing or reviewing hot-path animation code                                    |
 | [audit.md](references/audit.md)                             | Auditing existing animations for optimization opportunities                     |
+| [reporting.md](references/reporting.md)                     | Writing the audit report after classification and blast-radius checks           |
 | [abort-signals.md](references/abort-signals.md)             | Tearing down core primitives with an `AbortSignal` (`signal` option)            |
 | [timed-sequences.md](references/timed-sequences.md)         | Choosing browser keyframes or `useLoop` for multi-step timelines                |
 | [smil.md](references/smil.md)                               | Auditing or implementing static, lifecycle-aware SVG SMIL                       |

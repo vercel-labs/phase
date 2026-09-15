@@ -19,7 +19,6 @@ A repeatable procedure for auditing existing animation and rendering code. A det
 - [Severity weighting](#severity-weighting)
 - [Common replacements](#common-replacements)
 - [Reviewing phase code](#reviewing-phase-code)
-- [Output format](#output-format)
 
 ## When to run
 
@@ -47,6 +46,7 @@ Recommendations carry obligations that findings do not, and the obligations depe
 - **The framework and rendering model.** Next.js App Router? Server Components? PPR or streaming? The scanner stamps what it detects (see [Reading the output](#reading-the-output)), but its detection is best-effort; confirm from `package.json` and the config when it matters.
 - **What is server-rendered today.** Content in the initial SSR HTML is load-bearing for SEO, LCP, and any static shell. Changing that is never "just perf" (see [Step 2.5](#step-25-verify-the-blast-radius)).
 - **The entry points.** Skim the main routes/pages the user cares about so findings land in a mental map rather than a vacuum. For a route audit, read directly rendered local or shared components that own animation, chart, canvas, scroll, or rendering behavior. Stop there: do not expand into backend, data, generated, or unrelated workspace dependencies.
+- **Where code can enter the page.** Map the requested component or route, parent layouts and site shell, shared UI or runtimes, optional content registries such as CMS entries, and remote code that is not available to inspect. This lets the report separate code that always runs from optional or unknown code.
 - **Runtime evidence.** For reported jank, slow load, high CPU, dropped frames, or background work, offer the matching load or interaction trace. Offer both only when the audit covers both. Load [performance-trace.md](./performance-trace.md) after the user supplies or accepts one.
 
 This costs a minute and is what separates a recommendation from a guess.
@@ -66,6 +66,8 @@ node <skill-dir>/scripts/scan.mjs --diff origin/main
 ```
 
 Scanner targets are literal and non-transitive: scanning a route does not follow its imports. Run the primary route scan first, then scan the smallest focused files or directories for the directly rendered relevant UI dependencies identified in Step 0. Do not turn this into automatic import traversal or a workspace-wide scan.
+
+An optional content registry is an explicit boundary, not an invitation to scan a workspace. If the user asks for all available components, count the registry entries and scan the relevant implementations. Otherwise name the boundary and offer it as a separate scope. Treat remote implementations and generated code that cannot be inspected as coverage gaps.
 
 | Option                    | Effect                                                                                                                                                                                   |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -397,6 +399,10 @@ A recommendation made from a matched line alone is a guess. Perf recommendations
 - [ ] **Check renderers.** Identify who creates, starts, pauses, resumes, updates, and disposes the renderer.
 - [ ] **Check completion and recovery.** Determine whether the state update can repeat, whether a timeout schedules another timeout, and whether recovery requires layers to stay mounted.
 - [ ] **Determine the rendering environment.** In Next.js App Router: is this a Server Component (no `'use client'`)? Is PPR active (`experimental_ppr` in the route, `ppr`/`cacheComponents` in `next.config`)? Is the subtree inside a Suspense boundary or streamed? Is this content in the initial SSR HTML today?
+- [ ] **Record where and when it runs.** Is the code in the requested area, a parent layout or site shell, shared code, optional content, or an unavailable remote implementation? Does it run always, for certain content, after an interaction, only in draft or preview mode, or under an unknown condition?
+- [ ] **Verify reuse and instance count.** Search imports, callers, and registry mappings before claiming a shared or site-wide impact. Record the verified callers and the known maximum number of instances that can appear together. State separately what was not checked or could not be proven.
+- [ ] **Choose the fix location.** Put behavior that every caller needs in the shared definition. Put placement-specific policy, such as below-the-fold lazy mounting, at the usage site. A shared fix can help more routes and also requires wider regression testing.
+- [ ] **Name the verification scope.** List the requested path and representative callers that must be tested after a shared or parent-layout change.
 - [ ] **Classify the recommendation's semantics:**
   - **Preserving.** Rendered content, SSR, hydration, and timing stay the same. Examples include changing transitioned properties, pooling an equivalent observer, moving values that change every frame to refs, adding reduced-motion handling, or using `Defer` (children remain server-rendered; only paint waits).
   - **Changing.** SSR HTML, hydration timing, mount timing, or visible behavior changes: `WhenVisible`/`WhenIdle` remove children from server HTML; `next/dynamic` with `ssr: false` does too; conditional unmount drops DOM; `useTween` changes when a value arrives.
@@ -409,30 +415,7 @@ Hard rules:
 
 ## Step 3: Emit recommendations
 
-For each finding, emit a structured recommendation:
-
-````
-### [file:line] — <brief description>
-
-**Current pattern:** <what's there now, 1-2 lines>
-**Problem:** <what's wrong and why it matters>
-**Recommendation:** <CSS/WAAPI | useTween | useLoop | useCanvas | useLifecycle | Presence | Swap | WhenVisible | external library | no change>
-**Why this tier:** <one sentence justifying the choice>
-**Semantics:** <preserving | changing: what changes (SSR HTML, hydration, timing) and that it needs the user's confirmation>
-**Measured:** <only for an exercised path; trace, time range, cost or frame impact, attribution confidence, causal or correlated>
-
-Before:
-```tsx
-// existing code (minimal, just the relevant part)
-```
-
-After:
-```tsx
-// recommended replacement
-```
-````
-
-End every audit that did not use a trace with: "A Chrome DevTools performance trace can refine these source-based recommendations by showing which work costs time on the recorded path. Want capture steps for a load or interaction trace?"
+Before writing the report, read [reporting.md](./reporting.md) in full. It owns report size, grouping, fix order, required facts, tier explanations, and the final plain-language pass. Do not write the report directly from scanner output; use the classified findings and blast-radius facts from the earlier steps.
 
 ## Step 4: Verify
 
@@ -460,8 +443,7 @@ phase audits what its references can defend: animation lifecycle, rendering gati
 
 While reading context (Step 2.5) you will see adjacent issues. The protocol:
 
-- **Do not fix them under this skill, and do not silently drop them.**
-- Append an **Out of scope** section to the report listing each one (one line: file, issue, domain).
+- **Do not fix them under this skill.** Report an adjacent issue only when it affects the requested decision or merits a concrete handoff. Keep each handoff to one line: file, issue, and domain.
 - Point to the right skill for the domain: React and Next.js performance (waterfalls, bundle size, server-side performance, re-render architecture) belongs to `react-best-practices` from [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) (`npx skills add vercel-labs/agent-skills`). If that skill is already installed in the project, offer to run it on the flagged files.
 - The same boundary applies in reverse: when another skill's guidance conflicts with a phase micro-optimization, defer to the more framework-aware guidance and say so.
 
@@ -475,7 +457,6 @@ While reading context (Step 2.5) you will see adjacent issues. The protocol:
 - **Explain "no change" decisions.** If an Architecture item applies, include its checks.
 - **Always address reduced motion.** If reduced-motion handling is missing, include it in the recommendation. Before changing explicit `'ignore'`, check whether a parent already removes the animation while reduced motion is on and shows the same information without motion.
 - **Always address cleanup.** If the candidate leaks listeners/observers/rAF handles, the recommendation must include proper teardown.
-- **Show before/after code.** Keep snippets minimal, only the relevant change, not the entire file.
 - **Never trade rendering semantics for performance silently.** Changes to SSR HTML presence, hydration, or streaming are semantics-changing (Step 2.5): label them and get explicit consent.
 - **Out-of-domain findings are handed off, not improvised.** See [Scope and handoffs](#scope-and-handoffs).
 
@@ -485,12 +466,12 @@ Skip the audit when the codebase was audited recently and has not changed since.
 
 ## Severity weighting
 
-The scanner encodes this ranking; text output is already grouped by it. When the scan returns many candidates, work top-down:
+The scanner groups candidates by worst-case severity. When a scan is large, use severity to choose what to inspect first. Final report priority is separate and follows [Step 3](#step-3-emit-recommendations).
 
-1. **Critical.** Forced reflows in hot paths (observer callbacks, event handlers, rAF), per-frame `setState`, and missing reduced-motion handling cause visible jank or accessibility failures. Fix first.
-2. **High.** Always-on background work (rAF without visibility pausing, timers animating off-screen, global `:has()` invalidation) wastes CPU and battery. Fix second.
+1. **Critical.** Forced reflows in hot paths (observer callbacks, event handlers, rAF), per-frame `setState`, and missing reduced-motion handling cause visible jank or accessibility failures.
+2. **High.** Always-on background work (rAF without visibility pausing, timers animating off-screen, global `:has()` invalidation) wastes CPU and battery.
 3. **Medium.** Redundant observers, observers outside shared pools, and work that CSS or a simpler phase API can handle may waste resources. Check setup and cleanup before fixing.
-4. **Dedup.** Correct code with a phase shorthand (manual synced refs). Fix last or never.
+4. **Dedup.** Correct code with a phase shorthand (manual synced refs) may need no change.
 
 ## Common replacements
 
@@ -560,18 +541,3 @@ After implementing, migrating, or reviewing animation code that uses phase, ask:
 The scanner's phase-usage signals surface candidates for these questions automatically: `setstate-in-ontick` (invariant 2 after adoption), `reduced-motion-ignored` and `core-primitive-in-component` (questions 2 and 3), and `when-visible-no-fallback` (a prompt to verify the gated child's final in-flow footprint).
 
 The specific failure modes and correct patterns live in the reference files: [timed-sequences.md](./timed-sequences.md) for the timer anti-pattern and initial-state flash, [performance.md](./performance.md) for hot-path rules, [decision-guide.md](./decision-guide.md) for tier selection and migration mappings.
-
-## Output format
-
-If a trace was used, order exercised findings by measured runtime cost or frame impact and keep unexercised findings in severity order, labeled unmeasured. Otherwise use severity order. Always retain severity and noise labels:
-
-1. **Critical.** Causes jank or accessibility failures
-2. **High.** Wastes significant CPU or leaks resources
-3. **Medium.** Suboptimal but functional
-4. **Opportunities.** Nothing is wrong, but phase would make it better: the scanner-silent wins from [Step 1.5](#opportunity-checks-scanner-silent). Same recommendation shape as a finding, with no severity
-5. **No change.** Already well-implemented (list briefly for completeness)
-6. **Out of scope.** Adjacent issues for other skills (one line each, naming the skill to use)
-
-Opportunities are a required section, not an optional one: omitting it means the report claims the scan's coverage as the audit's coverage. Write "none found" when the manual passes turned up nothing, so the reader can tell you looked.
-
-End with a summary: "Found N candidates, M actionable, P opportunities, K already optimal."
