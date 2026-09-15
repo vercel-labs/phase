@@ -11,63 +11,105 @@ Phase is a browser runtime performance toolkit for detecting and controlling avo
 ## Use the scan tool
 
 ```bash
-npx phase scan --diff origin/main --fail-on critical  # gate a PR on new findings
+npx phase scan --diff origin/main --fail-on critical  # fail on new critical findings
 npx phase scan src components                          # scan files or directories
 npx phase explain setstate-in-raf                      # explain a finding and its fix
 ```
 
-The scanner is deterministic; its findings are candidates that need review, not confirmed defects. `--fail-on` turns severity tiers into a CI gate, and a committed [baseline](skills/phase/README.md#scanner-cli) keeps pre-existing findings from failing new PRs.
-
-## What ships
-
-<!-- docs/positioning.md owns public framing; this table expands its toolkit parts into shipped artifacts. -->
-
-| Part                        | Shipped as                                                                     | What it does                                                                                               |
-| --------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| Scan CLI                    | npm [`phase`](https://www.npmjs.com/package/phase)                             | Runs the deterministic scanner in terminals                                                                |
-| Core runtime                | npm [`@usephase/core`](https://www.npmjs.com/package/@usephase/core)           | Framework-agnostic timing, observation, lifecycle, and scheduling                                          |
-| React bindings              | npm [`@usephase/react`](https://www.npmjs.com/package/@usephase/react)         | React hooks and components built on the core runtime                                                       |
-| Migration codemods          | npm [`@usephase/codemod`](https://www.npmjs.com/package/@usephase/codemod)     | Applies versioned package transforms                                                                       |
-| [Agent skill](#agent-skill) | skills.sh [vercel-labs/phase/phase](https://skills.sh/vercel-labs/phase/phase) | Audits browser runtime performance, checks each candidate in context, and recommends the cheapest safe fix |
-| GitHub Action               | repository [`action/`](action/README.md)                                       | Runs the same deterministic scanner in CI                                                                  |
-
-One scanner powers all three distributions: the skill, the CLI, and the Action. The libraries are one possible recommendation from an audit, not a prerequisite for one: CSS, a browser API, a framework feature, or no change may be the correct result.
+The scanner is deterministic, but every match still needs review. Use `--fail-on` to fail CI at a chosen severity. Commit a [baseline](skills/phase/README.md#scanner-cli) to keep existing findings from failing new pull requests.
 
 ## Agent skill
 
-Install the phase skill when working with an agent. It teaches agents to use the runtime library APIs correctly, follow performance-conscious animation practices, and audit existing code to recommend the cheapest sufficient approach: CSS, minimal JavaScript, the runtime libraries, an external library, or no change.
+Install the phase skill to give a coding agent the runtime API references, performance rules, and audit procedure. It can build or audit animation, rendering, and loading code. For each task, it chooses the cheapest approach that meets the requirement: CSS, a browser API, minimal JavaScript, phase, another library, or no change.
 
 ```bash
 npx skills add vercel-labs/phase --skill phase
 ```
 
-Alternatively, copy `skills/phase/` to your project's `.agents/skills/phase/` and reference its `SKILL.md` from your project's `AGENTS.md`. You can also download [`skills/phase/dist/phase-skill.zip`](skills/phase/dist/phase-skill.zip), create `<skills-dir>/phase/`, and unzip the archive there.
+To install it manually, copy `skills/phase/` to `.agents/skills/phase/` in your project, then reference `.agents/skills/phase/SKILL.md` from `AGENTS.md`.
 
-The audit scanner ships with the skill, so agents need no separate npm install. Ask your agent to audit animation or rendering code, and the skill will direct it to run `scripts/scan.mjs`. You can also run the scanner directly with `node <skill-dir>/scripts/scan.mjs <target-dir>`. See the [skill README](skills/phase/README.md#running-an-audit) for details.
+The skill includes the audit scanner, so audits need no separate npm install. Agents run `scripts/scan.mjs` during an audit; you can also run it directly with `node <skill-dir>/scripts/scan.mjs <target-dir>`. See the [skill README](skills/phase/README.md#running-an-audit) for details.
 
-## Why the runtime libraries
+### Copy-paste prompts
 
-You can't accidentally tank the main thread, leak an observer, jank on scroll, or ignore reduced motion. The hard parts are handled for you, so the slow path isn't even reachable:
+Point the skill at one animation, page, component family, or package. Replace the bracketed text in one of these prompts.
 
-- **Pauses when unseen.** Off-screen or in a background tab, work stops and CPU drops to zero.
-- **Respects reduced motion by default.** Accessibility is built in, not an opt-in.
-- **Batches layout reads.** Element-relative pointer tracking reads one rect per dirty frame; scroll geometry is read on attachment or explicit measurement and coalesced after resize signals; other dimensions and visibility come from observers.
-- **Zero re-renders from the frame loop.** Per-frame work writes to refs and the DOM, never React state.
-- **Frame-locked shared clock.** Tickers using the same clock protocol read one timestamp, so they do not drift out of sync.
-- **Renders only what matters.** Skip painting off-screen content, mount non-critical UI when idle.
+#### Build a production animation
 
-Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every export stays [sub-kilobyte to a few kilobytes](#bundle-size).
+```text
+Use the phase skill to build [animation] in [component or file]. Make it
+ready to ship and as performant as possible.
+```
+
+#### Optimize an existing animation
+
+```text
+I just built [animation] in [component or file]. Use the phase skill to make it as
+performant as possible without changing how it looks or feels.
+```
+
+#### Audit a page or component set
+
+```text
+Use the phase skill to audit [page, route, or component set] for browser runtime
+performance. Create a polished HTML report of the findings that I can share with
+my team.
+```
+
+#### Assess a design system
+
+```text
+Use the phase skill to audit [design-system package or component family]. Create
+a polished HTML report of the findings that I can share with my team.
+```
+
+## What ships
+
+<!-- docs/positioning.md owns public framing; this table expands its toolkit parts into shipped artifacts. -->
+
+| Part                        | Shipped as                                                                     | What it does                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Scan CLI                    | npm [`phase`](https://www.npmjs.com/package/phase)                             | Runs deterministic source scans from the terminal                                                   |
+| Core runtime                | npm [`@usephase/core`](https://www.npmjs.com/package/@usephase/core)           | Provides framework-agnostic timing, observation, lifecycle, and scheduling APIs                     |
+| React bindings              | npm [`@usephase/react`](https://www.npmjs.com/package/@usephase/react)         | Provides React hooks and components built on the core runtime                                       |
+| Migration codemods          | npm [`@usephase/codemod`](https://www.npmjs.com/package/@usephase/codemod)     | Runs versioned migrations for phase packages                                                        |
+| [Agent skill](#agent-skill) | skills.sh [vercel-labs/phase/phase](https://skills.sh/vercel-labs/phase/phase) | Audits browser runtime code, checks each candidate in context, and recommends the cheapest safe fix |
+| GitHub Action               | repository [`action/`](action/README.md)                                       | Runs the same deterministic scanner in CI                                                           |
+
+The skill, CLI, and Action use the same scanner. Audits do not require the runtime libraries. Depending on the code, the right recommendation may be CSS, a browser API, a framework feature, a runtime library, or no change.
+
+## Runtime library principles
+
+The runtime libraries put lifecycle decisions in the primitives that need them:
+
+- **Treat visibility and reduced motion as lifecycle inputs.** Phase-managed loops use element visibility, document visibility, and user preference to decide whether to run.
+- **Share scheduling and observation.** Compatible tickers use one frame clock, and observer-backed primitives reuse browser observers when they can provide the same data.
+- **Keep the runtime frame path outside React and layout.** Phase delivers frame data without a React state update or synchronous layout read on each frame. Application callbacks remain responsible for their own work.
+- **Delay non-critical rendering.** `Defer` can skip off-screen paint; `WhenVisible` and `WhenIdle` can delay mounting.
+
+The [Guarantees](#guarantees) section documents the scheduler, observation, and React frame-loop contracts. CI checks a [bundle-size budget](#bundle-size) for every export; individual exports range from less than 1 kB to a few kilobytes.
+
+## Install the runtime libraries
+
+```bash
+pnpm add @usephase/core @usephase/react
+```
 
 ## Table of contents
 
+<details>
+<summary>Show contents</summary>
+
 - [Use the scan tool](#use-the-scan-tool)
-- [What ships](#what-ships)
 - [Agent skill](#agent-skill)
-- [Why the runtime libraries](#why-the-runtime-libraries)
+  - [Copy-paste prompts](#copy-paste-prompts)
+- [What ships](#what-ships)
+- [Runtime library principles](#runtime-library-principles)
 - [Install the runtime libraries](#install-the-runtime-libraries)
 - [Getting started](#getting-started)
 - [Philosophy](#philosophy)
 - [Scope](#scope)
+- [Guarantees](#guarantees)
 - [Entry points](#entry-points)
 - [Core API](#core-api)
   - [createLoop](#createloop)
@@ -110,17 +152,12 @@ Each guarantee is a [tested invariant](#guarantees), not an aspiration. Every ex
   - [useIdle](#useidle)
   - [useWhenIdle](#usewhenidle)
   - [useRenderState](#userenderstate)
-- [Guarantees](#guarantees)
 - [Errors](#errors)
 - [Relationship to View Transitions](#relationship-to-view-transitions)
 - [Bundle size](#bundle-size)
 - [Repository layout](#repository-layout)
 
-## Install the runtime libraries
-
-```bash
-pnpm add @usephase/core @usephase/react
-```
+</details>
 
 ## Getting started
 
@@ -140,12 +177,7 @@ function Orbit({ radius }) {
 }
 ```
 
-Four lines of animation code. Behind them, performance-critical plumbing:
-
-- **Pauses when invisible.** Scrolled off-screen or background tab? Zero CPU consumed.
-- **Respects reduced motion.** Accessibility is the default, not an opt-in.
-- **Resumes without teleporting.** Elapsed time freezes during pause, picks up where it left off.
-- **Clean teardown.** Unmount the component and walk away. Nothing leaks.
+`useLoop` manages the loop's lifecycle. With its default options, the loop pauses when the element leaves the viewport, the page enters a background tab, or the user prefers reduced motion. Paused time does not advance `frame.elapsed`, and unmounting stops the loop. See [Guarantees](#guarantees) for its scheduling and timing contracts.
 
 ## Philosophy
 
@@ -196,6 +228,34 @@ If a gap fails any criterion, phase closes it in the [skill](#agent-skill) (audi
 | Composition | Mount/unmount orchestration with transitions | Presence, Swap, WhenVisible, WhenIdle, Defer        |
 | Math        | Pure easing and interpolation functions      | lerp, clamp, easeOutCubic                           |
 | Utility     | React ref/callback patterns for phase users  | useSyncedRef, useStableCallback                     |
+
+## Guarantees
+
+These contracts cover phase's scheduler, observer-backed primitives, and React frame-loop binding. Code inside application callbacks can still allocate, read layout, or update React state.
+
+### Reused frame state
+
+`createTicker` creates one `FrameState` object and mutates it before each callback instead of allocating a replacement for every frame. Read its fields inside `onTick`; a stored reference will contain the next frame's values.
+
+### Strong pause
+
+Pausing a ticker removes it from the shared clock, so that ticker receives no frame callbacks. When no ticker or queued input callback remains, the clock cancels the pending browser frame and schedules no replacement.
+
+### Controlled layout reads
+
+Phase uses shared `ResizeObserver` and `IntersectionObserver` pools for size and visibility. `createPointer` refreshes its target's bounding box at most once during a dirty frame. `createScroll` measures geometry on attachment, during an explicit `measure()`, or after coalesced resize signals; scroll events read offsets against the cached geometry. The ticker and loop scheduler do not read layout. Application callbacks remain responsible for their own DOM reads.
+
+### Frame delivery does not update React
+
+`useLoop` updates React state for lifecycle transitions, not for each delivered frame. Its internal tick handler forwards `FrameState` to `onTick` without calling `setState`. An application callback can still trigger a render by updating state.
+
+### Shared frame clock
+
+Ticker instances using the same phase clock protocol in one JavaScript global share one browser `requestAnimationFrame` loop and timestamp. Compatible instances from separately bundled copies use the same clock.
+
+### Bounded frame timing
+
+`frame.time` is the browser's `requestAnimationFrame` timestamp. On the first callback after `start()` or `resume()`, `frame.delta` is 16.67ms without an FPS limit or one configured interval with a limit. After a delayed callback, `frame.delta` is capped at 40ms without an FPS limit or one interval plus 40ms with a limit. `frame.elapsed` is the sum of delivered deltas, so paused time does not advance it. See [`createTicker`](#createticker) for the full timing contract.
 
 ## Entry points
 
@@ -1224,34 +1284,6 @@ function Chart() {
 
 `useRenderState` only listens and reports; it does not affect layout. You rarely need it with `useLoop` or `useCanvas`, because those hooks already pause their loops when off-screen.
 
-## Guarantees
-
-These are the performance invariants behind [Why the runtime libraries](#why-the-runtime-libraries). They are tested in CI, not aspirations.
-
-### Zero per-frame allocations
-
-`FrameState` is created once and mutated in place every frame. No objects, arrays, closures, template literals, or spread operators in the tick path, and no GC pressure at 60 fps.
-
-### Strong pause
-
-When paused, the ticker calls `cancelAnimationFrame` and stops scheduling entirely. Zero callbacks fire, zero CPU consumed. This is not the "weak pause" pattern of scheduling rAF and returning early.
-
-### Controlled layout reads
-
-ResizeObserver signals element dimension changes and IntersectionObserver reports visibility. Two primitives own controlled synchronous reads: `createPointer` reads at most one `getBoundingClientRect()` in the input stage of each dirty frame; `createScroll` reads scroll geometry synchronously on attachment and explicit `measure()`, then coalesces resize-driven reads into the input stage. Frame-loop callbacks perform no synchronous layout reads.
-
-### Zero React re-renders from the frame loop
-
-The rAF loop never triggers a React re-render. All per-frame state lives in refs; `onTick` writes to refs or the DOM directly. Only `phase` changes trigger re-renders (infrequent lifecycle transitions).
-
-### Frame-locked shared clock
-
-Ticker instances within one JavaScript global and clock protocol share one browser `requestAnimationFrame` loop and timestamp. See [`createTicker`](#createticker) for the duplicate-copy behavior.
-
-### Frame timing
-
-See [`createTicker`](#createticker) for how `delta`, `elapsed`, and `time` behave after delayed frames and pauses.
-
 ## Errors
 
 Every error includes a machine-readable `code` and an actionable message.
@@ -1275,7 +1307,7 @@ The runtime libraries do not wrap React's View Transition API. Use `<ViewTransit
 
 ## Bundle size
 
-Minimal footprint is a core promise (see [Why the runtime libraries](#why-the-runtime-libraries)). Every export is individually measured with [Size Limit](https://github.com/ai/size-limit) and budgeted in CI. Sizes are minified and brotli-compressed. Core rows include the core code pulled in by each export. React rows measure only the binding and exclude React and `@usephase/core`.
+Minimal footprint is a core promise (see [runtime library principles](#runtime-library-principles)). Every export is individually measured with [Size Limit](https://github.com/ai/size-limit) and budgeted in CI. Sizes are minified and brotli-compressed. Core rows include the core code pulled in by each export. React rows measure only the binding and exclude React and `@usephase/core`.
 
 > Regenerate with `pnpm size:readme`.
 
