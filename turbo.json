@@ -48,7 +48,8 @@
     },
     "@usephase/e2e#test:e2e": {
       "dependsOn": ["@usephase/core#build", "@usephase/react#build"],
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["PHASE_E2E_KEEP_TEMP", "PLAYWRIGHT_*"]
     },
     "@usephase/harness#build": {
       "dependsOn": ["^build"],

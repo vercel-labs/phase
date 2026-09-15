@@ -23,6 +23,7 @@ permissions:
 jobs:
   detect:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     outputs:
@@ -48,6 +49,7 @@ jobs:
   # publish-worthy must pass these checks first. This job has no id-token.
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
 
@@ -96,6 +98,7 @@ jobs:
 
   browser:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
 
@@ -131,6 +134,7 @@ jobs:
     needs: [validate, browser, detect]
     if: needs.detect.outputs.has_packages == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: release
     permissions:
       contents: read
