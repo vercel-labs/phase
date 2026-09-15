@@ -1,0 +1,26 @@
+{
+  "name": "@usephase/harness",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
+    "typecheck": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@usephase/examples": "workspace:*",
+    "next": "16.3.5",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0",
+    "@types/react": "19.2.10",
+    "@types/react-dom": "19.2.3",
+    "typescript": "6.0.2"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

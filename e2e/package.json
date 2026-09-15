@@ -1,0 +1,21 @@
+{
+  "name": "@usephase/e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test scripts/*.spec.mjs",
+    "test:e2e": "node scripts/run-packed-e2e.mjs",
+    "test:workspace": "turbo run build --filter=@usephase/harness && playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.59.0",
+    "@types/node": "25.6.0",
+    "@usephase/examples": "workspace:*",
+    "@usephase/harness": "workspace:*",
+    "typescript": "6.0.2"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

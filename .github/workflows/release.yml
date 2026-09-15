@@ -23,6 +23,7 @@ permissions:
 jobs:
   detect:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
     outputs:
@@ -48,6 +49,7 @@ jobs:
   # publish-worthy must pass these checks first. This job has no id-token.
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
 
@@ -96,6 +98,7 @@ jobs:
 
   browser:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
 
@@ -122,12 +125,16 @@ jobs:
       - name: Run browser tests
         run: pnpm test:browser
 
+      - name: Run packed end-to-end tests
+        run: pnpm test:e2e
+
   # Minimal publish job. Each package is rebuilt and packed from a clean
   # checkout. Only these serialized matrix legs hold id-token: write.
   publish:
     needs: [validate, browser, detect]
     if: needs.detect.outputs.has_packages == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: release
     permissions:
       contents: read

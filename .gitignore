@@ -8,11 +8,15 @@
 .env
 .env*.local
 .logs
+.next/
 .planning
 .turbo
 .vercel
 .vitest-attachments/
+next-env.d.ts
 node_modules/
+playwright-report/
+test-results/
 # Anchored to the package so it ignores library build output, not the packaged
 # skill at skills/phase/dist/, which is committed for direct download.
 /packages/core/dist/

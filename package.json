@@ -6,6 +6,7 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "test:browser": "turbo run test:browser",
+    "test:e2e": "turbo run test:e2e",
     "test:root": "vitest run --globals scripts/*.spec.mjs",
     "typecheck": "turbo run typecheck",
     "lint": "oxlint .",
@@ -27,7 +28,7 @@
     "lefthook": "2.1.5",
     "oxfmt": "0.44.0",
     "oxlint": "1.59.0",
-    "turbo": "2.10.11",
+    "turbo": "2.10.13",
     "vitest": "4.1.11"
   },
   "engines": {

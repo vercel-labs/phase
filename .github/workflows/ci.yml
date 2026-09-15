@@ -19,6 +19,7 @@ permissions:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
         with:
@@ -89,6 +90,7 @@ jobs:
   scanner:
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -114,6 +116,7 @@ jobs:
   codemod:
     needs: ci
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -158,6 +161,7 @@ jobs:
 
   action:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -197,8 +201,14 @@ jobs:
 
   browser:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
+      TURBO_SCM_HEAD: HEAD
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@fdbc4fdcf7d143a5d0a39e9a02e103b13e309024 # v6.0.4
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
@@ -208,14 +218,56 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Plan affected browser tasks
+        id: browser-plan
+        run: |
+          if ! git diff --quiet "$TURBO_SCM_BASE" "$TURBO_SCM_HEAD" -- .github/workflows/ci.yml package.json pnpm-workspace.yaml turbo.json; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "scope=all" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          pnpm exec turbo run test:browser test:e2e --affected --dry=json > "$RUNNER_TEMP/browser-plan.json"
+          if jq -e '.tasks | any(.command != "<NONEXISTENT>" and (.task == "test:browser" or .task == "test:e2e"))' "$RUNNER_TEMP/browser-plan.json" >/dev/null; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "scope=affected" >> "$GITHUB_OUTPUT"
+
       - name: Cache Playwright browsers
+        if: steps.browser-plan.outputs.run == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright browsers
+        if: steps.browser-plan.outputs.run == 'true'
         run: pnpm --filter @usephase/core exec playwright install --with-deps chromium firefox webkit
 
       - name: Run browser tests
-        run: pnpm test:browser
+        if: steps.browser-plan.outputs.run == 'true'
+        env:
+          BROWSER_SCOPE: ${{ steps.browser-plan.outputs.scope }}
+        run: |
+          if [[ "$BROWSER_SCOPE" == "affected" ]]; then
+            pnpm exec turbo run test:browser --affected
+          else
+            pnpm test:browser
+          fi
+
+      - name: Run packed end-to-end tests
+        if: steps.browser-plan.outputs.run == 'true'
+        env:
+          BROWSER_SCOPE: ${{ steps.browser-plan.outputs.scope }}
+        run: |
+          if [[ "$BROWSER_SCOPE" == "affected" ]]; then
+            pnpm exec turbo run test:e2e --affected
+          else
+            pnpm test:e2e
+          fi
+
+      - name: Skip unaffected browser tests
+        if: steps.browser-plan.outputs.run != 'true'
+        run: echo "No affected browser tasks."

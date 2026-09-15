@@ -1,5 +1,9 @@
 # Run scheduling-subject specs in real engines
 
+## Status
+
+Partially superseded by [ADR 0025](./0025-run-browser-gates-for-affected-packages.md). The native-browser subject split remains active; PR CI now runs the browser gate only when Turbo identifies affected browser tasks.
+
 ## Context
 
 Phase depends on browser scheduling and observation semantics that jsdom does not implement. Mocked IntersectionObserver, ResizeObserver, matchMedia, requestAnimationFrame, idle callbacks, and content-visibility events verify phase against a model but cannot expose differences between Chromium, Firefox, and WebKit.
