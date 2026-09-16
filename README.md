@@ -4,6 +4,13 @@
 
 # ▲ phase
 
+<p>
+  <a href="https://vercel.com/labs#active-experiments"><img alt="Vercel Labs Experiment" src="https://img.shields.io/badge/Labs%20Experiment-000000.svg?style=for-the-badge&amp;logo=Vercel&amp;labelColor=000" height="28"></a>
+  <a href="https://www.npmjs.com/package/phase"><img alt="npm version: phase" src="https://img.shields.io/npm/v/phase.svg?style=for-the-badge&amp;labelColor=000000" height="28"></a>
+  <a href="https://github.com/vercel-labs/phase/blob/main/packages/cli/LICENSE"><img alt="License: MIT" src="https://img.shields.io/npm/l/phase.svg?style=for-the-badge&amp;labelColor=000000" height="28"></a>
+  <a href="https://www.npmjs.com/package/phase"><img alt="npm downloads per month: phase" src="https://img.shields.io/npm/dm/phase.svg?style=for-the-badge&amp;labelColor=000000&amp;label=npm%20downloads" height="28"></a>
+</p>
+
 > **Status: Alpha.** APIs are evolving rapidly. Expect breaking changes.
 
 Phase is a browser runtime performance toolkit for detecting and controlling avoidable browser work in animation, rendering, and loading.
