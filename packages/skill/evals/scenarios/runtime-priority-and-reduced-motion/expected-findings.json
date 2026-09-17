@@ -1,0 +1,33 @@
+{
+  "description": "Regression guard for a phase-only audit that must separate a supported browser-runtime bottleneck from reduced-motion accessibility.",
+  "scan": {
+    "target": "workspace/app",
+    "assertions": {
+      "required": [
+        {
+          "signal": "forced-reflow",
+          "file": "runtime-ticker.tsx",
+          "count": 1
+        },
+        {
+          "signal": "manual-raf",
+          "file": "runtime-ticker.tsx"
+        },
+        {
+          "signal": "missing-reduced-motion",
+          "file": "ambient.css",
+          "count": 1
+        }
+      ],
+      "context": { "framework": "next", "appRouter": true }
+    }
+  },
+  "expectedBehavior": [
+    "Treats the explicit phase request as a Phase browser-runtime audit and does not expand it into a combined page-performance report",
+    "Groups the recurring layout read and manual frame loop in runtime-ticker.tsx into one Phase-owned browser-runtime fix",
+    "Places the supported recurring runtime work in the Phase fix queue ahead of the unmeasured accessibility-only concern",
+    "Reports ambient.css under Reduced-motion accessibility without Fix first, Fix next, or Later labels",
+    "Keeps scanner severity and noise in technical details instead of using them to merge runtime and accessibility priority",
+    "Makes no measured runtime or bundle-savings claim because no trace or companion bundle analysis was provided"
+  ]
+}

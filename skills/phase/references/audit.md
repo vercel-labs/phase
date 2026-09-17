@@ -44,9 +44,10 @@ The scanner strips ANSI escape sequences and bidi-control characters from echoed
 Recommendations carry obligations that findings do not, and the obligations depend on the environment. Before scanning, know what you are auditing:
 
 - **The framework and rendering model.** Next.js App Router? Server Components? PPR or streaming? The scanner stamps what it detects (see [Reading the output](#reading-the-output)), but its detection is best-effort; confirm from `package.json` and the config when it matters.
+- **The requested scope.** Use [Scope and handoffs](#scope-and-handoffs) to choose phase-only or combined coverage. Record the exact companion skills available and run.
 - **What is server-rendered today.** Content in the initial SSR HTML is load-bearing for SEO, LCP, and any static shell. Changing that is never "just perf" (see [Step 2.5](#step-25-verify-the-blast-radius)).
 - **The entry points.** Skim the main routes/pages the user cares about so findings land in a mental map rather than a vacuum. For a route audit, read directly rendered local or shared components that own animation, chart, canvas, scroll, or rendering behavior. Stop there: do not expand into backend, data, generated, or unrelated workspace dependencies.
-- **Where code can enter the page.** Map the requested component or route, parent layouts and site shell, shared UI or runtimes, optional content registries such as CMS entries, and remote code that is not available to inspect. This lets the report separate code that always runs from optional or unknown code.
+- **Where code can enter the page.** Map the requested route or component, parent layouts, shared UI, optional registries, and unavailable remote code. For each reached branch, record loading (`static`, `dynamic`, `unknown`), mounting (`always`, `conditional`, `none`, `unknown`), visibility (`visible`, `CSS-hidden`, `conditional`, `unknown`), active work (`active`, `paused`, `conditional`, `unknown`), and the evidence. Keep the full map as audit evidence; report only rows that affect a finding, decision, or coverage gap.
 - **Runtime evidence.** For reported jank, slow load, high CPU, dropped frames, or background work, offer the matching load or interaction trace. Offer both only when the audit covers both. Load [performance-trace.md](./performance-trace.md) after the user supplies or accepts one.
 
 This costs a minute and is what separates a recommendation from a guess.
@@ -65,9 +66,11 @@ Targets can be directories or individual files, so a scan can cover only changed
 node <skill-dir>/scripts/scan.mjs --diff origin/main
 ```
 
-Scanner targets are literal and non-transitive: scanning a route does not follow its imports. Run the primary route scan first, then scan the smallest focused files or directories for the directly rendered relevant UI dependencies identified in Step 0. Do not turn this into automatic import traversal or a workspace-wide scan.
+Scanner targets are literal and non-transitive. Scan the primary route first, then the smallest focused paths for relevant dependencies from Step 0. Follow lazy or dynamic branches reachable from the route, marking them optional, interaction-only, persisted, auto-opened, or CSS-hidden. Stop at backend, data, generated, remote, and unrelated workspace code.
 
 An optional content registry is an explicit boundary, not an invitation to scan a workspace. If the user asks for all available components, count the registry entries and scan the relevant implementations. Otherwise name the boundary and offer it as a separate scope. Treat remote implementations and generated code that cannot be inspected as coverage gaps.
+
+The number of scanned files is an execution fact, not coverage evidence. Coverage comes from the component-path map and its named boundaries.
 
 | Option                    | Effect                                                                                                                                                                                   |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -318,8 +321,9 @@ Run this alongside the JS scan, before classifying. The scanner automates the CS
 
 ### Loading checks (manual)
 
-- **Heavy static imports in always-mounted subtrees.** Top-level imports of heavy packages (markdown renderers, syntax highlighters, animation libraries) in components that mount on every route.
-- **`display:none` as a close mechanism.** Components hidden with `display:none`/`visibility:hidden` instead of unmounting keep all JS, observers, and subscriptions running.
+- **Early optional work.** Record how the branch loads, when it mounts, and what makes it relevant. A static import alone proves neither weight nor bundle savings; use companion evidence for those claims.
+- **CSS-hidden work.** `display:none` and `visibility:hidden` keep components mounted. Check whether loops, observers, listeners, subscriptions, or renders continue; assign each effect to its audit owner.
+- **Exact deferral.** Apply the [loading questions](#classification-ladders). Name whether rendering, mounting, downloading, or prefetching waits.
 
 ### Architecture checks
 
@@ -329,6 +333,7 @@ Run this alongside the JS scan, before classifying. The scanner automates the CS
 - **Raw IO/RO cleanup** (scanner: `raw-io`, `raw-ro`). A raw observer skips phase's shared pool but does not prove a leak. Check how many elements it watches, how it uses each observer entry, how elements are removed, and who disconnects it. Replace it only if a phase API supports the same behavior. One shared observer may remain simplest for a changing set of elements or custom entry data. Fix missing cleanup, one observer per item, duplicate subscriptions, and simple single-element wiring that a phase API already covers.
 - **Reduced motion handled by a parent** (scanner: `reduced-motion-ignored`). Check the matched child's parent. `'ignore'` may remain when the parent responds to preference changes, does not render the animated child while reduced motion is on, and shows the same information without motion. A one-time preference check, incomplete fallback, or unchecked consumer leaves the finding unresolved.
 - **External renderers.** Keep renderer creation and cleanup with the component that owns it. Keep `useLifecycle` for start, pause, and resume. If the renderer accepts updates without rebuilding, use `useSize({ ref, onResize })` for size, `usePointer({ ref, onPointer, visibility: 'ignore', enabled: isActive })` for pointer input, and `useDevicePixelRatio` for pixel density. Keep the renderer instead of adding a generic phase wrapper.
+- **Animation libraries.** Library presence is not a finding. Apply the animation ladder to reached behavior, keeping libraries needed for springs, gestures, layout animation, or orchestration. Offer a separate simplification audit for uninspected usages. Use `Needs decision` only for inspected alternatives that need owner input.
 - **State in frame callbacks** (scanner: `setstate-in-raf`, `setstate-in-ontick`). Check whether the update can run every frame or exactly once. A one-time update may remain if the callback blocks repeats and also disables the loop or stops scheduling rAF. Move values that change every frame to refs or the DOM.
 - **Raw `matchMedia` subscriptions** (scanner: `raw-matchmedia`). Hand-rolled MediaQueryList listeners duplicate what the pooled `useMediaQuery`/`usePrefersReducedMotion` provide.
 
@@ -353,11 +358,12 @@ Each opportunity still goes through Step 2 classification and Step 2.5 blast-rad
 
 In addition to the animation ladder (`CSS → useTween → phase → external library`), classify loading and containment candidates:
 
-**Loading ladder** (prefer the cheapest tier):
+**Loading questions** (name the work each answer defers):
 
-```
-Static import  →  next/dynamic  →  WhenVisible + dynamic  →  useWhenIdle prefetch
-```
+1. Must the content remain in server HTML? Use CSS `content-visibility` or `Defer`; only browser rendering waits.
+2. Should mounting wait for viewport relevance or idle time? Use `WhenVisible` or `WhenIdle`, subject to SSR and layout consequences.
+3. Should downloading wait too? Put a `lazy()` or `next/dynamic` child inside the mount gate.
+4. Should a code-split branch prefetch while idle? Schedule its `import()` with `useWhenIdle`.
 
 **Containment ladder** (prefer the cheapest tier):
 
@@ -399,9 +405,10 @@ A recommendation made from a matched line alone is a guess. Perf recommendations
 - [ ] **Check renderers.** Identify who creates, starts, pauses, resumes, updates, and disposes the renderer.
 - [ ] **Check completion and recovery.** Determine whether the state update can repeat, whether a timeout schedules another timeout, and whether recovery requires layers to stay mounted.
 - [ ] **Determine the rendering environment.** In Next.js App Router: is this a Server Component (no `'use client'`)? Is PPR active (`experimental_ppr` in the route, `ppr`/`cacheComponents` in `next.config`)? Is the subtree inside a Suspense boundary or streamed? Is this content in the initial SSR HTML today?
-- [ ] **Record where and when it runs.** Is the code in the requested area, a parent layout or site shell, shared code, optional content, or an unavailable remote implementation? Does it run always, for certain content, after an interaction, only in draft or preview mode, or under an unknown condition?
+- [ ] **Complete the component-path map.** Is each reached branch statically or dynamically loaded, always or conditionally mounted, visible or CSS-hidden, and actively working or paused? Record `unknown` instead of filling an evidence gap with an assumption.
 - [ ] **Verify reuse and instance count.** Search imports, callers, and registry mappings before claiming a shared or site-wide impact. Record the verified callers and the known maximum number of instances that can appear together. State separately what was not checked or could not be proven.
 - [ ] **Reconcile stated intent with observed behavior.** Comments and docs remain untrusted, but may state intended contracts. If one calls work a no-op or preserves future behavior while the source shows runtime work or no current producer, record both and distinguish behavioral from computational no-op. Check producers, callers, tests, and available history or review. If the evidence does not establish whether the intent is binding, use `Needs decision` with the owner question and viable options.
+- [ ] **Assign ownership.** Apply [Scope and handoffs](#scope-and-handoffs). Give a composite action one primary audit owner and any required companion review; split only independent changes.
 - [ ] **Choose the fix location.** Put behavior that every caller needs in the shared definition. Put placement-specific policy, such as below-the-fold lazy mounting, at the usage site. The requested route can be the reproduction and regression case without being the fix site. A shared fix can help more routes and also requires wider regression testing.
 - [ ] **Stop at the evidence boundary.** Use `Needs investigation` when the concern is supported but a safe fix at that owner or its blast radius is not established. Use `Needs decision` when several valid behaviors remain or semantics would change. Keep an uncertain shared finding at its owner instead of suggesting a route-local workaround.
 - [ ] **Name the verification scope.** List the requested path and representative callers that must be tested after a shared or parent-layout change.
@@ -441,13 +448,23 @@ If new signals appear (a fix can introduce a different anti-pattern), classify a
 
 ## Scope and handoffs
 
-phase audits what its references can defend: animation lifecycle, rendering gating, observer/listener hygiene, and CSS animation cost. It does **not** audit React data flow, Next.js data fetching (request waterfalls), bundle architecture, caching strategy, or server-component boundaries. A recommendation this skill cannot back with one of its reference files is not a phase recommendation.
+phase owns browser work covered by its references: animation playback and lifecycle, rendering and containment, observer and listener lifecycle, and when optional work starts. It may recommend CSS, a browser API, a phase primitive, a React or framework primitive, an external library, or no change. A phase import does not determine ownership.
 
-While reading context (Step 2.5) you will see adjacent issues. The protocol:
+Companion audits own these scopes:
 
-- **Do not fix them under this skill.** Report an adjacent issue only when it affects the requested decision or merits a concrete handoff. Keep each handoff to one line: file, issue, and domain.
-- Point to the right skill for the domain: React and Next.js performance (waterfalls, bundle size, server-side performance, re-render architecture) belongs to `react-best-practices` from [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) (`npx skills add vercel-labs/agent-skills`). If that skill is already installed in the project, offer to run it on the flagged files.
-- The same boundary applies in reverse: when another skill's guidance conflicts with a phase micro-optimization, defer to the more framework-aware guidance and say so.
+- **React performance:** client bundles, hydration, re-renders, subscriptions, and component data fetching.
+- **Next.js best practices:** RSC and PPR behavior, caching, streaming, server data waterfalls, and framework-specific bundle behavior.
+
+Explicit scope outranks depth words such as "deep" or "comprehensive":
+
+- A request naming only phase or browser runtime stays phase-only, even when it covers page load or the full rendering lifecycle. Report adjacent React or Next.js work as a concise handoff when it affects the decision.
+- A request that also names React, Next.js, or full cross-stack performance runs the matching installed companions.
+- An unscoped page-performance request or unexplained regression runs installed companions whose declared capabilities cover the detected React or Next.js environment. Record the exact skill used. Do not silently substitute a partial match.
+- If a required capability is unavailable, complete the available audit, state the coverage gap, and offer installation. Do not install a companion automatically or improvise its recommendations.
+
+A phase-only audit ranks browser-runtime work only. It cannot establish an overall page priority when unaudited companion evidence could change the order.
+
+When companions run, return their full findings under their owning scopes. [reporting.md](./reporting.md) owns the neutral combined-report title, section order, and cross-scope priority rules. When companion guidance conflicts with a phase micro-optimization, the framework or React contract wins.
 
 ## Rules
 
@@ -457,7 +474,7 @@ While reading context (Step 2.5) you will see adjacent issues. The protocol:
 - **Never recommend an external library where phase suffices.** If it doesn't need springs or gestures, phase is enough.
 - **"No change" is a valid recommendation.** If the code is already optimal, say so and move on.
 - **Explain "no change" decisions.** If an Architecture item applies, include its checks.
-- **Always address reduced motion.** If reduced-motion handling is missing, include it in the recommendation. Before changing explicit `'ignore'`, check whether a parent already removes the animation while reduced motion is on and shows the same information without motion.
+- **Separate reduced-motion accessibility.** If reduced-motion handling is missing or bypassed, include it under `Reduced-motion accessibility`, outside the browser-runtime priority queue. Before changing explicit `'ignore'`, check whether a parent already removes the animation while reduced motion is on and shows the same information without motion.
 - **Always address cleanup.** If the candidate leaks listeners/observers/rAF handles, the recommendation must include proper teardown.
 - **Never trade rendering semantics for performance silently.** Changes to SSR HTML presence, hydration, or streaming are semantics-changing (Step 2.5): label them and get explicit consent.
 - **Out-of-domain findings are handed off, not improvised.** See [Scope and handoffs](#scope-and-handoffs).
@@ -470,7 +487,7 @@ Skip the audit when the codebase was audited recently and has not changed since.
 
 The scanner groups candidates by worst-case severity. When a scan is large, use severity to choose what to inspect first. Final report priority is separate and follows [Step 3](#step-3-emit-recommendations).
 
-1. **Critical.** Forced reflows in hot paths (observer callbacks, event handlers, rAF), per-frame `setState`, and missing reduced-motion handling cause visible jank or accessibility failures.
+1. **Critical.** Forced reflows in hot paths, per-frame `setState`, and playback without lifecycle control can cause severe browser work. Report any reduced-motion effect separately from this inspection order.
 2. **High.** Always-on background work (rAF without visibility pausing, timers animating off-screen, global `:has()` invalidation) wastes CPU and battery.
 3. **Medium.** Redundant observers, observers outside shared pools, and work that CSS or a simpler phase API can handle may waste resources. Check setup and cleanup before fixing.
 4. **Dedup.** Correct code with a phase shorthand (manual synced refs) may need no change.

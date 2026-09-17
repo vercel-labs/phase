@@ -62,7 +62,7 @@
     "Notices that intentPosition is never rendered and removes that hover path instead of replacing dead code with phase",
     "Prefers a native range input for the video scrubber when its design can be preserved; otherwise recommends pointer capture, one cached layout read at drag start, and at most one update per frame",
     "Explains that usePointer fits element-relative hover tracking if that behavior is retained, but does not own drag gestures, and that useScroll is unrelated to pointer movement",
-    "Keeps the scanner's severity and noise tiers in technical details while ordering one fix queue by harm, audited-path reach, frequency, affected callers or instances, shared leverage, evidence support, repair cost, and regression risk",
+    "Keeps the scanner's severity and noise tiers in technical details while ordering one Phase browser-runtime queue by harm, audited-path reach, frequency, affected callers or instances, how many callers one change fixes, evidence support, repair cost, and regression risk",
     "Labels finding, actionable-finding, fix, and affected-area counts with their units",
     "Uses direct language, explains required browser terms, and makes no measured runtime claim without a performance trace",
     "Uses the brief report shape for this chat request, omits empty sections, and puts technical details after the fix-order summary"

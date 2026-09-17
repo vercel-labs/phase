@@ -1,0 +1,23 @@
+{
+  "description": "Regression guard for a Phase audit whose depth language also names page load and the full rendering lifecycle.",
+  "scan": {
+    "target": "workspace/app",
+    "assertions": {
+      "required": [
+        {
+          "signal": "manual-raf",
+          "file": "dashboard-client.tsx"
+        }
+      ],
+      "context": { "framework": "next", "appRouter": true }
+    }
+  },
+  "expectedBehavior": [
+    "Treats the named Phase scope as authoritative despite the deep page-load and rendering-lifecycle language",
+    "Uses the Phase browser-runtime audit title and does not run React or Next.js companion audits",
+    "Follows the page into DashboardClient and records the reached branch's load, mount, visibility, and active-work state",
+    "Calls the Phase fix first within browser-runtime scope rather than the overall page priority",
+    "Places the sequential server-fetch handoff beside the result and leaves overall page priority unresolved until a Next.js companion audit runs",
+    "Returns full companion findings only when the user also requests React, Next.js, full cross-stack performance, or leaves the specialist scope open"
+  ]
+}
