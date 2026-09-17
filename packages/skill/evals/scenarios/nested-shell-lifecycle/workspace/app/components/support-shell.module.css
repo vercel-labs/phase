@@ -1,0 +1,8 @@
+.open {
+  visibility: visible;
+}
+
+.closed {
+  visibility: hidden;
+  pointer-events: none;
+}
