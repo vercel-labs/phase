@@ -227,7 +227,12 @@ function scanSignal(
     let matchOffset: number | null = null;
 
     if (signal.matcher) {
-      if (!signal.matcher(matchLines, i, relPath)) continue;
+      const match = signal.matcher(matchLines, i, relPath);
+      if (!match) continue;
+      if (typeof match === 'object') {
+        matchIndex = match.index;
+        matchOffset = match.index;
+      }
     } else {
       if (!matchesSignalContext(signal, codeLines, uncommentedLines, i))
         continue;

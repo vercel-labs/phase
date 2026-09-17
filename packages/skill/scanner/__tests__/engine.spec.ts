@@ -1,6 +1,7 @@
 import { SIGNAL_EXAMPLES } from '../examples.ts';
 import { newDiag, scanFile } from '../index.ts';
 import {
+  findStaticClassToken,
   maskComments,
   maskStrings,
   parseSuppressionDirective,
@@ -45,6 +46,26 @@ describe('lexical masks', () => {
       ),
     ).toEqual({ signalId: 'manual-raf', reason: 'accepted ownership' });
   });
+
+  it('finds complete static class tokens with their source column', () => {
+    const lines = maskComments([
+      'const cls = cn("px-2 transition-[height]", `transition-[${property}] transition-[width] ${extra}`);',
+    ]);
+
+    expect(
+      findStaticClassToken(
+        lines,
+        0,
+        (token) => token === 'transition-[height]',
+      ),
+    ).toEqual({ index: 21, value: 'transition-[height]' });
+    expect(
+      findStaticClassToken(lines, 0, (token) => token === 'transition-[width]'),
+    ).toEqual({ index: 69, value: 'transition-[width]' });
+    expect(
+      findStaticClassToken(lines, 0, (token) => token.includes('${property}')),
+    ).toBeNull();
+  });
 });
 
 describe('file selection', () => {
@@ -82,6 +103,19 @@ describe('pathological input', () => {
     const line = `.x { transition: ${'1s '.repeat(40)}allow-discrete; }`;
     const started = performance.now();
     scanFile('src/a.css', `${line}\n`);
+    expect(performance.now() - started).toBeLessThan(250);
+  });
+
+  it('rejects malformed nested Tailwind arbitrary values in linear time', () => {
+    const token = `${'[&:'.repeat(150)}transition-[height${']'.repeat(149)}`;
+    const started = performance.now();
+    const findings = scanFile('src/a.ts', `const cls = '${token}';\n`);
+
+    expect(
+      findings.filter(
+        (finding) => finding.signal === 'tailwind-layout-transition',
+      ),
+    ).toEqual([]);
     expect(performance.now() - started).toBeLessThan(250);
   });
 });

@@ -1,5 +1,11 @@
 # phase
 
+## 0.7.0
+
+### Minor Changes
+
+- Added `tailwind-layout-transition` findings for complete Tailwind arbitrary transition lists that include an explicit layout property. Existing baselines do not contain the new signal, so `--fail-on high` can report new failures after upgrading.
+
 ## 0.6.1
 
 ### Patch Changes

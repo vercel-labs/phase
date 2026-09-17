@@ -85,6 +85,20 @@ describe('dedup/supersedes', () => {
   });
 });
 
+describe('Tailwind transition signal ownership', () => {
+  it('reports distinct transition-all and explicit layout utilities once each', () => {
+    const findings = scanFile(
+      'src/panel.tsx',
+      '<div className="transition-all transition-[height]" />;',
+    ).filter((finding) => finding.signal.startsWith('tailwind-'));
+
+    expect(findings.map((finding) => finding.signal)).toEqual([
+      'tailwind-transition-all',
+      'tailwind-layout-transition',
+    ]);
+  });
+});
+
 describe('suppressions', () => {
   it('parses the supported grammar and rejects unrelated comments', () => {
     expect(

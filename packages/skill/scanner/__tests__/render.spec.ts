@@ -379,6 +379,17 @@ describe('output', () => {
     expect(finding?.text.startsWith('…')).toBe(true);
   });
 
+  it('centers custom-matcher excerpts on the accepted class token', () => {
+    const className = `${'px-2 rounded-lg border '.repeat(8)}transition-[height] duration-300`;
+    const finding = scanFile(
+      'src/panel.tsx',
+      `<div className="${className}" />;\n`,
+    ).find((candidate) => candidate.signal === 'tailwind-layout-transition');
+
+    expect(finding?.text).toContain('transition-[height]');
+    expect(finding?.text.startsWith('…')).toBe(true);
+  });
+
   it('strips ANSI escape sequences from excerpts', () => {
     // Scanned code is untrusted: an escape sequence quoted verbatim can
     // restyle or hide report text in the reader's terminal.

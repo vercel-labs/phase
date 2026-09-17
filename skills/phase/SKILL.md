@@ -4,7 +4,7 @@ description: 'Use when optimizing, auditing, or preparing to ship web animations
 license: MIT
 metadata:
   author: vercel
-  version: '0.0.57'
+  version: '0.0.58'
   abstract: 'Browser runtime performance skill. Implement @usephase/core and @usephase/react primitives correctly, follow performant-animation and render-gating best practices, and audit existing code to recommend browser-driven animation, minimal JS, the phase runtime libraries, or an external library.'
 ---
 
@@ -117,7 +117,7 @@ The audit procedure and invariants above catch JS anti-patterns. These rules cat
 
 ### CSS and style-recalc rules
 
-- **Animate `transform`/`opacity`, not layout.** `transition: all`, the Tailwind `transition-all` class, or transitioning `width`/`height`/`top`/`left`/`margin` forces layout + paint every frame, off the compositor. Transition `transform`/`opacity` instead; if a layout value must change, do it once, not per frame.
+- **Animate `transform`/`opacity`, not layout.** `transition: all`, Tailwind `transition-all`, and arbitrary lists such as `transition-[width]` can run layout and paint on each frame. Prefer `transform`/`opacity` for visual-only motion when that preserves geometry, hit testing, and neighboring layout. If layout change is part of the behavior, keep the explicit transition and measure the interaction.
 - **No global `:has()` selectors.** `body:has(...)` or `html:has(...)` in a global stylesheet triggers broad style invalidation whenever a mutation could affect the `:has()` argument; cost scales with the selector and subtree size. Scope the rule to a subtree or replace with a data attribute.
 - **Large repeated lists need `content-visibility`.** Tables, log lists, and card grids without `content-visibility: auto` + `contain-intrinsic-size` pay full style/layout cost off-screen. Use `Defer` (with the `as` prop for semantic elements).
 - **Scope expensive selectors.** Deeply nested combinators and broad `*` selectors in global sheets increase style-recalc time proportionally to DOM size.
