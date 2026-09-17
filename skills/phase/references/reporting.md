@@ -43,6 +43,8 @@ name.
   accessibility behavior, or nothing user-visible.
 - **What supports the claim:** a performance trace, work visible directly in
   the source, an inference, or an open question.
+- **Intent conflicts:** stated no-op, must-stay, or future behavior that conflicts
+  with observed runtime work or current producers, plus evidence for each side.
 - **What to test:** the requested area plus representative callers affected by
   a shared change.
 
@@ -101,6 +103,12 @@ Every next action gets one of these outcomes:
 An uncertain shared finding stays at the shared owner. The audited route may be
 the stress case, but it does not receive a local workaround unless the missing
 evidence shows that the requirement is route-specific.
+
+For an intent conflict, report the browser work, stated intent, contract
+evidence, and disposition together. A comment alone proves neither `No change`
+nor removal. If current performance and future behavior support different
+actions, use `Needs decision` with the owner question and viable options.
+Recommend phase only when its verified contract fits the chosen behavior.
 
 ## Group by the fix a person would make
 
@@ -194,19 +202,35 @@ location remains visible.
 
 ### Suggested agent prompts
 
-For each next action in a shareable report, add a standalone prompt. Start with
-`Implement` for a fix, `Investigate` or `Measure` for an investigation, and
-`Propose` for a decision. Name the outcome and owning file or symbol. State the
-behavior to preserve before any approval boundary. Authorize only the next
-action. End with one observable done condition and ask the agent to report the
-exact checks run. Keep detailed tests outside the prompt.
+For each next action in a shareable report, add a standalone prompt. Follow a
+format the user supplies. Otherwise use this compact handoff shape:
 
-In `Start here`, include only source context established by the audit: the
-repo-relative owning file and symbol, direct producers or consumers that
-constrain the work, and representative callers needed for shared verification. Use one
-`Base path` for a shared prefix and include the audited revision when known.
-Prefer symbols to line numbers unless the lines are pinned to that revision.
-Inspect further only if current code differs.
+```text
+<Implement | Investigate | Measure | Propose> <outcome> in `<repo>`'s <owner>.
+
+Audited at: `<repo>@<revision>`
+Base path: `<shared repo-relative prefix>`
+Start here:
+- `<relative path>` - `<symbol>` owner
+- `<relative path>` - <producer, consumer, or representative caller to preserve>
+
+<Approach and approval boundary>. Preserve <observable behavior>. Done when
+<one checkable outcome>. Report the exact checks run. Expand the source map
+only if current callers differ.
+```
+
+Use the repo root as `Base path` when no narrower prefix fits. Keep `Start here`
+to the owner and the smallest set of constraining producers, consumers, or
+representative callers, normally two to four entries. Prefer symbols to
+unpinned line numbers. Change `callers` in the closing sentence when another
+boundary may have changed.
+
+The prompt is a handoff, not a second `AGENTS.md`. Leave routine repository
+instructions, skill loading, command discovery, step-by-step plans, detailed
+tests, checklists, and generic stop conditions in their existing sources or the
+recommendation's `Test` field. Add sections only for a real safety, approval, or
+measurement requirement. For investigations and decisions, state the evidence
+required before implementation.
 
 Use a labeled block in plain text or Markdown. In HTML, use a collapsed copy
 control with selectable text. Add prompts to brief chat reports only when the
@@ -282,13 +306,15 @@ The report is complete when:
   usage-site change;
 - uncertain work is labeled `Needs investigation` or `Needs decision` instead
   of receiving a speculative fix;
+- intent conflicts include contract evidence and a disposition;
 - semantics-changing fixes state what changes and require confirmation;
 - every material claim has a source anchor or runtime measurement;
 - skipped, remote, and unmeasured work is visible;
 - useful changes found by manual review, no-change decisions, and work handed
   to another specialist are accounted for;
 - counts distinguish findings, actionable findings, fixes, and affected areas;
-- every action in a shareable report has a prompt matched to its outcome;
+- every action in a shareable report has a compact handoff prompt matched to
+  its outcome, or follows the user's supplied format;
 - report-level verification does not repeat each action's detailed test;
 - the plain-language pass is complete;
 - the report size matches the task.

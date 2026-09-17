@@ -1,0 +1,21 @@
+{
+  "description": "Regression guard for future intent that conflicts with current browser work.",
+  "scan": {
+    "target": "workspace/app/connect/connect-sub-nav.tsx",
+    "assertions": {
+      "required": [
+        { "signal": "forced-reflow", "count": 1 },
+        { "signal": "js-opacity-transform", "count": 1 },
+        { "signal": "redundant-mutation-observers", "count": 1 }
+      ]
+    }
+  },
+  "expectedBehavior": [
+    "Treats the future-compatibility comment as intent evidence, not proof that the hook must stay",
+    "Distinguishes the visual no-op from document-wide observation, scroll and animation-frame work, and a layout read once a marker exists",
+    "Checks current producers, callers, tests, and available history or review, and names missing evidence",
+    "Uses Needs decision with the owner question and options: remove the hook until a marker ships, make activation explicit and zero-cost while disabled, or retain it after measuring and accepting the cost",
+    "Explains that no phase primitive is needed without a marker and verifies an API's exact semantics before proposing one for an accepted future contract",
+    "Makes no runtime-cost claim without a performance trace"
+  ]
+}
