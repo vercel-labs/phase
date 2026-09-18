@@ -110,9 +110,9 @@ export function maskStrings(lines: string[]): string[] {
 }
 
 export interface StaticClassToken {
-  /** Raw token text from the source file, with JavaScript escapes preserved. */
+  /** Token text exactly as written; JavaScript escapes are not decoded. */
   source: string;
-  /** Zero-based column where `source` begins on its source line. */
+  /** Zero-based source column where the token starts. */
   index: number;
 }
 
@@ -150,9 +150,9 @@ function appendStaticClassToken(
 }
 
 /**
- * Finds the first complete raw source token accepted by `matches` on one line.
- * The immutable, position-preserving lines array is lexed once and cached by
- * identity; JavaScript escape sequences are not evaluated.
+ * Finds the first static token on `line` accepted by `matches`. Token text
+ * preserves JavaScript escapes and `index` is the source column. Results are
+ * cached by array identity, so callers must not mutate `lines`.
  */
 export function findStaticClassToken(
   lines: readonly string[],
@@ -171,7 +171,7 @@ export function findStaticClassToken(
   return null;
 }
 
-// oxlint-disable-next-line complexity -- explicit source modes keep interpolation local
+// oxlint-disable-next-line complexity -- explicit modes keep interpolation state local
 function collectStaticClassTokens(
   lines: readonly string[],
 ): StaticClassToken[][] {

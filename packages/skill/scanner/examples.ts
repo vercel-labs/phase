@@ -1335,8 +1335,8 @@ const SIGNAL_EXAMPLE_CATALOG = {
         content: "const cls = 'transition-[width,_height]';\n",
       },
       {
-        // Tailwind v3.4.17 and v4.1.14 both treat the first source
-        // backslash as escaping the second, leaving a top-level comma.
+        // Tailwind 3.4.17 and 4.1.14 treat the first backslash as escaping the
+        // second, so the comma remains a top-level separator.
         file: 'src/panel.ts',
         content: "const cls = 'transition-[width\\\\,height]';\n",
       },
@@ -1408,8 +1408,8 @@ const SIGNAL_EXAMPLE_CATALOG = {
           "const prefixed = 'tw-transition-[height]';\nconst separated = 'hover__transition-[height]';\n",
       },
       {
-        // The same Tailwind versions keep one source backslash as an escape,
-        // so these are single custom identifiers, not property lists.
+        // Both Tailwind versions keep one backslash as an escape, so each value
+        // is one custom identifier rather than a property list.
         file: 'src/panel.ts',
         content:
           "const comma = 'transition-[width\\,height]';\nconst underscore = 'transition-[width\\_height]';\nconst cssEscape = 'transition-[w\\69dth]';\n",

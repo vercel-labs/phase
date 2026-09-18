@@ -85,8 +85,8 @@ describe('dedup/supersedes', () => {
   });
 });
 
-describe('Tailwind transition signal ownership', () => {
-  it('reports distinct transition-all and explicit layout utilities once each', () => {
+describe('Tailwind transition signals', () => {
+  it('reports transition-all and explicit layout utilities separately', () => {
     const findings = scanFile(
       'src/panel.tsx',
       '<div className="transition-all transition-[height]" />;',

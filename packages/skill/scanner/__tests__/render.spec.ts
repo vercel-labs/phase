@@ -379,7 +379,7 @@ describe('output', () => {
     expect(finding?.text.startsWith('…')).toBe(true);
   });
 
-  it('centers custom-matcher excerpts on the accepted class token', () => {
+  it('centers matcher excerpts on the matched class token', () => {
     const className = `${'px-2 rounded-lg border '.repeat(8)}transition-[height] duration-300`;
     const finding = scanFile(
       'src/panel.tsx',

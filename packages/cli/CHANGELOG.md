@@ -4,7 +4,7 @@
 
 ### Minor Changes
 
-- Added `tailwind-layout-transition` findings for complete Tailwind arbitrary transition lists that include an explicit layout property. Existing baselines do not contain the new signal, so `--fail-on high` can report new failures after upgrading.
+- Added `tailwind-layout-transition` for static Tailwind `transition-[...]` utilities that name a layout property. Existing baselines do not include this signal, so upgrading may cause `--fail-on high` to fail on new findings.
 
 ## 0.6.1
 

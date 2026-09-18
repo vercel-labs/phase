@@ -47,7 +47,7 @@ describe('lexical masks', () => {
     ).toEqual({ signalId: 'manual-raf', reason: 'accepted ownership' });
   });
 
-  it('finds complete static class tokens with their source column', () => {
+  it('finds static class tokens and their source columns', () => {
     const lines = maskComments([
       'const cls = cn("px-2 transition-[height]", `transition-[${property}] transition-[width] ${extra}`);',
     ]);

@@ -27,8 +27,8 @@ export type ScanNoise = (typeof NOISE_TIERS)[number];
 export type ScanFileType = 'js' | 'css' | 'jsx';
 
 /**
- * `false` rejects the line, `true` reports it from column zero, and `{ index }`
- * reports it from the given zero-based source column.
+ * Return `false` to skip a line, `true` to report column zero, or `{ index }`
+ * to report that zero-based source column.
  */
 export type ScanMatcherResult = boolean | { index: number };
 export type ScanMatcher = (
@@ -467,13 +467,13 @@ const SIGNAL_CATALOG = [
   {
     id: 'tailwind-layout-transition',
     replacement:
-      'use transform/opacity only for visual-only motion; otherwise keep the explicit layout transition and measure the interaction',
-    label: 'Tailwind arbitrary transition of a layout property',
+      'remove the property from the transition and change layout once; for visual-only motion, animate transform/opacity on a wrapper',
+    label: 'Tailwind transition-[...] includes a layout property',
     severity: 'high',
     noise: 'normal',
     detects:
-      'Static Tailwind arbitrary transition list containing an explicit layout property',
-    why: 'Layout-property transitions can run layout and paint on each frame; review whether compositor-only motion preserves the behavior.',
+      'Static Tailwind transition-[...] utility that names a layout property',
+    why: 'If the named property changes while this transition applies, the browser runs layout on every animation frame and may repaint.',
     fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
     matcher: matchesTailwindLayoutTransition,
   },
@@ -595,8 +595,8 @@ const TAILWIND_LAYOUT_TRANSITION_PROPERTIES = new Set([
 const SVG_LAYOUT_ATTRIBUTE =
   /^(?:x|y|width|height|cx|cy|r|d|points|x1|y1|x2|y2|transform)$/;
 //
-// Custom matchers are called once per line per signal and must be pure: no side
-// effects and no mutation of lines.
+// Custom matchers run once per line per signal. They must not mutate the input
+// or cause side effects.
 
 /** JavaScript writes that may invalidate layout or paint when repeated. */
 function matchesLayoutWrite(lines: string[], i: number): boolean {
