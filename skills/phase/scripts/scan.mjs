@@ -217,15 +217,16 @@ function maskStrings(lines) {
 const staticClassTokenCache = /* @__PURE__ */ new WeakMap();
 function appendStaticClassToken(mode, value, line, index) {
 	mode.token ??= {
-		value: "",
+		source: "",
 		index,
 		line
 	};
-	mode.token.value += value;
+	mode.token.source += value;
 }
 /**
-* Finds the first complete static class token accepted by `matches` on one
-* line. The file is lexed once per position-preserving lines array.
+* Finds the first complete raw source token accepted by `matches` on one line.
+* The immutable, position-preserving lines array is lexed once and cached by
+* identity; JavaScript escape sequences are not evaluated.
 */
 function findStaticClassToken(lines, line, matches) {
 	let tokens = staticClassTokenCache.get(lines);
@@ -233,7 +234,7 @@ function findStaticClassToken(lines, line, matches) {
 		tokens = collectStaticClassTokens(lines);
 		staticClassTokenCache.set(lines, tokens);
 	}
-	for (const token of tokens[line] ?? []) if (matches(token.value)) return token;
+	for (const token of tokens[line] ?? []) if (matches(token.source)) return token;
 	return null;
 }
 function collectStaticClassTokens(lines) {
@@ -243,8 +244,8 @@ function collectStaticClassTokens(lines) {
 		templateDepth: null
 	}];
 	const flush = (mode) => {
-		if (mode.token?.value) tokens[mode.token.line]?.push({
-			value: mode.token.value,
+		if (mode.token?.source) tokens[mode.token.line]?.push({
+			source: mode.token.source,
 			index: mode.token.index
 		});
 		mode.token = null;
@@ -1817,33 +1818,13 @@ function isTailwindLayoutTransitionClass(token) {
 	if (utility === null) return false;
 	const value = tailwindArbitraryTransitionValue(utility);
 	if (value === null) return false;
-	const properties = splitTailwindArbitraryList(value);
+	const properties = splitTailwindTopLevel(value, ",");
 	return properties !== null && properties.some((property) => TAILWIND_LAYOUT_TRANSITION_PROPERTIES.has(normalizeTailwindArbitraryValue(property)));
 }
 function tailwindUtilitySegment(token) {
-	let utilityStart = 0;
-	let brackets = 0;
-	let parentheses = 0;
-	let escaped = false;
-	for (let i = 0; i < token.length; i++) {
-		const ch = token[i];
-		if (escaped) {
-			escaped = false;
-			continue;
-		}
-		if (ch === "\\") escaped = true;
-		else if (ch === "[") brackets++;
-		else if (ch === "]") {
-			if (brackets === 0) return null;
-			brackets--;
-		} else if (ch === "(") parentheses++;
-		else if (ch === ")") {
-			if (parentheses === 0) return null;
-			parentheses--;
-		} else if (ch === ":" && brackets === 0 && parentheses === 0) utilityStart = i + 1;
-	}
-	if (escaped || brackets !== 0 || parentheses !== 0) return null;
-	return token.slice(utilityStart);
+	const segments = splitTailwindTopLevel(token, ":");
+	if (!segments || segments.some((segment) => segment.length === 0)) return null;
+	return segments.at(-1) ?? null;
 }
 function tailwindArbitraryTransitionValue(utility) {
 	const leadingImportant = utility.startsWith("!");
@@ -1855,7 +1836,7 @@ function tailwindArbitraryTransitionValue(utility) {
 	if (!candidate.startsWith("transition-[") || !candidate.endsWith("]")) return null;
 	return candidate.slice(12, -1);
 }
-function splitTailwindArbitraryList(value) {
+function splitTailwindTopLevel(value, separator) {
 	const items = [];
 	let start = 0;
 	let brackets = 0;
@@ -1876,7 +1857,7 @@ function splitTailwindArbitraryList(value) {
 		else if (ch === ")") {
 			if (parentheses === 0) return null;
 			parentheses--;
-		} else if (ch === "," && brackets === 0 && parentheses === 0) {
+		} else if (ch === separator && brackets === 0 && parentheses === 0) {
 			items.push(value.slice(start, i));
 			start = i + 1;
 		}

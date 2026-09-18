@@ -25,6 +25,11 @@ export const NOISE_TIERS = ['precise', 'normal', 'noisy'] as const;
 export type ScanSeverity = (typeof SEVERITY_ORDER)[number];
 export type ScanNoise = (typeof NOISE_TIERS)[number];
 export type ScanFileType = 'js' | 'css' | 'jsx';
+
+/**
+ * `false` rejects the line, `true` reports it from column zero, and `{ index }`
+ * reports it from the given zero-based source column.
+ */
 export type ScanMatcherResult = boolean | { index: number };
 export type ScanMatcher = (
   lines: string[],
@@ -590,9 +595,8 @@ const TAILWIND_LAYOUT_TRANSITION_PROPERTIES = new Set([
 const SVG_LAYOUT_ATTRIBUTE =
   /^(?:x|y|width|height|cx|cy|r|d|points|x1|y1|x2|y2|transform)$/;
 //
-// Custom matchers are called once per line per signal. Return true if line i
-// should be reported, or { index } when the finding excerpt should center on a
-// specific token. They must be pure (no side effects, no mutation of lines).
+// Custom matchers are called once per line per signal and must be pure: no side
+// effects and no mutation of lines.
 
 /** JavaScript writes that may invalidate layout or paint when repeated. */
 function matchesLayoutWrite(lines: string[], i: number): boolean {
@@ -792,7 +796,7 @@ function isTailwindLayoutTransitionClass(token: string): boolean {
   if (utility === null) return false;
   const value = tailwindArbitraryTransitionValue(utility);
   if (value === null) return false;
-  const properties = splitTailwindArbitraryList(value);
+  const properties = splitTailwindTopLevel(value, ',');
   return (
     properties !== null &&
     properties.some((property) =>
@@ -804,36 +808,10 @@ function isTailwindLayoutTransitionClass(token: string): boolean {
 }
 
 function tailwindUtilitySegment(token: string): string | null {
-  let utilityStart = 0;
-  let brackets = 0;
-  let parentheses = 0;
-  let escaped = false;
-
-  for (let i = 0; i < token.length; i++) {
-    const ch = token[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\') {
-      escaped = true;
-    } else if (ch === '[') {
-      brackets++;
-    } else if (ch === ']') {
-      if (brackets === 0) return null;
-      brackets--;
-    } else if (ch === '(') {
-      parentheses++;
-    } else if (ch === ')') {
-      if (parentheses === 0) return null;
-      parentheses--;
-    } else if (ch === ':' && brackets === 0 && parentheses === 0) {
-      utilityStart = i + 1;
-    }
-  }
-  if (escaped || brackets !== 0 || parentheses !== 0) return null;
-
-  return token.slice(utilityStart);
+  const segments = splitTailwindTopLevel(token, ':');
+  if (!segments || segments.some((segment) => segment.length === 0))
+    return null;
+  return segments.at(-1) ?? null;
 }
 
 function tailwindArbitraryTransitionValue(utility: string): string | null {
@@ -849,7 +827,10 @@ function tailwindArbitraryTransitionValue(utility: string): string | null {
   return candidate.slice('transition-['.length, -1);
 }
 
-function splitTailwindArbitraryList(value: string): string[] | null {
+function splitTailwindTopLevel(
+  value: string,
+  separator: ':' | ',',
+): string[] | null {
   const items: string[] = [];
   let start = 0;
   let brackets = 0;
@@ -874,7 +855,7 @@ function splitTailwindArbitraryList(value: string): string[] | null {
     } else if (ch === ')') {
       if (parentheses === 0) return null;
       parentheses--;
-    } else if (ch === ',' && brackets === 0 && parentheses === 0) {
+    } else if (ch === separator && brackets === 0 && parentheses === 0) {
       items.push(value.slice(start, i));
       start = i + 1;
     }

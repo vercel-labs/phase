@@ -58,10 +58,10 @@ describe('lexical masks', () => {
         0,
         (token) => token === 'transition-[height]',
       ),
-    ).toEqual({ index: 21, value: 'transition-[height]' });
+    ).toEqual({ index: 21, source: 'transition-[height]' });
     expect(
       findStaticClassToken(lines, 0, (token) => token === 'transition-[width]'),
-    ).toEqual({ index: 69, value: 'transition-[width]' });
+    ).toEqual({ index: 69, source: 'transition-[width]' });
     expect(
       findStaticClassToken(lines, 0, (token) => token.includes('${property}')),
     ).toBeNull();

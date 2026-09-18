@@ -110,7 +110,9 @@ export function maskStrings(lines: string[]): string[] {
 }
 
 export interface StaticClassToken {
-  value: string;
+  /** Raw token text from the source file, with JavaScript escapes preserved. */
+  source: string;
+  /** Zero-based column where `source` begins on its source line. */
   index: number;
 }
 
@@ -132,7 +134,10 @@ type TokenCollectingMode = Extract<
   { token: TokenBuffer | null }
 >;
 
-const staticClassTokenCache = new WeakMap<string[], StaticClassToken[][]>();
+const staticClassTokenCache = new WeakMap<
+  readonly string[],
+  StaticClassToken[][]
+>();
 
 function appendStaticClassToken(
   mode: TokenCollectingMode,
@@ -140,18 +145,19 @@ function appendStaticClassToken(
   line: number,
   index: number,
 ): void {
-  mode.token ??= { value: '', index, line };
-  mode.token.value += value;
+  mode.token ??= { source: '', index, line };
+  mode.token.source += value;
 }
 
 /**
- * Finds the first complete static class token accepted by `matches` on one
- * line. The file is lexed once per position-preserving lines array.
+ * Finds the first complete raw source token accepted by `matches` on one line.
+ * The immutable, position-preserving lines array is lexed once and cached by
+ * identity; JavaScript escape sequences are not evaluated.
  */
 export function findStaticClassToken(
-  lines: string[],
+  lines: readonly string[],
   line: number,
-  matches: (token: string) => boolean,
+  matches: (source: string) => boolean,
 ): StaticClassToken | null {
   let tokens = staticClassTokenCache.get(lines);
   if (!tokens) {
@@ -160,20 +166,22 @@ export function findStaticClassToken(
   }
 
   for (const token of tokens[line] ?? []) {
-    if (matches(token.value)) return token;
+    if (matches(token.source)) return token;
   }
   return null;
 }
 
 // oxlint-disable-next-line complexity -- explicit source modes keep interpolation local
-function collectStaticClassTokens(lines: string[]): StaticClassToken[][] {
+function collectStaticClassTokens(
+  lines: readonly string[],
+): StaticClassToken[][] {
   const tokens = lines.map(() => [] as StaticClassToken[]);
   const modes: ClassTokenMode[] = [{ kind: 'code', templateDepth: null }];
 
   const flush = (mode: TokenCollectingMode) => {
-    if (mode.token?.value) {
+    if (mode.token?.source) {
       tokens[mode.token.line]?.push({
-        value: mode.token.value,
+        source: mode.token.source,
         index: mode.token.index,
       });
     }
