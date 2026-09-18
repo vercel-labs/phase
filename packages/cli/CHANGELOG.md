@@ -1,5 +1,11 @@
 # phase
 
+## 0.7.0
+
+### Minor Changes
+
+- Added `tailwind-layout-transition` for static Tailwind `transition-[...]` utilities that name a layout property. Existing baselines do not include this signal, so upgrading may cause `--fail-on high` to fail on new findings.
+
 ## 0.6.1
 
 ### Patch Changes

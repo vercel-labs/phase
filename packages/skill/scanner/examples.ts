@@ -1299,6 +1299,131 @@ const SIGNAL_EXAMPLE_CATALOG = {
       },
     ],
   },
+  'tailwind-layout-transition': {
+    match: [
+      {
+        file: 'src/panel.tsx',
+        content: '<div className="transition-[width] duration-200" />;\n',
+      },
+      {
+        file: 'src/panel-variants.ts',
+        content: "export const panel = cva('transition-[height]');\n",
+      },
+      {
+        file: 'src/panel.tsx',
+        content:
+          'const cls = cn("[&:hover]:transition-[left,width,top,height]", \'motion-reduce:transition-none\');\n',
+      },
+      {
+        file: 'src/panel.ts',
+        content: "const cls = 'hover:!transition-[transform,width,height]';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content: "const cls = 'tw:focus:transition-[height]!';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content: 'const cls = `transition-[height] ${extra}`;\n',
+      },
+      {
+        file: 'src/panel.ts',
+        content: "const cls = `${open ? 'transition-[height]' : ''}`;\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content: "const cls = 'transition-[width,_height]';\n",
+      },
+      {
+        // Tailwind 3.4.17 and 4.1.14 treat the first backslash as escaping the
+        // second, so the comma remains a top-level separator.
+        file: 'src/panel.ts',
+        content: "const cls = 'transition-[width\\\\,height]';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content: "const cls = 'transition-[var(--properties),width]';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content:
+          "const cls = clsx({ 'transition-[margin-left]': open }, ['transition-[padding-top]']);\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content:
+          "const cls = '[&_[data-state=open\\:now]]:transition-[height]';\n",
+      },
+    ],
+    noMatch: [
+      {
+        file: 'src/panel.tsx',
+        content: '<div className="transition-[transform,opacity]" />;\n',
+      },
+      {
+        file: 'src/panel.ts',
+        content: "const cls = 'transition-[color,box-shadow,filter]';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content:
+          "const all = 'transition-all';\nconst custom = 'transition-(--properties)';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content:
+          "const variable = 'transition-[var(--properties)]';\nconst fallback = 'transition-[var(--properties,width)]';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content: "const cls = 'transition-[--panel-width]';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content:
+          "const shorthand = 'transition-[margin,padding,inset]';\nconst logical = 'transition-[inline-size,margin-inline-start]';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content:
+          "const cls = 'transition-[grid-template-columns,gap,flex-basis,font-size,border-width]';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content:
+          'const property = `transition-[${name}]`;\nconst variant = `${state}:transition-[height]`;\nconst suffix = `transition-[height]${extra}`;\n',
+      },
+      {
+        file: 'src/panel.ts',
+        content: "const malformed = 'transition-[height';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content:
+          "const leading = ':transition-[height]';\nconst empty = 'hover::transition-[height]';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content:
+          "const prefixed = 'tw-transition-[height]';\nconst separated = 'hover__transition-[height]';\n",
+      },
+      {
+        // Both Tailwind versions keep one backslash as an escape, so each value
+        // is one custom identifier rather than a property list.
+        file: 'src/panel.ts',
+        content:
+          "const comma = 'transition-[width\\,height]';\nconst underscore = 'transition-[width\\_height]';\nconst cssEscape = 'transition-[w\\69dth]';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content: "// const cls = 'transition-[height]';\n",
+      },
+      {
+        file: 'src/panel.ts',
+        content: "const cls = `${/* 'transition-[height]' */ property}`;\n",
+      },
+    ],
+  },
   'tailwind-permanent-will-change': {
     match: [
       {

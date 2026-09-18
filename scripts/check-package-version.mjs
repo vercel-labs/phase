@@ -75,12 +75,15 @@ function readBaseFile(path) {
   return execFileSync('git', ['show', `${base}:${path}`], { encoding: 'utf8' });
 }
 
-function isPackageBuildInput(path, directory) {
+function isPackageBuildInput(path, directory, packageName) {
   return (
     path === 'tsconfig.base.json' ||
     path === `${directory}/tsconfig.json` ||
     path === `${directory}/tsdown.config.ts` ||
-    (path?.startsWith(`${directory}/src/`) && !TEST_ONLY.test(path))
+    (path?.startsWith(`${directory}/src/`) && !TEST_ONLY.test(path)) ||
+    (packageName === 'phase' &&
+      (path === 'skills/phase/metadata.json' ||
+        (path?.startsWith('packages/skill/scanner/') && !TEST_ONLY.test(path))))
   );
 }
 
@@ -151,8 +154,8 @@ for (const {
 
     return [source, file].some(
       (path) =>
-        isPackageBuildInput(path, directory) ||
-        isPackageBuildInput(path, baseDirectory),
+        isPackageBuildInput(path, directory, currentPackage.name) ||
+        isPackageBuildInput(path, baseDirectory, currentPackage.name),
     );
   });
   const publishedManifestChanged = publishedManifestFields.some(
