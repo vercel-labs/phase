@@ -8,6 +8,7 @@ import {
 import { conflictingTargetError } from '@usephase/core/internal';
 import { useState, useEffect, useRef, type RefObject } from 'react';
 
+import { useElementEffect } from '../_internal/use-element-effect';
 import { useSyncedRef } from '../use-synced-ref';
 
 export interface UseLifecycleOptions<T extends Element = HTMLDivElement> {
@@ -62,6 +63,8 @@ const INITIAL_STATE: LifecycleState = {
  * Returns `active` / `paused` so a consumer-owned render loop (WebGL, three.js, a
  * Web Worker) can pause when off-screen or under reduced motion. For a
  * library-managed loop, use `useLoop` or `useCanvas` instead.
+ * Detaching the element resets phase to `idle`; a replacement gets a new
+ * lifecycle after commit.
  *
  * @example
  * const { ref, isActive } = useLifecycle();
@@ -89,21 +92,12 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
 
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
+  const latestRef = useSyncedRef(ref);
 
   const [state, setState] = useState<LifecycleState>(INITIAL_STATE);
   const lifecycleRef = useRef<Lifecycle | null>(null);
 
-  useEffect(() => {
-    if (target && options?.ref) conflictingTargetError('useLifecycle');
-
-    // Resolved here, not in the options object: this runs only on the client.
-    const anchor: Element | Document | null =
-      target === 'page' ? document : ref.current;
-    if (!anchor || !enabled) {
-      setState(INITIAL_STATE);
-      return;
-    }
-
+  function subscribe(anchor: Element | Document): () => void {
     const lifecycle = createLifecycle({
       target: anchor,
       reducedMotion,
@@ -120,10 +114,45 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
 
     return () => {
       lifecycle.stop();
-      lifecycleRef.current = null;
+      if (lifecycleRef.current === lifecycle) lifecycleRef.current = null;
+    };
+  }
+
+  // The page has no element to attach, so use document after mount.
+  useEffect(() => {
+    if (target && options?.ref) conflictingTargetError('useLifecycle');
+    if (target !== 'page') return;
+    if (!enabled) {
+      setState(INITIAL_STATE);
+      return;
+    }
+
+    const unsubscribe = subscribe(document);
+    return () => {
+      unsubscribe();
+      setState(INITIAL_STATE);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, reducedMotion, target]);
+
+  // A condition may add or remove the element; React may also replace it.
+  useElementEffect(
+    ref,
+    (element) => {
+      if (target) return;
+      if (!enabled) {
+        setState(INITIAL_STATE);
+        return;
+      }
+
+      const unsubscribe = subscribe(element);
+      return () => {
+        unsubscribe();
+        if (latestRef.current.current !== element) setState(INITIAL_STATE);
+      };
+    },
+    [enabled, reducedMotion, target],
+  );
 
   // Sync subsequent `paused` changes onto the live lifecycle.
   useEffect(() => {

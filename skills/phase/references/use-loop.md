@@ -36,6 +36,10 @@ const { ref, phase, phaseReason, quality, qualityReason } = useLoop<T>(options);
 | `quality`       | `Quality`                     | `'full' \| 'degraded'`                         |
 | `qualityReason` | `DegradedReason \| undefined` | `'unfocused' \| 'frame-budget'`                |
 
+## Element changes
+
+Attach the returned `ref` to the animated element, or pass an object `ref`. A conditionally mounted element starts a loop after its commit. On a keyed replacement or collapse, the old loop stops and its observer is released. Detach resets `phase` / `phaseReason` to `idle` / `initial` and `quality` / `qualityReason` to `full` / `undefined`. A replacement starts from fresh visibility and timing state; it may report `paused` / `sight` before its first intersection. A page target remains tied to `document`.
+
 ## When to use
 
 - Animating DOM elements whose frames depend on live JS input or simulation state.

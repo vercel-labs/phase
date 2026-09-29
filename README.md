@@ -941,9 +941,9 @@ CI measures every export with [Size Limit](https://github.com/ai/size-limit). Va
 | **Ease**                  |                   |
 | `ease (all)`              |             210 B |
 | **React**                 |                   |
-| `useLoop`                 |           3.46 kB |
-| `useLifecycle`            |           1.89 kB |
-| `useSight`                |           1.41 kB |
+| `useLoop`                 |           3.58 kB |
+| `useLifecycle`            |           2.02 kB |
+| `useSight`                |           1.54 kB |
 | `useCanvas`               |           4.11 kB |
 | `useMutation`             |           1.75 kB |
 | `usePointer`              |           1.86 kB |
@@ -953,7 +953,7 @@ CI measures every export with [Size Limit](https://github.com/ai/size-limit). Va
 | `useTween`                |             660 B |
 | `usePresence`             |             591 B |
 | `useScrollProgress`       |           1.07 kB |
-| `useSize`                 |             597 B |
+| `useSize`                 |             594 B |
 | `useContainerQuery`       |             591 B |
 | `useMediaQuery`           |             244 B |
 | `usePrefersReducedMotion` |             272 B |
@@ -961,7 +961,7 @@ CI measures every export with [Size Limit](https://github.com/ai/size-limit). Va
 | `useSyncedRef`            |              22 B |
 | `useStableCallback`       |              39 B |
 | `Presence`                |             744 B |
-| `WhenVisible`             |           1.65 kB |
+| `WhenVisible`             |           1.79 kB |
 | `WhenIdle`                |             594 B |
 | `Defer`                   |              85 B |
 | `useIdle`                 |             419 B |

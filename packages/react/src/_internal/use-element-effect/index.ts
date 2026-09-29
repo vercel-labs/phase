@@ -13,13 +13,16 @@ type ElementEffect<T extends Element> = (
 ) => (() => void) | undefined;
 
 /**
- * Run a subscription effect for the element behind an object ref.
+ * Start an effect for the element attached to an object ref.
  *
- * The subscription restarts when the ref object, attached element, or a
- * dependency changes. Element changes reconcile after commit because object
- * refs do not notify React. Dependencies follow the `useEffect` contract: keep
- * their length and order constant and include every reactive value read while
- * creating the subscription.
+ * The element may appear after a condition changes, disappear, or be replaced
+ * while the same ref is used. Clean up the old effect before starting one for
+ * a new element. Changing the ref object or a dependency also restarts it.
+ *
+ * Updating `ref.current` does not re-render the component, so an element
+ * change is handled after commit and may add one render. Keep dependencies at
+ * a fixed length and order, and include every reactive value used to create
+ * the effect.
  */
 export function useElementEffect<T extends Element>(
   ref: RefObject<T | null>,

@@ -1,5 +1,11 @@
 # phase
 
+## 0.7.3
+
+### Patch Changes
+
+- Updated the embedded scanner version to 0.0.61 for the revised `useSight`, `useLoop`, and `useLifecycle` guidance.
+
 ## 0.7.2
 
 ### Patch Changes

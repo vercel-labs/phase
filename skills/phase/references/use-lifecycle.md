@@ -31,6 +31,10 @@ const { ref, phase, phaseReason, isActive } = useLifecycle<T>(options?);
 | `phaseReason` | `LifecycleReason`      | `'initial' \| 'started' \| 'resumed' \| 'sight' \| 'reduced-motion' \| 'manual' \| 'disposed'` |
 | `isActive`    | `boolean`              | Convenience: `phase === 'active'`                                                              |
 
+## Element changes
+
+Attach the returned `ref` to the gated element, or pass an object `ref`. A conditionally mounted element starts a lifecycle after its commit. On a keyed replacement or collapse, the old observer and reduced-motion subscription are released. Detach resets `phase` / `phaseReason` to `idle` / `initial` and `isActive` to `false`. `onPhaseChange` still receives the old lifecycle's `stopped` / `disposed` callback. A replacement may report `paused` / `sight` until its first intersection. A page target remains tied to `document`.
+
 ## When to use
 
 - You own the render loop (three.js, Pixi, WebGL, a Web Worker) but want phase's lifecycle guarantees.
