@@ -1,5 +1,11 @@
 # phase
 
+## 0.7.2
+
+### Patch Changes
+
+- Updated the embedded scanner version to 0.0.60 after the skill added a non-blocking version notice and runtime contract checks.
+
 ## 0.7.1
 
 ### Patch Changes
