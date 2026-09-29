@@ -118,6 +118,7 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
     };
   }
 
+  // Page mode has no element ref to reconcile; resolve document after mount.
   useEffect(() => {
     if (target && options?.ref) conflictingTargetError('useLifecycle');
     if (target !== 'page') return;
@@ -126,7 +127,6 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
       return;
     }
 
-    // Resolve document in an effect so options remain safe during SSR.
     const unsubscribe = subscribe(document);
     return () => {
       unsubscribe();
@@ -135,6 +135,7 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, reducedMotion, target]);
 
+  // Element refs can retarget without changing the ref object's identity.
   useElementEffect(
     ref,
     (element) => {

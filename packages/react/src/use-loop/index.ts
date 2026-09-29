@@ -139,6 +139,7 @@ export function useLoop<T extends Element = HTMLDivElement>(
     };
   }
 
+  // Page mode has no element ref to reconcile; resolve document after mount.
   useEffect(() => {
     if (target && options.ref) conflictingTargetError('useLoop');
     if (target !== 'page') return;
@@ -147,7 +148,6 @@ export function useLoop<T extends Element = HTMLDivElement>(
       return;
     }
 
-    // Resolve document in an effect so options remain safe during SSR.
     const unsubscribe = subscribe(document);
     return () => {
       unsubscribe();
@@ -156,6 +156,7 @@ export function useLoop<T extends Element = HTMLDivElement>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, fps, reducedMotion, degraded, degradedFps, target]);
 
+  // Element refs can retarget without changing the ref object's identity.
   useElementEffect(
     ref,
     (element) => {
