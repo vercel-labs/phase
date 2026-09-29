@@ -118,7 +118,7 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
     };
   }
 
-  // Page mode has no element ref to reconcile; resolve document after mount.
+  // The page has no element to attach, so use document after mount.
   useEffect(() => {
     if (target && options?.ref) conflictingTargetError('useLifecycle');
     if (target !== 'page') return;
@@ -135,7 +135,7 @@ export function useLifecycle<T extends Element = HTMLDivElement>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, reducedMotion, target]);
 
-  // Element refs can retarget without changing the ref object's identity.
+  // React can replace the attached element while keeping the same ref.
   useElementEffect(
     ref,
     (element) => {

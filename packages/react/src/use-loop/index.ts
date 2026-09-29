@@ -139,7 +139,7 @@ export function useLoop<T extends Element = HTMLDivElement>(
     };
   }
 
-  // Page mode has no element ref to reconcile; resolve document after mount.
+  // The page has no element to attach, so use document after mount.
   useEffect(() => {
     if (target && options.ref) conflictingTargetError('useLoop');
     if (target !== 'page') return;
@@ -156,7 +156,7 @@ export function useLoop<T extends Element = HTMLDivElement>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, fps, reducedMotion, degraded, degradedFps, target]);
 
-  // Element refs can retarget without changing the ref object's identity.
+  // React can replace the attached element while keeping the same ref.
   useElementEffect(
     ref,
     (element) => {
