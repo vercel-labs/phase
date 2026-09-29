@@ -1,5 +1,11 @@
 # phase
 
+## 0.7.4
+
+### Patch Changes
+
+- Updated the embedded scanner version to 0.0.62 for the revised `useRenderState` guidance.
+
 ## 0.7.3
 
 ### Patch Changes
