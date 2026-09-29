@@ -1,0 +1,23 @@
+{
+  "description": "Behavioral regression guard for a broad Next.js audit when the runner exposes Phase but withholds React and Next.js companion capabilities.",
+  "scan": {
+    "target": "workspace/app",
+    "assertions": {
+      "required": [
+        {
+          "signal": "manual-raf",
+          "file": "page.tsx"
+        }
+      ],
+      "context": { "framework": "next", "appRouter": true }
+    }
+  },
+  "expectedBehavior": [
+    "Recognizes that the broad request needs React performance and Next.js best-practices coverage in addition to Phase",
+    "Completes the available Phase browser-runtime audit instead of blocking the report",
+    "Names React client performance and Next.js framework behavior as separate unavailable coverage",
+    "Offers installation for the missing companion capabilities without installing them automatically",
+    "Does not invent bundle, hydration, re-render, RSC, caching, streaming, or server-data recommendations under Phase",
+    "Uses one concise coverage-gap entry for each unavailable companion and makes no claim that the audit is complete across all scopes"
+  ]
+}

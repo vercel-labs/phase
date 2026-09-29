@@ -1,0 +1,1 @@
+Audit the blog article route in `workspace/app/blog/[slug]` and every renderable component that can affect its browser runtime performance. Return a shareable Markdown report that engineers can use directly or hand to a coding agent.

@@ -34,7 +34,7 @@ The scanner ships with the skill; nothing else to install. Ask your agent, for e
 
 The agent reads `SKILL.md` → `references/audit.md`, runs the scanner, then classifies every finding against the decision ladder (browser-driven CSS/WAAPI → `useTween` → phase → external library → no change). It loads `references/reporting.md` only when it is ready to write, so report structure does not distract from the audit itself.
 
-Before the audit, the skill prefers a repository copy over the user copy and checks the fixed source for a newer version. Installed runtime contracts are checked only when a Phase primitive becomes a likely recommendation. Normal results do not load `references/version-preflight.md`.
+The agent uses the selected skill and scanner. It checks the fixed source for a newer skill version once per task and continues the audit. When a Phase primitive is likely, it verifies the relevant contract against the package version the project uses.
 
 ### Why you can trust the recommendations
 

@@ -1,0 +1,25 @@
+{
+  "description": "Regression guard for a broad Next.js audit with distinct Phase, React performance, and Next.js findings.",
+  "scan": {
+    "target": "workspace/app/dashboard",
+    "assertions": {
+      "required": [
+        {
+          "signal": "manual-raf",
+          "file": "ambient-canvas.tsx"
+        }
+      ],
+      "context": { "framework": "next", "appRouter": true }
+    }
+  },
+  "expectedBehavior": [
+    "Treats the unexplained page-performance request as a combined audit and uses the neutral Page performance audit title",
+    "Runs installed companions whose capabilities cover React client performance and Next.js framework behavior, and records the exact skills used",
+    "Keeps the CSS-hidden canvas loop under Phase because the mounted subtree continues browser work while hidden",
+    "Keeps the client barrel import and whole-store subscription under React performance instead of claiming Phase bundle or re-render ownership",
+    "Keeps the independent sequential server fetches under Next.js best practices instead of improvising a Phase data recommendation",
+    "Returns full findings under Phase, React performance, and Next.js sections, with one audit owner on every action",
+    "Does not force a global priority order without common measurement or a clear causal dependency",
+    "Makes no bundle-size, hydration-cost, or runtime-savings claim without the matching companion evidence or a performance trace"
+  ]
+}

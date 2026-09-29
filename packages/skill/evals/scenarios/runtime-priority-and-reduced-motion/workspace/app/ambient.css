@@ -1,0 +1,12 @@
+@keyframes ambient-pulse {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ambient-status {
+  animation: ambient-pulse 1s linear infinite;
+}

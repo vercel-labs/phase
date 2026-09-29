@@ -109,6 +109,182 @@ export function maskStrings(lines: string[]): string[] {
   return result;
 }
 
+export interface StaticClassToken {
+  /** Token text exactly as written; JavaScript escapes are not decoded. */
+  source: string;
+  /** Zero-based source column where the token starts. */
+  index: number;
+}
+
+interface TokenBuffer extends StaticClassToken {
+  line: number;
+}
+
+type ClassTokenMode =
+  | { kind: 'code'; templateDepth: number | null }
+  | { kind: 'block-comment' }
+  | {
+      kind: 'quote';
+      quote: "'" | '"';
+      token: TokenBuffer | null;
+    }
+  | { kind: 'template'; dynamic: boolean; token: TokenBuffer | null };
+type TokenCollectingMode = Extract<
+  ClassTokenMode,
+  { token: TokenBuffer | null }
+>;
+
+const staticClassTokenCache = new WeakMap<
+  readonly string[],
+  StaticClassToken[][]
+>();
+
+function appendStaticClassToken(
+  mode: TokenCollectingMode,
+  value: string,
+  line: number,
+  index: number,
+): void {
+  mode.token ??= { source: '', index, line };
+  mode.token.source += value;
+}
+
+/**
+ * Finds the first static token on `line` accepted by `matches`. Token text
+ * preserves JavaScript escapes and `index` is the source column. Results are
+ * cached by array identity, so callers must not mutate `lines`.
+ */
+export function findStaticClassToken(
+  lines: readonly string[],
+  line: number,
+  matches: (source: string) => boolean,
+): StaticClassToken | null {
+  let tokens = staticClassTokenCache.get(lines);
+  if (!tokens) {
+    tokens = collectStaticClassTokens(lines);
+    staticClassTokenCache.set(lines, tokens);
+  }
+
+  for (const token of tokens[line] ?? []) {
+    if (matches(token.source)) return token;
+  }
+  return null;
+}
+
+// oxlint-disable-next-line complexity -- explicit modes keep interpolation state local
+function collectStaticClassTokens(
+  lines: readonly string[],
+): StaticClassToken[][] {
+  const tokens = lines.map(() => [] as StaticClassToken[]);
+  const modes: ClassTokenMode[] = [{ kind: 'code', templateDepth: null }];
+
+  const flush = (mode: TokenCollectingMode) => {
+    if (mode.token?.source) {
+      tokens[mode.token.line]?.push({
+        source: mode.token.source,
+        index: mode.token.index,
+      });
+    }
+    mode.token = null;
+  };
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const source = lines[lineIndex] ?? '';
+
+    for (let index = 0; index < source.length; index++) {
+      const ch = source[index] as string;
+      const next = source[index + 1];
+      const mode = modes.at(-1) as ClassTokenMode;
+
+      if (mode.kind === 'block-comment') {
+        if (ch === '*' && next === '/') {
+          modes.pop();
+          index++;
+        }
+        continue;
+      }
+
+      if (mode.kind === 'code') {
+        if (ch === '/' && next === '/') {
+          break;
+        } else if (ch === '/' && next === '*') {
+          modes.push({ kind: 'block-comment' });
+          index++;
+        } else if (ch === "'" || ch === '"') {
+          modes.push({ kind: 'quote', quote: ch, token: null });
+        } else if (ch === '`') {
+          modes.push({ kind: 'template', dynamic: false, token: null });
+        } else if (mode.templateDepth !== null && ch === '{') {
+          mode.templateDepth++;
+        } else if (mode.templateDepth !== null && ch === '}') {
+          mode.templateDepth--;
+          if (mode.templateDepth === 0) modes.pop();
+        }
+        continue;
+      }
+
+      if (mode.kind === 'quote') {
+        if (ch === '\\') {
+          appendStaticClassToken(mode, ch, lineIndex, index);
+          if (next !== undefined) {
+            appendStaticClassToken(mode, next, lineIndex, index + 1);
+            index++;
+          }
+        } else if (ch === mode.quote) {
+          flush(mode);
+          modes.pop();
+        } else if (/\s/.test(ch)) {
+          flush(mode);
+        } else {
+          appendStaticClassToken(mode, ch, lineIndex, index);
+        }
+        continue;
+      }
+
+      if (ch === '\\') {
+        if (!mode.dynamic) {
+          appendStaticClassToken(mode, ch, lineIndex, index);
+        }
+        if (next !== undefined) {
+          if (!mode.dynamic) {
+            appendStaticClassToken(mode, next, lineIndex, index + 1);
+          }
+          index++;
+        }
+      } else if (ch === '`') {
+        if (mode.dynamic) mode.token = null;
+        else flush(mode);
+        modes.pop();
+      } else if (ch === '$' && next === '{') {
+        mode.token = null;
+        mode.dynamic = true;
+        modes.push({ kind: 'code', templateDepth: 1 });
+        index++;
+      } else if (/\s/.test(ch)) {
+        if (mode.dynamic) mode.token = null;
+        else flush(mode);
+        mode.dynamic = false;
+      } else if (!mode.dynamic) {
+        appendStaticClassToken(mode, ch, lineIndex, index);
+      }
+    }
+
+    const mode = modes.at(-1) as ClassTokenMode;
+    if (mode.kind === 'block-comment') {
+      continue;
+    } else if (mode.kind === 'quote') {
+      mode.token = null;
+      modes.pop();
+    } else if (mode.kind === 'template') {
+      if (mode.dynamic) mode.token = null;
+      else flush(mode);
+      mode.dynamic = false;
+    }
+  }
+
+  return tokens;
+}
+
 const IGNORE_DIRECTIVE = /phase-scan-ignore:?\s+([a-z-]+)(?:\s+--\s*(\S.*))?/;
 
 export interface SuppressionDirective {

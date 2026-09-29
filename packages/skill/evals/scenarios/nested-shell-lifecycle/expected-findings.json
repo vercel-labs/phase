@@ -1,0 +1,41 @@
+{
+  "description": "Regression guard for a clean route whose shared shell mounts a dynamically imported canvas inside a CSS-hidden panel.",
+  "scan": {
+    "runs": [
+      {
+        "name": "primary route",
+        "target": "workspace/app/page.tsx",
+        "assertions": {
+          "requiredAbsent": [
+            {
+              "signal": "manual-raf",
+              "reason": "the scanner target is literal and the shared shell requires a focused scan"
+            }
+          ],
+          "context": { "framework": "next", "appRouter": true }
+        }
+      },
+      {
+        "name": "shared shell",
+        "target": "workspace/app/components",
+        "assertions": {
+          "required": [
+            {
+              "signal": "manual-raf",
+              "file": "ambient-canvas.tsx"
+            }
+          ],
+          "context": { "framework": "next", "appRouter": true }
+        }
+      }
+    ]
+  },
+  "expectedBehavior": [
+    "Runs the clean route scan first, then follows the root layout and dynamic import to AmbientCanvas without scanning unrelated workspace code",
+    "Records that SupportShell is statically loaded and always mounted, while AmbientCanvas is dynamically loaded, always mounted with the shell, conditionally visible through CSS, and actively running while hidden",
+    "Keeps the complete load, mount, visibility, and work map as audit evidence but reports only the shared branches that affect the finding",
+    "Reports the route itself as clean and keeps the browser lifecycle and loading action at the shared SupportShell and AmbientCanvas owners",
+    "Explains that CSS hiding does not stop the canvas loop and that rendering the dynamic child immediately still starts its chunk and mount",
+    "Recommends lifecycle-aware canvas ownership and a closed-state mount policy only after preserving the panel's interaction and state requirements"
+  ]
+}

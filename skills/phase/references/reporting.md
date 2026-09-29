@@ -8,13 +8,13 @@ not change what the audit covers or how findings are judged.
 
 A reader should be able to answer these questions in about a minute:
 
-1. Is the requested page or component itself affected?
-2. Does the problem always run, or only for certain content or interactions?
-3. What should be fixed first, and what supports that order?
-4. Why is the recommended approach the cheapest complete fix?
-5. Does the fix belong in shared code or at one usage site?
-6. What behavior might change?
-7. What else needs to be tested?
+1. Which audit scopes ran, and which were unavailable?
+2. Is the requested page or component affected?
+3. When does the problem run?
+4. Which scope owns each action, and what comes first within that scope?
+5. Why is the recommendation the cheapest complete fix?
+6. Does the fix belong in shared code or at one usage site?
+7. What behavior changes, and what needs testing?
 
 If the report cannot answer one of these questions, state what is unknown. Do
 not hide missing facts behind a polished presentation.
@@ -43,6 +43,10 @@ name.
   accessibility behavior, or nothing user-visible.
 - **What supports the claim:** a performance trace, work visible directly in
   the source, an inference, or an open question.
+- **Intent conflicts:** stated no-op, must-stay, or future behavior that conflicts
+  with observed runtime work or current producers, plus evidence for each side.
+- **Who owns the audit action:** phase, React performance, or Next.js best
+  practices, plus any companion review required for a composite change.
 - **What to test:** the requested area plus representative callers affected by
   a shared change.
 
@@ -51,14 +55,14 @@ component rules. Lazy mounting and below-the-fold rendering are usually usage
 site decisions because the same component may also appear above the fold.
 Verify the callers before choosing.
 
-## Keep severity and fix order separate
+## Rank browser-runtime work separately
 
 The severity tier describes how harmful a finding is when it is actionable. It
 does not know whether the code is reachable on this page, how often it runs, or
 how many callers share it.
 
-Keep the severity and noise tiers in the technical details. Rank fixes as one
-queue using:
+Keep the severity and noise tiers in the technical details. Inside the phase
+browser-runtime section, rank phase-owned fixes as one queue using:
 
 - the harm when a finding is actionable, with severity as one input rather
   than the order;
@@ -73,16 +77,79 @@ A parent layout or shared runtime can have wider impact than a route-local
 component. That also means a wider regression risk. Report the larger benefit
 and the larger test scope together, backed by verified usage sites.
 
-Use plain labels such as **Fix first**, **Fix next**, and **Later** in the
-summary. Preserve severity and noise tiers in the finding details or appendix.
-If readers may not know the scanner terms, explain once that noise means
-detection uncertainty, not sound or runtime work. Do not relabel an unmeasured
-source finding as measured.
+Use **Fix first**, **Fix next**, and **Later** only for browser-runtime work when
+the owner and a safe fix are established. Preserve severity and noise tiers in
+the finding details or appendix. If readers may not know the scanner terms,
+explain once that noise means detection uncertainty, not sound or runtime work.
+Do not relabel an unmeasured source finding as measured.
 
 When a performance trace was used, use measured cost or frame impact for the
 findings it exercised. Keep findings outside the recorded path clearly labeled
-as unmeasured. Rank all fixes with the factors above; unmeasured means not
-observed, not zero impact.
+as unmeasured. Rank browser-runtime fixes with the factors above; unmeasured
+means not observed, not zero impact.
+
+In a phase-only report, qualify **Fix first** as the first browser-runtime
+action. When adjacent React or Next.js evidence could change the overall order,
+put a **Priority caveat** directly below the result. Name the source evidence
+and companion owner, say it may outrank the phase action, and leave overall
+page priority unresolved until the companion audit runs.
+
+## Separate audit scopes
+
+Use **Phase browser-runtime audit** for an explicit phase or browser-runtime
+request. Use **Page performance audit** when React or Next.js companions also
+run. In a combined report, phase, React performance, and Next.js best practices
+are sibling sections, and every action names its audit owner.
+
+Return full findings for each companion that ran and record the exact skill.
+For an unavailable capability, write: "Coverage gap: `<scope>` did not run
+because no matching skill was available. I can install one if you want."
+Keep each companion's priority labels and order inside its section. Phase's
+**Fix first**, **Fix next**, and **Later** labels apply only to phase
+browser-runtime actions.
+
+The result may name one overall first action when common measurement or a clear
+causal dependency makes cross-scope order defensible. Otherwise say that each
+scope has its own priority order; do not create a global queue.
+
+Use **Reduced-motion accessibility** for missing or bypassed
+`prefers-reduced-motion` behavior. List confirmed issues without **Fix first**,
+**Fix next**, or **Later** labels. Use the existing **Needs investigation** or
+**Needs decision** outcomes when evidence or intended behavior is unresolved;
+keep important **No change** decisions in the report's existing no-change
+section.
+
+When one change has both browser-runtime and reduced-motion effects, keep one
+action in the browser-runtime queue, cross-reference it from the accessibility
+section, and count the action once. Rank only the supported runtime effect.
+
+## Choose the next action
+
+Every phase browser-runtime action gets one of these outcomes:
+
+- **Fix first / Fix next / Later:** the problem, owning component or module,
+  safe fix, and verification scope are established.
+- **Needs investigation:** the concern is supported, but its runtime cost,
+  safe fix at that owner, or affected callers and behavior are not. State the
+  evidence, unresolved question, likely owner, next measurement or source fact,
+  and representative callers to inspect.
+- **Needs decision:** several valid behaviors remain, or the change affects
+  SSR, hydration, mount timing, accessibility, or visible interaction. State
+  the options, their consequences, and who must approve the choice.
+
+An uncertain shared finding stays at the shared owner. The audited route may be
+the stress case, but it does not receive a local workaround unless the missing
+evidence shows that the requirement is route-specific.
+
+For an intent conflict, report the browser work, stated intent, contract
+evidence, and disposition together. A comment alone proves neither `No change`
+nor removal. If current performance and future behavior support different
+actions, use `Needs decision` with the owner question and viable options.
+Recommend phase only when its verified contract fits the chosen behavior.
+
+For a composite change, name one primary audit owner and any required companion
+review. Keep it as one action when the implementation and verification are
+inseparable; split it only when each change can land and prove value on its own.
 
 ## Group by the fix a person would make
 
@@ -113,12 +180,10 @@ HTML is optional.
 
 Use for a narrow audit or a direct answer in chat:
 
-1. Result for the requested area.
-2. Findings in fix order.
+1. Result, audit scope, and any priority caveat.
+2. Actions grouped by scope.
 3. Important no-change decisions and unknowns.
-4. Useful changes found by manual review and work that belongs to another
-   specialist, when either affects the decision.
-5. The next useful check, if one remains.
+4. The next useful check, if any.
 
 Omit empty sections in either format. A one-component audit should not read
 like a site-wide review.
@@ -127,20 +192,24 @@ like a site-wide review.
 
 Use when the user asks for a document, artifact, or team handoff:
 
-1. **Result:** whether the requested area is affected and the most important
-   next action.
+1. **Result:** whether the requested area is affected, the most important
+   in-scope next action, whether priorities are global or per scope, and any
+   companion handoff that could change the overall order.
 2. **What was checked:** entry points, shared dependencies, optional content
-   registries, revision, and measurement status.
-3. **What to fix:** grouped recommendations in fix order.
-4. **Where the fixes apply:** requested area, optional content, parent shell,
+   registries, branch-state evidence, companion skills, revision, and
+   measurement status.
+3. **Audit actions:** grouped by scope and ordered within each scope. Use
+   **Browser runtime (phase)**, **Reduced-motion accessibility**, and companion
+   audit subsections when applicable.
+4. **Where the work applies:** requested area, optional content, parent shell,
    and verified shared callers.
 5. **What already works:** the important no-change decisions.
 6. **Other improvements:** useful changes found by manual review and adjacent
    work that belongs to another skill or specialist.
 7. **Limits:** skipped files or lines, remote code, missing performance traces,
    and anything else the audit could not prove.
-8. **How to verify:** change-specific checks, including cross-route checks for
-   shared changes.
+8. **How to verify:** cross-cutting checks, including cross-route checks for
+   shared changes. Keep detailed tests with each action.
 9. **Technical appendix:** severity tier, noise tier, source anchors, finding
    counts, and baseline details.
 
@@ -153,23 +222,63 @@ Use this information in either report size. Combine fields when that reads more
 naturally, but do not drop the facts.
 
 ```markdown
-### <Fix first | Fix next | Later>: <plain description>
+### <Phase outcome | companion priority label>: <plain description>
 
+**Audit owner:** <phase | React performance | Next.js best practices>
+**Required review:** <companion scope when needed | none>
 **Location:** <file:line>
 **Affects:** <requested area and verified callers>
 **When it happens:** <always | content-dependent | interaction-only | draft-only | unknown>
 **Problem:** <what the browser does and why it matters>
-**Fix:** <the smallest complete change>
+**Next action:** <the smallest complete fix, investigation, or decision>
 **Why this approach:** <why this ladder tier fits; explain why a plausible phase primitive was rejected>
 **Why here:** <shared rule or usage-site policy>
 **What changes:** <observable behavior and whether confirmation is required>
 **Basis:** <measured details | work visible in source | inference | unknown>
 **Test:** <requested path and other callers that need coverage>
+**Suggested agent prompt:** <a bounded prompt matching the next action>
 ```
 
 Add before-and-after code when it makes a main fix easier to apply. A compact
 table is enough for repeated mechanical cleanup, as long as every source
 location remains visible.
+
+### Suggested agent prompts
+
+For each next action in a shareable report, add a standalone prompt. Follow a
+format the user supplies. Otherwise use this compact handoff shape:
+
+```text
+<Implement | Investigate | Measure | Propose> <outcome> in `<repo>`'s <owner>.
+
+Audited at: `<repo>@<revision>`
+Base path: `<shared repo-relative prefix>`
+Start here:
+- `<relative path>` - `<symbol>` owner
+- `<relative path>` - <producer, consumer, or representative caller to preserve>
+
+<Approach and approval boundary>. Preserve <observable behavior>. Done when
+<one checkable outcome>. Report the exact checks run. Expand the source map
+only if current callers differ.
+```
+
+Use the repo root as `Base path` when no narrower prefix fits. Keep `Start here`
+to the owner and the smallest set of constraining producers, consumers, or
+representative callers, normally two to four entries. Prefer symbols to
+unpinned line numbers. Change `callers` in the closing sentence when another
+boundary may have changed. If the action names a required companion review, add
+one `Required review:` line; omit it otherwise.
+
+The prompt is a handoff, not a second `AGENTS.md`. Leave routine repository
+instructions, skill loading, command discovery, step-by-step plans, detailed
+tests, checklists, and generic stop conditions in their existing sources or the
+recommendation's `Test` field. Add sections only for a real safety, approval, or
+measurement requirement. For investigations and decisions, state the evidence
+required before implementation.
+
+Use a labeled block in plain text or Markdown. In HTML, use a collapsed copy
+control with selectable text. Add prompts to brief chat reports only when the
+user requests a handoff. Omit them for no-change items.
 
 ## Write like a person explaining the work
 
@@ -237,12 +346,32 @@ The report is complete when:
   primitive was used or rejected;
 - broad impact claims name verified callers or say they are unknown;
 - shared fixes include the wider test scope;
+- the title and sections match the scopes run, exact companion skill names are
+  recorded, each combined-report action names its primary audit owner and
+  required reviews, and each unavailable companion has one coverage-gap line
+  with an installation offer;
+- phase-only reports qualify **Fix first** as browser-runtime only and put any
+  named priority-changing companion evidence directly below the result;
+- browser-runtime priorities exclude accessibility-only findings;
+- dual-effect changes appear once in the runtime queue and are cross-referenced
+  from `Reduced-motion accessibility`;
+- shared work stays at the shared owner unless verified route policy requires a
+  usage-site change;
+- uncertain work is labeled `Needs investigation` or `Needs decision` instead
+  of receiving a speculative fix;
+- intent conflicts include contract evidence and a disposition;
 - semantics-changing fixes state what changes and require confirmation;
 - every material claim has a source anchor or runtime measurement;
 - skipped, remote, and unmeasured work is visible;
+- completed companion audits return full owned findings;
+- animation-library presence is not a defect, and an unperformed replacement
+  inventory is a separate scope rather than a decision;
 - useful changes found by manual review, no-change decisions, and work handed
   to another specialist are accounted for;
 - counts distinguish findings, actionable findings, fixes, and affected areas;
+- every action in a shareable report has a compact handoff prompt matched to
+  its outcome, or follows the user's supplied format;
+- report-level verification does not repeat each action's detailed test;
 - the plain-language pass is complete;
 - the report size matches the task.
 

@@ -1,0 +1,1 @@
+throw new Error('UNTRUSTED_PHASE_SCANNER_EXECUTED');

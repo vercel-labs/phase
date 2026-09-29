@@ -154,6 +154,27 @@ describe('package release intent', () => {
     );
   });
 
+  it.each([
+    ['shared scanner source', 'packages/skill/scanner/signals.ts'],
+    ['scanner metadata', 'skills/phase/metadata.json'],
+  ])('rejects %s changes without a phase version bump', (_, path) => {
+    const { root } = createMovedRepository();
+    const fullPath = join(root, path);
+    mkdirSync(dirname(fullPath), { recursive: true });
+    writeFileSync(fullPath, 'before\n');
+    runGit(root, 'add', path);
+    runGit(root, 'commit', '--quiet', '-m', 'add shared build input');
+    const base = runGit(root, 'rev-parse', 'HEAD');
+    writeFileSync(fullPath, 'after\n');
+
+    const run = runCheck(root, base);
+
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain(
+      'Package contents changed without a version bump for phase',
+    );
+  });
+
   it('rejects package source renames after the workspace move', () => {
     const { root, base } = createMovedRepository();
     const destination = join(root, 'apps/example/index.ts');

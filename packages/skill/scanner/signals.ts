@@ -7,7 +7,7 @@ import {
   WINDOW_LISTENER_LAYOUT_READ,
 } from './analysis.ts';
 import type { EvidenceName } from './analysis.ts';
-import { escapeRegExp, maskStrings } from './lex.ts';
+import { escapeRegExp, findStaticClassToken, maskStrings } from './lex.ts';
 import {
   FRAME_CALLBACK_DEFINITION,
   INTERSECTION_OBSERVER_CONSTRUCTOR,
@@ -25,11 +25,17 @@ export const NOISE_TIERS = ['precise', 'normal', 'noisy'] as const;
 export type ScanSeverity = (typeof SEVERITY_ORDER)[number];
 export type ScanNoise = (typeof NOISE_TIERS)[number];
 export type ScanFileType = 'js' | 'css' | 'jsx';
+
+/**
+ * Return `false` to skip a line, `true` to report column zero, or `{ index }`
+ * to report that zero-based source column.
+ */
+export type ScanMatcherResult = boolean | { index: number };
 export type ScanMatcher = (
   lines: string[],
   line: number,
   file: string,
-) => boolean;
+) => ScanMatcherResult;
 
 export interface ScanExample {
   file: string;
@@ -459,6 +465,19 @@ const SIGNAL_CATALOG = [
     // cva/tailwind-variants modules and clsx helpers, which are plain .ts.
   },
   {
+    id: 'tailwind-layout-transition',
+    replacement:
+      'remove the property from the transition and change layout once; for visual-only motion, animate transform/opacity on a wrapper',
+    label: 'Tailwind transition-[...] includes a layout property',
+    severity: 'high',
+    noise: 'normal',
+    detects:
+      'Static Tailwind transition-[...] utility that names a layout property',
+    why: 'If the named property changes while this transition applies, the browser runs layout on every animation frame and may repaint.',
+    fix: 'references/audit.md#step-15-css-loading-and-architecture-pass',
+    matcher: matchesTailwindLayoutTransition,
+  },
+  {
     id: 'tailwind-permanent-will-change',
     replacement: 'toggle the class with animation state, or drop it',
     label: 'Tailwind will-change-transform class not toggled with state',
@@ -553,14 +572,31 @@ const STYLE_LAYOUT_PROPERTY =
   /^(?:width|height|minWidth|maxWidth|minHeight|maxHeight|inlineSize|minInlineSize|maxInlineSize|blockSize|minBlockSize|maxBlockSize|top|right|bottom|left|inset|insetBlock|insetBlockStart|insetBlockEnd|insetInline|insetInlineStart|insetInlineEnd|margin|marginTop|marginRight|marginBottom|marginLeft|marginBlock|marginBlockStart|marginBlockEnd|marginInline|marginInlineStart|marginInlineEnd|padding|paddingTop|paddingRight|paddingBottom|paddingLeft|paddingBlock|paddingBlockStart|paddingBlockEnd|paddingInline|paddingInlineStart|paddingInlineEnd)$/;
 const CSS_LAYOUT_PROPERTY =
   /^(?:width|height|min-width|max-width|min-height|max-height|inline-size|min-inline-size|max-inline-size|block-size|min-block-size|max-block-size|top|right|bottom|left|inset|inset-block|inset-block-start|inset-block-end|inset-inline|inset-inline-start|inset-inline-end|margin|margin-top|margin-right|margin-bottom|margin-left|margin-block|margin-block-start|margin-block-end|margin-inline|margin-inline-start|margin-inline-end|padding|padding-top|padding-right|padding-bottom|padding-left|padding-block|padding-block-start|padding-block-end|padding-inline|padding-inline-start|padding-inline-end)$/;
+const TAILWIND_LAYOUT_TRANSITION_PROPERTIES = new Set([
+  'width',
+  'min-width',
+  'max-width',
+  'height',
+  'min-height',
+  'max-height',
+  'top',
+  'right',
+  'bottom',
+  'left',
+  'margin-top',
+  'margin-right',
+  'margin-bottom',
+  'margin-left',
+  'padding-top',
+  'padding-right',
+  'padding-bottom',
+  'padding-left',
+]);
 const SVG_LAYOUT_ATTRIBUTE =
   /^(?:x|y|width|height|cx|cy|r|d|points|x1|y1|x2|y2|transform)$/;
 //
-// Custom matchers: `(lines: string[], i: number, file: string) => boolean`.
-// Called once per line per signal. Return true if line i should be reported.
-// Must be pure (no side effects, no mutation of lines). Declared before
-// SIGNALS because the catalog references them; grouped here with other
-// detection-support constants for locality.
+// Custom matchers run once per line per signal. They must not mutate the input
+// or cause side effects.
 
 /** JavaScript writes that may invalidate layout or paint when repeated. */
 function matchesLayoutWrite(lines: string[], i: number): boolean {
@@ -744,6 +780,105 @@ function matchesStableCallback(lines: string[], i: number): boolean {
 function matchesPermanentWillChangeClass(lines: string[], i: number): boolean {
   if (!/\bwill-change-transform\b/.test(lines[i] ?? '')) return false;
   return !/\?|&&/.test(lines[i] ?? '');
+}
+
+function matchesTailwindLayoutTransition(
+  lines: string[],
+  i: number,
+): ScanMatcherResult {
+  if (!(lines[i] ?? '').includes('transition-[')) return false;
+  const token = findStaticClassToken(lines, i, isTailwindLayoutTransitionClass);
+  return token ? { index: token.index } : false;
+}
+
+function isTailwindLayoutTransitionClass(token: string): boolean {
+  const utility = tailwindUtilitySegment(token);
+  if (utility === null) return false;
+  const value = tailwindArbitraryTransitionValue(utility);
+  if (value === null) return false;
+  const properties = splitTailwindTopLevel(value, ',');
+  return (
+    properties !== null &&
+    properties.some((property) =>
+      TAILWIND_LAYOUT_TRANSITION_PROPERTIES.has(
+        normalizeTailwindArbitraryValue(property),
+      ),
+    )
+  );
+}
+
+function tailwindUtilitySegment(token: string): string | null {
+  const segments = splitTailwindTopLevel(token, ':');
+  if (!segments || segments.some((segment) => segment.length === 0))
+    return null;
+  return segments.at(-1) ?? null;
+}
+
+function tailwindArbitraryTransitionValue(utility: string): string | null {
+  const leadingImportant = utility.startsWith('!');
+  const trailingImportant = utility.endsWith('!');
+  if (leadingImportant && trailingImportant) return null;
+  let candidate = utility;
+  if (leadingImportant) candidate = candidate.slice(1);
+  if (trailingImportant) candidate = candidate.slice(0, -1);
+  if (!candidate.startsWith('transition-[') || !candidate.endsWith(']')) {
+    return null;
+  }
+  return candidate.slice('transition-['.length, -1);
+}
+
+function splitTailwindTopLevel(
+  value: string,
+  separator: ':' | ',',
+): string[] | null {
+  const items: string[] = [];
+  let start = 0;
+  let brackets = 0;
+  let parentheses = 0;
+  let escaped = false;
+
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+    } else if (ch === '[') {
+      brackets++;
+    } else if (ch === ']') {
+      if (brackets === 0) return null;
+      brackets--;
+    } else if (ch === '(') {
+      parentheses++;
+    } else if (ch === ')') {
+      if (parentheses === 0) return null;
+      parentheses--;
+    } else if (ch === separator && brackets === 0 && parentheses === 0) {
+      items.push(value.slice(start, i));
+      start = i + 1;
+    }
+  }
+  if (escaped || brackets !== 0 || parentheses !== 0) return null;
+  items.push(value.slice(start));
+  return items;
+}
+
+function normalizeTailwindArbitraryValue(value: string): string {
+  let normalized = '';
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i] as string;
+    if (ch === '\\' && value[i + 1] === '_') {
+      normalized += '_';
+      i++;
+    } else if (ch === '_') {
+      normalized += ' ';
+    } else {
+      normalized += ch;
+    }
+  }
+  return normalized.trim();
 }
 
 /**
