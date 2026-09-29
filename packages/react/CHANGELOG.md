@@ -1,5 +1,11 @@
 # @usephase/react
 
+## 0.6.2
+
+### Patch Changes
+
+- Re-observe the attached element in `useContainerQuery` after conditional mounts, keyed replacements, and remounts while retaining the last match until the next observation.
+
 ## 0.6.1
 
 ### Patch Changes

@@ -954,7 +954,7 @@ CI measures every export with [Size Limit](https://github.com/ai/size-limit). Va
 | `usePresence`             |             591 B |
 | `useScrollProgress`       |           1.07 kB |
 | `useSize`                 |             597 B |
-| `useContainerQuery`       |             481 B |
+| `useContainerQuery`       |             591 B |
 | `useMediaQuery`           |             244 B |
 | `usePrefersReducedMotion` |             272 B |
 | `useDevicePixelRatio`     |             233 B |
