@@ -1,5 +1,7 @@
 import { observeResize } from '@usephase/core/internal';
-import { useState, useEffect, useRef, type RefObject } from 'react';
+import { useState, useRef, type RefObject } from 'react';
+
+import { useElementEffect } from '../_internal/use-element-effect';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,7 +24,7 @@ export interface UseContainerQueryOptions<T extends Element = HTMLDivElement> {
 export interface UseContainerQueryResult<T extends Element = HTMLDivElement> {
   /** Attach to the element you want to match against the breakpoint. */
   ref: RefObject<T | null>;
-  /** Whether the element currently matches the breakpoint. */
+  /** Last observed match, initially false and retained while detached. */
   matches: boolean;
 }
 
@@ -33,9 +35,11 @@ export interface UseContainerQueryResult<T extends Element = HTMLDivElement> {
 /**
  * Returns whether an element matches a size-based container breakpoint.
  *
- * Unlike `useSize` (which re-renders on every pixel of resize), this hook only
- * re-renders when the match result changes, i.e. when the element crosses a
- * breakpoint boundary. Uses the shared ResizeObserver singleton.
+ * Resize updates re-render only when the match result changes, i.e. when the
+ * element crosses a breakpoint boundary. Uses the shared ResizeObserver
+ * singleton. Element changes may add one lifecycle reconciliation render.
+ * Tracks the element behind the ref across commits. A new element updates the
+ * result after its first ResizeObserver delivery.
  *
  * @example
  * const { ref, matches } = useContainerQuery({ minWidth: 600 });
@@ -46,43 +50,45 @@ export function useContainerQuery<T extends Element = HTMLDivElement>(
   options?: UseContainerQueryOptions<T>,
 ): UseContainerQueryResult<T> {
   const [matches, setMatches] = useState(false);
-  const matchesRef = useRef(false);
+  const matchesRef = useRef<boolean | null>(null);
 
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
 
   const { minWidth, maxWidth, minHeight, maxHeight } = breakpoint;
 
-  useEffect(() => {
-    const element: Element | null = ref.current;
-    if (!element) return;
+  useElementEffect(
+    ref,
+    (element) => {
+      matchesRef.current = null;
 
-    const unobserve: () => void = observeResize(element, (entry) => {
-      const box = entry.contentBoxSize[0];
-      if (!box) return;
+      return observeResize(element, (entry) => {
+        if (entry.target !== ref.current) return;
 
-      const width: number = box.inlineSize;
-      const height: number = box.blockSize;
+        const box = entry.contentBoxSize[0];
+        if (!box) return;
 
-      const nowMatches: boolean = evaluateBreakpoint(
-        width,
-        height,
-        minWidth,
-        maxWidth,
-        minHeight,
-        maxHeight,
-      );
+        const width: number = box.inlineSize;
+        const height: number = box.blockSize;
 
-      // Only re-render when the boolean flips — not on every pixel of resize.
-      if (nowMatches !== matchesRef.current) {
-        matchesRef.current = nowMatches;
-        setMatches(nowMatches);
-      }
-    });
+        const nowMatches: boolean = evaluateBreakpoint(
+          width,
+          height,
+          minWidth,
+          maxWidth,
+          minHeight,
+          maxHeight,
+        );
 
-    return unobserve;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minWidth, maxWidth, minHeight, maxHeight]);
+        // Dedupe resize deliveries within this subscription.
+        if (nowMatches !== matchesRef.current) {
+          matchesRef.current = nowMatches;
+          setMatches(nowMatches);
+        }
+      });
+    },
+    [minWidth, maxWidth, minHeight, maxHeight],
+  );
 
   return { ref, matches };
 }
