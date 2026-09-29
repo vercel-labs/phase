@@ -1,5 +1,11 @@
 # phase
 
+## 0.7.1
+
+### Patch Changes
+
+- Updated the embedded scanner version to 0.0.59 for the revised `useContainerQuery` guidance.
+
 ## 0.7.0
 
 ### Minor Changes
