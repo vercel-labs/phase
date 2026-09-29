@@ -2,6 +2,10 @@
 
 Tracks whether the browser is rendering an element or skipping it under `content-visibility` (e.g. a `Defer` subtree). Returns `'rendered'` until the browser reports otherwise. Wraps `createRenderState`.
 
+The hook observes the element behind the ref, including one mounted after the first render. It removes the old listener when the element detaches or changes. A new ref object also restarts observation, even if it points to the same element.
+
+After a detach or restart, the hook returns `'rendered'` until the observed element fires `contentvisibilityautostatechange` with `skipped: true`. A changed element may add one reconciliation render; an element present on mount does not.
+
 ## Signature
 
 ```tsx
