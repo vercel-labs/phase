@@ -966,7 +966,7 @@ CI measures every export with [Size Limit](https://github.com/ai/size-limit). Va
 | `Defer`                   |              85 B |
 | `useIdle`                 |             419 B |
 | `useWhenIdle`             |             444 B |
-| `useRenderState`          |             521 B |
+| `useRenderState`          |             628 B |
 | `Swap`                    |           1.13 kB |
 
 <!-- SIZE-TABLE:END -->

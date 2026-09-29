@@ -1,5 +1,11 @@
 # @usephase/react
 
+## 0.6.4
+
+### Patch Changes
+
+- Re-observe changed elements in `useRenderState`, release listeners from detached elements, and reset the phase to `rendered` when observation restarts.
+
 ## 0.6.3
 
 ### Patch Changes

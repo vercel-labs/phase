@@ -200,7 +200,7 @@ const checks = [
     path: 'src/index.ts',
     import: '{ useRenderState }',
     ignore: ['react'],
-    limit: '550 B',
+    limit: '660 B',
   },
   {
     name: 'Swap',
