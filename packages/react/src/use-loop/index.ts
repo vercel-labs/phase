@@ -156,7 +156,7 @@ export function useLoop<T extends Element = HTMLDivElement>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, fps, reducedMotion, degraded, degradedFps, target]);
 
-  // React can replace the attached element while keeping the same ref.
+  // A condition may add or remove the element; React may also replace it.
   useElementEffect(
     ref,
     (element) => {
