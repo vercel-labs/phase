@@ -7,6 +7,7 @@ import {
 import { conflictingTargetError } from '@usephase/core/internal';
 import { useState, useEffect, useRef, type RefObject } from 'react';
 
+import { useElementEffect } from '../_internal/use-element-effect';
 import { useSyncedRef } from '../use-synced-ref';
 
 export type SightCallback = (
@@ -34,7 +35,8 @@ export interface UseSightOptions<
   observe?: 'continuous' | 'once';
   /**
    * Called on every visibility transition. When provided, `phase` and
-   * `phaseReason` stay at initial values and no re-renders occur.
+   * `phaseReason` stay at initial values and visibility updates do not
+   * re-render. An element change may cause one reconciliation render.
    */
   onVisibilityChange?: SightCallback;
 }
@@ -71,15 +73,17 @@ const INITIAL_STATE: SightState = {
 /**
  * Intersection + document visibility as a phase.
  *
- * Pass `onVisibilityChange` for zero-re-render mode (animation gating,
- * many-element observation). Without it, `phase` and `phaseReason` update
+ * Pass `onVisibilityChange` for render-free visibility updates (impression
+ * tracking, many-element observation). Without it, `phase` and `phaseReason` update
  * via state on every transition. `phaseRef`/`phaseReasonRef` are always current.
+ * A changed or detached element resets phase and reason to their initial values;
+ * the next attached element is observed after commit.
  *
  * @example
  * // Reactive
  * const { ref, phase } = useSight();
  *
- * // Transient (no re-renders)
+ * // Transient (no renders from visibility updates)
  * const { ref, phaseRef } = useSight({
  *   onVisibilityChange: (phase) => { worker.postMessage({ visible: phase === 'visible' }); },
  * });
@@ -94,6 +98,7 @@ export function useSight<T extends Element = HTMLDivElement>(
   options?: UseSightOptions<T>,
 ): UseSightReactiveResult<T> | UseSightTransientResult<T> {
   const [state, setState] = useState<SightState>(INITIAL_STATE);
+  const stateRef = useSyncedRef(state);
   const observe = options?.observe ?? 'continuous';
   const phaseRef = useRef<SightPhase>('unknown');
   const phaseReasonRef = useRef<SightReason>('initial');
@@ -102,15 +107,9 @@ export function useSight<T extends Element = HTMLDivElement>(
   const target = options?.target;
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
+  const latestRef = useSyncedRef(ref);
 
-  useEffect(() => {
-    if (target && options?.ref) conflictingTargetError('useSight');
-
-    // Resolved here, not in the options object: this runs only on the client.
-    const anchor: Element | Document | null =
-      target === 'page' ? document : ref.current;
-    if (!anchor) return;
-
+  function subscribe(anchor: Element | Document): () => void {
     let frozen = false;
     // A page target reports its phase synchronously from createSight, before
     // `sight` is bound, so the freeze is applied after construction instead.
@@ -146,8 +145,38 @@ export function useSight<T extends Element = HTMLDivElement>(
     if (frozen) sight.stop();
 
     return () => sight.stop();
+  }
+
+  useEffect(() => {
+    if (target && options?.ref) conflictingTargetError('useSight');
+    if (target !== 'page') return;
+
+    // Resolve document in an effect so options remain safe during SSR.
+    const unsubscribe = subscribe(document);
+    return () => {
+      unsubscribe();
+      phaseRef.current = 'unknown';
+      phaseReasonRef.current = 'initial';
+      if (stateRef.current !== INITIAL_STATE) setState(INITIAL_STATE);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [observe, target]);
+
+  useElementEffect(
+    ref,
+    (element) => {
+      if (target) return;
+      const unsubscribe = subscribe(element);
+      return () => {
+        unsubscribe();
+        if (latestRef.current.current === element) return;
+        phaseRef.current = 'unknown';
+        phaseReasonRef.current = 'initial';
+        if (stateRef.current !== INITIAL_STATE) setState(INITIAL_STATE);
+      };
+    },
+    [observe, target],
+  );
 
   return { ref, ...state, phaseRef, phaseReasonRef };
 }

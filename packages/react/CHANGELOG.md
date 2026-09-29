@@ -1,5 +1,11 @@
 # @usephase/react
 
+## 0.6.3
+
+### Patch Changes
+
+- Re-observe changed elements in `useSight`, `useLoop`, and `useLifecycle`, releasing old subscriptions and resetting phase state on detach.
+
 ## 0.6.2
 
 ### Patch Changes

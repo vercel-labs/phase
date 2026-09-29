@@ -12,7 +12,7 @@ import { useSight } from '@usephase/react';
 // Reactive (re-renders on visibility transitions)
 const { ref, phase, phaseReason, phaseRef, phaseReasonRef } = useSight<T>(options?);
 
-// Transient (zero re-renders)
+// Transient (no renders from visibility updates)
 const { ref, phaseRef, phaseReasonRef } = useSight<T>({
   onVisibilityChange: (phase, reason) => { /* imperative work */ },
 });
@@ -20,15 +20,15 @@ const { ref, phaseRef, phaseReasonRef } = useSight<T>({
 
 ### Options
 
-| Option               | Type                                               | Default        | Description                                                                                            |
-| -------------------- | -------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ |
-| `ref`                | `RefObject<T \| null>`                             | returned       | Bring your own ref                                                                                     |
-| `target`             | `'page'`                                           | —              | Anchor to the page; pass `'page'`. Mutually exclusive with `ref`                                       |
-| `observe`            | `'continuous' \| 'once'`                           | `'continuous'` | `'once'` freezes at `'visible'` after first intersection                                               |
-| `root`               | `Element \| null`                                  | —              | IO root element                                                                                        |
-| `rootMargin`         | `string`                                           | —              | IO root margin                                                                                         |
-| `threshold`          | `number \| number[]`                               | —              | IO threshold                                                                                           |
-| `onVisibilityChange` | `(phase: SightPhase, reason: SightReason) => void` | —              | Called on every visibility transition. When provided, `phase`/`phaseReason` are omitted, no re-renders |
+| Option               | Type                                               | Default        | Description                                                                                                                  |
+| -------------------- | -------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `ref`                | `RefObject<T \| null>`                             | returned       | Bring your own ref                                                                                                           |
+| `target`             | `'page'`                                           | —              | Anchor to the page; pass `'page'`. Mutually exclusive with `ref`                                                             |
+| `observe`            | `'continuous' \| 'once'`                           | `'continuous'` | `'once'` freezes at `'visible'` after first intersection                                                                     |
+| `root`               | `Element \| null`                                  | —              | IO root element                                                                                                              |
+| `rootMargin`         | `string`                                           | —              | IO root margin                                                                                                               |
+| `threshold`          | `number \| number[]`                               | —              | IO threshold                                                                                                                 |
+| `onVisibilityChange` | `(phase: SightPhase, reason: SightReason) => void` | —              | Called on every visibility transition. When provided, `phase`/`phaseReason` are omitted; visibility updates do not re-render |
 
 ### Return (reactive, no `onVisibilityChange`)
 
@@ -50,13 +50,17 @@ const { ref, phaseRef, phaseReasonRef } = useSight<T>({
 
 `phase` and `phaseReason` are not available in transient mode. Accessing them is a TypeScript error.
 
+## Element changes
+
+Attach the returned `ref` to the observed element, or pass an object `ref`. A conditionally mounted element is observed after its commit. On a keyed replacement or collapse, the old observer is released and the next element is observed. The reactive phase resets to `unknown` / `initial` on detach or replacement; `phaseRef` and `phaseReasonRef` reset in both modes. `onVisibilityChange` receives observer transitions, not a synthetic reset call. Changing elements may cause one reconciliation render even in transient mode. A page target remains tied to `document`.
+
 ## When to use
 
 - Lazy-mounting content on viewport entry (analytics, video playback, data loading).
 - Tracking impressions.
 - Conditionally rendering based on visibility (not animation gating; use `useLifecycle` for that).
 - `observe: 'once'` for one-shot triggers (load data when first visible, never unload).
-- **With `onVisibilityChange`**: observing many elements or gating imperative work without re-renders.
+- **With `onVisibilityChange`**: observing many elements or gating imperative work without renders from visibility updates.
 
 ## When not to use
 
@@ -74,7 +78,7 @@ const { ref, phaseRef, phaseReasonRef } = useSight<T>({
   const { ref, phase } = useSight({ observe: 'once' });
   if (phase === 'visible') loadData();
   ```
-- Use `onVisibilityChange` for zero-re-render observation:
+- Use `onVisibilityChange` for render-free visibility updates:
   ```tsx
   const { ref, phaseRef } = useSight({
     onVisibilityChange: (phase) => {
