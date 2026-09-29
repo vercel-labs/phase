@@ -1,6 +1,6 @@
 # `useContainerQuery`
 
-Returns whether an element matches a size-based container breakpoint. Re-renders only when the match result flips.
+Returns whether an element matches a size-based container breakpoint. Resize updates re-render only when the match result flips. Element changes may add one lifecycle reconciliation render.
 
 ## Signature
 
@@ -27,10 +27,12 @@ const { ref, matches } = useContainerQuery<T>(breakpoint, options?);
 
 ### Return
 
-| Property  | Type                   | Description                           |
-| --------- | ---------------------- | ------------------------------------- |
-| `ref`     | `RefObject<T \| null>` | Attach to the measured element        |
-| `matches` | `boolean`              | Whether the element currently matches |
+| Property  | Type                   | Description                             |
+| --------- | ---------------------- | --------------------------------------- |
+| `ref`     | `RefObject<T \| null>` | Attach to the measured element          |
+| `matches` | `boolean`              | Last observed match (initially `false`) |
+
+The hook observes the element attached to `ref` after commit. It follows the ref across conditional mounts, keyed replacements, and remounts. `matches` stays at its last value while no element is attached, then updates after the new element's first ResizeObserver delivery. On first mount, it remains `false` until that delivery.
 
 ## When to use
 
