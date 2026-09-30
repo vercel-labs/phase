@@ -1,6 +1,7 @@
 import { createScrollProgress } from '@usephase/core';
-import { useState, useEffect, useRef, type RefObject } from 'react';
+import { useState, useRef, type RefObject } from 'react';
 
+import { useElementEffect } from '../_internal/use-element-effect';
 import { useSyncedRef } from '../use-synced-ref';
 
 // ---------------------------------------------------------------------------
@@ -19,9 +20,10 @@ export interface UseScrollProgressOptions<T extends Element = HTMLDivElement> {
   root?: Element | null;
   rootMargin?: string;
   /**
-   * Called on every threshold crossing. When provided, `progress` stays `0`
-   * and no re-renders occur, the right path for scroll-driven animation
-   * consumers that read progress imperatively.
+   * Called when the intersection ratio changes at a threshold crossing.
+   * When provided, `progress` is omitted from the return type and observer
+   * deliveries do not re-render. Element changes may add one lifecycle
+   * reconciliation render.
    */
   onProgress?: ScrollProgressCallback;
 }
@@ -30,9 +32,9 @@ export interface UseScrollProgressReactiveResult<
   T extends Element = HTMLDivElement,
 > {
   ref: RefObject<T | null>;
-  /** Fraction of the element currently visible (0–1). */
+  /** Last delivered visibility ratio (0-1), retained while detached. */
   progress: number;
-  /** Fraction visible via ref. Always current, never triggers re-render. */
+  /** Last delivered ratio via ref. Updating it never triggers re-render. */
   progressRef: RefObject<number>;
 }
 
@@ -40,7 +42,7 @@ export interface UseScrollProgressTransientResult<
   T extends Element = HTMLDivElement,
 > {
   ref: RefObject<T | null>;
-  /** Fraction visible via ref. Always current, never triggers re-render. */
+  /** Last delivered ratio via ref. Updating it never triggers re-render. */
   progressRef: RefObject<number>;
 }
 
@@ -55,15 +57,20 @@ export type UseScrollProgressResult<T extends Element = HTMLDivElement> =
 /**
  * Element visibility ratio (0–1) via the shared IntersectionObserver pool.
  *
- * Pass `onProgress` for zero-re-render mode (scroll-driven animation).
+ * Pass `onProgress` for observer updates without re-renders.
  * Without it, `progress` updates via state at each threshold crossing.
- * `progressRef` is always current in both modes.
+ * `progressRef` holds the last delivered ratio in both modes.
+ *
+ * Tracks the element behind the ref across commits. Detaching or replacing
+ * it retains the last delivered ratio until the current subscription reports
+ * a changed ratio. Each subscription starts at 0, so an initial ratio of 0
+ * does not deliver a callback or clear a previous nonzero value.
  *
  * @example
  * // Reactive (re-renders at threshold crossings)
  * const { ref, progress } = useScrollProgress();
  *
- * // Transient (no re-renders — read progressRef in onTick)
+ * // Transient (observer updates do not re-render; read progressRef in onTick)
  * const { ref, progressRef } = useScrollProgress({
  *   onProgress: (p) => { el.style.opacity = String(p); },
  * });
@@ -88,29 +95,31 @@ export function useScrollProgress<T extends Element = HTMLDivElement>(
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options?.ref ?? internalRef;
 
-  useEffect(() => {
-    const element: Element | null = ref.current;
-    if (!element) return;
+  useElementEffect(
+    ref,
+    (element) => {
+      const scrollProgress = createScrollProgress({
+        target: element,
+        onProgress: (ratio: number) => {
+          if (element !== ref.current) return;
 
-    const scrollProgress = createScrollProgress({
-      target: element,
-      onProgress: (ratio: number) => {
-        progressRef.current = ratio;
+          progressRef.current = ratio;
 
-        if (onProgressRef.current) {
-          onProgressRef.current(ratio);
-        } else {
-          setProgress(ratio);
-        }
-      },
-      steps,
-      root: options?.root,
-      rootMargin,
-    });
+          if (onProgressRef.current) {
+            onProgressRef.current(ratio);
+          } else {
+            setProgress(ratio);
+          }
+        },
+        steps,
+        root: options?.root,
+        rootMargin,
+      });
 
-    return () => scrollProgress.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [steps, rootMargin]);
+      return () => scrollProgress.stop();
+    },
+    [steps, rootMargin],
+  );
 
   return { ref, progress, progressRef };
 }

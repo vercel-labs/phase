@@ -1,6 +1,6 @@
 # `useScrollProgress`
 
-Element visibility ratio as a 0–1 value. Wraps `createScrollProgress` with React lifecycle management. Re-renders only at threshold crossings.
+Element visibility ratio as a 0-1 value. Wraps `createScrollProgress` with React lifecycle management. Observer deliveries re-render in reactive mode only when the ratio changes. Element changes may add one lifecycle reconciliation render.
 
 ## Signature
 
@@ -12,7 +12,7 @@ import { useScrollProgress } from '@usephase/react';
 // Reactive (re-renders at threshold crossings)
 const { ref, progress, progressRef } = useScrollProgress<T>(options?);
 
-// Transient (zero re-renders)
+// Transient (observer updates do not re-render)
 const { ref, progressRef } = useScrollProgress<T>({
   onProgress: (p) => { el.style.opacity = String(p); },
 });
@@ -20,13 +20,13 @@ const { ref, progressRef } = useScrollProgress<T>({
 
 ### Options
 
-| Option       | Type                         | Default  | Description                                                                                                  |
-| ------------ | ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
-| `ref`        | `RefObject<T \| null>`       | returned | Bring your own ref                                                                                           |
-| `steps`      | `number`                     | `20`     | Number of evenly-spaced thresholds                                                                           |
-| `root`       | `Element \| null`            | —        | IO root element                                                                                              |
-| `rootMargin` | `string`                     | —        | IO root margin                                                                                               |
-| `onProgress` | `(progress: number) => void` | —        | Called on every threshold crossing. When provided, `progress` is omitted from the return type, no re-renders |
+| Option       | Type                         | Default  | Description                                                                                                                          |
+| ------------ | ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `ref`        | `RefObject<T \| null>`       | returned | Bring your own ref                                                                                                                   |
+| `steps`      | `number`                     | `20`     | Number of evenly-spaced thresholds                                                                                                   |
+| `root`       | `Element \| null`            | —        | IO root element                                                                                                                      |
+| `rootMargin` | `string`                     | —        | IO root margin                                                                                                                       |
+| `onProgress` | `(progress: number) => void` | —        | Called when the ratio changes at a threshold crossing. When provided, `progress` is omitted and observer deliveries do not re-render |
 
 ### Return (reactive, no `onProgress`)
 
@@ -64,6 +64,7 @@ const { ref, progressRef } = useScrollProgress<T>({
 
 ## Do
 
+- The hook follows the element attached to its ref across conditional mounts, keyed replacements, and remounts. It unsubscribes from a detached or replaced element. The last delivered ratio is retained across detach and replacement (`progress` in reactive mode, `progressRef.current` in both modes) until the current subscription reports a changed ratio. Each subscription starts at `0`, so an initial ratio of `0` does not trigger a callback or clear a previous nonzero value.
 - Cleanup is automatic. The observer is unsubscribed on unmount.
 - Use for declarative reveal effects:
   ```tsx
@@ -74,7 +75,7 @@ const { ref, progressRef } = useScrollProgress<T>({
     </div>
   );
   ```
-- Use `onProgress` for zero-re-render scroll-driven animation:
+- Use `onProgress` to apply ratio updates without re-renders:
   ```tsx
   const { ref, progressRef } = useScrollProgress({
     onProgress: (p) => {
