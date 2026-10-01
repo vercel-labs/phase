@@ -34,9 +34,9 @@ const { ref, phase, phaseReason, phaseRef, phaseReasonRef } =
 | `phaseRef`       | `RefObject<MutationPhase>`  | Phase via ref. Always current, never triggers re-render  |
 | `phaseReasonRef` | `RefObject<MutationReason>` | Reason via ref. Always current, never triggers re-render |
 
-Phase transitions (observing ⇄ paused) fire only on visibility changes, so reactive `phase` costs at most one re-render per transition. For a synchronous phase reaction (e.g. posting to a worker before React commits), use the core `createMutation`, which exposes `onPhaseChange`.
+Phase updates when observation starts, pauses, or restarts may re-render; mutation records never enter React state. For a synchronous phase reaction (e.g. posting to a worker before React commits), use the core `createMutation`, which exposes `onPhaseChange`.
 
-The hook follows its element ref across commits. A conditional mount starts observation, and a keyed replacement or remount releases the old observer before subscribing to the new element. On detach or subscription restart, `phase`/`phaseRef` reset to `'paused'` and `phaseReason`/`phaseReasonRef` to `'initial'`. A new observer with `visibility: 'ignore'` may immediately report `'observing'`. The reset does not call `onMutations`.
+The hook follows its element ref across commits. A conditional mount starts observation, and a keyed replacement or remount releases the old observer before subscribing to the new element. On detach or subscription restart, `phase`/`phaseRef` reset to `'paused'` and `phaseReason`/`phaseReasonRef` to `'initial'`. A new observer with `visibility: 'ignore'` may immediately report `'observing'`. The reset does not call `onMutations`. An element change may add one reconciliation render.
 
 ## When to use
 

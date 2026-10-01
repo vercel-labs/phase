@@ -155,6 +155,35 @@ it('resets after a new ref object restarts tracking of the same element', async 
   expect(current?.stateRef.current.maxX).toBe(0);
 });
 
+it('keeps page measurement live after switching from an element', async () => {
+  const useScroll = await getHook();
+  makeScrollable(document.documentElement, 500);
+  let current: UseScrollResult<HTMLDivElement> | undefined;
+
+  function Probe({ page }: { page: boolean }) {
+    current = useScroll<HTMLDivElement>({
+      target: page ? 'page' : undefined,
+      onScroll: vi.fn(),
+      visibility: 'ignore',
+    });
+    useLayoutEffect(() => {
+      if (!page && current?.ref.current)
+        makeScrollable(current.ref.current, 400);
+    }, [page]);
+    return <div ref={current.ref} />;
+  }
+
+  const view = render(<Probe page={false} />);
+  expect(current?.stateRef.current.maxX).toBe(300);
+
+  view.rerender(<Probe page />);
+  expect(current?.stateRef.current.maxX).toBe(400);
+
+  makeScrollable(document.documentElement, 800);
+  act(() => current?.measure());
+  expect(current?.stateRef.current.maxX).toBe(700);
+});
+
 it('adds no reconciliation render on plain mount', async () => {
   const useScroll = await getHook();
   let renders = 0;
