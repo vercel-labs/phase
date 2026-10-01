@@ -1,5 +1,5 @@
-// Native observer coverage lives in index.browser.spec.ts. Keep only
-// deterministic React wiring and headless-unreachable scenarios here.
+// Browser tests cover native observer behavior. This file tests React lifecycle
+// wiring with a mocked observer.
 import { render, renderHook, act } from '@testing-library/react';
 import { createMockIntersectionObserver } from '@usephase/testing/intersection-observer';
 import { useLayoutEffect, useRef } from 'react';
@@ -55,7 +55,7 @@ describe('useScrollProgress', () => {
     expect(view.getByTestId('progress-ref').textContent).toBe('0.45');
   });
 
-  it('moves observation to a keyed replacement and keeps progress until a changed-ratio callback', async () => {
+  it('follows keyed replacements and keeps progress until the new element reports a different ratio', async () => {
     const useScrollProgress = await getHook();
 
     function Probe({ elementKey }: { elementKey: string }) {
@@ -92,7 +92,7 @@ describe('useScrollProgress', () => {
     expect(view.getByTestId('progress-ref').textContent).toBe('0.25');
   });
 
-  it('re-observes after collapse and re-expand while retaining the last progress', async () => {
+  it('re-observes after a conditional unmount and remount while retaining the last progress', async () => {
     const useScrollProgress = await getHook();
 
     function Probe({ show }: { show: boolean }) {
@@ -129,7 +129,7 @@ describe('useScrollProgress', () => {
     expect(view.getByTestId('progress-ref').textContent).toBe('0.2');
   });
 
-  it('ignores a detached element update before passive cleanup', async () => {
+  it('ignores callbacks from a detached element before observer cleanup', async () => {
     const useScrollProgress = await getHook();
     const onProgress = vi.fn();
     let detachedTarget: HTMLDivElement | null = null;
@@ -163,7 +163,7 @@ describe('useScrollProgress', () => {
     expect(onProgress).not.toHaveBeenCalled();
   });
 
-  it('adds no reconciliation render on plain mount', async () => {
+  it('adds no extra render when the element is present on mount', async () => {
     const useScrollProgress = await getHook();
     let renders = 0;
 
@@ -208,7 +208,7 @@ describe('useScrollProgress', () => {
     );
   });
 
-  it('re-subscribes when steps changes', async () => {
+  it('re-subscribes when the step count changes', async () => {
     const useScrollProgress = await getHook();
     const { ref } = createRefWithElement();
     const { result, rerender } = renderHook(
@@ -220,11 +220,10 @@ describe('useScrollProgress', () => {
 
     rerender({ steps: 10 });
 
-    // Should have created a new IO instance with different thresholds
     expect(mockIO.instances.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('returns 0 when ref is null', async () => {
+  it('returns 0 when the ref has no element', async () => {
     const useScrollProgress = await getHook();
     const nullRef = { current: null };
     const { result } = renderHook(() => useScrollProgress({ ref: nullRef }));
@@ -232,7 +231,7 @@ describe('useScrollProgress', () => {
     expect(result.current.progress).toBe(0);
   });
 
-  it('multiple hooks on different elements work independently', async () => {
+  it('keeps progress independent for multiple elements', async () => {
     const useScrollProgress = await getHook();
     const { ref: ref1, el: el1 } = createRefWithElement();
     const { ref: ref2, el: el2 } = createRefWithElement();
@@ -266,7 +265,7 @@ describe('useScrollProgress', () => {
 });
 
 describe('useScrollProgress with onProgress (transient mode)', () => {
-  it('calls onProgress instead of triggering re-render', async () => {
+  it('calls onProgress without a render from the hook', async () => {
     const useScrollProgress = await getHook();
     const { ref, el } = createRefWithElement();
     const onProgress = vi.fn();
@@ -306,7 +305,7 @@ describe('useScrollProgress with onProgress (transient mode)', () => {
     act(() => mockIO.triggerWithRatio(el, 0.5));
 
     expect(result.current.progressRef.current).toBe(0.5);
-    // @ts-expect-error — progress is not in the transient return type
+    // @ts-expect-error: progress is not in the transient return type
     expect(result.current.progress).toBe(0);
   });
 

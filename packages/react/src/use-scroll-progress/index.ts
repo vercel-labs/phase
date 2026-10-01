@@ -21,9 +21,9 @@ export interface UseScrollProgressOptions<T extends Element = HTMLDivElement> {
   rootMargin?: string;
   /**
    * Called when the intersection ratio changes at a threshold crossing.
-   * When provided, `progress` is omitted from the return type and observer
-   * deliveries do not re-render. Element changes may add one lifecycle
-   * reconciliation render.
+   * When provided, `progress` is omitted from the return type, and observer
+   * updates do not cause the hook to render. Changing the attached element may
+   * add one render while the hook starts observing the new target.
    */
   onProgress?: ScrollProgressCallback;
 }
@@ -32,9 +32,12 @@ export interface UseScrollProgressReactiveResult<
   T extends Element = HTMLDivElement,
 > {
   ref: RefObject<T | null>;
-  /** Last delivered visibility ratio (0-1), retained while detached. */
+  /**
+   * Most recently reported visible fraction (0 to 1), retained while the ref
+   * has no element.
+   */
   progress: number;
-  /** Last delivered ratio via ref. Updating it never triggers re-render. */
+  /** Most recently reported ratio. Updating this ref does not cause a render. */
   progressRef: RefObject<number>;
 }
 
@@ -42,7 +45,7 @@ export interface UseScrollProgressTransientResult<
   T extends Element = HTMLDivElement,
 > {
   ref: RefObject<T | null>;
-  /** Last delivered ratio via ref. Updating it never triggers re-render. */
+  /** Most recently reported ratio. Updating this ref does not cause a render. */
   progressRef: RefObject<number>;
 }
 
@@ -57,14 +60,14 @@ export type UseScrollProgressResult<T extends Element = HTMLDivElement> =
 /**
  * Element visibility ratio (0–1) via the shared IntersectionObserver pool.
  *
- * Pass `onProgress` for observer updates without re-renders.
+ * Pass `onProgress` to receive observer updates without a render from the hook.
  * Without it, `progress` updates via state at each threshold crossing.
- * `progressRef` holds the last delivered ratio in both modes.
+ * `progressRef` holds the most recently reported ratio in both modes.
  *
- * Tracks the element behind the ref across commits. Detaching or replacing
- * it retains the last delivered ratio until the current subscription reports
- * a changed ratio. Each subscription starts at 0, so an initial ratio of 0
- * does not deliver a callback or clear a previous nonzero value.
+ * Tracks the element attached to the ref across commits. The hook keeps the
+ * last reported ratio if React detaches or replaces the element. Each
+ * subscription starts at 0, so an initial ratio of 0 does not call
+ * `onProgress` or clear a previous nonzero value.
  *
  * @example
  * // Reactive (re-renders at threshold crossings)

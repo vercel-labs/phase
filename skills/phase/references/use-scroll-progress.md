@@ -1,6 +1,8 @@
 # `useScrollProgress`
 
-Element visibility ratio as a 0-1 value. Wraps `createScrollProgress` with React lifecycle management. Observer deliveries re-render in reactive mode only when the ratio changes. Element changes may add one lifecycle reconciliation render.
+This hook reports the visible fraction of an element from 0 to 1 and manages the `createScrollProgress` subscription through the React lifecycle.
+
+In reactive mode, the hook re-renders when the reported ratio changes. Changing the attached element may add one render while the hook starts observing the new target.
 
 ## Signature
 
@@ -30,18 +32,18 @@ const { ref, progressRef } = useScrollProgress<T>({
 
 ### Return (reactive, no `onProgress`)
 
-| Property      | Type                   | Description                                                        |
-| ------------- | ---------------------- | ------------------------------------------------------------------ |
-| `ref`         | `RefObject<T \| null>` | Attach to the observed element                                     |
-| `progress`    | `number`               | Fraction visible (0–1). `0` before first observation               |
-| `progressRef` | `RefObject<number>`    | Fraction visible via ref. Always current, never triggers re-render |
+| Property      | Type                   | Description                                                                       |
+| ------------- | ---------------------- | --------------------------------------------------------------------------------- |
+| `ref`         | `RefObject<T \| null>` | Attach to the observed element                                                    |
+| `progress`    | `number`               | Most recently reported ratio (0–1); returns `0` before the first update           |
+| `progressRef` | `RefObject<number>`    | Most recently reported ratio; retained when detached. Updating it does not render |
 
 ### Return (transient, with `onProgress`)
 
-| Property      | Type                   | Description                                                        |
-| ------------- | ---------------------- | ------------------------------------------------------------------ |
-| `ref`         | `RefObject<T \| null>` | Attach to the observed element                                     |
-| `progressRef` | `RefObject<number>`    | Fraction visible via ref. Always current, never triggers re-render |
+| Property      | Type                   | Description                                                                       |
+| ------------- | ---------------------- | --------------------------------------------------------------------------------- |
+| `ref`         | `RefObject<T \| null>` | Attach to the observed element                                                    |
+| `progressRef` | `RefObject<number>`    | Most recently reported ratio; retained when detached. Updating it does not render |
 
 `progress` is not available in transient mode. Accessing it is a TypeScript error.
 
@@ -64,7 +66,8 @@ const { ref, progressRef } = useScrollProgress<T>({
 
 ## Do
 
-- The hook follows the element attached to its ref across conditional mounts, keyed replacements, and remounts. It unsubscribes from a detached or replaced element. The last delivered ratio is retained across detach and replacement (`progress` in reactive mode, `progressRef.current` in both modes) until the current subscription reports a changed ratio. Each subscription starts at `0`, so an initial ratio of `0` does not trigger a callback or clear a previous nonzero value.
+- The hook follows the element attached to its ref across conditional mounts and keyed replacements. It stops observing the old element before it starts observing the new one.
+- The hook keeps the last reported ratio when an element detaches or changes. Each subscription starts at `0`. An initial observation of `0` does not call `onProgress` or replace a previous nonzero ratio.
 - Cleanup is automatic. The observer is unsubscribed on unmount.
 - Use for declarative reveal effects:
   ```tsx

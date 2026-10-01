@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- Re-observe the current element in `useScrollProgress` after conditional mounts, replacements, and remounts, retaining the last progress while detached.
+- `useScrollProgress` now follows the element attached to its ref through conditional mounts and replacements, retaining the last reported ratio across each transition.
 
 ## 0.6.4
 
