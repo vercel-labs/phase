@@ -1,5 +1,11 @@
 # phase
 
+## 0.7.6
+
+### Patch Changes
+
+- Updated the embedded scanner version to 0.0.64 for the revised `useMutation`, `usePointer`, and `useScroll` guidance.
+
 ## 0.7.5
 
 ### Patch Changes
