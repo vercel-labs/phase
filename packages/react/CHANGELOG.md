@@ -1,5 +1,11 @@
 # @usephase/react
 
+## 0.6.6
+
+### Patch Changes
+
+- Re-observe changed elements in `useMutation`, `usePointer`, and `useScroll`, releasing old subscriptions and resetting phase and transient state on restart.
+
 ## 0.6.5
 
 ### Patch Changes

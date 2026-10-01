@@ -3,8 +3,9 @@ import {
   type MutationPhase,
   type MutationReason,
 } from '@usephase/core';
-import { useState, useEffect, useRef, type RefObject } from 'react';
+import { useState, useRef, type RefObject } from 'react';
 
+import { useElementEffect } from '../_internal/use-element-effect';
 import { useSyncedRef } from '../use-synced-ref';
 
 // ---------------------------------------------------------------------------
@@ -15,8 +16,8 @@ export type MutationRecordsCallback = (records: MutationRecord[]) => void;
 
 export interface UseMutationOptions<T extends Element = HTMLDivElement> {
   /**
-   * Element to observe. When omitted, attach the returned `ref`.
-   * Must be set before the first effect commit (standard React ref contract).
+   * Element to observe. When omitted, attach the returned `ref`. Conditional
+   * mounts and element replacements are observed after commit.
    */
   ref?: RefObject<T | null>;
   /**
@@ -62,6 +63,7 @@ const INITIAL_STATE: MutationState = {
  * Auto-pauses off-screen and tears down on unmount.
  *
  * Records are always delivered imperatively via `onMutations` (never state).
+ * Ref changes release the old observer and reset phase/reason on restart.
  * Phase transitions (observing/paused) are infrequent, so `phase`/`phaseReason`
  * are reactive state; read `phaseRef`/`phaseReasonRef` for the latest value
  * inside `onMutations` without closure staleness. For synchronous phase
@@ -85,31 +87,40 @@ export function useMutation<T extends Element = HTMLDivElement>(
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options.ref ?? internalRef;
 
-  useEffect(() => {
-    const element = ref.current;
-    if (!element || !enabled) {
-      setState(INITIAL_STATE);
-      phaseRef.current = 'paused';
-      phaseReasonRef.current = 'initial';
-      return;
-    }
+  function resetState(): void {
+    setState(INITIAL_STATE);
+    phaseRef.current = 'paused';
+    phaseReasonRef.current = 'initial';
+  }
 
-    const instance = createMutation({
-      target: element,
-      mutation: mutationInit,
-      onMutations: (records) => onMutationsRef.current(records),
-      onPhaseChange: (phase, reason) => {
-        phaseRef.current = phase;
-        phaseReasonRef.current = reason;
-        setState({ phase, phaseReason: reason });
-      },
-      visibility,
-      intersectionOptions,
-    });
+  useElementEffect(
+    ref,
+    (element) => {
+      if (!enabled) {
+        resetState();
+        return;
+      }
 
-    return () => instance.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, visibility]);
+      const instance = createMutation({
+        target: element,
+        mutation: mutationInit,
+        onMutations: (records) => onMutationsRef.current(records),
+        onPhaseChange: (phase, reason) => {
+          phaseRef.current = phase;
+          phaseReasonRef.current = reason;
+          setState({ phase, phaseReason: reason });
+        },
+        visibility,
+        intersectionOptions,
+      });
+
+      return () => {
+        instance.stop();
+        resetState();
+      };
+    },
+    [enabled, visibility],
+  );
 
   return { ref, ...state, phaseRef, phaseReasonRef };
 }

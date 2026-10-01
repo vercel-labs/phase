@@ -4,8 +4,9 @@ import {
   type PointerReason,
   type PointerState,
 } from '@usephase/core';
-import { useState, useEffect, useRef, type RefObject } from 'react';
+import { useState, useRef, type RefObject } from 'react';
 
+import { useElementEffect } from '../_internal/use-element-effect';
 import { useSyncedRef } from '../use-synced-ref';
 
 // ---------------------------------------------------------------------------
@@ -56,6 +57,7 @@ const INITIAL_STATE: PointerPhaseState = {
  *
  * Position is always delivered imperatively via `onPointer` (never state) and
  * mirrored in `stateRef` for on-demand reads (e.g. inside a `useLoop` tick).
+ * Ref changes release old listeners and reset phase and position on restart.
  * Phase transitions (tracking/idle) are infrequent, so `phase`/`phaseReason`
  * are reactive state; read `phaseRef`/`phaseReasonRef` for the latest value
  * without closure staleness. For synchronous phase reactions, use the core
@@ -75,35 +77,44 @@ export function usePointer<T extends Element = HTMLDivElement>(
   const internalRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options.ref ?? internalRef;
 
-  useEffect(() => {
-    const element = ref.current;
-    if (!element || !enabled) {
-      setState(INITIAL_STATE);
-      phaseRef.current = 'idle';
-      phaseReasonRef.current = 'initial';
-      stateRef.current = { x: 0, y: 0, active: false };
-      return;
-    }
+  function resetState(): void {
+    setState(INITIAL_STATE);
+    phaseRef.current = 'idle';
+    phaseReasonRef.current = 'initial';
+    stateRef.current = { x: 0, y: 0, active: false };
+  }
 
-    const instance = createPointer({
-      target: element,
-      onPointer: (pointerState) => {
-        stateRef.current = pointerState;
-        onPointerRef.current(pointerState);
-      },
-      onPhaseChange: (phase, reason) => {
-        stateRef.current.active = phase === 'tracking';
-        phaseRef.current = phase;
-        phaseReasonRef.current = reason;
-        setState({ phase, phaseReason: reason });
-      },
-      visibility,
-      intersectionOptions,
-    });
+  useElementEffect(
+    ref,
+    (element) => {
+      if (!enabled) {
+        resetState();
+        return;
+      }
 
-    return () => instance.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, visibility]);
+      const instance = createPointer({
+        target: element,
+        onPointer: (pointerState) => {
+          stateRef.current = pointerState;
+          onPointerRef.current(pointerState);
+        },
+        onPhaseChange: (phase, reason) => {
+          stateRef.current.active = phase === 'tracking';
+          phaseRef.current = phase;
+          phaseReasonRef.current = reason;
+          setState({ phase, phaseReason: reason });
+        },
+        visibility,
+        intersectionOptions,
+      });
+
+      return () => {
+        instance.stop();
+        resetState();
+      };
+    },
+    [enabled, visibility],
+  );
 
   return { ref, ...state, phaseRef, phaseReasonRef, stateRef };
 }
