@@ -1,5 +1,11 @@
 # phase
 
+## 0.7.5
+
+### Patch Changes
+
+- Updated the embedded scanner version to 0.0.63 for the revised `useScrollProgress` guidance.
+
 ## 0.7.4
 
 ### Patch Changes

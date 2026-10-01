@@ -952,7 +952,7 @@ CI measures every export with [Size Limit](https://github.com/ai/size-limit). Va
 | `useDebouncedCallback`    |             690 B |
 | `useTween`                |             660 B |
 | `usePresence`             |             591 B |
-| `useScrollProgress`       |           1.07 kB |
+| `useScrollProgress`       |           1.14 kB |
 | `useSize`                 |             594 B |
 | `useContainerQuery`       |             591 B |
 | `useMediaQuery`           |             244 B |

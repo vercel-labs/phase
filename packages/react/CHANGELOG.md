@@ -1,5 +1,11 @@
 # @usephase/react
 
+## 0.6.5
+
+### Patch Changes
+
+- Re-observe the current element in `useScrollProgress` after conditional mounts, replacements, and remounts, retaining the last progress while detached.
+
 ## 0.6.4
 
 ### Patch Changes
