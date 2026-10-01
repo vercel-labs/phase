@@ -182,6 +182,27 @@ it('keeps page measurement live after switching from an element', async () => {
   makeScrollable(document.documentElement, 800);
   act(() => current?.measure());
   expect(current?.stateRef.current.maxX).toBe(700);
+
+  view.rerender(<Probe page={false} />);
+  expect(current?.stateRef.current.maxX).toBe(300);
+});
+
+it('does not reconcile attached elements while tracking the page', async () => {
+  const useScroll = await getHook();
+  let renders = 0;
+
+  function Probe({ elementKey }: { elementKey: string }) {
+    renders++;
+    const { ref } = useScroll({ target: 'page', onScroll: vi.fn() });
+    return <div key={elementKey} ref={ref} />;
+  }
+
+  const view = render(<Probe elementKey="first" />, {
+    reactStrictMode: false,
+  });
+  const initialRenders = renders;
+  view.rerender(<Probe elementKey="second" />);
+  expect(renders).toBe(initialRenders + 1);
 });
 
 it('adds no reconciliation render on plain mount', async () => {

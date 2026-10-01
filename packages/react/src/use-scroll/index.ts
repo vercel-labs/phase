@@ -112,6 +112,7 @@ export function useScroll<T extends Element = HTMLDivElement>(
   const instanceRef = useRef<Scroll | null>(null);
 
   const internalRef = useRef<T | null>(null);
+  const noElementRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options.ref ?? internalRef;
 
   const measure = useCallback(() => {
@@ -166,8 +167,9 @@ export function useScroll<T extends Element = HTMLDivElement>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, visibility, target]);
 
+  // Page tracking uses document; the returned ref needs no reconciliation.
   useElementEffect(
-    ref,
+    target === 'page' ? noElementRef : ref,
     (element) => {
       if (target) return;
       if (!enabled) {

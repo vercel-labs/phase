@@ -947,7 +947,7 @@ CI measures every export with [Size Limit](https://github.com/ai/size-limit). Va
 | `useCanvas`               |           4.11 kB |
 | `useMutation`             |           1.82 kB |
 | `usePointer`              |           1.94 kB |
-| `useScroll`               |           2.54 kB |
+| `useScroll`               |           2.55 kB |
 | `useThrottledCallback`    |           1.12 kB |
 | `useDebouncedCallback`    |             690 B |
 | `useTween`                |             660 B |
