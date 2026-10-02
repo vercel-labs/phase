@@ -34,7 +34,9 @@ const { ref, phase, phaseReason, phaseRef, phaseReasonRef, stateRef } =
 | `phaseReasonRef` | `RefObject<PointerReason>` | Reason via ref. Always current, never triggers re-render    |
 | `stateRef`       | `RefObject<PointerState>`  | Latest `{ x, y, active }` via ref. Never triggers re-render |
 
-Phase transitions (tracking ⇄ idle) fire only on pointer enter/leave, so reactive `phase` costs at most one re-render per transition. For a synchronous phase reaction, use the core `createPointer`, which exposes `onPhaseChange`.
+Phase updates on pointer entry/leave, visibility pauses, and subscription restarts may re-render; position updates never enter React state. For a synchronous phase reaction, use the core `createPointer`, which exposes `onPhaseChange`.
+
+The hook follows its element ref across commits. A conditional mount attaches listeners, and a keyed replacement or remount releases the old listeners before tracking the new element. On detach or subscription restart, phase/reason reset to `'idle'`/`'initial'`, and `stateRef` resets to `{ x: 0, y: 0, active: false }`. Pointer activity on the new element establishes its next position. An element change may add one reconciliation render.
 
 ## When to use
 

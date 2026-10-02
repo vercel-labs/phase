@@ -38,6 +38,8 @@ const { ref, phase, phaseReason, phaseRef, phaseReasonRef, stateRef, measure } =
 
 See [create-scroll](./create-scroll.md) for the `ScrollState` fields. For a synchronous phase reaction (before React commits), use the core `createScroll`, which exposes `onPhaseChange`.
 
+In element mode, the hook follows its ref across commits. Conditional mounts, keyed replacements, and remounts subscribe to the current element and release the previous listener and observer. Detach or subscription restart resets phase/reason to `'paused'`/`'initial'` and clears `stateRef` position, progress, and geometry to their initial values. The next element reports its own state when tracking starts. An element change may add one reconciliation render. Page mode continues to track `document` without an element ref.
+
 ## When to use
 
 - Custom scrollbars, carousels, and scroll-position indicators that write to the DOM directly (thumb transform, `disabled`, `aria-valuenow`) without re-rendering per scroll.

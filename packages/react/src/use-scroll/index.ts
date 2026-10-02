@@ -14,6 +14,7 @@ import {
   type RefObject,
 } from 'react';
 
+import { useElementEffect } from '../_internal/use-element-effect';
 import { useSyncedRef } from '../use-synced-ref';
 
 // ---------------------------------------------------------------------------
@@ -91,6 +92,7 @@ function initialState(): ScrollState {
  * Reads `scrollLeft`/`scrollTop` once per rAF frame; the reflow-heavy geometry
  * (`scrollWidth`/`clientWidth`) is read only on resize or via `measure()`, never
  * on the scroll path. Call `measure()` after mutating scrollable content.
+ * Element ref changes reset phase and scroll state; page tracking is unchanged.
  */
 export function useScroll<T extends Element = HTMLDivElement>(
   options: UseScrollOptions<T>,
@@ -110,26 +112,22 @@ export function useScroll<T extends Element = HTMLDivElement>(
   const instanceRef = useRef<Scroll | null>(null);
 
   const internalRef = useRef<T | null>(null);
+  const noElementRef = useRef<T | null>(null);
   const ref: RefObject<T | null> = options.ref ?? internalRef;
 
   const measure = useCallback(() => {
     instanceRef.current?.measure();
   }, []);
 
-  useEffect(() => {
-    if (target && options.ref) conflictingTargetError('useScroll');
+  function resetState(): void {
+    instanceRef.current = null;
+    setState(INITIAL_STATE);
+    phaseRef.current = 'paused';
+    phaseReasonRef.current = 'initial';
+    stateRef.current = initialState();
+  }
 
-    // Resolved here, not in the options object: this runs only on the client.
-    const anchor = target === 'page' ? document : ref.current;
-    if (!anchor || !enabled) {
-      instanceRef.current = null;
-      setState(INITIAL_STATE);
-      phaseRef.current = 'paused';
-      phaseReasonRef.current = 'initial';
-      stateRef.current = initialState();
-      return;
-    }
-
+  function subscribe(anchor: Element | Document): () => void {
     const instance = createScroll({
       target: anchor,
       onScroll: (scrollState) => {
@@ -148,10 +146,45 @@ export function useScroll<T extends Element = HTMLDivElement>(
 
     return () => {
       instance.stop();
-      instanceRef.current = null;
+      if (instanceRef.current === instance) instanceRef.current = null;
+    };
+  }
+
+  // The page has no element to attach, so resolve document after mount.
+  useEffect(() => {
+    if (target && options.ref) conflictingTargetError('useScroll');
+    if (target !== 'page') return;
+    if (!enabled) {
+      resetState();
+      return;
+    }
+
+    const unsubscribe = subscribe(document);
+    return () => {
+      unsubscribe();
+      resetState();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, visibility, target]);
+
+  // Page tracking uses document; the returned ref needs no reconciliation.
+  useElementEffect(
+    target === 'page' ? noElementRef : ref,
+    (element) => {
+      if (target) return;
+      if (!enabled) {
+        resetState();
+        return;
+      }
+
+      const unsubscribe = subscribe(element);
+      return () => {
+        unsubscribe();
+        resetState();
+      };
+    },
+    [enabled, visibility, target],
+  );
 
   return { ref, ...state, phaseRef, phaseReasonRef, stateRef, measure };
 }
