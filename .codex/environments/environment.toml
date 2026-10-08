@@ -1,0 +1,5 @@
+version = 1
+name = "phase"
+
+[setup]
+script = "bash .codex/setup.sh"
