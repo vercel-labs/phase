@@ -42,7 +42,6 @@ describe('useSight', () => {
   it('returns a ref when none is provided', async () => {
     const useSight = await getHook();
     const { result } = renderHook(() => useSight());
-    expect(result.current.ref).toBeDefined();
     expect(result.current.ref.current).toBeNull();
   });
 

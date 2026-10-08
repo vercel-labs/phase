@@ -95,7 +95,6 @@ describe('ref management', () => {
   it('returns a ref when none is provided', async () => {
     const useScroll = await getHook();
     const { result } = renderHook(() => useScroll({ onScroll: vi.fn() }));
-    expect(result.current.ref).toBeDefined();
     expect(result.current.ref.current).toBeNull();
   });
 

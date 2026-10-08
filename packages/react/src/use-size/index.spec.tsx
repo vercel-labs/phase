@@ -37,7 +37,6 @@ describe('useSize', () => {
   it('returns a ref when none is provided', async () => {
     const useSize = await getHook();
     const { result } = renderHook(() => useSize());
-    expect(result.current.ref).toBeDefined();
     expect(result.current.ref.current).toBeNull();
   });
 
