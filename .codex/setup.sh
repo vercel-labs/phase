@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cd "$(dirname "$0")/.."
+
 if command -v fnm >/dev/null 2>&1; then
   eval "$(fnm env --shell bash)"
   fnm use --install-if-missing
