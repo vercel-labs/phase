@@ -39,7 +39,6 @@ describe('useContainerQuery', () => {
   it('returns a ref when none is provided', async () => {
     const useContainerQuery = await getHook();
     const { result } = renderHook(() => useContainerQuery({ minWidth: 600 }));
-    expect(result.current.ref).toBeDefined();
     expect(result.current.ref.current).toBeNull();
   });
 

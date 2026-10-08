@@ -38,7 +38,6 @@ describe('useLifecycle', () => {
   it('returns a ref when none is provided', async () => {
     const useLifecycle = await getHook();
     const { result } = renderHook(() => useLifecycle());
-    expect(result.current.ref).toBeDefined();
     expect(result.current.ref.current).toBeNull();
     expect(result.current.isActive).toBe(false);
   });

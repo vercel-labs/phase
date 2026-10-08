@@ -52,7 +52,6 @@ describe('ref management', () => {
   it('returns a ref when none is provided', async () => {
     const usePointer = await getHook();
     const { result } = renderHook(() => usePointer({ onPointer: vi.fn() }));
-    expect(result.current.ref).toBeDefined();
     expect(result.current.ref.current).toBeNull();
   });
 

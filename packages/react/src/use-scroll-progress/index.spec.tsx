@@ -190,7 +190,6 @@ describe('useScrollProgress', () => {
   it('returns a ref when none is provided', async () => {
     const useScrollProgress = await getHook();
     const { result } = renderHook(() => useScrollProgress());
-    expect(result.current.ref).toBeDefined();
     expect(result.current.ref.current).toBeNull();
   });
 

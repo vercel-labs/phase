@@ -53,7 +53,6 @@ describe('ref management', () => {
         onMutations: vi.fn(),
       }),
     );
-    expect(result.current.ref).toBeDefined();
     expect(result.current.ref.current).toBeNull();
   });
 

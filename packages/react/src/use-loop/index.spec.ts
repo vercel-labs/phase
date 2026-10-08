@@ -49,7 +49,6 @@ describe('useLoop', () => {
   it('returns a ref when none is provided', async () => {
     const useLoop = await getHook();
     const { result } = renderHook(() => useLoop({ onTick: vi.fn() }));
-    expect(result.current.ref).toBeDefined();
     expect(result.current.ref.current).toBeNull();
   });
 
