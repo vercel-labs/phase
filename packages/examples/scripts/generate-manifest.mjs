@@ -2,7 +2,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import ts from 'typescript';
+import { parse } from '@babel/parser';
 
 const scriptsDirectory = dirname(fileURLToPath(import.meta.url));
 const root = process.argv[2] ?? join(scriptsDirectory, '..');
@@ -57,19 +57,18 @@ async function discoverExamples(entry) {
         );
       }
       const source = await readFile(join(directory, file.name), 'utf8');
-      const sourceFile = ts.createSourceFile(
-        file.name,
-        source,
-        ts.ScriptTarget.Latest,
-        false,
-        ts.ScriptKind.TSX,
-      );
-      if (!hasClientDirective(sourceFile)) {
+      const { program } = parse(source, {
+        sourceType: 'module',
+        sourceFilename: file.name,
+        plugins: ['typescript', 'jsx'],
+        errorRecovery: true,
+      });
+      if (!hasClientDirective(program)) {
         throw new Error(
           `${entry.name}/${file.name} must start with 'use client'`,
         );
       }
-      if (!hasDefaultExport(sourceFile)) {
+      if (!hasDefaultExport(program)) {
         throw new Error(
           `${entry.name}/${file.name} must have a default export`,
         );
@@ -101,24 +100,17 @@ process.stdout.write(
   `Generated ${relative(process.cwd(), join(root, 'manifest.ts'))}\n`,
 );
 
-function hasClientDirective(sourceFile) {
-  const statement = sourceFile.statements[0];
-  return (
-    statement !== undefined &&
-    ts.isExpressionStatement(statement) &&
-    ts.isStringLiteral(statement.expression) &&
-    statement.expression.text === 'use client'
-  );
+// The parser keeps a file's leading string statements as directives, so the
+// first one is the file's first statement.
+function hasClientDirective(program) {
+  return program.directives[0]?.value.value === 'use client';
 }
 
-function hasDefaultExport(sourceFile) {
-  return sourceFile.statements.some(
-    (statement) =>
-      (ts.isExportAssignment(statement) && !statement.isExportEquals) ||
-      (ts
-        .getModifiers(statement)
-        ?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ??
-        false),
+// `export default <expression>` and `export default function/class/...`;
+// `export =` and `export { name as default }` don't count.
+function hasDefaultExport(program) {
+  return program.body.some(
+    (statement) => statement.type === 'ExportDefaultDeclaration',
   );
 }
 
